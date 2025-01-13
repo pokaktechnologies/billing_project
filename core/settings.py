@@ -55,6 +55,14 @@ REST_FRAMEWORK = {
     ],
 }
 
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'  # Replace with your email provider's SMTP server
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'Pokaktech1@gmail.com'  # Your email address
+EMAIL_HOST_PASSWORD = 'auvb xjir onow hghp'  # Your email password
+DEFAULT_FROM_EMAIL = 'Pokaktech1@gmail.com'  # Default "from" email address
+
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=1),  # Access token validity (e.g., 1 day)
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),  # Refresh token validity (e.g., 7 days)

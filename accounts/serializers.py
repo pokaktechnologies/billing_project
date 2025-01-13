@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import CustomUser, Quotation
+from .models import CustomUser, Quotation, Feature, HelpLink, Notification, UserSetting, Feedback, SalesOrder,QuotationOrder, InvoiceOrder, DeliveryOrder, SupplierPurchase,Supplier,DeliveryChallan
+
 
 # Serializer for user registration
 class CustomUserCreateSerializer(serializers.ModelSerializer):
@@ -34,4 +35,126 @@ class QuotationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Quotation
         fields = '__all__'
+        
+
+
+class FeatureSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Feature
+        fields = '__all__'
+        
+
+class HelpLinkSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HelpLink
+        fields = '__all__'
+
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = '__all__'
+
+class UserSettingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserSetting
+        fields = '__all__'
+
+class FeedbackSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Feedback
+        fields = '__all__'        
+        
+class SalesOrderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SalesOrder
+        fields = [
+            'id', 
+            'customer_name', 
+            'invoice_no', 
+            'invoice_date', 
+            'terms', 
+            'due_date', 
+            'salesperson', 
+            'subject', 
+            'attachments', 
+            'order_amount'
+        ]
+        readonly_fields = ['order_number', 'invoice_no']
+        
+class QuotationOrderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuotationOrder
+        fields = [
+            'id',
+            'customer_name',
+            'quotation_number',
+            'quotation_date',
+            'terms',
+            'due_date',
+            'salesperson',
+            'subject',
+            'attachments',
+            'customer_amount'
+        ]
+        read_only_fields = ['quotation_number']
+
+class InvoiceOrderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InvoiceOrder
+        fields = [
+            'id',
+            'customer_name',
+            'invoice_number',
+            'invoice_date',
+            'terms',
+            'due_date',
+            'salesperson',
+            'subject',
+            'attachments',
+            'invoice_amount'
+        ]
+        read_only_fields = ['invoice_number']
+
+class DeliveryOrderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DeliveryOrder
+        fields = [
+            'id',
+            'customer_name',
+            'delivery_number',
+            'delivery_date',
+            'delivery_amount',
+            'delivery_location',
+            'received_location',
+            'salesperson',
+            'terms',
+            'due_date',
+            'subject',
+            'attachments'
+        ]
+        read_only_fields = ['delivery_number']        
+        
+class SupplierPurchaseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SupplierPurchase
+        fields = [
+                'id', 'supplier_name', 'purchase_number', 'date', 'amount', 'terms', 
+                'due_date', 'purchase_person', 'subject', 'add_stock', 'attachments'
+            ]
+        read_only_fields = ['supplier_number']        
+        
+
+class SupplierSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Supplier
+        fields = [
+            'id', 'supplier_type', 'first_name', 'last_name', 'company_name',
+            'supplier_display_name', 'email', 'phone', 'mobile', 'currency', 'payment_terms'
+        ]        
+        
+class DeliveryChallanSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DeliveryChallan
+        fields = '__all__'
+ 
         

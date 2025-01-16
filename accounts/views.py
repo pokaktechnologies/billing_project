@@ -5,10 +5,11 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from .models import CustomUser, Feature
 from django.db.models import Q
+from django.db import transaction
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
-from .models import Quotation,HelpLink, Notification, UserSetting, Feedback,SalesOrder,QuotationOrder,InvoiceOrder,DeliveryOrder, SupplierPurchase,Supplier, DeliveryChallan
-from .serializers import QuotationSerializer, FeatureSerializer
+from .models import Quotation,HelpLink, Notification, UserSetting, Feedback,SalesOrder,QuotationOrder,InvoiceOrder,DeliveryOrder, SupplierPurchase,Supplier, DeliveryChallan,Product
+from .serializers import QuotationSerializer, FeatureSerializer,ProductSerializer
 from .serializers import CustomUserCreateSerializer, OTPSerializer, GettingStartedSerializer,HelpLinkSerializer,NotificationSerializer, UserSettingSerializer, FeedbackSerializer,QuotationOrderSerializer,InvoiceOrderSerializer,DeliveryOrderSerializer,SupplierPurchaseSerializer,SupplierSerializer,DeliveryChallanSerializer
 from django.core.mail import send_mail
 import random
@@ -179,18 +180,69 @@ class NotificationView(APIView):
         return Response(serializer.data)
 
 # Settings
-class UserSettingView(APIView):
-    def get(self, request):
-        setting = UserSetting.objects.first()  # Assuming one setting per user
-        serializer = UserSettingSerializer(setting)
-        return Response(serializer.data)
-
+class UserSettingView(APIView):  
     def post(self, request):
         serializer = UserSettingSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return Response(serializer.data, status=201)
-        return Response(serializer.errors, status=400)
+            return Response({"message": "User setting created successfully.", "data": serializer.data}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def get(self, request, pk=None):
+        if pk:
+            try:
+                user_setting = UserSetting.objects.get(pk=pk)
+                serializer = UserSettingSerializer(user_setting)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            except UserSetting.DoesNotExist:
+                return Response({"error": "User setting not found."}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            user_settings = UserSetting.objects.all()
+            serializer = UserSettingSerializer(user_settings, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+    
+      # PUT method for updating a user setting (replace the entire object)
+    def put(self, request, pk):
+        try:
+            user_setting = UserSetting.objects.get(pk=pk)
+        except UserSetting.DoesNotExist:
+            return Response({"error": "User setting not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = UserSettingSerializer(user_setting, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                {"message": "User setting updated successfully.", "data": serializer.data},
+                status=status.HTTP_200_OK
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    # PATCH method for partial updates
+    def patch(self, request, pk):
+        try:
+            user_setting = UserSetting.objects.get(pk=pk)
+        except UserSetting.DoesNotExist:
+            return Response({"error": "User setting not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = UserSettingSerializer(user_setting, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                {"message": "User setting partially updated successfully.", "data": serializer.data},
+                status=status.HTTP_200_OK
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    # DELETE method for deleting a user setting
+    def delete(self, request, pk):
+        try:
+            user_setting = UserSetting.objects.get(pk=pk)
+        except UserSetting.DoesNotExist:
+            return Response({"error": "User setting not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        user_setting.delete()
+        return Response({"message": "User setting deleted successfully."}, status=status.HTTP_204_NO_CONTENT)    
+        
 
 # Rate Us
 class FeedbackView(APIView):
@@ -208,7 +260,7 @@ class CreateSalesOrderAPI(APIView):
         # Validate mandatory fields
         mandatory_fields = [
             "customer_name",
-            "invoice_date", "due_date", "salesperson", "order_amount"
+            "invoice_date", "due_date", "salesperson", "order_amount","quantity"
         ]
         for field in mandatory_fields:
             if not data.get(field):
@@ -237,7 +289,8 @@ class CreateSalesOrderAPI(APIView):
             salesperson=data['salesperson'],
             subject=data.get('subject', ''),
             attachments=data.get('attachments', ''),
-            order_amount=data['order_amount']
+            order_amount=data['order_amount'],
+            quantity=data['quantity']
         )
 
         return Response(
@@ -254,7 +307,8 @@ class CreateSalesOrderAPI(APIView):
                     "salesperson": sales_order.salesperson,
                     "subject": sales_order.subject,
                     "attachments": sales_order.attachments,
-                    "order_amount": sales_order.order_amount
+                    "order_amount": sales_order.order_amount,
+                    "quantity": sales_order.quantity
                 }
             },
             status=status.HTTP_201_CREATED
@@ -297,7 +351,11 @@ class SalesOrderListAPI(APIView):
                 for order in orders
             ]
 
-            return Response(data, status=status.HTTP_200_OK)
+            return Response({
+            "Status": "1",
+            "message": "Success",
+            "Data": data
+            }, status=status.HTTP_200_OK)
             
 
 class CreateQuotationOrderAPI(APIView):
@@ -310,7 +368,8 @@ class CreateQuotationOrderAPI(APIView):
             "quotation_date",
             "due_date",
             "salesperson",
-            "customer_amount"
+            "customer_amount",
+            'quantity',
         ]
         for field in mandatory_fields:
             if not data.get(field):
@@ -338,7 +397,8 @@ class CreateQuotationOrderAPI(APIView):
             salesperson=data['salesperson'],
             subject=data.get('subject', ''),
             attachments=data.get('attachments', ''),
-            customer_amount=data['customer_amount']
+            customer_amount=data['customer_amount'],
+            quantity=data['quantity']  
         )
 
         return Response(
@@ -375,13 +435,17 @@ class QuotationOrderListAPI(APIView):
         # Serialize response
         data = QuotationOrderSerializer(orders, many=True).data
 
-        return Response(data, status=status.HTTP_200_OK)            
+        return Response({
+            "Status": "1",
+            "message": "Success",
+            "Data": data
+        }, status=status.HTTP_200_OK)       
     
 
 class CreateInvoiceOrderAPI(APIView):
     def post(self, request):
         data = request.data
-        mandatory_fields = ["customer_name", "invoice_date", "due_date", "salesperson", "invoice_amount"]
+        mandatory_fields = ["customer_name", "invoice_date", "due_date", "salesperson", "invoice_amount","quantity"]
         for field in mandatory_fields:
             if not data.get(field):
                 return Response({"error": f"{field} is required."}, status=status.HTTP_400_BAD_REQUEST)
@@ -389,23 +453,42 @@ class CreateInvoiceOrderAPI(APIView):
         if data['due_date'] < data['invoice_date']:
             return Response({"error": "Due date cannot be earlier than invoice date."}, status=status.HTTP_400_BAD_REQUEST)
 
-        invoice_number = random.randint(111111, 999999)
-        invoice_order = InvoiceOrder.objects.create(
-            customer_name=data['customer_name'],
-            invoice_number=f"INV-{invoice_number}",
-            invoice_date=data['invoice_date'],
-            terms=data.get('terms', ''),
-            due_date=data['due_date'],
-            salesperson=data['salesperson'],
-            subject=data.get('subject', ''),
-            attachments=data.get('attachments', ''),
-            invoice_amount=data['invoice_amount']
-        )
+        try:
+            product = Product.objects.get(id=data['product_id'])
+            if product.stock < data['quantity']:
+                return Response({"error": "Insufficient stock for the product."}, status=status.HTTP_400_BAD_REQUEST)
 
-        return Response({
-            "message": "Invoice order created successfully.",
-            "data": InvoiceOrderSerializer(invoice_order).data
-        }, status=status.HTTP_201_CREATED)
+            with transaction.atomic():
+                # Deduct stock
+                product.stock -= int(data['quantity'])
+                product.save()
+
+                # Create invoice
+                invoice_number = random.randint(111111, 999999)
+                invoice_order = InvoiceOrder.objects.create(
+                    customer_name=data['customer_name'],
+                    invoice_number=f"INV-{invoice_number}",
+                    invoice_date=data['invoice_date'],
+                    terms=data.get('terms', ''),
+                    due_date=data['due_date'],
+                    salesperson=data['salesperson'],
+                    subject=data.get('subject', ''),
+                    attachments=data.get('attachments', ''),
+                    invoice_amount=data['invoice_amount'],
+                    quantity=data['quantity'],
+                    product=product
+                )
+
+                return Response({
+                    "message": "Invoice order created successfully.",
+                    "data": InvoiceOrderSerializer(invoice_order).data
+                }, status=status.HTTP_201_CREATED)
+
+        except Product.DoesNotExist:
+            return Response({"error": "Product not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
     
 class InvoiceOrderListAPI(APIView):
     def get(self, request):
@@ -427,14 +510,18 @@ class InvoiceOrderListAPI(APIView):
         orders = orders.order_by('-invoice_date')
         data = InvoiceOrderSerializer(orders, many=True).data
 
-        return Response(data, status=status.HTTP_200_OK)
+        return Response({
+            "Status": "1",
+            "message": "Success",
+            "Data": data
+        }, status=status.HTTP_200_OK)
 
 class CreateDeliveryOrderAPI(APIView):
     def post(self, request):
         data = request.data
         mandatory_fields = [
             "customer_name", "delivery_date", "due_date", 
-            "salesperson", "delivery_amount", "delivery_location", "received_location"
+            "salesperson", "delivery_amount", "delivery_location", "received_location", "quantity"
         ]
         for field in mandatory_fields:
             if not data.get(field):
@@ -455,7 +542,8 @@ class CreateDeliveryOrderAPI(APIView):
             terms=data.get('terms', ''),
             due_date=data['due_date'],
             subject=data.get('subject', ''),
-            attachments=data.get('attachments', '')
+            attachments=data.get('attachments', ''),
+            quantity=data['quantity']   # Assuming quantity is an integer in the request data. If it's a string, convert it to integer.
         )
 
         return Response({
@@ -484,14 +572,18 @@ class DeliveryOrderListAPI(APIView):
         orders = orders.order_by('-delivery_date')
         data = DeliveryOrderSerializer(orders, many=True).data
 
-        return Response(data, status=status.HTTP_200_OK)
+        return Response({
+            "Status": "1",
+            "message": "Success",
+            "Data": data
+        }, status=status.HTTP_200_OK)
 
 class CreateSupplierPurchaseAPI(APIView):
     
      def post(self, request):
         data = request.data
         mandatory_fields = [
-            "supplier_name", "date", "due_date", "amount"
+            "supplier_name", "date", "due_date", "amount","quantity"
         ]
         for field in mandatory_fields:
             if not data.get(field):
@@ -511,8 +603,25 @@ class CreateSupplierPurchaseAPI(APIView):
             purchase_person=data.get('purchase_person', ''),
             subject=data.get('subject', ''),
             add_stock=data.get('add_stock', False),
-            attachments=data.get('attachments', '')
+            attachments=data.get('attachments', ''),
+            quantity=data['quantity']
         )
+        
+        
+        # If add_stock is True, create a corresponding Stock record
+        product_id = data.get('product_id')
+        if product_id:
+            # Attempt to retrieve the product using product_id
+            product = Product.objects.get(id=product_id)
+            product.stock += data['quantity']
+            product.save()
+        else:
+            # If 'product_id' is not provided, create a new product
+            product = Product.objects.create(
+                name=data['product_name'],
+                stock=data['quantity'],
+        
+            )
 
         return Response({
             "message": "Supplier purchase created successfully.",
@@ -539,7 +648,11 @@ class SupplierPurchaseListAPI(APIView):
         purchases = purchases.order_by('-date')
         data = SupplierPurchaseSerializer(purchases, many=True).data
 
-        return Response(data, status=status.HTTP_200_OK)
+        return Response({
+            "Status": "1",
+            "message": "Success",
+            "Data": data
+        }, status=status.HTTP_200_OK)
 
 class CreateSupplierAPI(APIView):
     def post(self, request):
@@ -553,7 +666,11 @@ class SupplierListAPI(APIView):
     def get(self, request):
         suppliers = Supplier.objects.all()
         serializer = SupplierSerializer(suppliers, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)        
+        return Response({
+            "Status": "1",
+            "message": "Success",
+            "Data": serializer.data
+        }, status=status.HTTP_200_OK)       
     
 
 class CreateDeliveryChallanAPI(APIView):
@@ -572,8 +689,14 @@ class CreateDeliveryChallanAPI(APIView):
 class DeliveryChallanListAPI(APIView):
     def get(self, request):
         delivery_challans = DeliveryChallan.objects.all()
-        data = DeliveryChallanSerializer(delivery_challans, many=True).data
-        return Response(data, status=status.HTTP_200_OK)
+        serializer = DeliveryChallanSerializer(delivery_challans, many=True)
+        
+        # Return the serialized data in the desired response format
+        return Response({
+            "Status": "1",
+            "message": "Success",
+            "Data": serializer.data
+        })
     
 class UpdateDeliveryChallanAPI(APIView):
     def patch(self, request, pk):
@@ -591,3 +714,41 @@ class UpdateDeliveryChallanAPI(APIView):
             }, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)    
     
+class ProductListCreateAPIView(APIView):
+    def get(self, request):
+        products = Product.objects.all()
+        serializer = ProductSerializer(products, many=True)
+        return Response({
+            "Status": "1",
+            "message": "Success",
+            "Data": serializer.data
+        })
+
+    def post(self, request):
+        serializer = ProductSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class ProductUpdateDeleteAPIView(APIView):
+    def put(self, request, pk):
+        try:
+            product = Product.objects.get(pk=pk)
+        except Product.DoesNotExist:
+            return Response({"error": "Product not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = ProductSerializer(product, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        try:
+            product = Product.objects.get(pk=pk)
+        except Product.DoesNotExist:
+            return Response({"error": "Product not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        product.delete()
+        return Response({"message": "Product deleted successfully."}, status=status.HTTP_204_NO_CONTENT)    

@@ -57,6 +57,8 @@ class Quotation(models.Model):
     delivery_location = models.CharField(max_length=255, blank=True, null=True)
     received_location = models.CharField(max_length=255, blank=True, null=True)
     attachments = models.FileField(upload_to="quotations/", blank=True, null=True)
+    quantity = models.DecimalField(max_digits=10, decimal_places=2, null=False, blank=False, default=1)
+
 
     def __str__(self):
         return self.invoice_number
@@ -89,17 +91,24 @@ class Notification(models.Model):
 
 # Settings
 class UserSetting(models.Model):
+    RATE_US_CHOICES = [
+        ('great', '😊 Great'),
+        ('okay', '😐 Okay'),
+        ('bad', '😞 Bad')
+    ]
+     
     company_name = models.CharField(max_length=200)
     user_name = models.CharField(max_length=200)
-    logo = models.ImageField(upload_to='logos/')  # Upload folder for logos
+    logo = models.ImageField(upload_to='logos/', blank=True, null=True)  # Upload folder for logos
     business_type = models.CharField(max_length=50, choices=[
         ('Individual', 'Individual'),
         ('Corporate', 'Corporate')
     ])
+    contact_us = models.TextField(default=1)  # Contact details of the organization
+    rate_us = models.CharField(max_length=5, choices=RATE_US_CHOICES, blank=True,default=1)  # Optional rating
 
     def __str__(self):
         return self.company_name
-
 # Rate Us
 class Feedback(models.Model):
     user = models.CharField(max_length=100)  # Or a ForeignKey to User model
@@ -113,10 +122,18 @@ class Feedback(models.Model):
     def __str__(self):
         return f"{self.user} - {self.rating}"   
     
+class Product(models.Model):
+    name = models.CharField(max_length=255)
+    stock = models.PositiveIntegerField()
 
+
+    def __str__(self):
+        return self.name
+    
 class SalesOrder(models.Model):
     customer_name = models.CharField(max_length=255)
     invoice_no = models.CharField(max_length=50, unique=True)
+ 
     order_number = models.CharField(max_length=50, unique=True)
     invoice_date = models.DateField()
     terms = models.CharField(max_length=255, blank=True)
@@ -125,6 +142,8 @@ class SalesOrder(models.Model):
     subject = models.TextField(blank=True)
     attachments = models.URLField(blank=True)
     order_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    quantity = models.DecimalField(max_digits=10, decimal_places=2, null=False, blank=False, default=1)
+
 
     def __str__(self):
         return f"Sales Order {self.order_number} - {self.customer_name}"    
@@ -139,6 +158,7 @@ class QuotationOrder(models.Model):
     subject = models.TextField(blank=True)
     attachments = models.URLField(blank=True)
     customer_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    quantity = models.DecimalField(max_digits=10, decimal_places=2, null=False, blank=False, default=1)
 
     def __str__(self):
         return f"Quotation {self.quotation_number} - {self.customer_name}"    
@@ -149,11 +169,14 @@ class InvoiceOrder(models.Model):
     invoice_date = models.DateField()
     terms = models.CharField(max_length=255, blank=True)
     due_date = models.DateField()
-    salesperson = models.CharField(max_length=255)
+    salesperson = models.CharField(max_length=255)              
     subject = models.TextField(blank=True)
     attachments = models.URLField(blank=True)
     invoice_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    quantity = models.DecimalField(max_digits=10, decimal_places=2,null=False, blank=False, default=1)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, default=1)  # New field
 
+    
     def __str__(self):
         return f"Invoice {self.invoice_number} - {self.customer_name}"    
     
@@ -169,7 +192,9 @@ class DeliveryOrder(models.Model):
     due_date = models.DateField()
     subject = models.TextField(blank=True)
     attachments = models.URLField(blank=True)
+    quantity = models.DecimalField(max_digits=10, decimal_places=2, null=False, blank=False, default=1)
 
+    
     def __str__(self):
         return f"Delivery {self.delivery_number} - {self.customer_name}"
     
@@ -177,6 +202,7 @@ class SupplierPurchase(models.Model):
     supplier_name = models.CharField(max_length=255)
     purchase_number = models.CharField(max_length=50, unique=True, default='Unknown')
     date = models.DateField()
+    product_name = models.CharField(max_length=255, default=1)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     terms = models.CharField(max_length=255, blank=True)
     due_date = models.DateField()
@@ -184,6 +210,7 @@ class SupplierPurchase(models.Model):
     subject = models.TextField(blank=True)
     add_stock = models.BooleanField(default=False)
     attachments = models.URLField(blank=True)
+    quantity = models.DecimalField(max_digits=10, decimal_places=2,null=False, blank=False , default=1)
 
     def __str__(self):
         return f"Purchase {self.supplier_number} - {self.supplier_name}"        

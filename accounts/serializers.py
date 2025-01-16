@@ -1,6 +1,5 @@
 from rest_framework import serializers
-from .models import CustomUser, Quotation, Feature, HelpLink, Notification, UserSetting, Feedback, SalesOrder,QuotationOrder, InvoiceOrder, DeliveryOrder, SupplierPurchase,Supplier,DeliveryChallan
-
+from .models import CustomUser, Quotation,Product, Feature, HelpLink, Notification, UserSetting, Feedback, SalesOrder,QuotationOrder, InvoiceOrder, DeliveryOrder, SupplierPurchase,Supplier,DeliveryChallan
 
 # Serializer for user registration
 class CustomUserCreateSerializer(serializers.ModelSerializer):
@@ -77,7 +76,8 @@ class SalesOrderSerializer(serializers.ModelSerializer):
             'salesperson', 
             'subject', 
             'attachments', 
-            'order_amount'
+            'order_amount',
+            'quantity'
         ]
         readonly_fields = ['order_number', 'invoice_no']
         
@@ -94,7 +94,8 @@ class QuotationOrderSerializer(serializers.ModelSerializer):
             'salesperson',
             'subject',
             'attachments',
-            'customer_amount'
+            'customer_amount',
+            'quantity'
         ]
         read_only_fields = ['quotation_number']
 
@@ -111,7 +112,8 @@ class InvoiceOrderSerializer(serializers.ModelSerializer):
             'salesperson',
             'subject',
             'attachments',
-            'invoice_amount'
+            'invoice_amount',
+            'quantity'
         ]
         read_only_fields = ['invoice_number']
 
@@ -130,7 +132,8 @@ class DeliveryOrderSerializer(serializers.ModelSerializer):
             'terms',
             'due_date',
             'subject',
-            'attachments'
+            'attachments',
+            'quantity'
         ]
         read_only_fields = ['delivery_number']        
         
@@ -139,7 +142,7 @@ class SupplierPurchaseSerializer(serializers.ModelSerializer):
         model = SupplierPurchase
         fields = [
                 'id', 'supplier_name', 'purchase_number', 'date', 'amount', 'terms', 
-                'due_date', 'purchase_person', 'subject', 'add_stock', 'attachments'
+                'due_date', 'purchase_person', 'subject', 'add_stock', 'attachments','quantity'
             ]
         read_only_fields = ['supplier_number']        
         
@@ -156,5 +159,10 @@ class DeliveryChallanSerializer(serializers.ModelSerializer):
     class Meta:
         model = DeliveryChallan
         fields = '__all__'
+        
+class ProductSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Product
+        fields = ['id', 'name', 'stock']        
  
         

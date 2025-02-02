@@ -10,6 +10,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from .models import Quotation,HelpLink, Notification, UserSetting, Feedback,SalesOrder,QuotationOrder,InvoiceOrder,DeliveryOrder, SupplierPurchase,Supplier, DeliveryChallan,Product
 from .serializers import QuotationSerializer, FeatureSerializer,ProductSerializer
+from rest_framework.authtoken.models import Token 
 from .serializers import CustomUserCreateSerializer, OTPSerializer, GettingStartedSerializer,HelpLinkSerializer,NotificationSerializer, UserSettingSerializer, FeedbackSerializer,QuotationOrderSerializer,InvoiceOrderSerializer,DeliveryOrderSerializer,SupplierPurchaseSerializer,SupplierSerializer,DeliveryChallanSerializer
 from django.core.mail import send_mail
 import random
@@ -68,6 +69,7 @@ class OTPVerificationView(APIView):
             return Response({'error': 'Invalid OTP or email.'}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
 
 class GettingStartedView(APIView):
     """

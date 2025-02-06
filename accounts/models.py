@@ -281,3 +281,28 @@ class QuotationOrderModel(models.Model):
 
     def __str__(self):
         return f"Quotation {self.quotation_number} - {self.customer_name}"    
+    
+
+class SalesOrderNew(models.Model):
+    customer_name = models.CharField(max_length=255)
+    item_name = models.CharField(max_length=255, blank=True, null=True)
+    description = models.TextField(blank=True, null=True)
+    order_number = models.CharField(max_length=50, unique=True)
+    sales_date = models.DateField()
+    quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2)
+    discount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    terms = models.TextField()
+    due_date = models.DateField()
+    salesperson = models.ForeignKey(SalesPerson, on_delete=models.CASCADE)
+    subject = models.TextField(blank=True, null=True)
+    attachments = models.FileField(upload_to="sales_order_attachments/", blank=True, null=True)
+
+    def save(self, *args, **kwargs):
+        # Auto-calculate total amount before saving
+        self.total_amount = (self.unit_price * self.quantity) - self.discount
+        super(SalesOrderNew, self).save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Sales Order {self.order_number} - {self.customer_name}"    

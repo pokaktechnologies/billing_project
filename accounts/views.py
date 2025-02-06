@@ -508,11 +508,13 @@ class CreateQuotationOrderAPI(APIView):
 
         return Response(
             {
+                "Status": "1",
                 "message": "Quotation order created successfully.",
-                "data": QuotationOrderSerializer(quotation_order).data
+                "Data": [QuotationOrderSerializer(quotation_order).data]
             },
             status=status.HTTP_201_CREATED
         )
+
 
 class QuotationOrderListAPI(APIView):
     def get(self, request):
@@ -554,10 +556,10 @@ class QuotationOrderUpdateAPI(APIView):
         if serializer.is_valid():
             serializer.save()
             return Response(
-                {"message": "Quotation order updated successfully.", "data": serializer.data},
+                {"message": "Quotation order updated successfully.", "Data": [serializer.data]},
                 status=status.HTTP_200_OK
             )
-        return Response({"error": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"Status": "0", "message": serializer.errors, "Data": []}, status=status.HTTP_400_BAD_REQUEST)
 
 class QuotationOrderDeleteAPI(APIView):
     """API for deleting an existing Quotation Order"""
@@ -565,9 +567,9 @@ class QuotationOrderDeleteAPI(APIView):
         try:
             quotation_order = QuotationOrderModel.objects.get(pk=pk)
             quotation_order.delete()
-            return Response({"message": "Quotation order deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+            return Response({"Status": "1", "message": "Quotation order deleted successfully.", "Data": []}, status=status.HTTP_204_NO_CONTENT)
         except QuotationOrderModel.DoesNotExist:
-            return Response({"error": "Quotation order not found."}, status=status.HTTP_404_NOT_FOUND)    
+            return Response({"Status": "0", "message": "Quotation order not found.", "Data": []}, status=status.HTTP_404_NOT_FOUND)    
     
 class CreateInvoiceOrderAPI(APIView):
     def post(self, request):
@@ -586,7 +588,7 @@ class CreateInvoiceOrderAPI(APIView):
                 return Response({"error": "Insufficient stock for the product."}, status=status.HTTP_400_BAD_REQUEST)
 
             with transaction.atomic():
-                # Deduct stock
+                # Deduct stockt 
                 product.stock -= int(data['quantity'])
                 product.save()
 

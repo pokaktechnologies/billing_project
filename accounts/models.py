@@ -243,3 +243,15 @@ class DeliveryChallan(models.Model):
 
     def __str__(self):
         return f"Delivery Challan {self.delivery_challan_number} - {self.customer_name}"  
+    
+class SalesPerson(models.Model):
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100, blank=True, null=True)
+    display_name = models.CharField(max_length=200, unique=True)
+    email = models.EmailField(unique=True)
+    phone = models.CharField(max_length=15, unique=True)
+    mobile = models.CharField(max_length=15, unique=True)
+    incentive = models.DecimalField(max_digits=10, decimal_places=2)
+
+    def __str__(self):
+        return self.display_name    

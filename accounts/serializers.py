@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
-from .models import CustomUser, Quotation,Product, Feature, HelpLink, Notification, UserSetting, Feedback, SalesOrder,QuotationOrder, InvoiceOrder, DeliveryOrder, SupplierPurchase,Supplier,DeliveryChallan
+from .models import CustomUser,SalesPerson, Quotation,Product, Feature, HelpLink, Notification, UserSetting, Feedback, SalesOrder,QuotationOrder, InvoiceOrder, DeliveryOrder, SupplierPurchase,Supplier,DeliveryChallan
 
 # Serializer for user registration
 class CustomUserCreateSerializer(serializers.ModelSerializer):
@@ -166,4 +166,18 @@ class ProductSerializer(serializers.ModelSerializer):
         model = Product
         fields = ['id', 'name', 'stock']        
  
-        
+
+class SalesPersonSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SalesPerson
+        fields = [
+            'id',
+            'first_name',
+            'last_name',
+            'display_name',
+            'email',
+            'phone',
+            'mobile',
+            'incentive'
+        ]
+        read_only_fields = []        

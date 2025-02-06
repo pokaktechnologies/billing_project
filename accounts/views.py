@@ -8,8 +8,8 @@ from django.db.models import Q
 from django.db import transaction
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
-from .models import Quotation,HelpLink, Notification, UserSetting, Feedback,SalesOrder,QuotationOrder,InvoiceOrder,DeliveryOrder, SupplierPurchase,Supplier, DeliveryChallan,Product
-from .serializers import QuotationSerializer, FeatureSerializer,ProductSerializer
+from .models import Quotation,HelpLink, SalesPerson,Notification, UserSetting, Feedback,SalesOrder,QuotationOrder,InvoiceOrder,DeliveryOrder, SupplierPurchase,Supplier, DeliveryChallan,Product
+from .serializers import QuotationSerializer, FeatureSerializer,ProductSerializer,SalesPersonSerializer
 from rest_framework.authtoken.models import Token 
 from .serializers import CustomUserCreateSerializer, OTPSerializer, GettingStartedSerializer,HelpLinkSerializer,NotificationSerializer, UserSettingSerializer, FeedbackSerializer,QuotationOrderSerializer,InvoiceOrderSerializer,DeliveryOrderSerializer,SupplierPurchaseSerializer,SupplierSerializer,DeliveryChallanSerializer
 from django.core.mail import send_mail
@@ -754,3 +754,16 @@ class ProductUpdateDeleteAPIView(APIView):
 
         product.delete()
         return Response({"message": "Product deleted successfully."}, status=status.HTTP_204_NO_CONTENT)    
+
+class SalesPersonListCreateAPIView(APIView):
+    def get(self, request):
+        salespersons = SalesPerson.objects.all()
+        serializer = SalesPersonSerializer(salespersons, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = SalesPersonSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

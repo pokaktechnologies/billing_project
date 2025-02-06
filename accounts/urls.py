@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import SignupView, OTPVerificationView,UserSettingView,GettingStartedView,ProductListCreateAPIView,ProductUpdateDeleteAPIView, HomePageView, HelpLinkView, NotificationView, UserSettingView, FeedbackView, CreateSalesOrderAPI,SalesOrderListAPI,CreateQuotationOrderAPI, QuotationOrderListAPI, CreateInvoiceOrderAPI,InvoiceOrderListAPI,CreateDeliveryOrderAPI,DeliveryOrderListAPI, CreateSupplierPurchaseAPI,SupplierPurchaseListAPI,CreateSupplierAPI,SupplierListAPI,CreateDeliveryChallanAPI,DeliveryChallanListAPI,UpdateDeliveryChallanAPI
+from .views import SignupView, OTPVerificationView,SalesPersonListCreateAPIView,UserSettingView,GettingStartedView,ProductListCreateAPIView,ProductUpdateDeleteAPIView, HomePageView, HelpLinkView, NotificationView, UserSettingView, FeedbackView, CreateSalesOrderAPI,SalesOrderListAPI,CreateQuotationOrderAPI, QuotationOrderListAPI, CreateInvoiceOrderAPI,InvoiceOrderListAPI,CreateDeliveryOrderAPI,DeliveryOrderListAPI, CreateSupplierPurchaseAPI,SupplierPurchaseListAPI,CreateSupplierAPI,SupplierListAPI,CreateDeliveryChallanAPI,DeliveryChallanListAPI,UpdateDeliveryChallanAPI
 
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -35,4 +35,5 @@ urlpatterns = [
     path('create-delivery-challan/', CreateDeliveryChallanAPI.as_view(), name='create_delivery_challan'),
     path('list-delivery-challans/', DeliveryChallanListAPI.as_view(), name='list_delivery_challans'),
     path('update-delivery-challan/<int:pk>/', UpdateDeliveryChallanAPI.as_view(), name='update_delivery_challan'),
+    path('salespersons/', SalesPersonListCreateAPIView.as_view(), name='salespersons_list'),
 ]

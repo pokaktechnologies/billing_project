@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
-from .models import CustomUser,SalesPerson, Quotation,Product, Feature, HelpLink, Notification, UserSetting, Feedback, SalesOrder,QuotationOrder, InvoiceOrder, DeliveryOrder, SupplierPurchase,Supplier,DeliveryChallan
+from .models import CustomUser,SalesPerson, Quotation,Product, Feature, HelpLink, Notification, UserSetting, Feedback, SalesOrder,QuotationOrderModel, InvoiceOrder, DeliveryOrder, SupplierPurchase,Supplier,DeliveryChallan
 
 # Serializer for user registration
 class CustomUserCreateSerializer(serializers.ModelSerializer):
@@ -83,8 +83,10 @@ class SalesOrderSerializer(serializers.ModelSerializer):
         readonly_fields = ['order_number', 'invoice_no']
         
 class QuotationOrderSerializer(serializers.ModelSerializer):
+    salesperson_name = serializers.CharField(source='salesperson.display_name', read_only=True)
+
     class Meta:
-        model = QuotationOrder
+        model = QuotationOrderModel
         fields = [
             'id',
             'customer_name',
@@ -93,13 +95,25 @@ class QuotationOrderSerializer(serializers.ModelSerializer):
             'terms',
             'due_date',
             'salesperson',
+            'salesperson_name',  # Salesperson fetched dynamically
+            'email_id',
             'subject',
             'attachments',
-            'customer_amount',
+            'item_name',
+            'description',
+            'unit_price',
+            'discount',
+            'total_amount',
             'quantity'
         ]
-        read_only_fields = ['quotation_number']
+        read_only_fields = ['quotation_number', 'total_amount']
 
+    def validate_discount(self, value):
+        """ Ensure discount is not greater than unit price """
+        if value < 0:
+            raise serializers.ValidationError("Discount cannot be negative.")
+        return value
+    
 class InvoiceOrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = InvoiceOrder

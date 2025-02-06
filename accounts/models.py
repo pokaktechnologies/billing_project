@@ -148,21 +148,23 @@ class SalesOrder(models.Model):
     def __str__(self):
         return f"Sales Order {self.order_number} - {self.customer_name}"    
 
-class QuotationOrder(models.Model):
-    customer_name = models.CharField(max_length=255)
-    quotation_number = models.CharField(max_length=50, unique=True)
-    quotation_date = models.DateField()
-    terms = models.CharField(max_length=255, blank=True)
-    due_date = models.DateField()
-    salesperson = models.CharField(max_length=255)
-    subject = models.TextField(blank=True)
-    attachments = models.URLField(blank=True)
-    customer_amount = models.DecimalField(max_digits=10, decimal_places=2)
-    quantity = models.DecimalField(max_digits=10, decimal_places=2, null=False, blank=False, default=1)
+# class QuotationOrder(models.Model):
+#     customer_name = models.CharField(max_length=255)
+#     quotation_number = models.CharField(max_length=50, unique=True)
+#     quotation_date = models.DateField()
+#     terms = models.CharField(max_length=255, blank=True)
+#     due_date = models.DateField()
+#     salesperson = models.CharField(max_length=255)
+#     subject = models.TextField(blank=True)
+#     attachments = models.URLField(blank=True)
+#     customer_amount = models.DecimalField(max_digits=10, decimal_places=2)
+#     quantity = models.DecimalField(max_digits=10, decimal_places=2, null=False, blank=False, default=1)
 
-    def __str__(self):
-        return f"Quotation {self.quotation_number} - {self.customer_name}"    
-    
+#     def __str__(self):
+#         return f"Quotation {self.quotation_number} - {self.customer_name}"    
+
+
+        
 class InvoiceOrder(models.Model):
     customer_name = models.CharField(max_length=255)
     invoice_number = models.CharField(max_length=50, unique=True)
@@ -255,3 +257,27 @@ class SalesPerson(models.Model):
 
     def __str__(self):
         return self.display_name    
+    
+class QuotationOrderModel(models.Model):
+    customer_name = models.CharField(max_length=255)
+    quotation_number = models.CharField(max_length=50, unique=True)
+    quotation_date = models.DateField()
+    terms = models.CharField(max_length=255, blank=True)
+    due_date = models.DateField()
+    salesperson = models.ForeignKey(SalesPerson, on_delete=models.CASCADE)  # Fetching from SalesPerson model
+    email_id = models.EmailField(default=1)  # New field
+    subject = models.TextField(blank=True)
+    attachments = models.FileField(upload_to='quotations/', blank=True, null=True)  # File upload
+    item_name = models.CharField(max_length=255,default=1)  # New field
+    description = models.TextField(blank=True,default=1)  # New field
+    unit_price = models.DecimalField(max_digits=10,default=1, decimal_places=2)  # New field
+    discount = models.DecimalField(max_digits=5,  decimal_places=2, default=0)  # New field
+    total_amount = models.DecimalField(max_digits=10 ,decimal_places=2, default=1,editable=False)  # New field
+    quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
+
+    def save(self, *args, **kwargs):
+        self.total_amount = (self.unit_price * self.quantity) - self.discount  # Auto-calculate total amount
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Quotation {self.quotation_number} - {self.customer_name}"    

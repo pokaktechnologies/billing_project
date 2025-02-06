@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import SignupView, OTPVerificationView,SalesPersonListCreateAPIView,UserSettingView,GettingStartedView,ProductListCreateAPIView,ProductUpdateDeleteAPIView, HomePageView, HelpLinkView, NotificationView, UserSettingView, FeedbackView, CreateSalesOrderAPI,SalesOrderListAPI,CreateQuotationOrderAPI, QuotationOrderListAPI, CreateInvoiceOrderAPI,InvoiceOrderListAPI,CreateDeliveryOrderAPI,DeliveryOrderListAPI, CreateSupplierPurchaseAPI,SupplierPurchaseListAPI,CreateSupplierAPI,SupplierListAPI,CreateDeliveryChallanAPI,DeliveryChallanListAPI,UpdateDeliveryChallanAPI
+from .views import SignupView, OTPVerificationView,SalesPersonListCreateAPIView,QuotationOrderUpdateAPI,QuotationOrderDeleteAPI,UserSettingView,GettingStartedView,ProductListCreateAPIView,ProductUpdateDeleteAPIView, HomePageView, HelpLinkView, NotificationView, UserSettingView, FeedbackView, CreateSalesOrderAPI,SalesOrderListAPI,CreateQuotationOrderAPI, QuotationOrderListAPI, CreateInvoiceOrderAPI,InvoiceOrderListAPI,CreateDeliveryOrderAPI,DeliveryOrderListAPI, CreateSupplierPurchaseAPI,SupplierPurchaseListAPI,CreateSupplierAPI,SupplierListAPI,CreateDeliveryChallanAPI,DeliveryChallanListAPI,UpdateDeliveryChallanAPI
 
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -24,6 +24,9 @@ urlpatterns = [
     path('get-sales-orders/', SalesOrderListAPI.as_view(), name='sales_order_list'),
     path('quotation-orders/', CreateQuotationOrderAPI.as_view(), name='create_quotation_order'),
     path('get-quotation-orders/', QuotationOrderListAPI.as_view(), name='quotation_order_list'),
+    path('quotation-update-orders/<pk>/', QuotationOrderUpdateAPI.as_view(), name='quotation_order_list'),
+    path('quotation-delete-orders/<pk>/', QuotationOrderDeleteAPI.as_view(), name='quotation_order_list'),
+
     path('invoice-orders/', CreateInvoiceOrderAPI.as_view(), name='create_invoice_order'),
     path('get-invoice-orders/', InvoiceOrderListAPI.as_view(), name='invoice_order_list'),
     path('delivery-orders/', CreateDeliveryOrderAPI.as_view(), name='create_delivery_order'),

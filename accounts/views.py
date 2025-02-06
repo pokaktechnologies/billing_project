@@ -8,7 +8,8 @@ from django.db.models import Q
 from django.db import transaction
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
-from .models import Quotation,HelpLink, SalesPerson,Notification, UserSetting, Feedback,SalesOrder,QuotationOrder,InvoiceOrder,DeliveryOrder, SupplierPurchase,Supplier, DeliveryChallan,Product
+from rest_framework.parsers import MultiPartParser, FormParser
+from .models import Quotation,HelpLink, SalesPerson,Notification, UserSetting, Feedback,SalesOrder,QuotationOrderModel,InvoiceOrder,DeliveryOrder, SupplierPurchase,Supplier, DeliveryChallan,Product
 from .serializers import QuotationSerializer, FeatureSerializer,ProductSerializer,SalesPersonSerializer
 from rest_framework.authtoken.models import Token 
 from .serializers import CustomUserCreateSerializer, OTPSerializer, GettingStartedSerializer,HelpLinkSerializer,NotificationSerializer, UserSettingSerializer, FeedbackSerializer,QuotationOrderSerializer,InvoiceOrderSerializer,DeliveryOrderSerializer,SupplierPurchaseSerializer,SupplierSerializer,DeliveryChallanSerializer
@@ -360,6 +361,89 @@ class SalesOrderListAPI(APIView):
             }, status=status.HTTP_200_OK)
             
 
+# class CreateQuotationOrderAPI(APIView):
+#     def post(self, request):
+#         data = request.data
+
+#         # Validate mandatory fields
+#         mandatory_fields = [
+#             "customer_name",
+#             "quotation_date",
+#             "due_date",
+#             "salesperson",
+#             "customer_amount",
+#             'quantity',
+#         ]
+#         for field in mandatory_fields:
+#             if not data.get(field):
+#                 return Response(
+#                     {"error": f"{field} is required."},
+#                     status=status.HTTP_400_BAD_REQUEST
+#                 )
+
+#         # Validate date range
+#         if data['due_date'] < data['quotation_date']:
+#             return Response(
+#                 {"error": "Due date cannot be earlier than quotation date."},
+#                 status=status.HTTP_400_BAD_REQUEST
+#             )
+
+#         quotation_number = f"QUO-{random.randint(111111, 999999)}"
+        
+#         # Save to database
+#         quotation_order = QuotationOrder.objects.create(
+#             customer_name=data['customer_name'],
+#             quotation_number=quotation_number,
+#             quotation_date=data['quotation_date'],
+#             terms=data.get('terms', ''),
+#             due_date=data['due_date'],
+#             salesperson=data['salesperson'],
+#             subject=data.get('subject', ''),
+#             attachments=data.get('attachments', ''),
+#             customer_amount=data['customer_amount'],
+#             quantity=data['quantity']  
+#         )
+
+#         return Response(
+#             {
+#                 "message": "Quotation order created successfully.",
+#                 "data": QuotationOrderSerializer(quotation_order).data
+#             },
+#             status=status.HTTP_201_CREATED
+#         )
+
+# class QuotationOrderListAPI(APIView):
+
+#     def get(self, request):
+#         # Get query parameters
+#         from_date = request.query_params.get('from_date')
+#         to_date = request.query_params.get('to_date')
+#         search = request.query_params.get('search')
+
+#         # Filter quotation orders
+#         orders = QuotationOrder.objects.all()
+#         if from_date and to_date:
+#             orders = orders.filter(quotation_date__range=[from_date, to_date])
+        
+#         if search:
+#             orders = orders.filter(
+#                 Q(customer_name__icontains=search) |
+#                 Q(quotation_number__icontains=search) |
+#                 Q(salesperson__icontains=search)
+#             )
+        
+#         # Order by the newest order on top
+#         orders = orders.order_by('-quotation_date')
+
+#         # Serialize response
+#         data = QuotationOrderSerializer(orders, many=True).data
+
+#         return Response({
+#             "Status": "1",
+#             "message": "Success",
+#             "Data": data
+#         }, status=status.HTTP_200_OK)       
+    
 class CreateQuotationOrderAPI(APIView):
     def post(self, request):
         data = request.data
@@ -370,8 +454,12 @@ class CreateQuotationOrderAPI(APIView):
             "quotation_date",
             "due_date",
             "salesperson",
-            "customer_amount",
-            'quantity',
+            "item_name",
+            "description",
+            "unit_price",
+            "discount",
+            "quantity",
+            "email_id"
         ]
         for field in mandatory_fields:
             if not data.get(field):
@@ -387,20 +475,35 @@ class CreateQuotationOrderAPI(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # Generate a unique quotation number
         quotation_number = f"QUO-{random.randint(111111, 999999)}"
         
+        # Fetch salesperson instance
+        try:
+            salesperson = SalesPerson.objects.get(id=data['salesperson'])
+        except SalesPerson.DoesNotExist:
+            return Response({"error": "Invalid salesperson ID."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Calculate total amount
+        total_amount = (float(data['unit_price']) - float(data['discount'])) * float(data['quantity'])
+        
         # Save to database
-        quotation_order = QuotationOrder.objects.create(
+        quotation_order = QuotationOrderModel.objects.create(
             customer_name=data['customer_name'],
             quotation_number=quotation_number,
             quotation_date=data['quotation_date'],
             terms=data.get('terms', ''),
             due_date=data['due_date'],
-            salesperson=data['salesperson'],
+            salesperson=salesperson,
             subject=data.get('subject', ''),
-            attachments=data.get('attachments', ''),
-            customer_amount=data['customer_amount'],
-            quantity=data['quantity']  
+            attachments=request.FILES.get('attachments', None),
+            item_name=data['item_name'],
+            description=data['description'],
+            unit_price=data['unit_price'],
+            discount=data['discount'],
+            quantity=data['quantity'],
+            total_amount=total_amount,
+            email_id=data['email_id']
         )
 
         return Response(
@@ -412,15 +515,13 @@ class CreateQuotationOrderAPI(APIView):
         )
 
 class QuotationOrderListAPI(APIView):
-
     def get(self, request):
-        # Get query parameters
         from_date = request.query_params.get('from_date')
         to_date = request.query_params.get('to_date')
         search = request.query_params.get('search')
 
         # Filter quotation orders
-        orders = QuotationOrder.objects.all()
+        orders = QuotationOrderModel.objects.all()
         if from_date and to_date:
             orders = orders.filter(quotation_date__range=[from_date, to_date])
         
@@ -431,19 +532,43 @@ class QuotationOrderListAPI(APIView):
                 Q(salesperson__icontains=search)
             )
         
-        # Order by the newest order on top
         orders = orders.order_by('-quotation_date')
-
-        # Serialize response
+        
         data = QuotationOrderSerializer(orders, many=True).data
-
+        
         return Response({
             "Status": "1",
             "message": "Success",
             "Data": data
-        }, status=status.HTTP_200_OK)       
-    
+        }, status=status.HTTP_200_OK)
 
+class QuotationOrderUpdateAPI(APIView):
+    """API for updating an existing Quotation Order"""
+    def put(self, request, pk):
+        try:
+            quotation_order = QuotationOrderModel.objects.get(pk=pk)
+        except QuotationOrderModel.DoesNotExist:
+            return Response({"error": "Quotation order not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = QuotationOrderSerializer(quotation_order, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                {"message": "Quotation order updated successfully.", "data": serializer.data},
+                status=status.HTTP_200_OK
+            )
+        return Response({"error": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+class QuotationOrderDeleteAPI(APIView):
+    """API for deleting an existing Quotation Order"""
+    def delete(self, request, pk):
+        try:
+            quotation_order = QuotationOrderModel.objects.get(pk=pk)
+            quotation_order.delete()
+            return Response({"message": "Quotation order deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+        except QuotationOrderModel.DoesNotExist:
+            return Response({"error": "Quotation order not found."}, status=status.HTTP_404_NOT_FOUND)    
+    
 class CreateInvoiceOrderAPI(APIView):
     def post(self, request):
         data = request.data

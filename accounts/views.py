@@ -882,15 +882,25 @@ class ProductUpdateDeleteAPIView(APIView):
         product.delete()
         return Response({"message": "Product deleted successfully."}, status=status.HTTP_204_NO_CONTENT)    
 
+
 class SalesPersonListCreateAPIView(APIView):
     def get(self, request):
         salespersons = SalesPerson.objects.all()
         serializer = SalesPersonSerializer(salespersons, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(
+            {"Status": "1", "message": "Success", "Data": serializer.data},
+            status=status.HTTP_200_OK
+        )
 
     def post(self, request):
         serializer = SalesPersonSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"Status": "1", "message": "Salesperson created successfully.", "Data": [serializer.data]},
+                status=status.HTTP_201_CREATED
+            )
+        return Response(
+            {"Status": "0", "message": "Validation failed.", "Data": serializer.errors},
+            status=status.HTTP_400_BAD_REQUEST
+        )

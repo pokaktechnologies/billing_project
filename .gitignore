@@ -1,0 +1,18 @@
+# Virtual Environment
+venv/
+
+# Environment Variables
+.env
+
+# SQLite Database
+*.sqlite3
+*.db
+
+# Logs and Background Processes
+nohup.out
+
+# Cache and Temporary Files
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store

@@ -123,19 +123,19 @@ class Feedback(models.Model):
         return f"{self.user} - {self.rating}"   
     
 class Product(models.Model):
-    product_code = models.CharField(max_length=50, unique=True, default=True)
+    product_code = models.CharField(max_length=50, unique=True)
     name = models.CharField(max_length=255)
     product_description = models.TextField(blank=True)
-    unit = models.CharField(max_length=50, null=True)  # Example: kg, liter, piece
-    unit_price = models.DecimalField(max_digits=10, decimal_places=2,default=True)
-    total_price = models.DecimalField(max_digits=10, decimal_places=2,default=True)
+    unit = models.CharField(max_length=50)  # Example: kg, liter, piece
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2)
+    total_price = models.DecimalField(max_digits=10, decimal_places=2)
 
     def save(self, *args, **kwargs):
         self.total_price = self.unit_price  # Set total_price same as unit_price
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return self.product_name
+        return self.name
 
     
 class SalesOrder(models.Model):

@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import SignupView, OTPVerificationView,SalesPersonListCreateAPIView,QuotationOrderUpdateAPI,QuotationOrderDeleteAPI,UserSettingView,GettingStartedView,ProductListCreateAPIView,ProductUpdateDeleteAPIView, HomePageView, HelpLinkView, NotificationView, UserSettingView, FeedbackView, CreateSalesOrderAPI,SalesOrderListAPI,CreateQuotationOrderAPI, QuotationOrderListAPI, CreateInvoiceOrderAPI,InvoiceOrderListAPI,CreateDeliveryOrderAPI,DeliveryOrderListAPI, CreateSupplierPurchaseAPI,SupplierPurchaseListAPI,CreateSupplierAPI,SupplierListAPI,CreateDeliveryChallanAPI,DeliveryChallanListAPI,UpdateDeliveryChallanAPI
+from .views import SignupView, OTPVerificationView,SalesPersonListCreateAPIView,QuotationOrderUpdateAPI,QuotationOrderDeleteAPI,UserSettingView,GettingStartedView,ProductListCreateAPIView,ProductDetailAPI, HomePageView, HelpLinkView, NotificationView, UserSettingView, FeedbackView, CreateSalesOrderAPI,SalesOrderListAPI,CreateQuotationOrderAPI, QuotationOrderListAPI, CreateInvoiceOrderAPI,InvoiceOrderListAPI,CreateDeliveryOrderAPI,DeliveryOrderListAPI, CreateSupplierPurchaseAPI,SupplierPurchaseListAPI,CreateSupplierAPI,SupplierListAPI,CreateDeliveryChallanAPI,DeliveryChallanListAPI,UpdateDeliveryChallanAPI
 
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -19,7 +19,7 @@ urlpatterns = [
     path('usersettings/', UserSettingView.as_view(), name='user_setting_list'),
     path('feedback/', FeedbackView.as_view(), name='feedback'),
     path('products/', ProductListCreateAPIView.as_view(), name='product-list-create'),
-    path('products/<int:pk>/', ProductUpdateDeleteAPIView.as_view(), name='product-update-delete'),
+    path('products/<int:product_id>/', ProductDetailAPI.as_view(), name='product-update-delete'),
     path('sales-orders/', CreateSalesOrderAPI.as_view(), name='create_sales_order'),
     path('get-sales-orders/', SalesOrderListAPI.as_view(), name='sales_order_list'),
     path('quotation-orders/', CreateQuotationOrderAPI.as_view(), name='create_quotation_order'),

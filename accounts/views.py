@@ -846,41 +846,87 @@ class UpdateDeliveryChallanAPI(APIView):
 class ProductListCreateAPIView(APIView):
     def get(self, request):
         products = Product.objects.all()
-        serializer = ProductSerializer(products, many=True)
+        data = ProductSerializer(products, many=True).data
         return Response({
             "Status": "1",
             "message": "Success",
-            "Data": serializer.data
-        })
+            "Data": data
+        }, status=status.HTTP_200_OK)
 
     def post(self, request):
         serializer = ProductSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                "Status": "1",
+                "message": "Product created successfully.",
+                "Data": [serializer.data]
+            }, status=status.HTTP_201_CREATED)
+        return Response({
+            "Status": "0",
+            "message": "Validation failed.",
+            "Errors": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
 
-class ProductUpdateDeleteAPIView(APIView):
-    def put(self, request, pk):
+# Retrieve, Update, and Delete a Product
+class ProductDetailAPI(APIView):
+    def get_object(self, product_id):
         try:
-            product = Product.objects.get(pk=pk)
+            return Product.objects.get(id=product_id)
         except Product.DoesNotExist:
-            return Response({"error": "Product not found."}, status=status.HTTP_404_NOT_FOUND)
+            return None
 
-        serializer = ProductSerializer(product, data=request.data)
+    def get(self, request, product_id):
+        product = self.get_object(product_id)
+        if not product:
+            return Response({
+                "Status": "0",
+                "message": "Product not found."
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        data = [ProductSerializer(product).data]
+        return Response({
+            "Status": "1",
+            "message": "Success",
+            "Data": data
+        }, status=status.HTTP_200_OK)
+
+    def put(self, request, product_id):
+        product = self.get_object(product_id)
+        if not product:
+            return Response({
+                "Status": "0",
+                "message": "Product not found."
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        serializer = ProductSerializer(product, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                "Status": "1",
+                "message": "Product updated successfully.",
+                "Data": [serializer.data]
+            }, status=status.HTTP_200_OK)
 
-    def delete(self, request, pk):
-        try:
-            product = Product.objects.get(pk=pk)
-        except Product.DoesNotExist:
-            return Response({"error": "Product not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response({
+            "Status": "0",
+            "message": "Validation failed.",
+            "Errors": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, product_id):
+        product = self.get_object(product_id)
+        if not product:
+            return Response({
+                "Status": "0",
+                "message": "Product not found."
+            }, status=status.HTTP_404_NOT_FOUND)
 
         product.delete()
-        return Response({"message": "Product deleted successfully."}, status=status.HTTP_204_NO_CONTENT)    
+        return Response({
+            "Status": "1",
+            "message": "Product deleted successfully."
+        }, status=status.HTTP_200_OK)
 
 
 class SalesPersonListCreateAPIView(APIView):
@@ -904,3 +950,5 @@ class SalesPersonListCreateAPIView(APIView):
             {"Status": "0", "message": "Validation failed.", "Data": serializer.errors},
             status=status.HTTP_400_BAD_REQUEST
         )
+        
+        

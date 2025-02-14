@@ -123,12 +123,20 @@ class Feedback(models.Model):
         return f"{self.user} - {self.rating}"   
     
 class Product(models.Model):
+    product_code = models.CharField(max_length=50, unique=True, default=True)
     name = models.CharField(max_length=255)
-    stock = models.PositiveIntegerField()
+    product_description = models.TextField(blank=True)
+    unit = models.CharField(max_length=50, null=True)  # Example: kg, liter, piece
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2,default=True)
+    total_price = models.DecimalField(max_digits=10, decimal_places=2,default=True)
 
+    def save(self, *args, **kwargs):
+        self.total_price = self.unit_price  # Set total_price same as unit_price
+        super().save(*args, **kwargs)
 
     def __str__(self):
-        return self.name
+        return self.product_name
+
     
 class SalesOrder(models.Model):
     customer_name = models.CharField(max_length=255)
@@ -268,21 +276,29 @@ class QuotationOrderModel(models.Model):
     email_id = models.EmailField(default=1)  # New field
     subject = models.TextField(blank=True)
     attachments = models.FileField(upload_to='quotations/', blank=True, null=True)  # File upload
-    item_name = models.CharField(max_length=255,default=1)  # New field
-    description = models.TextField(blank=True,default=1)  # New field
-    unit_price = models.DecimalField(max_digits=10,default=1, decimal_places=2)  # New field
-    discount = models.DecimalField(max_digits=5,  decimal_places=2, default=0)  # New field
-    total_amount = models.DecimalField(max_digits=10 ,decimal_places=2, default=1,editable=False)  # New field
-    quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
 
-    def save(self, *args, **kwargs):
-        self.total_amount = (self.unit_price * self.quantity) - self.discount  # Auto-calculate total amount
-        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Quotation {self.quotation_number} - {self.customer_name}"    
     
 
+class QuotationItem(models.Model):
+    quotation = models.ForeignKey(QuotationOrderModel, related_name='items', on_delete=models.CASCADE)
+    product_code = models.CharField(max_length=100)
+    product_description = models.TextField()
+    quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    discount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    # Auto-calculated field
+    total_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, editable=False)
+
+    def save(self, *args, **kwargs):
+        self.total_price = (self.unit_price * self.quantity) - self.discount
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.product_code} - {self.product_description}"
 class SalesOrderNew(models.Model):
     customer_name = models.CharField(max_length=255)
     item_name = models.CharField(max_length=255, blank=True, null=True)

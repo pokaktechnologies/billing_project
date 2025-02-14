@@ -114,6 +114,9 @@ class QuotationOrderSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Discount cannot be negative.")
         return value
     
+
+
+            
 class InvoiceOrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = InvoiceOrder
@@ -178,7 +181,7 @@ class DeliveryChallanSerializer(serializers.ModelSerializer):
 class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
-        fields = ['id', 'name', 'stock']        
+        fields = '__all__'
  
 
 class SalesPersonSerializer(serializers.ModelSerializer):

@@ -951,4 +951,5 @@ class SalesPersonListCreateAPIView(APIView):
             status=status.HTTP_400_BAD_REQUEST
         )
         
-        
+# class test(APIView):
+#     def get

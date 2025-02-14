@@ -16,6 +16,7 @@ from .serializers import CustomUserCreateSerializer, OTPSerializer, GettingStart
 from django.core.mail import send_mail
 import random
 
+
 class SignupView(APIView):
     """
     API view for user signup with first_name, last_name, and email. An OTP will be sent to the email.
@@ -951,5 +952,3 @@ class SalesPersonListCreateAPIView(APIView):
             status=status.HTTP_400_BAD_REQUEST
         )
         
-# class test(APIView):
-#     def get

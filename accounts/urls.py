@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import SignupView, OTPVerificationView,SalesPersonListCreateAPIView,QuotationOrderUpdateAPI,QuotationOrderDeleteAPI,UserSettingView,GettingStartedView,ProductListCreateAPIView,ProductDetailAPI, HomePageView, HelpLinkView, NotificationView, UserSettingView, FeedbackView, CreateSalesOrderAPI,SalesOrderListAPI,CreateQuotationOrderAPI, QuotationOrderListAPI, CreateInvoiceOrderAPI,InvoiceOrderListAPI,CreateDeliveryOrderAPI,DeliveryOrderListAPI, CreateSupplierPurchaseAPI,SupplierPurchaseListAPI,CreateSupplierAPI,SupplierListAPI,CreateDeliveryChallanAPI,DeliveryChallanListAPI,UpdateDeliveryChallanAPI
+from .views import *
 
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -22,11 +22,27 @@ urlpatterns = [
     path('products/<int:product_id>/', ProductDetailAPI.as_view(), name='product-update-delete'),
     path('sales-orders/', CreateSalesOrderAPI.as_view(), name='create_sales_order'),
     path('get-sales-orders/', SalesOrderListAPI.as_view(), name='sales_order_list'),
-    path('quotation-orders/', CreateQuotationOrderAPI.as_view(), name='create_quotation_order'),
-    path('get-quotation-orders/', QuotationOrderListAPI.as_view(), name='quotation_order_list'),
-    path('quotation-update-orders/<pk>/', QuotationOrderUpdateAPI.as_view(), name='quotation_order_list'),
-    path('quotation-delete-orders/<pk>/', QuotationOrderDeleteAPI.as_view(), name='quotation_order_list'),
-
+    # path('quotation-orders/', CreateQuotationOrderAPI.as_view(), name='create_quotation_order'),
+    # path('get-quotation-orders/', QuotationOrderListAPI.as_view(), name='quotation_order_list'),
+    # path('quotation-update-orders/<pk>/', QuotationOrderUpdateAPI.as_view(), name='quotation_order_list'),
+    # path('quotation-delete-orders/<pk>/', QuotationOrderDeleteAPI.as_view(), name='quotation_order_list'),
+    # path('quotations/', QuotationOrderAPIView.as_view(), name='quotations-list'),
+    # path('quotations/<int:pk>/', QuotationOrderAPIView.as_view(), name='quotations-detail'),
+    # path('quotations/<int:quotation_pk>/items/', QuotationItemAPIView.as_view(), name='quotation-items-list'),
+    # path('quotations/<int:quotation_pk>/items/<int:item_pk>/', QuotationItemAPIView.as_view(), name='quotation-items-detail'),
+    
+    # path('quotations/', QuotationOrderAPIView.as_view(), name='quotations-list'),
+    # path('quotations/<int:pk>/', QuotationOrderAPIView.as_view(), name='quotations-detail'),
+    
+    # path('quotations/<int:quotation_pk>/items/', QuotationItemAPIView.as_view(), name='quotation-items-list'),
+    # path('quotations/<int:quotation_pk>/items/<int:item_pk>/', QuotationItemAPIView.as_view(), name='quotation-items-detail'),
+    
+        
+    # path('quotations/<int:quotation_pk>/items/', QuotationItemAPIView.as_view(), name='quotation-items-list'),
+    # path('quotations/<int:quotation_pk>/items/<int:item_pk>/', QuotationItemAPIView.as_view(), name='quotation-items-detail'),
+    
+    path('quotations/', QuotationOrderAPI.as_view(), name='quotation-items-detail'),
+    path('quotations/<int:qid>/', QuotationOrderAPI.as_view(), name='quotation-items-detail'),
     path('invoice-orders/', CreateInvoiceOrderAPI.as_view(), name='create_invoice_order'),
     path('get-invoice-orders/', InvoiceOrderListAPI.as_view(), name='invoice_order_list'),
     path('delivery-orders/', CreateDeliveryOrderAPI.as_view(), name='create_delivery_order'),
@@ -39,4 +55,7 @@ urlpatterns = [
     path('list-delivery-challans/', DeliveryChallanListAPI.as_view(), name='list_delivery_challans'),
     path('update-delivery-challan/<int:pk>/', UpdateDeliveryChallanAPI.as_view(), name='update_delivery_challan'),
     path('salespersons/', SalesPersonListCreateAPIView.as_view(), name='salespersons_list'),
+    
+
+
 ]

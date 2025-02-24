@@ -128,11 +128,11 @@ class Product(models.Model):
     product_description = models.TextField(blank=True)
     unit = models.CharField(max_length=50)  # Example: kg, liter, piece
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
-    total_price = models.DecimalField(max_digits=10, decimal_places=2)
+    # total_price = models.DecimalField(max_digits=10, decimal_places=2)
 
-    def save(self, *args, **kwargs):
-        self.total_price = self.unit_price  # Set total_price same as unit_price
-        super().save(*args, **kwargs)
+    # def save(self, *args, **kwargs):
+    #     # self.total_price = self.unit_price  # Set total_price same as unit_price
+    #     super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
@@ -277,6 +277,13 @@ class QuotationOrderModel(models.Model):
     subject = models.TextField(blank=True)
     attachments = models.FileField(upload_to='quotations/', blank=True, null=True)  # File upload
 
+    grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
+
+    def update_grand_total(self):
+        """Recalculate grand total based on related QuotationItems."""
+        total_amount = sum(item.sub_total for item in self.items.all())  # Sum of all items' sub_total
+        self.grand_total = total_amount
+        self.save(update_fields=["grand_total"])  # Save only the g
 
     def __str__(self):
         return f"Quotation {self.quotation_number} - {self.customer_name}"    
@@ -284,21 +291,36 @@ class QuotationOrderModel(models.Model):
 
 class QuotationItem(models.Model):
     quotation = models.ForeignKey(QuotationOrderModel, related_name='items', on_delete=models.CASCADE)
-    product_code = models.CharField(max_length=100)
-    product_description = models.TextField()
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    # product_description = models.TextField()
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
-    unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    discount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    # unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    # discount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
     # Auto-calculated field
-    total_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, editable=False)
-
+    total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # quantity * unit_price
+    sgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # 9% SGST
+    cgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # 9% CGST
+    sub_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # Total + SGST + CGST
+    
+    
     def save(self, *args, **kwargs):
-        self.total_price = (self.unit_price * self.quantity) - self.discount
+        """Calculate and update total, SGST, CGST, and sub_total before saving."""
+        self.total = self.product.unit_price * self.quantity
+        self.sgst = (self.total * 9) / 100  # 9% SGST
+        self.cgst = (self.total * 9) / 100  # 9% CGST
+        self.sub_total = self.total + self.sgst + self.cgst
         super().save(*args, **kwargs)
+        
+        self.quotation.update_grand_total()
+
+    def delete(self, *args, **kwargs):
+        """Ensure grand total updates when an item is deleted."""
+        super().delete(*args, **kwargs)
+        self.quotation.update_grand_total()    
 
     def __str__(self):
-        return f"{self.product_code} - {self.product_description}"
+        return self.product.name
 class SalesOrderNew(models.Model):
     customer_name = models.CharField(max_length=255)
     item_name = models.CharField(max_length=255, blank=True, null=True)

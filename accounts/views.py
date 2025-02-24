@@ -3,16 +3,19 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.generics import get_object_or_404
 from .models import CustomUser, Feature
 from django.db.models import Q
 from django.db import transaction
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.parsers import MultiPartParser, FormParser
-from .models import Quotation,HelpLink, SalesPerson,Notification, UserSetting, Feedback,SalesOrder,QuotationOrderModel,InvoiceOrder,DeliveryOrder, SupplierPurchase,Supplier, DeliveryChallan,Product
-from .serializers import QuotationSerializer, FeatureSerializer,ProductSerializer,SalesPersonSerializer
+from .models import *
+from .serializers import *
 from rest_framework.authtoken.models import Token 
-from .serializers import CustomUserCreateSerializer, OTPSerializer, GettingStartedSerializer,HelpLinkSerializer,NotificationSerializer, UserSettingSerializer, FeedbackSerializer,QuotationOrderSerializer,InvoiceOrderSerializer,DeliveryOrderSerializer,SupplierPurchaseSerializer,SupplierSerializer,DeliveryChallanSerializer
+from decimal import Decimal
+
+# from .serializers import CustomUserCreateSerializer, OTPSerializer, GettingStartedSerializer,HelpLinkSerializer,NotificationSerializer, UserSettingSerializer, FeedbackSerializer,QuotationOrderSerializer,InvoiceOrderSerializer,DeliveryOrderSerializer,SupplierPurchaseSerializer,SupplierSerializer,DeliveryChallanSerializer
 from django.core.mail import send_mail
 import random
 
@@ -119,39 +122,6 @@ class GettingStartedView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-
-class QuotationViewSet(viewsets.ModelViewSet):
-    """
-    A viewset for viewing, creating, and managing quotations.
-    """
-    queryset = Quotation.objects.all()
-    serializer_class = QuotationSerializer
-
-    # Add filtering and searching
-    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['customer_name', 'salesperson', 'invoice_date']
-    search_fields = ['customer_name', 'invoice_number', 'order_number']
-    ordering_fields = ['invoice_date', 'due_date']
-    ordering = ['invoice_date']  # Default ordering
-
-    def create(self, request, *args, **kwargs):
-        """
-        Override create to handle custom logic if needed.
-        """
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-    @action(detail=True, methods=['post'])
-    def mark_as_paid(self, request, pk=None):
-        """
-        Custom action to mark a quotation as paid.
-        """
-        quotation = self.get_object()
-        quotation.status = "Paid"  # Assuming 'status' is a field in the model
-        quotation.save()
-        return Response({"message": "Quotation marked as Paid!"}, status=status.HTTP_200_OK)
     
 class HomePageView(APIView):
     def get(self, request):
@@ -362,6 +332,8 @@ class SalesOrderListAPI(APIView):
             }, status=status.HTTP_200_OK)
             
 
+    
+    
 # class CreateQuotationOrderAPI(APIView):
 #     def post(self, request):
 #         data = request.data
@@ -372,8 +344,12 @@ class SalesOrderListAPI(APIView):
 #             "quotation_date",
 #             "due_date",
 #             "salesperson",
-#             "customer_amount",
-#             'quantity',
+#             "item_name",
+#             "description",
+#             "unit_price",
+#             "discount",
+#             "quantity",
+#             "email_id"
 #         ]
 #         for field in mandatory_fields:
 #             if not data.get(field):
@@ -389,40 +365,55 @@ class SalesOrderListAPI(APIView):
 #                 status=status.HTTP_400_BAD_REQUEST
 #             )
 
+#         # Generate a unique quotation number
 #         quotation_number = f"QUO-{random.randint(111111, 999999)}"
         
+#         # Fetch salesperson instance
+#         try:
+#             salesperson = SalesPerson.objects.get(id=data['salesperson'])
+#         except SalesPerson.DoesNotExist:
+#             return Response({"error": "Invalid salesperson ID."}, status=status.HTTP_400_BAD_REQUEST)
+        
+#         # Calculate total amount
+#         total_amount = (float(data['unit_price']) - float(data['discount'])) * float(data['quantity'])
+        
 #         # Save to database
-#         quotation_order = QuotationOrder.objects.create(
+#         quotation_order = QuotationOrderModel.objects.create(
 #             customer_name=data['customer_name'],
 #             quotation_number=quotation_number,
 #             quotation_date=data['quotation_date'],
 #             terms=data.get('terms', ''),
 #             due_date=data['due_date'],
-#             salesperson=data['salesperson'],
+#             salesperson=salesperson,
 #             subject=data.get('subject', ''),
-#             attachments=data.get('attachments', ''),
-#             customer_amount=data['customer_amount'],
-#             quantity=data['quantity']  
+#             attachments=request.FILES.get('attachments', None),
+#             item_name=data['item_name'],
+#             description=data['description'],
+#             unit_price=data['unit_price'],
+#             discount=data['discount'],
+#             quantity=data['quantity'],
+#             total_amount=total_amount,
+#             email_id=data['email_id']
 #         )
 
 #         return Response(
 #             {
+#                 "Status": "1",
 #                 "message": "Quotation order created successfully.",
-#                 "data": QuotationOrderSerializer(quotation_order).data
+#                 "Data": [QuotationOrderSerializer(quotation_order).data]
 #             },
 #             status=status.HTTP_201_CREATED
 #         )
 
-# class QuotationOrderListAPI(APIView):
 
+# class QuotationOrderListAPI(APIView):
 #     def get(self, request):
-#         # Get query parameters
 #         from_date = request.query_params.get('from_date')
 #         to_date = request.query_params.get('to_date')
 #         search = request.query_params.get('search')
 
 #         # Filter quotation orders
-#         orders = QuotationOrder.objects.all()
+#         orders = QuotationOrderModel.objects.all()
 #         if from_date and to_date:
 #             orders = orders.filter(quotation_date__range=[from_date, to_date])
         
@@ -433,144 +424,42 @@ class SalesOrderListAPI(APIView):
 #                 Q(salesperson__icontains=search)
 #             )
         
-#         # Order by the newest order on top
 #         orders = orders.order_by('-quotation_date')
-
-#         # Serialize response
+        
 #         data = QuotationOrderSerializer(orders, many=True).data
-
+        
 #         return Response({
 #             "Status": "1",
 #             "message": "Success",
 #             "Data": data
-#         }, status=status.HTTP_200_OK)       
-    
-class CreateQuotationOrderAPI(APIView):
-    def post(self, request):
-        data = request.data
+#         }, status=status.HTTP_200_OK)
 
-        # Validate mandatory fields
-        mandatory_fields = [
-            "customer_name",
-            "quotation_date",
-            "due_date",
-            "salesperson",
-            "item_name",
-            "description",
-            "unit_price",
-            "discount",
-            "quantity",
-            "email_id"
-        ]
-        for field in mandatory_fields:
-            if not data.get(field):
-                return Response(
-                    {"error": f"{field} is required."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+# class QuotationOrderUpdateAPI(APIView):
+#     """API for updating an existing Quotation Order"""
+#     def put(self, request, pk):
+#         try:
+#             quotation_order = QuotationOrderModel.objects.get(pk=pk)
+#         except QuotationOrderModel.DoesNotExist:
+#             return Response({"error": "Quotation order not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Validate date range
-        if data['due_date'] < data['quotation_date']:
-            return Response(
-                {"error": "Due date cannot be earlier than quotation date."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+#         serializer = QuotationOrderSerializer(quotation_order, data=request.data, partial=True)
+#         if serializer.is_valid():
+#             serializer.save()
+#             return Response(
+#                 {"message": "Quotation order updated successfully.", "Data": [serializer.data]},
+#                 status=status.HTTP_200_OK
+#             )
+#         return Response({"Status": "0", "message": serializer.errors, "Data": []}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Generate a unique quotation number
-        quotation_number = f"QUO-{random.randint(111111, 999999)}"
-        
-        # Fetch salesperson instance
-        try:
-            salesperson = SalesPerson.objects.get(id=data['salesperson'])
-        except SalesPerson.DoesNotExist:
-            return Response({"error": "Invalid salesperson ID."}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Calculate total amount
-        total_amount = (float(data['unit_price']) - float(data['discount'])) * float(data['quantity'])
-        
-        # Save to database
-        quotation_order = QuotationOrderModel.objects.create(
-            customer_name=data['customer_name'],
-            quotation_number=quotation_number,
-            quotation_date=data['quotation_date'],
-            terms=data.get('terms', ''),
-            due_date=data['due_date'],
-            salesperson=salesperson,
-            subject=data.get('subject', ''),
-            attachments=request.FILES.get('attachments', None),
-            item_name=data['item_name'],
-            description=data['description'],
-            unit_price=data['unit_price'],
-            discount=data['discount'],
-            quantity=data['quantity'],
-            total_amount=total_amount,
-            email_id=data['email_id']
-        )
-
-        return Response(
-            {
-                "Status": "1",
-                "message": "Quotation order created successfully.",
-                "Data": [QuotationOrderSerializer(quotation_order).data]
-            },
-            status=status.HTTP_201_CREATED
-        )
-
-
-class QuotationOrderListAPI(APIView):
-    def get(self, request):
-        from_date = request.query_params.get('from_date')
-        to_date = request.query_params.get('to_date')
-        search = request.query_params.get('search')
-
-        # Filter quotation orders
-        orders = QuotationOrderModel.objects.all()
-        if from_date and to_date:
-            orders = orders.filter(quotation_date__range=[from_date, to_date])
-        
-        if search:
-            orders = orders.filter(
-                Q(customer_name__icontains=search) |
-                Q(quotation_number__icontains=search) |
-                Q(salesperson__icontains=search)
-            )
-        
-        orders = orders.order_by('-quotation_date')
-        
-        data = QuotationOrderSerializer(orders, many=True).data
-        
-        return Response({
-            "Status": "1",
-            "message": "Success",
-            "Data": data
-        }, status=status.HTTP_200_OK)
-
-class QuotationOrderUpdateAPI(APIView):
-    """API for updating an existing Quotation Order"""
-    def put(self, request, pk):
-        try:
-            quotation_order = QuotationOrderModel.objects.get(pk=pk)
-        except QuotationOrderModel.DoesNotExist:
-            return Response({"error": "Quotation order not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        serializer = QuotationOrderSerializer(quotation_order, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(
-                {"message": "Quotation order updated successfully.", "Data": [serializer.data]},
-                status=status.HTTP_200_OK
-            )
-        return Response({"Status": "0", "message": serializer.errors, "Data": []}, status=status.HTTP_400_BAD_REQUEST)
-
-class QuotationOrderDeleteAPI(APIView):
-    """API for deleting an existing Quotation Order"""
-    def delete(self, request, pk):
-        try:
-            quotation_order = QuotationOrderModel.objects.get(pk=pk)
-            quotation_order.delete()
-            return Response({"Status": "1", "message": "Quotation order deleted successfully.", "Data": []}, status=status.HTTP_204_NO_CONTENT)
-        except QuotationOrderModel.DoesNotExist:
-            return Response({"Status": "0", "message": "Quotation order not found.", "Data": []}, status=status.HTTP_404_NOT_FOUND)    
+# class QuotationOrderDeleteAPI(APIView):
+#     """API for deleting an existing Quotation Order"""
+#     def delete(self, request, pk):
+#         try:
+#             quotation_order = QuotationOrderModel.objects.get(pk=pk)
+#             quotation_order.delete()
+#             return Response({"Status": "1", "message": "Quotation order deleted successfully.", "Data": []}, status=status.HTTP_204_NO_CONTENT)
+#         except QuotationOrderModel.DoesNotExist:
+#             return Response({"Status": "0", "message": "Quotation order not found.", "Data": []}, status=status.HTTP_404_NOT_FOUND)    
     
 class CreateInvoiceOrderAPI(APIView):
     def post(self, request):
@@ -952,3 +841,215 @@ class SalesPersonListCreateAPIView(APIView):
             status=status.HTTP_400_BAD_REQUEST
         )
         
+class QuotationOrderAPI(APIView):
+    
+    def get(self, request, qid=None):
+        if qid:
+            quotation = get_object_or_404(QuotationOrderModel, id=qid)
+            quotation_serializer = NewQuotationOrderSerializer(quotation)
+            
+            # Get quotation items
+            quotation_items = QuotationItem.objects.filter(quotation=quotation)
+            item_list = []
+            
+            print("\n--- DEBUGGING ---")
+            print(f"Quotation ID: {quotation.id}, Customer: {quotation.customer_name}")
+
+            grand_total = 0  # Initial
+
+            for item in quotation_items:
+                product_serializer = ProductSerializer(item.product)  # Serialize product details
+                product_data = product_serializer.data
+                
+                product_data["quantity"] = item.quantity  # Add quantity inside product dictionary
+                product_data["total"] = item.total
+                product_data["sgst"] = item.sgst
+                product_data["cgst"] = item.cgst
+                product_data["sub_total"]= item.sub_total 
+                 
+                # product_data["unit_price"] = item.unit_price  
+                # item_data = NewQuotationItemSerializer(item).data  # Get quotation item details
+                # item_data["product"] = product_data  # Replace product field with modified product data
+
+                item_list.append(product_data)
+            
+            print(f"Calculated Grand Total: {grand_total}")
+            print("--- END DEBUGGING ---\n")
+            return Response({
+                'status': '1',
+                'message': 'success',
+                'quotation': quotation_serializer.data,
+                'items': item_list  # Include full product details inside items
+            })
+        else:
+            from_date = request.query_params.get('from_date')
+            to_date = request.query_params.get('to_date')
+            search = request.query_params.get('search')
+            
+            quotations = QuotationOrderModel.objects.all()
+            
+            if from_date and to_date:
+                quotations = quotations.filter(quotation_date__range=[from_date, to_date])
+            if search:
+                quotations = quotations.filter(customer_name__icontains=search)
+            
+            serializer = QuotationOrderSerializer(quotations, many=True)
+            return Response({"Status": "1", "Data": serializer.data}, status=status.HTTP_200_OK)
+    
+
+    def post(self, request, *args, **kwargs):
+        data = request.data
+        try:
+            with transaction.atomic():
+                # Validate and create Quotation Order
+                print("\n--- DEBUGGING POST ---")
+                print(f"Received Data: {data}")
+                salesperson_id = data.get("salesperson")
+                if not SalesPerson.objects.filter(id=salesperson_id).exists():
+                    return Response({"error": "Invalid salesperson ID"}, status=status.HTTP_400_BAD_REQUEST)
+                quotation_number = f"QUO-{random.randint(111111, 999999)}"
+                quotation = QuotationOrderModel.objects.create(
+                    customer_name=data.get("customer_name"),
+                    quotation_number=quotation_number,
+                    quotation_date=data.get("quotation_date"),
+                    due_date=data.get("due_date"),
+                    salesperson_id=salesperson_id,
+                    email_id=data.get("email_id"),
+                    subject=data.get("subject", ""),
+                    terms=data.get("terms", ""),
+                    attachments=data.get("attachments", None),
+                    grand_total=0  
+                )
+
+                # Create Quotation Items
+                items = data.get("items", [])
+                if not items:
+                    return Response({"error": "Quotation must have at least one item."}, status=status.HTTP_400_BAD_REQUEST)
+                
+                total_amount = 0  
+
+
+                for item in items:
+                    product_id = item.get("product")
+                    if not Product.objects.filter(id=product_id).exists():
+                        return Response({"error": f"Invalid product ID {product_id}"}, status=status.HTTP_400_BAD_REQUEST)
+
+                    product = Product.objects.get(id=product_id)
+                    quantity = float(item.get("quantity", 1))
+                    unit_price = float(item.get("unit_price", product.unit_price))
+
+                    print(f"Adding Item: Product ID: {product_id}, Quantity: {quantity}, Unit Price: {unit_price}")
+
+                    item_total = quantity * unit_price
+                    total_amount += item_total  
+            
+                    QuotationItem.objects.create(
+                        quotation=quotation,
+                        product=product,
+                        quantity=item.get("quantity", 1),
+                        # unit_price=item.get("unit_price", 0),
+                        # discount=item.get("discount", 0)
+                    )
+                print("Total amount: fefe")
+                # Update Grand Total
+                # quotation.update_grand_total()
+                quotation.grand_total = total_amount
+                quotation.save()
+
+                print(f"Final Grand Total Saved: {quotation.grand_total}")
+                print("--- END DEBUGGING ---\n")
+
+                return Response({
+                    "status": "1",
+                    "message": "Quotation created successfully.",
+                    "quotation_id": quotation.id,
+                    "grand_total": quotation.grand_total
+                }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            print(str(e))
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+   
+    def patch(self, request, qid=None):
+        if not qid:
+            return Response({"error": "Quotation ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        data = request.data
+        try:
+            with transaction.atomic():
+                # Fetch the quotation
+                quotation = get_object_or_404(QuotationOrderModel, id=qid)
+
+                print("\n--- DEBUGGING PATCH ---")
+                print(f"Updating Quotation ID: {quotation.id} with data: {data}")
+
+                # Update fields if provided
+                quotation.customer_name = data.get("customer_name", quotation.customer_name)
+                quotation.quotation_date = data.get("quotation_date", quotation.quotation_date)
+                quotation.due_date = data.get("due_date", quotation.due_date)
+                quotation.salesperson_id = data.get("salesperson", quotation.salesperson_id)
+                quotation.email_id = data.get("email_id", quotation.email_id)
+                quotation.subject = data.get("subject", quotation.subject)
+                quotation.terms = data.get("terms", quotation.terms)
+                quotation.attachments = data.get("attachments", quotation.attachments)
+                quotation.save()
+
+                # Remove old items
+                quotation.items.all().delete()  # Ensure `related_name="items"` in `QuotationItem` model
+
+                total_amount = Decimal(0)  # Convert total_amount to Decimal
+
+                # Add new items
+                for item in data.get("items", []):
+                    product_id = item.get("product")
+                    if not Product.objects.filter(id=product_id).exists():
+                        return Response({"error": f"Invalid product ID {product_id}"}, status=status.HTTP_400_BAD_REQUEST)
+
+                    product = Product.objects.get(id=product_id)
+                    quantity = Decimal(str(item.get("quantity", 1)))  # Convert quantity to Decimal
+                    unit_price = product.unit_price  # unit_price is already Decimal
+
+                    print(f"Updating Item: Product ID: {product_id}, Quantity: {quantity}, Unit Price: {unit_price}")
+
+                    QuotationItem.objects.create(
+                        quotation=quotation,
+                        product=product,
+                        quantity=quantity
+                    )
+
+                    # Calculate total price using Decimal
+                    total_amount += quantity * unit_price
+
+                # Update Grand Total
+                quotation.grand_total = total_amount
+                quotation.save()
+
+                print(f"Final Grand Total Saved: {quotation.grand_total}")
+                print("--- END DEBUGGING ---\n")
+
+                return Response({
+                    "status": "1",
+                    "message": "Quotation updated successfully.",
+                    "quotation_id": quotation.id,
+                    "grand_total": str(quotation.grand_total)  # Convert Decimal to string for JSON response
+                }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(str(e))
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+# class QuotationOrderListAPI(APIView):
+#     def get(self, request):
+#         from_date = request.query_params.get('from_date')
+#         to_date = request.query_params.get('to_date')
+#         search = request.query_params.get('search')
+        
+#         quotations = QuotationOrderModel.objects.all()
+        
+#         if from_date and to_date:
+#             quotations = quotations.filter(quotation_date__range=[from_date, to_date])
+#         if search:
+#             quotations = quotations.filter(customer_name__icontains=search)
+        
+#         serializer = QuotationOrderSerializer(quotations, many=True)
+#         return Response({"Status": "1", "Data": serializer.data}, status=status.HTTP_200_OK)

@@ -1,6 +1,7 @@
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
 from django.utils.timezone import now
+from decimal import Decimal
 
 
 class CustomUserManager(BaseUserManager):
@@ -321,26 +322,59 @@ class QuotationItem(models.Model):
 
     def __str__(self):
         return self.product.name
-class SalesOrderNew(models.Model):
-    customer_name = models.CharField(max_length=255)
-    item_name = models.CharField(max_length=255, blank=True, null=True)
-    description = models.TextField(blank=True, null=True)
-    order_number = models.CharField(max_length=50, unique=True)
-    sales_date = models.DateField()
+       
+    
+class SalesOrderModel(models.Model):
+        customer_name = models.CharField(max_length=255)
+        sales_order_id = models.CharField(max_length=50, unique=True)  # Unique Sales Order ID
+        sales_date = models.DateField()  # Sales Order Date
+        purchase_order_number = models.CharField(max_length=50, blank=True, null=True)  # PO Number
+        terms = models.CharField(max_length=255, blank=True)  # Payment terms
+        due_date = models.DateField()  # Payment Due Date
+        salesperson = models.ForeignKey(SalesPerson, on_delete=models.CASCADE)  # Salesperson responsible
+        delivery_location = models.CharField(max_length=255, blank=True)  # Location for delivery
+        delivery_address = models.TextField(blank=True)  # Full delivery address
+        contact_person = models.CharField(max_length=255)  # Contact person for delivery
+        mobile_number = models.CharField(max_length=15)  # Mobile number of contact person
+        # attachments = models.FileField(upload_to='salesorder/', blank=True, null=True)  # File upload
+
+        grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # Total sales amount
+
+        def update_grand_total(self):
+            """Recalculate grand total based on related SalesOrderItems."""
+            total_amount = sum(item.sub_total for item in self.items.all())  # Sum of all items' sub_total
+            self.grand_total = total_amount
+            self.save(update_fields=["grand_total"])
+
+        def __str__(self):
+            return f"Sales Order {self.sales_order_id} - {self.customer_name}"
+
+
+class SalesOrderItem(models.Model):
+    sales_order = models.ForeignKey(SalesOrderModel, related_name='items', on_delete=models.CASCADE)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
-    unit_price = models.DecimalField(max_digits=10, decimal_places=2)
-    discount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    total_amount = models.DecimalField(max_digits=10, decimal_places=2)
-    terms = models.TextField()
-    due_date = models.DateField()
-    salesperson = models.ForeignKey(SalesPerson, on_delete=models.CASCADE)
-    subject = models.TextField(blank=True, null=True)
-    attachments = models.FileField(upload_to="sales_order_attachments/", blank=True, null=True)
+
+    total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # quantity * unit_price
+    sgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # 9% SGST
+    cgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # 9% CGST
+    sub_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # Total + SGST + CGST
 
     def save(self, *args, **kwargs):
-        # Auto-calculate total amount before saving
-        self.total_amount = (self.unit_price * self.quantity) - self.discount
-        super(SalesOrderNew, self).save(*args, **kwargs)
+        """Calculate and update total, SGST, CGST, and sub_total before saving."""
+        self.total = self.product.unit_price * self.quantity
+        self.sgst = (self.total * Decimal("9")) / Decimal("100")  # 9% SGST
+        self.cgst = (self.total * Decimal("9")) / Decimal("100")  # 9% CGST
+        self.sub_total = self.total + self.sgst + self.cgst
+        super().save(*args, **kwargs)
+
+        self.sales_order.update_grand_total()
+
+    def delete(self, *args, **kwargs):
+        """Ensure grand total updates when an item is deleted."""
+        super().delete(*args, **kwargs)
+        self.sales_order.update_grand_total()
 
     def __str__(self):
-        return f"Sales Order {self.order_number} - {self.customer_name}"    
+        return self.product.name
+    

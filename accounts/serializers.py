@@ -64,23 +64,23 @@ class FeedbackSerializer(serializers.ModelSerializer):
         model = Feedback
         fields = '__all__'        
         
-class SalesOrderSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = SalesOrder
-        fields = [
-            'id', 
-            'customer_name', 
-            'invoice_no', 
-            'invoice_date', 
-            'terms', 
-            'due_date', 
-            'salesperson', 
-            'subject', 
-            'attachments', 
-            'order_amount',
-            'quantity'
-        ]
-        readonly_fields = ['order_number', 'invoice_no']
+# class SalesOrderSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = SalesOrder
+#         fields = [
+#             'id', 
+#             'customer_name', 
+#             'invoice_no', 
+#             'invoice_date', 
+#             'terms', 
+#             'due_date', 
+#             'salesperson', 
+#             'subject', 
+#             'attachments', 
+#             'order_amount',
+#             'quantity'
+#         ]
+#         readonly_fields = ['order_number', 'invoice_no']
         
 # class QuotationOrderSerializer(serializers.ModelSerializer):
 #     salesperson_name = serializers.CharField(source='salesperson.display_name', read_only=True)
@@ -223,3 +223,10 @@ class NewQuotationItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuotationItem
         fields = ['quotation', 'product', 'quantity']           
+        
+class NewsalesOrderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SalesOrderModel
+        fields = '__all__'
+        read_only_fields = ('sales_order_id', 'grand_total')  # Ensure correct spelling
+        

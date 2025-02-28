@@ -23,6 +23,9 @@ urlpatterns = [
     # path('sales-orders/', CreateSalesOrderAPI.as_view(), name='create_sales_order'),
     path('sales-orders/', SalesOrderAPI.as_view(), name='sales_order_list'),
     path('sales-orders/<int:sid>/', SalesOrderAPI.as_view(), name='sales_order_list'),
+    
+    path('delivery-orders/', DeliveryFormAPI.as_view(), name='create_delivery_order'),
+     path('delivery-orders/<int:did>/', DeliveryFormAPI.as_view(), name='create_delivery_order'),
 
     # path('quotation-orders/', CreateQuotationOrderAPI.as_view(), name='create_quotation_order'),
     # path('get-quotation-orders/', QuotationOrderListAPI.as_view(), name='quotation_order_list'),
@@ -47,7 +50,7 @@ urlpatterns = [
     path('quotations/<int:qid>/', QuotationOrderAPI.as_view(), name='quotation-items-detail'),
     path('invoice-orders/', CreateInvoiceOrderAPI.as_view(), name='create_invoice_order'),
     path('get-invoice-orders/', InvoiceOrderListAPI.as_view(), name='invoice_order_list'),
-    path('delivery-orders/', CreateDeliveryOrderAPI.as_view(), name='create_delivery_order'),
+
     path('get-delivery-orders/', DeliveryOrderListAPI.as_view(), name='delivery_order_list'),
     path('create-purchase/', CreateSupplierPurchaseAPI.as_view(), name='create_supplier_purchase'),
     path('list-purchase/', SupplierPurchaseListAPI.as_view(), name='supplier_purchase_list'),

@@ -1369,6 +1369,157 @@ class SalesOrderAPI(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
+
+class DeliveryFormAPI(APIView):
+    
+    def get(self, request, did=None):
+        if did:
+            delivery = get_object_or_404(DeliveryFormModel, id=did)
+            delivery_serializer = NewDeliverySerializer(delivery)
+            
+            delivery_items = DeliveryItem.objects.filter(delivery_form=delivery)
+            item_list = []
+
+            for item in delivery_items:
+                product_serializer = ProductSerializer(item.product)
+                product_data = product_serializer.data
+                
+                product_data["quantity"] = item.quantity
+                product_data["delivered_quantity"] = item.delivered_quantity
+                product_data["status"] = item.status
+
+                item_list.append(product_data)
+            
+            return Response({
+                'status': '1',
+                'message': 'success',
+                'delivery': delivery_serializer.data,
+                'items': item_list
+            })
+        else:
+            deliveries = DeliveryFormModel.objects.all()
+            serializer = NewDeliverySerializer(deliveries, many=True)
+            return Response({"status": "1", "data": serializer.data}, status=status.HTTP_200_OK)
+
+    def post(self, request, *args, **kwargs):
+        data = request.data
+        try:
+            with transaction.atomic():
+                # Validate Sales Order ID
+                sales_order_id = data.get("sales_order")
+                if not SalesOrderModel.objects.filter(id=sales_order_id).exists():
+                    return Response({"error": "Invalid sales order ID"}, status=status.HTTP_400_BAD_REQUEST)
+
+                # Validate Salesperson ID
+                salesperson_id = data.get("salesperson")
+                if not SalesPerson.objects.filter(id=salesperson_id).exists():
+                    return Response({"error": "Invalid salesperson ID"}, status=status.HTTP_400_BAD_REQUEST)
+
+                # Create Delivery Form
+                delivery_form = DeliveryFormModel.objects.create(
+                    customer_name=data.get("customer_name"),
+                    delivery_number=f"DLV-{random.randint(111111, 999999)}",  # Unique delivery number
+                    delivery_date=data.get("delivery_date"),
+                    sales_order_id=sales_order_id,
+                    terms=data.get("terms", ""),
+                    due_date=data.get("due_date"),
+                    salesperson_id=salesperson_id,
+                    delivery_location=data.get("delivery_location", ""),
+                    delivery_address=data.get("delivery_address", ""),
+                    contact_person=data.get("contact_person"),
+                    mobile_number=data.get("mobile_number"),
+                    time=data.get("time"),
+                    date=data.get("date"),
+                    grand_total=0  # Will be updated after adding items
+                )
+
+                # Validate and Add Delivery Items
+                items = data.get("items", [])
+                if not items:
+                    return Response({"error": "Delivery must have at least one item."}, status=status.HTTP_400_BAD_REQUEST)
+
+                for item in items:
+                    product_id = item.get("product")
+                    if not Product.objects.filter(id=product_id).exists():
+                        return Response({"error": f"Invalid product ID {product_id}"}, status=status.HTTP_400_BAD_REQUEST)
+
+                    product = Product.objects.get(id=product_id)
+                    quantity = Decimal(str(item.get("quantity", 1)))
+
+                    DeliveryItem.objects.create(
+                        delivery_form=delivery_form,
+                        product=product,
+                        quantity=quantity
+                    ) 
+
+                # Update grand total
+                delivery_form.update_grand_total()
+
+                return Response({
+                    "status": "1",
+                    "message": "Delivery form created successfully.",
+                    "delivery_number": delivery_form.delivery_number,
+                    "grand_total": delivery_form.grand_total
+                }, status=status.HTTP_201_CREATED)
+        
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+    def patch(self, request, did=None):
+        if not did:
+            return Response({"error": "Delivery ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        data = request.data
+        try:
+            with transaction.atomic():
+                delivery = get_object_or_404(DeliveryFormModel, id=did)
+                
+                delivery.delivery_date = data.get("delivery_date", delivery.delivery_date)
+                delivery.delivery_location = data.get("delivery_location", delivery.delivery_location)
+                delivery.delivery_status = data.get("delivery_status", delivery.delivery_status)
+                delivery.save()
+                
+                delivery.items.all().delete()
+                
+                for item in data.get("items", []):
+                    product_id = item.get("product")
+                    if not Product.objects.filter(id=product_id).exists():
+                        return Response({"error": f"Invalid product ID {product_id}"}, status=status.HTTP_400_BAD_REQUEST)
+                    
+                    product = Product.objects.get(id=product_id)
+                    quantity = Decimal(str(item.get("quantity", 1)))
+                    delivered_quantity = Decimal(str(item.get("delivered_quantity", 0)))
+                    
+                    DeliveryItem.objects.create(
+                        delivery_form=delivery,
+                        product=product,
+                        quantity=quantity,
+                        delivered_quantity=delivered_quantity,
+                        status=item.get("status", "Pending")
+                    )
+                
+                return Response({
+                    "status": "1",
+                    "message": "Delivery updated successfully.",
+                    "delivery_id": delivery.id
+                }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def delete(self, request, did=None):
+        if not did:
+            return Response({"error": "Delivery ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            with transaction.atomic():
+                delivery = get_object_or_404(DeliveryFormModel, id=did)
+                delivery.items.all().delete()
+                delivery.delete()
+                return Response({"status": "1", "message": "Delivery deleted successfully."}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     
 #     def get(self, request):
 #         from_date = request.query_params.get('from_date')

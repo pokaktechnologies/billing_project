@@ -378,3 +378,68 @@ class SalesOrderItem(models.Model):
     def __str__(self):
         return self.product.name
     
+    
+class DeliveryFormModel(models.Model):
+    customer_name = models.CharField(max_length=255)
+    delivery_number = models.CharField(max_length=50, unique=True)  # Unique Delivery Number
+    delivery_date = models.DateField()  # Delivery Date
+    # sales_order_number = models.CharField(max_length=50, blank=True, null=True)  # Sales Order Number
+    sales_order = models.ForeignKey(
+        SalesOrderModel, on_delete=models.CASCADE, related_name="deliveries"
+    )
+    terms = models.CharField(max_length=255, blank=True)  # Payment terms
+    due_date = models.DateField()  # Payment Due Date
+    salesperson = models.ForeignKey(SalesPerson, on_delete=models.CASCADE)  # Salesperson responsible
+    delivery_location = models.CharField(max_length=255, blank=True)  # Location for delivery
+    delivery_address = models.TextField(blank=True)  # Full delivery address
+    contact_person = models.CharField(max_length=255)  # Contact person for delivery
+    mobile_number = models.CharField(max_length=15)  # Mobile number of contact person
+    
+    # New Fields
+    time = models.TimeField()  # Time of Delivery
+    date = models.DateField()  # Date of Delivery
+
+    grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # Total delivery amount
+    delivery_status = models.CharField(max_length=50, default="Pending")  
+
+
+    def update_grand_total(self):
+        """Recalculate grand total based on related DeliveryItems."""
+        total_amount = sum(item.sub_total for item in self.items.all())  # Sum of all items' sub_total
+        self.grand_total = total_amount
+        self.save(update_fields=["grand_total"])
+
+    def __str__(self):
+        return f"Delivery {self.delivery_number} - {self.customer_name}"
+
+
+class DeliveryItem(models.Model):
+    delivery_form = models.ForeignKey(DeliveryFormModel, related_name='items', on_delete=models.CASCADE)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
+    delivered_quantity = models.DecimalField(max_digits=10, decimal_places=2, default=0)  # Add this field
+    status = models.CharField(max_length=50, default="Pending")  # Example status choices can be added
+
+    
+    total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # quantity * unit_price
+    sgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # 9% SGST
+    cgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # 9% CGST
+    sub_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # Total + SGST + CGST
+
+    def save(self, *args, **kwargs):
+        """Calculate and update total, SGST, CGST, and sub_total before saving."""
+        self.total = self.product.unit_price * self.quantity
+        self.sgst = (self.total * Decimal("9")) / Decimal("100")  # 9% SGST
+        self.cgst = (self.total * Decimal("9")) / Decimal("100")  # 9% CGST
+        self.sub_total = self.total + self.sgst + self.cgst
+        super().save(*args, **kwargs)
+
+        self.delivery_form.update_grand_total()
+
+    def delete(self, *args, **kwargs):
+        """Ensure grand total updates when an item is deleted."""
+        super().delete(*args, **kwargs)
+        self.delivery_form.update_grand_total()
+
+    def __str__(self):
+        return self.product.name    

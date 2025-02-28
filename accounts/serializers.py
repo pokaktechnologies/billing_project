@@ -229,4 +229,8 @@ class NewsalesOrderSerializer(serializers.ModelSerializer):
         model = SalesOrderModel
         fields = '__all__'
         read_only_fields = ('sales_order_id', 'grand_total')  # Ensure correct spelling
-        
+
+class NewDeliverySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DeliveryFormModel
+        fields = '__all__'        

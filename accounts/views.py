@@ -1520,6 +1520,28 @@ class DeliveryFormAPI(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+class CountryView(APIView):
+    def get(self, request):
+        countries = Country.objects.all()
+        serializer = CountrySerializer(countries, many=True)
+        return Response({
+            'Status': '1',
+            'Message': 'Success',
+            'Data': serializer.data
+        })
+
+class StateView(APIView):
+    def get(self, request):
+        country_name = request.GET.get('country')
+        country = get_object_or_404(Country, name__iexact=country_name)
+        states = State.objects.filter(country=country)
+        serializer = CountrySerializer(states, many=True)
+        return Response({
+            'Status': '1',
+            'Message': 'Success',
+            'Data': serializer.data
+        })
+            
     
 #     def get(self, request):
 #         from_date = request.query_params.get('from_date')

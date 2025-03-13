@@ -234,3 +234,15 @@ class NewDeliverySerializer(serializers.ModelSerializer):
     class Meta:
         model = DeliveryFormModel
         fields = '__all__'        
+        
+class CountrySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Country
+        fields = ['name', 'flag']
+        
+class StateSerializer(serializers.ModelSerializer):
+    country = serializers.CharField(source='country.name')
+    class Meta:
+        model = Country
+        fields = ['name', 'country']
+                

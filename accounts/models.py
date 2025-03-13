@@ -2,6 +2,7 @@ from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, Permis
 from django.db import models
 from django.utils.timezone import now
 from decimal import Decimal
+from django_countries.fields import CountryField
 
 
 class CustomUserManager(BaseUserManager):
@@ -38,6 +39,9 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     business_location = models.CharField(max_length=255, blank=True, null=True)
     state_province = models.CharField(max_length=255, blank=True, null=True)
 
+    country = CountryField(blank=True, null=True)
+    state = models.CharField(max_length=255, blank=True, null=True)
+    pin_code = models.CharField(max_length=10, blank=True, null=True)
     objects = CustomUserManager()
 
     USERNAME_FIELD = 'email'
@@ -443,3 +447,19 @@ class DeliveryItem(models.Model):
 
     def __str__(self):
         return self.product.name    
+    
+
+class Country(models.Model):
+    name = models.CharField(max_length=100)
+    flag = models.ImageField(upload_to='flags/', blank=True, null=True)
+
+    def __str__(self):
+        return self.name
+
+class State(models.Model):
+    country = models.ForeignKey(Country, on_delete=models.CASCADE, related_name='states')
+    name = models.CharField(max_length=100)
+
+    def __str__(self):
+        return self.name
+    

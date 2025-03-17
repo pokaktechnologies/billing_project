@@ -65,6 +65,7 @@ urlpatterns = [
     path('update-delivery-challan/<int:pk>/', UpdateDeliveryChallanAPI.as_view(), name='update_delivery_challan'),
     path('salespersons/', SalesPersonListCreateAPIView.as_view(), name='salespersons_list'),
     
-
+    path('customers/', CustomerListCreateAPIView.as_view(), name='customer-list-create'),
+    path('customers/<int:pk>/', CustomerListCreateAPIView.as_view(), name='customer-detail'),
 
 ]

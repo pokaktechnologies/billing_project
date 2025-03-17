@@ -246,3 +246,7 @@ class StateSerializer(serializers.ModelSerializer):
         model = Country
         fields = ['name', 'country']
                 
+class CustomerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Customer
+        fields = '__all__'                

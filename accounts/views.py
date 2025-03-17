@@ -1542,6 +1542,62 @@ class StateView(APIView):
             'Data': serializer.data
         })
             
+class CustomerListCreateAPIView(APIView):
+
+    def get(self, request, pk=None):
+        if pk:
+            customer = get_object_or_404(Customer, pk=pk)
+            serializer = CustomerSerializer(customer)
+            response_data = {
+                "Status": "1",
+                "message": "Success",
+                "Data": [serializer.data]  # Returning data inside an array
+            }
+        else:
+            customers = Customer.objects.all()
+            serializer = CustomerSerializer(customers, many=True)
+            response_data = {
+                "Status": "1",
+                "message": "Success",
+                "Data": serializer.data  # Returning list of customers
+            }
+        
+        return Response(response_data, status=status.HTTP_200_OK)
+
+    # POST - Create a new customer
+    def post(self, request):
+        serializer = CustomerSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            response_data = {
+                "Status": "1",
+                "message": "Customer created successfully.",
+                "Data": [serializer.data]
+            }
+            return Response(response_data, status=status.HTTP_201_CREATED)
+        return Response({"Status": "0", "message": "Error", "Errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+    # PATCH - Update customer (Partial Update)
+    def patch(self, request, pk):
+        customer = get_object_or_404(Customer, pk=pk)
+        serializer = CustomerSerializer(customer, data=request.data, partial=True)  # Partial update
+        if serializer.is_valid():
+            serializer.save()
+            response_data = {
+                "Status": "1",
+                "message": "Customer updated successfully.",
+                "Data": [serializer.data]
+            }
+            return Response(response_data, status=status.HTTP_200_OK)
+        return Response({"Status": "0", "message": "Error", "Errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+    # DELETE - Delete a customer
+    def delete(self, request, pk):
+        customer = get_object_or_404(Customer, pk=pk)
+        customer.delete()
+        return Response({"Status": "1", "message": "Customer deleted successfully."},status=status.HTTP_200_OK)
+
+
     
 #     def get(self, request):
 #         from_date = request.query_params.get('from_date')

@@ -301,19 +301,22 @@ class QuotationItem(models.Model):
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
     # unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     # discount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-
+    sgst_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # Store SGST percentage
+    cgst_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # Store CGST percentage
     # Auto-calculated field
     total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # quantity * unit_price
     sgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # 9% SGST
     cgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # 9% CGST
+    
     sub_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # Total + SGST + CGST
     
     
     def save(self, *args, **kwargs):
         """Calculate and update total, SGST, CGST, and sub_total before saving."""
-        self.total = self.product.unit_price * self.quantity
-        self.sgst = (self.total * 9) / 100  # 9% SGST
-        self.cgst = (self.total * 9) / 100  # 9% CGST
+        unit_price = self.product.unit_price
+        self.total = unit_price * self.quantity
+        self.sgst = ((self.sgst_percentage * unit_price) / 100) * self.quantity
+        self.cgst = ((self.cgst_percentage * unit_price) / 100) * self.quantity
         self.sub_total = self.total + self.sgst + self.cgst
         super().save(*args, **kwargs)
         
@@ -326,7 +329,7 @@ class QuotationItem(models.Model):
 
     def __str__(self):
         return self.product.name
-       
+    
     
 class SalesOrderModel(models.Model):
         customer_name = models.CharField(max_length=255)
@@ -463,3 +466,22 @@ class State(models.Model):
     def __str__(self):
         return self.name
     
+class Customer(models.Model):
+    CUSTOMER_TYPES = [
+        ('individual', 'Individual'),
+        ('business', 'Business'),
+    ]
+
+    customer_type = models.CharField(max_length=10, choices=CUSTOMER_TYPES, default='individual')
+    first_name = models.CharField(max_length=100, blank=True, null=True)
+    last_name = models.CharField(max_length=100, blank=True, null=True)
+    company_name = models.CharField(max_length=255, blank=True, null=True)
+    address = models.TextField()
+    email = models.EmailField(unique=True)
+    phone = models.CharField(max_length=15, blank=True, null=True)
+    mobile = models.CharField(max_length=15)
+
+    def __str__(self):
+        if self.customer_type == 'individual':
+            return f"{self.first_name} {self.last_name}"
+        return self.company_name    

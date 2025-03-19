@@ -262,14 +262,17 @@ class DeliveryChallan(models.Model):
 class SalesPerson(models.Model):
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100, blank=True, null=True)
-    display_name = models.CharField(max_length=200, unique=True)
     email = models.EmailField(unique=True)
     phone = models.CharField(max_length=15, unique=True)
     mobile = models.CharField(max_length=15, unique=True)
     incentive = models.DecimalField(max_digits=10, decimal_places=2)
+    address = models.TextField(blank=True, null=True)  # Full address field
+    country = models.CharField(max_length=15,blank=True, null=True)  # Country field using django-countries
+    state = models.CharField(max_length=100, blank=True, null=True)  # State/Region
+
 
     def __str__(self):
-        return self.display_name    
+        return self.first_name    
     
 class QuotationOrderModel(models.Model):
     customer_name = models.CharField(max_length=255)

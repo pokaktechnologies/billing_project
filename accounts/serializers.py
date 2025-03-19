@@ -188,16 +188,7 @@ class ProductSerializer(serializers.ModelSerializer):
 class SalesPersonSerializer(serializers.ModelSerializer):
     class Meta:
         model = SalesPerson
-        fields = [
-            'id',
-            'first_name',
-            'last_name',
-            'display_name',
-            'email',
-            'phone',
-            'mobile',
-            'incentive'
-        ]
+        fields = '__all__'
         read_only_fields = []        
         
         

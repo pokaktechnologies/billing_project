@@ -475,6 +475,8 @@ class Customer(models.Model):
     customer_type = models.CharField(max_length=10, choices=CUSTOMER_TYPES, default='individual')
     first_name = models.CharField(max_length=100, blank=True, null=True)
     last_name = models.CharField(max_length=100, blank=True, null=True)
+    country = models.CharField(max_length=100, blank=True, null=True)
+    state = models.CharField(max_length=100, blank=True, null=True)
     company_name = models.CharField(max_length=255, blank=True, null=True)
     address = models.TextField()
     email = models.EmailField(unique=True)

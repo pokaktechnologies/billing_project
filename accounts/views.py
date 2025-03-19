@@ -1450,168 +1450,54 @@ class CustomerListCreateAPIView(APIView):
         return Response({"Status": "1", "message": "Customer deleted successfully."},status=status.HTTP_200_OK)
 
 
-    
-#     def get(self, request):
-#         from_date = request.query_params.get('from_date')
-#         to_date = request.query_params.get('to_date')
-#         search = request.query_params.get('search')
+class CategoryListCreateAPIView(APIView):
+
+    def get(self, request, pk=None):
+        if pk:
+            category = get_object_or_404(Category, pk=pk)
+            serializer = CategorySerializer(category)
+            response_data = {
+                "Status": "1",
+                "message": "Success",
+                "Data": [serializer.data]  # Returning data inside an array
+            }
+        else:
+            categories = Category.objects.all()
+            serializer = CategorySerializer(categories, many=True)
+            response_data = {
+                "Status": "1",
+                "message": "Success",
+                "Data": serializer.data  # Returning list of categories
+            }
         
-#         quotations = QuotationOrderModel.objects.all()
-        
-#         if from_date and to_date:
-#             quotations = quotations.filter(quotation_date__range=[from_date, to_date])
-#         if search:
-#             quotations = quotations.filter(customer_name__icontains=search)
-        
-#         serializer = QuotationOrderSerializer(quotations, many=True)
-#         return Response({"Status": "1", "Data": serializer.data}, status=status.HTTP_200_OK)
+        return Response(response_data, status=status.HTTP_200_OK)
 
+    def post(self, request):
+        serializer = CategorySerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            response_data = {
+                "Status": "1",
+                "message": "Category created successfully.",
+                "Data": [serializer.data]
+            }
+            return Response(response_data, status=status.HTTP_201_CREATED)
+        return Response({"Status": "0", "message": "Error", "Errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
-# class SalesOrderAPI(APIView):
-    
-    # def get(self, request, sid=None):
-    #     if sid:
-    #         sales_order = get_object_or_404(SalesOrderModel, id=sid)
-    #         sales_order_serializer = SalesOrderSerializer(sales_order)
-            
-    #         sales_items = SalesOrderItem.objects.filter(sales_order=sales_order)
-    #         item_list = []
+    def patch(self, request, pk):
+        category = get_object_or_404(Category, pk=pk)
+        serializer = CategorySerializer(category, data=request.data, partial=True)  # Partial update
+        if serializer.is_valid():
+            serializer.save()
+            response_data = {
+                "Status": "1",
+                "message": "Category updated successfully.",
+                "Data": [serializer.data]
+            }
+            return Response(response_data, status=status.HTTP_200_OK)
+        return Response({"Status": "0", "message": "Error", "Errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
-    #         print("\n--- DEBUGGING ---")
-    #         print(f"Sales Order ID: {sales_order.id}, Customer: {sales_order.customer_name}")
-
-    #         for item in sales_items:
-    #             product_serializer = ProductSerializer(item.product)
-    #             product_data = product_serializer.data
-                
-    #             product_data["quantity"] = item.quantity
-    #             product_data["total"] = item.total
-    #             product_data["sgst"] = item.sgst
-    #             product_data["cgst"] = item.cgst
-    #             product_data["sub_total"] = item.sub_total
-
-    #             item_list.append(product_data)
-            
-    #         return Response({
-    #             'status': '1',
-    #             'message': 'success',
-    #             'sales_order': sales_order_serializer.data,
-    #             'items': item_list
-    #         })
-    #     else:
-    #         sales_orders = SalesOrderModel.objects.all()
-    #         serializer = SalesOrderSerializer(sales_orders, many=True)
-    #         return Response({"status": "1", "data": serializer.data}, status=status.HTTP_200_OK)
-
-    # def post(self, request, *args, **kwargs):
-    #     data = request.data
-    #     try:
-    #         with transaction.atomic():
-    #             salesperson_id = data.get("salesperson")
-    #             if not SalesPerson.objects.filter(id=salesperson_id).exists():
-    #                 return Response({"error": "Invalid salesperson ID"}, status=status.HTTP_400_BAD_REQUEST)
-                
-    #             sales_number = f"SO-{random.randint(111111, 999999)}"
-    #             sales_order = SalesOrderModel.objects.create(
-    #                 customer_name=data.get("customer_name"),
-    #                 sales_number=sales_number,
-    #                 sales_date=data.get("sales_date"),
-    #                 due_date=data.get("due_date"),
-    #                 salesperson_id=salesperson_id,
-    #                 grand_total=0
-    #             )
-                
-    #             total_amount = 0
-    #             items = data.get("items", [])
-    #             if not items:
-    #                 return Response({"error": "Sales order must have at least one item."}, status=status.HTTP_400_BAD_REQUEST)
-                
-    #             for item in items:
-    #                 product_id = item.get("product")
-    #                 if not Product.objects.filter(id=product_id).exists():
-    #                     return Response({"error": f"Invalid product ID {product_id}"}, status=status.HTTP_400_BAD_REQUEST)
-                    
-    #                 product = Product.objects.get(id=product_id)
-    #                 quantity = float(item.get("quantity", 1))
-    #                 unit_price = float(item.get("unit_price", product.unit_price))
-                    
-    #                 item_total = quantity * unit_price
-    #                 total_amount += item_total
-                    
-    #                 SalesOrderItem.objects.create(
-    #                     sales_order=sales_order,
-    #                     product=product,
-    #                     quantity=quantity
-    #                 )
-                
-    #             sales_order.grand_total = total_amount
-    #             sales_order.save()
-                
-    #             return Response({
-    #                 "status": "1",
-    #                 "message": "Sales order created successfully.",
-    #                 "sales_order_id": sales_order.id,
-    #                 "grand_total": sales_order.grand_total
-    #             }, status=status.HTTP_201_CREATED)
-    #     except Exception as e:
-    #         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    # def patch(self, request, sid=None):
-    #     if not sid:
-    #         return Response({"error": "Sales Order ID is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-    #     data = request.data
-    #     try:
-    #         with transaction.atomic():
-    #             sales_order = get_object_or_404(SalesOrderModel, id=sid)
-                
-    #             sales_order.customer_name = data.get("customer_name", sales_order.customer_name)
-    #             sales_order.sales_date = data.get("sales_date", sales_order.sales_date)
-    #             sales_order.due_date = data.get("due_date", sales_order.due_date)
-    #             sales_order.salesperson_id = data.get("salesperson", sales_order.salesperson_id)
-    #             sales_order.save()
-
-    #             sales_order.items.all().delete()
-
-    #             total_amount = Decimal(0)
-    #             for item in data.get("items", []):
-    #                 product_id = item.get("product")
-    #                 if not Product.objects.filter(id=product_id).exists():
-    #                     return Response({"error": f"Invalid product ID {product_id}"}, status=status.HTTP_400_BAD_REQUEST)
-                    
-    #                 product = Product.objects.get(id=product_id)
-    #                 quantity = Decimal(str(item.get("quantity", 1)))
-    #                 unit_price = product.unit_price
-                    
-    #                 SalesOrderItem.objects.create(
-    #                     sales_order=sales_order,
-    #                     product=product,
-    #                     quantity=quantity
-    #                 )
-                    
-    #                 total_amount += quantity * unit_price
-                
-    #             sales_order.grand_total = total_amount
-    #             sales_order.save()
-                
-    #             return Response({
-    #                 "status": "1",
-    #                 "message": "Sales order updated successfully.",
-    #                 "sales_order_id": sales_order.id,
-    #                 "grand_total": str(sales_order.grand_total)
-    #             }, status=status.HTTP_200_OK)
-    #     except Exception as e:
-    #         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    # def delete(self, request, sid=None):
-    #     if not sid:
-    #         return Response({"error": "Sales Order ID is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-    #     try:
-    #         with transaction.atomic():
-    #             sales_order = get_object_or_404(SalesOrderModel, id=sid)
-    #             sales_order.items.all().delete()
-    #             sales_order.delete()
-    #             return Response({"status": "1", "message": "Sales order deleted successfully."}, status=status.HTTP_200_OK)
-    #     except Exception as e:
-    #         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    def delete(self, request, pk):
+        category = get_object_or_404(Category, pk=pk)
+        category.delete()
+        return Response({"Status": "1", "message": "Category deleted successfully."}, status=status.HTTP_200_OK)

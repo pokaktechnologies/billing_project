@@ -820,13 +820,21 @@ class ProductDetailAPI(APIView):
 
 
 class SalesPersonListCreateAPIView(APIView):
-    def get(self, request):
-        salespersons = SalesPerson.objects.all()
-        serializer = SalesPersonSerializer(salespersons, many=True)
-        return Response(
-            {"Status": "1", "message": "Success", "Data": serializer.data},
-            status=status.HTTP_200_OK
-        )
+    def get(self, request, pk=None):
+        if pk:
+            salesperson = get_object_or_404(SalesPerson, pk=pk)
+            serializer = SalesPersonSerializer(salesperson)
+            return Response(
+                {"Status": "1", "message": "Success", "Data": [serializer.data]},
+                status=status.HTTP_200_OK
+            )
+        else:
+            salespersons = SalesPerson.objects.all()
+            serializer = SalesPersonSerializer(salespersons, many=True)
+            return Response(
+                {"Status": "1", "message": "Success", "Data": serializer.data},
+                status=status.HTTP_200_OK
+            )
 
     def post(self, request):
         serializer = SalesPersonSerializer(data=request.data)
@@ -841,6 +849,37 @@ class SalesPersonListCreateAPIView(APIView):
             status=status.HTTP_400_BAD_REQUEST
         )
         
+    def patch(self, request, pk):
+        salesperson = get_object_or_404(SalesPerson, pk=pk)
+        serializer = SalesPersonSerializer(salesperson, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                {
+                    "Status": "1",
+                    "message": "Salesperson updated successfully.",
+                    "salesperson_id": salesperson.id,
+                    "updated_data": [serializer.data],
+                },
+                status=status.HTTP_200_OK
+            )
+        return Response(
+            {"Status": "0", "message": "Validation failed.", "Data": serializer.errors},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # DELETE - Delete Salesperson
+    def delete(self, request, pk):
+        salesperson = get_object_or_404(SalesPerson, pk=pk)
+        salesperson.delete()
+        return Response(
+            {
+                "Status": "1",
+                "message": "Salesperson deleted successfully.",
+                "deleted_salesperson_id": pk
+            },
+            status=status.HTTP_200_OK
+        )
 class QuotationOrderAPI(APIView):
     
     def get(self, request, qid=None):

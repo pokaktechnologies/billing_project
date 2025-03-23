@@ -1501,3 +1501,54 @@ class CategoryListCreateAPIView(APIView):
         category = get_object_or_404(Category, pk=pk)
         category.delete()
         return Response({"Status": "1", "message": "Category deleted successfully."}, status=status.HTTP_200_OK)
+    
+
+class UnitAPIView(APIView):
+    # GET - Retrieve all units or a specific unit by ID
+    def get(self, request, pk=None):
+        if pk:
+            unit = get_object_or_404(Unit, pk=pk)
+            serializer = UnitSerializer(unit)
+            response_data = {
+                "Status": "1",
+                "message": "Success",
+                "Data": [serializer.data]
+            }
+        else:
+            units = Unit.objects.all()
+            serializer = UnitSerializer(units, many=True)
+            response_data = {
+                "Status": "1",
+                "message": "Units fetched successfully.",
+                "Data": serializer.data
+            }
+        return Response(response_data, status=status.HTTP_200_OK)
+
+    # POST - Create a new unit
+    def post(self, request):
+        serializer = UnitSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            response_data = {
+                "Status": "1",
+                "message": "Unit created successfully.",
+                "Data": [serializer.data]
+            }
+            return Response(response_data, status=status.HTTP_201_CREATED)
+        return Response({"Status": "0", "message": "Error", "Errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+    # PATCH - Update a unit (partial update)
+    def patch(self, request, pk):
+        unit = get_object_or_404(Unit, pk=pk)
+        serializer = UnitSerializer(unit, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"Status": "1", "message": "Unit updated successfully.", "Data": [serializer.data]})
+        return Response({"Status": "0", "message": "Error", "Errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+    # DELETE - Delete a unit
+    def delete(self, request, pk):
+        unit = get_object_or_404(Unit, pk=pk)
+        unit.delete()
+        return Response({"Status": "1", "message": "Unit deleted successfully."}, status=status.HTTP_200_OK)
+    

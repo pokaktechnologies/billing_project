@@ -147,6 +147,13 @@ class Product(models.Model):
     def __str__(self):
         return self.name
 
+
+class Unit(models.Model):
+    name = models.CharField(max_length=50, unique=True)  # Unit name (e.g., kg, piece)
+    description = models.TextField(blank=True)  # Optional description
+
+    def __str__(self):
+        return self.name
     
 class SalesOrder(models.Model):
     customer_name = models.CharField(max_length=255)

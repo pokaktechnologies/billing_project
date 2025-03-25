@@ -140,7 +140,7 @@ class Product(models.Model):
       
     name = models.CharField(max_length=255)
     product_description = models.TextField(blank=True)
-    unit = models.CharField(max_length=50, choices=UNIT_CHOICES)  # Example: kg, liter, piece
+    unit = models.ForeignKey('Unit', on_delete=models.CASCADE, related_name='products')  # Connected as ForeignKey
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     category = models.ForeignKey('Category', on_delete=models.CASCADE, related_name='products')
 

@@ -290,12 +290,12 @@ class QuotationOrderModel(models.Model):
     customer_name = models.CharField(max_length=255)
     quotation_number = models.CharField(max_length=50, unique=True)
     quotation_date = models.DateField()
-    terms = models.CharField(max_length=255, blank=True)
-    due_date = models.DateField()
+    remark = models.CharField(max_length=255, blank=True)
+    # due_date = models.DateField()
     salesperson = models.ForeignKey(SalesPerson, on_delete=models.CASCADE)  # Fetching from SalesPerson model
     email_id = models.EmailField(default=1)  # New field
-    subject = models.TextField(blank=True)
-    attachments = models.FileField(upload_to='quotations/', blank=True, null=True)  # File upload
+
+    # attachments = models.FileField(upload_to='quotations/', blank=True, null=True)  # File upload
 
     grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
 

@@ -890,37 +890,47 @@ class QuotationOrderAPI(APIView):
             # Get quotation items
             quotation_items = QuotationItem.objects.filter(quotation=quotation)
             item_list = []
-            
+
+            # Log debugging info
             print("\n--- DEBUGGING ---")
             print(f"Quotation ID: {quotation.id}, Customer: {quotation.customer_name}")
 
-            grand_total = 0  # Initial
-
             for item in quotation_items:
-                product_serializer = ProductSerializer(item.product)  # Serialize product details
-                product_data = product_serializer.data
+                item_data = {
+                    "id": item.id,
+                    "name": item.product.name,  # Product name   
                 
-                product_data["quantity"] = item.quantity  # Add quantity inside product dictionary
-                product_data["total"] = item.total
-                product_data["sgst"] = item.sgst
-                product_data["cgst"] = item.cgst
-                product_data["sub_total"]= item.sub_total 
-                 
-                # product_data["unit_price"] = item.unit_price  
-                # item_data = NewQuotationItemSerializer(item).data  # Get quotation item details
-                # item_data["product"] = product_data  # Replace product field with modified product data
+                    "quantity": item.quantity,
+                    "total": item.total,
+                    "sgst": item.sgst,
+                    "cgst": item.cgst,
+                    "sub_total": item.sub_total,
+                }
+                item_list.append(item_data)
 
-                item_list.append(product_data)
-            
-            print(f"Calculated Grand Total: {grand_total}")
             print("--- END DEBUGGING ---\n")
+
+            # Return in the required format
             return Response({
                 'status': '1',
                 'message': 'success',
-                'quotation': quotation_serializer.data,
-                'items': item_list  # Include full product details inside items
-            })
+                'quotation': [
+                    {
+                        "id": quotation.id,
+                        "customer_name": quotation.customer_name,
+                        "quotation_number": quotation.quotation_number,
+                        "quotation_date": str(quotation.quotation_date),
+                        "remark": quotation.remark,
+                        "email_id": quotation.email_id,
+                        "grand_total": quotation.grand_total,
+                        "salesperson": quotation.salesperson.id if quotation.salesperson else None,
+                        "items": item_list,
+                    }
+                ]
+            }, status=status.HTTP_200_OK)
+
         else:
+            # Logic for listing all quotations with filters (from_date, to_date, and search)
             from_date = request.query_params.get('from_date')
             to_date = request.query_params.get('to_date')
             search = request.query_params.get('search')
@@ -933,8 +943,9 @@ class QuotationOrderAPI(APIView):
                 quotations = quotations.filter(customer_name__icontains=search)
             
             serializer = QuotationOrderSerializer(quotations, many=True)
-            return Response({"Status": "1", "Data": serializer.data}, status=status.HTTP_200_OK)
-    
+            return Response({"status": "1", "data": serializer.data}, status=status.HTTP_200_OK)
+
+        
 
     def post(self, request, *args, **kwargs):
         data = request.data
@@ -951,12 +962,12 @@ class QuotationOrderAPI(APIView):
                     customer_name=data.get("customer_name"),
                     quotation_number=quotation_number,
                     quotation_date=data.get("quotation_date"),
-                    due_date=data.get("due_date"),
+                    # due_date=data.get("due_date"),
                     salesperson_id=salesperson_id,
                     email_id=data.get("email_id"),
-                    subject=data.get("subject", ""),
-                    terms=data.get("terms", ""),
-                    attachments=data.get("attachments", None),
+                    # subject=data.get("subject", ""),
+                    remark=data.get("remark", ""),
+                    # attachments=data.get("attachments", None),
                     grand_total=0  
                 )
 

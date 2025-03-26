@@ -187,33 +187,51 @@ class ProductSerializer(serializers.ModelSerializer):
         model = Product
         fields = ['id','name', 'product_description', 'unit', 'unit_price', 'category']
         
-    
-    def get_category(self, obj):
-        return obj.category.name 
-    
-    
+
     def validate_unit(self, value):
-            """Fetch and return the Unit instance based on its name."""
-            try:
-                return Unit.objects.get(name=value)  # Return the Unit instance
-            except Unit.DoesNotExist:
-                raise serializers.ValidationError(f"Unit '{value}' does not exist.")
+        """Fetch and return the Unit instance based on its name."""
+        try:
+            return Unit.objects.get(name=value)
+        except Unit.DoesNotExist:
+            raise serializers.ValidationError(f"Unit '{value}' does not exist.")
+
+    def validate_category(self, value):
+        """Fetch and return the Category instance based on its name or ID."""
+        try:
+            # You can modify this logic based on your input (name or ID)
+            if value.isdigit():  # Check if it's an ID
+                return Category.objects.get(id=value)
+            else:  # Otherwise, assume it's a category name
+                return Category.objects.get(name=value)
+        except Category.DoesNotExist:
+            raise serializers.ValidationError(f"Category '{value}' does not exist.")
 
     def create(self, validated_data):
-            """Override create method to handle unit assignment."""
-            unit_instance = validated_data.pop('unit')  # unit is already a Unit instance due to validate_unit
-            validated_data['unit'] = unit_instance
-            return Product.objects.create(**validated_data)
+        """Override create method to handle unit and category assignment."""
+        unit_instance = validated_data.pop('unit')  # `unit` is already validated as a Unit instance
+        category_instance = validated_data.pop('category')  # `category` is also validated as a Category instance
+
+        validated_data['unit'] = unit_instance
+        validated_data['category'] = category_instance
+
+        return Product.objects.create(**validated_data)
 
     def update(self, instance, validated_data):
-            """Override update method to handle unit assignment."""
-            unit_instance = validated_data.pop('unit', None)
-            if unit_instance:
-                instance.unit = unit_instance  # Assign Unit instance
-            for attr, value in validated_data.items():
-                setattr(instance, attr, value)
-            instance.save()
-            return instance
+        """Override update method to handle unit and category assignment."""
+        unit_instance = validated_data.pop('unit', None)
+        category_instance = validated_data.pop('category', None)
+
+        if unit_instance:
+            instance.unit = unit_instance  # Assign Unit instance
+        if category_instance:
+            instance.category = category_instance  # Assign Category instance
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance
+    
+    
 
         
  

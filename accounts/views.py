@@ -1120,6 +1120,50 @@ class QuotationOrderAPI(APIView):
             print(str(e))
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
+        
+class PrintQuotationAPI(APIView):
+
+    def get(self, request, qid=None):
+        # Fetch specific quotation by ID
+        quotation = get_object_or_404(QuotationOrderModel, id=qid)
+        
+        # Get quotation items
+        quotation_items = QuotationItem.objects.filter(quotation=quotation)
+        item_list = []
+
+        # Prepare item details for the print view
+        for item in quotation_items:
+            item_data = {
+                "item_name": item.product.name,  # Assuming 'product' is a ForeignKey to a Product model
+                # "description": item.product.description,  # Assuming 'description' exists in the Product model
+                "quantity": item.quantity,
+                "rate": item.product.unit_price,
+                "tax": item.sgst + item.cgst,  # Assuming tax is stored as SGST and CGST in QuotationItem
+                "amount": item.total,  # Total amount for the item (rate * quantity + tax)
+                # "total": item.total,  # Total amount for the item (rate * quantity + tax)
+
+            }
+            item_list.append(item_data)
+
+        # Prepare the response data
+        response_data = {
+            "quotation_id": quotation.id,
+            "customer_name": quotation.customer_name,
+            "quotation_number": quotation.quotation_number,
+            "quotation_date": str(quotation.quotation_date),
+            "email_id": quotation.email_id,
+            "remark": quotation.remark,
+            "subtotal": sum(item['amount'] - item['tax'] for item in item_list),  # Calculate subtotal (without tax)
+            "total": sum(item['amount'] for item in item_list),  # Calculate total (with tax)
+            "items": item_list,  # List of items with full details
+        }
+
+        # Return the quotation print data as a response
+        return Response({
+            "status": "1",
+            "message": "success",
+            "data": response_data
+        }, status=status.HTTP_200_OK)
 
   
 class SalesOrderAPI(APIView):

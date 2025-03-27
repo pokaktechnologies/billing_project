@@ -1037,12 +1037,12 @@ class QuotationOrderAPI(APIView):
                 # Update fields if provided
                 quotation.customer_name = data.get("customer_name", quotation.customer_name)
                 quotation.quotation_date = data.get("quotation_date", quotation.quotation_date)
-                quotation.due_date = data.get("due_date", quotation.due_date)
+                # quotation.due_date = data.get("due_date", quotation.due_date)
                 quotation.salesperson_id = data.get("salesperson", quotation.salesperson_id)
                 quotation.email_id = data.get("email_id", quotation.email_id)
-                quotation.subject = data.get("subject", quotation.subject)
-                quotation.terms = data.get("terms", quotation.terms)
-                quotation.attachments = data.get("attachments", quotation.attachments)
+                # quotation.subject = data.get("subject", quotation.subject)
+                # quotation.terms = data.get("terms", quotation.terms)
+                # quotation.attachments = data.get("attachments", quotation.attachments)
                 quotation.save()
 
                 # Remove old items

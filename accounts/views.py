@@ -901,6 +901,7 @@ class QuotationOrderAPI(APIView):
                     "name": item.product.name,  # Product name   
                 
                     "quantity": item.quantity,
+                    "unit_price": item.product.unit_price,  # Added unit price
                     "total": item.total,
                     "sgst": item.sgst,
                     "cgst": item.cgst,
@@ -923,7 +924,7 @@ class QuotationOrderAPI(APIView):
                         "remark": quotation.remark,
                         "email_id": quotation.email_id,
                         "grand_total": quotation.grand_total,
-                        "salesperson": quotation.salesperson.id if quotation.salesperson else None,
+                        "salesperson": f"{quotation.salesperson.first_name} {quotation.salesperson.last_name}".strip() if quotation.salesperson else None,
                         "items": item_list,
                     }
                 ]

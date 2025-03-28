@@ -1126,7 +1126,14 @@ class PrintQuotationAPI(APIView):
     def get(self, request, qid=None):
         # Fetch specific quotation by ID
         quotation = get_object_or_404(QuotationOrderModel, id=qid)
+        customer_address = quotation.customer.address if quotation.customer else None
+        salesperson_address = quotation.salesperson.address if quotation.salesperson else None
         
+        salesperson_name = (
+            f"{quotation.salesperson.first_name} {quotation.salesperson.last_name}"
+            if quotation.salesperson else None
+        )
+
         # Get quotation items
         quotation_items = QuotationItem.objects.filter(quotation=quotation)
         item_list = []
@@ -1149,6 +1156,9 @@ class PrintQuotationAPI(APIView):
         response_data = {
             "quotation_id": quotation.id,
             "customer_name": quotation.customer_name,
+            "customer_address": customer_address,  # Access address directly from the model
+            "salesperson_name": salesperson_name,  # Combined full name of salesperson
+            "salesperson_address": salesperson_address,  # Access 
             "quotation_number": quotation.quotation_number,
             "quotation_date": str(quotation.quotation_date),
             "email_id": quotation.email_id,

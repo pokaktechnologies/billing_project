@@ -68,6 +68,28 @@ class Quotation(models.Model):
     def __str__(self):
         return self.invoice_number
 
+class Customer(models.Model):
+    CUSTOMER_TYPES = [
+        ('individual', 'Individual'),
+        ('business', 'Business'),
+    ]
+
+    customer_type = models.CharField(max_length=10, choices=CUSTOMER_TYPES, default='individual')
+    first_name = models.CharField(max_length=100, blank=True, null=True)
+    last_name = models.CharField(max_length=100, blank=True, null=True)
+    country = models.CharField(max_length=100, blank=True, null=True)
+    state = models.CharField(max_length=100, blank=True, null=True)
+    company_name = models.CharField(max_length=255, blank=True, null=True)
+    address = models.TextField()
+    email = models.EmailField(unique=True)
+    phone = models.CharField(max_length=15, blank=True, null=True)
+    mobile = models.CharField(max_length=15)
+
+    def __str__(self):
+        if self.customer_type == 'individual':
+            return f"{self.first_name} {self.last_name}"
+        return self.company_name    
+    
 class Feature(models.Model):
     name = models.CharField(max_length=100)
     icon = models.CharField(max_length=100)  # Icon name or URL
@@ -287,12 +309,15 @@ class SalesPerson(models.Model):
         return self.first_name    
     
 class QuotationOrderModel(models.Model):
+# Add ForeignKey
     customer_name = models.CharField(max_length=255)
+
     quotation_number = models.CharField(max_length=50, unique=True)
     quotation_date = models.DateField()
     remark = models.CharField(max_length=255, blank=True)
     # due_date = models.DateField()
     salesperson = models.ForeignKey(SalesPerson, on_delete=models.CASCADE)  # Fetching from SalesPerson model
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE) # Fetching from
     email_id = models.EmailField(default=1)  # New field
 
     # attachments = models.FileField(upload_to='quotations/', blank=True, null=True)  # File upload
@@ -481,29 +506,6 @@ class State(models.Model):
     def __str__(self):
         return self.name
     
-class Customer(models.Model):
-    CUSTOMER_TYPES = [
-        ('individual', 'Individual'),
-        ('business', 'Business'),
-    ]
-
-    customer_type = models.CharField(max_length=10, choices=CUSTOMER_TYPES, default='individual')
-    first_name = models.CharField(max_length=100, blank=True, null=True)
-    last_name = models.CharField(max_length=100, blank=True, null=True)
-    country = models.CharField(max_length=100, blank=True, null=True)
-    state = models.CharField(max_length=100, blank=True, null=True)
-    company_name = models.CharField(max_length=255, blank=True, null=True)
-    address = models.TextField()
-    email = models.EmailField(unique=True)
-    phone = models.CharField(max_length=15, blank=True, null=True)
-    mobile = models.CharField(max_length=15)
-
-    def __str__(self):
-        if self.customer_type == 'individual':
-            return f"{self.first_name} {self.last_name}"
-        return self.company_name    
-    
-
 class Category(models.Model):
     name = models.CharField(max_length=255, unique=True)
     description = models.TextField(blank=True, null=True)

@@ -311,13 +311,14 @@ class SalesPerson(models.Model):
 class QuotationOrderModel(models.Model):
 # Add ForeignKey
     customer_name = models.CharField(max_length=255)
-
+    
     quotation_number = models.CharField(max_length=50, unique=True)
     quotation_date = models.DateField()
     remark = models.CharField(max_length=255, blank=True)
     # due_date = models.DateField()
     salesperson = models.ForeignKey(SalesPerson, on_delete=models.CASCADE)  # Fetching from SalesPerson model
-    customer = models.ForeignKey(Customer, on_delete=models.CASCADE) # Fetching from
+    # customer = models.ForeignKey(Customer,on_delete=models.SET_NULL, null=True, blank=True) # Fetching from
+    address = models.TextField(max_length=100, blank=True )  
     email_id = models.EmailField(default=1)  # New field
 
     # attachments = models.FileField(upload_to='quotations/', blank=True, null=True)  # File upload

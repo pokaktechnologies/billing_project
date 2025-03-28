@@ -52,7 +52,8 @@ urlpatterns = [
     
     path('quotations/', QuotationOrderAPI.as_view(), name='quotation-items-detail'),
     path('quotations/<int:qid>/', QuotationOrderAPI.as_view(), name='quotation-items-detail'),
-    path('print-quotation/<int:qid>/', PrintQuotationAPI.as_view(), name='quotation-items-detail'),
+    path('print-quotations/<int:qid>/', PrintQuotationAPI.as_view(), name='quotation-items-detail'),
+    # path('print-quotation/', PrintQuotationAPI.as_view(), name='quotation-items-detail'),
     path('invoice-orders/', CreateInvoiceOrderAPI.as_view(), name='create_invoice_order'),
     path('get-invoice-orders/', InvoiceOrderListAPI.as_view(), name='invoice_order_list'),
 

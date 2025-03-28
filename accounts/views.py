@@ -919,12 +919,15 @@ class QuotationOrderAPI(APIView):
                     {
                         "id": quotation.id,
                         "customer_name": quotation.customer_name,
+                        # "address":quotation.address,
                         "quotation_number": quotation.quotation_number,
                         "quotation_date": str(quotation.quotation_date),
                         "remark": quotation.remark,
                         "email_id": quotation.email_id,
                         "grand_total": quotation.grand_total,
                         "salesperson": f"{quotation.salesperson.first_name} {quotation.salesperson.last_name}".strip() if quotation.salesperson else None,
+                        "salesperson_address": quotation.salesperson.address,
+                        # "customer_address": quotation.Customer.address,
                         "items": item_list,
                     }
                 ]
@@ -961,6 +964,7 @@ class QuotationOrderAPI(APIView):
                 quotation_number = f"QUO-{random.randint(111111, 999999)}"
                 quotation = QuotationOrderModel.objects.create(
                     customer_name=data.get("customer_name"),
+                    address=data.get("address"),
                     quotation_number=quotation_number,
                     quotation_date=data.get("quotation_date"),
                     # due_date=data.get("due_date"),
@@ -968,8 +972,11 @@ class QuotationOrderAPI(APIView):
                     email_id=data.get("email_id"),
                     # subject=data.get("subject", ""),
                     remark=data.get("remark", ""),
+                    
                     # attachments=data.get("attachments", None),
-                    grand_total=0  
+                    grand_total=0  ,
+                
+
                 )
 
                 # Create Quotation Items
@@ -1041,6 +1048,7 @@ class QuotationOrderAPI(APIView):
                 # quotation.due_date = data.get("due_date", quotation.due_date)
                 quotation.salesperson_id = data.get("salesperson", quotation.salesperson_id)
                 quotation.email_id = data.get("email_id", quotation.email_id)
+                quotation.address = data.get("address", quotation.address)
                 # quotation.subject = data.get("subject", quotation.subject)
                 # quotation.terms = data.get("terms", quotation.terms)
                 # quotation.attachments = data.get("attachments", quotation.attachments)
@@ -1126,9 +1134,11 @@ class PrintQuotationAPI(APIView):
     def get(self, request, qid=None):
         # Fetch specific quotation by ID
         quotation = get_object_or_404(QuotationOrderModel, id=qid)
-        customer_address = quotation.customer.address if quotation.customer else None
-        salesperson_address = quotation.salesperson.address if quotation.salesperson else None
         
+        print(f"Quotation Address: {quotation.address}")  # This will print the address in your console/logs
+        
+        salesperson_address = quotation.salesperson.address if quotation.salesperson else None
+      
         salesperson_name = (
             f"{quotation.salesperson.first_name} {quotation.salesperson.last_name}"
             if quotation.salesperson else None
@@ -1151,12 +1161,14 @@ class PrintQuotationAPI(APIView):
 
             }
             item_list.append(item_data)
+         
 
         # Prepare the response data
         response_data = {
             "quotation_id": quotation.id,
             "customer_name": quotation.customer_name,
-            "customer_address": customer_address,  # Access address directly from the model
+            "address": quotation.address if quotation.address else None,
+          
             "salesperson_name": salesperson_name,  # Combined full name of salesperson
             "salesperson_address": salesperson_address,  # Access 
             "quotation_number": quotation.quotation_number,
@@ -1166,7 +1178,9 @@ class PrintQuotationAPI(APIView):
             "subtotal": sum(item['amount'] - item['tax'] for item in item_list),  # Calculate subtotal (without tax)
             "total": sum(item['amount'] for item in item_list),  # Calculate total (with tax)
             "items": item_list,  # List of items with full details
+         
         }
+     
 
         # Return the quotation print data as a response
         return Response({
@@ -1232,7 +1246,7 @@ class SalesOrderAPI(APIView):
                     delivery_address=data.get("delivery_address", ""),
                     contact_person=data.get("contact_person"),
                     mobile_number=data.get("mobile_number"),
-                    grand_total=0
+                    grand_total=0,
                 )
                 
                 total_amount = 0

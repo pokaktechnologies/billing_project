@@ -1164,29 +1164,26 @@ class PrintQuotationAPI(APIView):
          
 
         # Prepare the response data
-        response_data = {
+            quotation_data = {
             "quotation_id": quotation.id,
             "customer_name": quotation.customer_name,
             "address": quotation.address if quotation.address else None,
-          
-            "salesperson_name": salesperson_name,  # Combined full name of salesperson
-            "salesperson_address": salesperson_address,  # Access 
+            "salesperson_name": salesperson_name,
+            "salesperson_address": salesperson_address,
             "quotation_number": quotation.quotation_number,
             "quotation_date": str(quotation.quotation_date),
             "email_id": quotation.email_id,
             "remark": quotation.remark,
-            "subtotal": sum(item['amount'] - item['tax'] for item in item_list),  # Calculate subtotal (without tax)
-            "total": sum(item['amount'] for item in item_list),  # Calculate total (with tax)
-            "items": item_list,  # List of items with full details
-         
+            "subtotal": sum(item['amount'] - item['tax'] for item in item_list),
+            "total": sum(item['amount'] for item in item_list),
+            "items": item_list,
         }
-     
 
-        # Return the quotation print data as a response
+        # Return the quotation data wrapped in an array (as requested)
         return Response({
             "status": "1",
             "message": "success",
-            "data": response_data
+            "data": [quotation_data]  # Wrap the response data in a list (array of objects)
         }, status=status.HTTP_200_OK)
 
   

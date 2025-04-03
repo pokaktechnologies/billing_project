@@ -24,7 +24,9 @@ class CustomUserManager(BaseUserManager):
         user.is_superuser = True
         user.save(using=self._db)
         return user
+    
 
+    
 class CustomUser(AbstractBaseUser, PermissionsMixin):     
     first_name = models.CharField(max_length=30)
     last_name = models.CharField(max_length=30)
@@ -90,6 +92,18 @@ class Customer(models.Model):
             return f"{self.first_name} {self.last_name}"
         return self.company_name    
     
+class BankAccount(models.Model):
+    customer = models.ForeignKey(
+        "Customer", on_delete=models.CASCADE, related_name="bank_accounts"
+    )  
+    bank_name = models.CharField(max_length=255)
+    account_holder_name = models.CharField(max_length=255)
+    account_number = models.CharField(max_length=50, unique=True)
+    ifsc_code = models.CharField(max_length=20)
+
+    def __str__(self):
+        return f"{self.bank_name} - {self.account_number}"    
+        
 class Feature(models.Model):
     name = models.CharField(max_length=100)
     icon = models.CharField(max_length=100)  # Icon name or URL
@@ -308,6 +322,9 @@ class SalesPerson(models.Model):
     def __str__(self):
         return self.first_name    
     
+
+
+    
 class QuotationOrderModel(models.Model):
 # Add ForeignKey
     customer_name = models.CharField(max_length=255)
@@ -319,8 +336,11 @@ class QuotationOrderModel(models.Model):
     salesperson = models.ForeignKey(SalesPerson, on_delete=models.CASCADE)  # Fetching from SalesPerson model
     # customer = models.ForeignKey(Customer,on_delete=models.SET_NULL, null=True, blank=True) # Fetching from
     address = models.TextField(max_length=100, blank=True )  
+    delivery_location = models.TextField(max_length=100, blank=True)
     email_id = models.EmailField(default=1)  # New field
-
+    bank_account = models.ForeignKey(
+        BankAccount, on_delete=models.SET_NULL, null=True, blank=True, related_name="quotations"
+    )   
     # attachments = models.FileField(upload_to='quotations/', blank=True, null=True)  # File upload
 
     grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
@@ -340,7 +360,7 @@ class QuotationItem(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     # product_description = models.TextField()
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
-    # unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     # discount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     sgst_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # Store SGST percentage
     cgst_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # Store CGST percentage
@@ -354,7 +374,10 @@ class QuotationItem(models.Model):
     
     def save(self, *args, **kwargs):
         """Calculate and update total, SGST, CGST, and sub_total before saving."""
-        unit_price = self.product.unit_price
+        if self.unit_price is None:  
+            self.unit_price = self.product.unit_price  # Default if not
+        # Use unit_price from the payload if provided; otherwise, fallback to product's unit_price
+        unit_price = self.product.unit_price   
         self.total = unit_price * self.quantity
         self.sgst = ((self.sgst_percentage * unit_price) / 100) * self.quantity
         self.cgst = ((self.cgst_percentage * unit_price) / 100) * self.quantity
@@ -513,3 +536,4 @@ class Category(models.Model):
 
     def __str__(self):
         return self.name    
+    

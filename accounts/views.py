@@ -887,6 +887,11 @@ class QuotationOrderAPI(APIView):
             quotation = get_object_or_404(QuotationOrderModel, id=qid)
             quotation_serializer = NewQuotationOrderSerializer(quotation)
             
+            if quotation.bank_account:
+                        bank_account_serializer = BankAccountSerializer(quotation.bank_account)
+                        bank_account_data = bank_account_serializer.data
+            else:
+                bank_account_data = None
             # Get quotation items
             quotation_items = QuotationItem.objects.filter(quotation=quotation)
             item_list = []
@@ -919,8 +924,10 @@ class QuotationOrderAPI(APIView):
                     {
                         "id": quotation.id,
                         "customer_name": quotation.customer_name,
-                        # "address":quotation.address,
+                        "address":quotation.address,
+                        "delivery_location": quotation.delivery_location,
                         "quotation_number": quotation.quotation_number,
+                        "bank_account": bank_account_data,
                         "quotation_date": str(quotation.quotation_date),
                         "remark": quotation.remark,
                         "email_id": quotation.email_id,
@@ -928,6 +935,8 @@ class QuotationOrderAPI(APIView):
                         "salesperson": f"{quotation.salesperson.first_name} {quotation.salesperson.last_name}".strip() if quotation.salesperson else None,
                         "salesperson_address": quotation.salesperson.address,
                         # "customer_address": quotation.Customer.address,
+                 # New Field
+
                         "items": item_list,
                     }
                 ]
@@ -961,6 +970,9 @@ class QuotationOrderAPI(APIView):
                 salesperson_id = data.get("salesperson")
                 if not SalesPerson.objects.filter(id=salesperson_id).exists():
                     return Response({"error": "Invalid salesperson ID"}, status=status.HTTP_400_BAD_REQUEST)
+                bank_account_id = data.get("bank_account")
+                if not BankAccount.objects.filter(id=bank_account_id).exists():
+                    return Response({"error": "Invalid bank account ID"}, status=status.HTTP_400_BAD_REQUEST)
                 quotation_number = f"QUO-{random.randint(111111, 999999)}"
                 quotation = QuotationOrderModel.objects.create(
                     customer_name=data.get("customer_name"),
@@ -975,7 +987,9 @@ class QuotationOrderAPI(APIView):
                     
                     # attachments=data.get("attachments", None),
                     grand_total=0  ,
-                
+                    delivery_location=data.get("delivery_location", ""),  # New Field
+                    bank_account_id= bank_account_id
+
 
                 )
 
@@ -1005,6 +1019,7 @@ class QuotationOrderAPI(APIView):
                         quotation=quotation,
                         product=product,
                         quantity=item.get("quantity", 1),
+                        
                         # unit_price=item.get("unit_price", 0),
                         # discount=item.get("discount", 0)
                     )
@@ -1049,6 +1064,8 @@ class QuotationOrderAPI(APIView):
                 quotation.salesperson_id = data.get("salesperson", quotation.salesperson_id)
                 quotation.email_id = data.get("email_id", quotation.email_id)
                 quotation.address = data.get("address", quotation.address)
+                quotation.delivery_location = data.get("delivery_location", quotation.delivery_location)
+                quotation.bank_account_id = data.get("bank_account", quotation.bank_account)
                 # quotation.subject = data.get("subject", quotation.subject)
                 # quotation.terms = data.get("terms", quotation.terms)
                 # quotation.attachments = data.get("attachments", quotation.attachments)
@@ -1067,14 +1084,16 @@ class QuotationOrderAPI(APIView):
 
                     product = Product.objects.get(id=product_id)
                     quantity = Decimal(str(item.get("quantity", 1)))  # Convert quantity to Decimal
-                    unit_price = product.unit_price  # unit_price is already Decimal
-
+                    # unit_price = product.unit_price  # unit_price is already Decimal
+                    unit_price = Decimal(str(item.get("unit_price", product.unit_price)))  
                     print(f"Updating Item: Product ID: {product_id}, Quantity: {quantity}, Unit Price: {unit_price}")
 
                     QuotationItem.objects.create(
                         quotation=quotation,
                         product=product,
-                        quantity=quantity
+                        quantity=quantity,
+                        unit_price=unit_price  # ✅ Ensure unit price is set correctly
+
                     )
 
                     # Calculate total price using Decimal
@@ -1668,3 +1687,39 @@ class UnitAPIView(APIView):
         unit.delete()
         return Response({"Status": "1", "message": "Unit deleted successfully."}, status=status.HTTP_200_OK)
     
+
+class BankAccountAPI(APIView):
+
+    def get(self, request, account_id=None):
+        """Fetch a single or all bank accounts."""
+        if account_id:
+            bank_account = get_object_or_404(BankAccount, id=account_id)
+            serializer = BankAccountSerializer(bank_account)
+            return Response({"status": "1", "message": "success", "data": [serializer.data]}, status=status.HTTP_200_OK)
+        
+        bank_accounts = BankAccount.objects.all()
+        serializer = BankAccountSerializer(bank_accounts, many=True)
+        return Response({"status": "1", "message": "success", "data": serializer.data}, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        """Create a new bank account."""
+        serializer = BankAccountSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"status": "1", "message": "Bank account added successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
+        return Response({"status": "0", "message": "Validation error", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request, account_id):
+        """Update a bank account."""
+        bank_account = get_object_or_404(BankAccount, id=account_id)
+        serializer = BankAccountSerializer(bank_account, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"status": "1", "message": "Bank account updated successfully", "data": serializer.data}, status=status.HTTP_200_OK)
+        return Response({"status": "0", "message": "Validation error", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, account_id):
+        """Delete a bank account."""
+        bank_account = get_object_or_404(BankAccount, id=account_id)
+        bank_account.delete()
+        return Response({"status": "1", "message": "Bank account deleted successfully"}, status=status.HTTP_200_OK)    

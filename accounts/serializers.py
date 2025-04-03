@@ -301,4 +301,10 @@ class CategorySerializer(serializers.ModelSerializer):
 class UnitSerializer(serializers.ModelSerializer):
     class Meta:
         model = Unit
-        fields = '__all__'  # Include all fields in the serializer                
+        fields = '__all__'  # Include all fields in the serializer  
+
+
+class BankAccountSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BankAccount
+        fields = '__all__'                      

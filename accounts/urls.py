@@ -75,5 +75,7 @@ urlpatterns = [
     
     path('units/', UnitAPIView.as_view(), name='unit-list-create'),  # List and Create
     path('units/<int:pk>/', UnitAPIView.as_view(), name='unit-detail'),  # Retrieve, Update, Delete
+    path('bank-accounts/', BankAccountAPI.as_view(), name='bank_account_list'),  # Get all, Post new
+    path('bank-accounts/<int:account_id>/', BankAccountAPI.as_view(), name='bank_account_detail'),  # Get, Put, Delete
 
 ]

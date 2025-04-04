@@ -1706,7 +1706,7 @@ class BankAccountAPI(APIView):
         serializer = BankAccountSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return Response({"status": "1", "message": "Bank account added successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
+            return Response({"status": "1", "message": "Bank account added successfully", "data": [serializer.data]}, status=status.HTTP_201_CREATED)
         return Response({"status": "0", "message": "Validation error", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
     def put(self, request, account_id):

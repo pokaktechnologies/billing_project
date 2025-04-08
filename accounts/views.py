@@ -932,7 +932,11 @@ class QuotationOrderAPI(APIView):
                         "remark": quotation.remark,
                         "email_id": quotation.email_id,
                         "grand_total": quotation.grand_total,
-                        "salesperson": f"{quotation.salesperson.first_name} {quotation.salesperson.last_name}".strip() if quotation.salesperson else None,
+                        # "salesperson": f"{quotation.salesperson.first_name} {quotation.salesperson.last_name}".strip() if quotation.salesperson else None,
+                        "salesperson": {
+                                "id": quotation.salesperson.id if quotation.salesperson else None,
+                                "name": f"{quotation.salesperson.first_name} {quotation.salesperson.last_name}".strip() if quotation.salesperson else None
+                            },
                         "salesperson_address": quotation.salesperson.address,
                         # "customer_address": quotation.Customer.address,
                  # New Field
@@ -1163,6 +1167,11 @@ class PrintQuotationAPI(APIView):
             if quotation.salesperson else None
         )
 
+        if quotation.bank_account:
+                        bank_account_serializer = BankAccountSerializer(quotation.bank_account)
+                        bank_account_data = bank_account_serializer.data
+        else:
+            bank_account_data = None
         # Get quotation items
         quotation_items = QuotationItem.objects.filter(quotation=quotation)
         item_list = []
@@ -1191,11 +1200,13 @@ class PrintQuotationAPI(APIView):
             "salesperson_address": salesperson_address,
             "quotation_number": quotation.quotation_number,
             "quotation_date": str(quotation.quotation_date),
+            "bank_account": bank_account_data,
             "email_id": quotation.email_id,
             "remark": quotation.remark,
             "subtotal": sum(item['amount'] - item['tax'] for item in item_list),
             "total": sum(item['amount'] for item in item_list),
             "items": item_list,
+
         }
 
         # Return the quotation data wrapped in an array (as requested)

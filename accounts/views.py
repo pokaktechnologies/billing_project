@@ -888,10 +888,10 @@ class QuotationOrderAPI(APIView):
             quotation_serializer = NewQuotationOrderSerializer(quotation)
             
             if quotation.bank_account:
-                        bank_account_serializer = BankAccountSerializer(quotation.bank_account)
-                        bank_account_data = bank_account_serializer.data
+                bank_account_serializer = BankAccountSerializer(quotation.bank_account)
+                bank_account_data = [bank_account_serializer.data]  # wrap in list
             else:
-                bank_account_data = None
+                bank_account_data = []  # empty array if no account
             # Get quotation items
             quotation_items = QuotationItem.objects.filter(quotation=quotation)
             item_list = []
@@ -1167,11 +1167,12 @@ class PrintQuotationAPI(APIView):
             if quotation.salesperson else None
         )
 
+            
         if quotation.bank_account:
-                        bank_account_serializer = BankAccountSerializer(quotation.bank_account)
-                        bank_account_data = bank_account_serializer.data
+            bank_account_serializer = BankAccountSerializer(quotation.bank_account)
+            bank_account_data = [bank_account_serializer.data]  # wrap in list
         else:
-            bank_account_data = None
+            bank_account_data = []  # empty array if no account
         # Get quotation items
         quotation_items = QuotationItem.objects.filter(quotation=quotation)
         item_list = []

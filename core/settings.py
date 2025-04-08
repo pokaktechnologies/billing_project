@@ -64,8 +64,8 @@ EMAIL_HOST_PASSWORD = 'auvb xjir onow hghp'  # Your email password
 DEFAULT_FROM_EMAIL = 'Pokaktech1@gmail.com'  # Default "from" email address
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),  # Access token validity (e.g., 1 day)
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),  # Refresh token validity (e.g., 7 days)
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=27),  # Access token validity (e.g., 1 day)
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=27),  # Refresh token validity (e.g., 7 days)
     'ROTATE_REFRESH_TOKENS': True,  # Automatically issue a new refresh token upon refresh
     'BLACKLIST_AFTER_ROTATION': True,  # Blacklist old refresh tokens after rotation
 }

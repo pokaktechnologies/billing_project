@@ -2,6 +2,7 @@ from rest_framework import viewsets,status
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.views import APIView
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.generics import get_object_or_404
 from .models import CustomUser, Feature
@@ -882,6 +883,9 @@ class SalesPersonListCreateAPIView(APIView):
         )
 class QuotationOrderAPI(APIView):
     
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
     def get(self, request, qid=None):
         if qid:
             quotation = get_object_or_404(QuotationOrderModel, id=qid)
@@ -1275,6 +1279,8 @@ class SalesOrderAPI(APIView):
                     contact_person=data.get("contact_person"),
                     mobile_number=data.get("mobile_number"),
                     grand_total=0,
+                    remark=data.get("remark", "")  # <-- new field added here
+
                 )
                 
                 total_amount = 0
@@ -1326,6 +1332,7 @@ class SalesOrderAPI(APIView):
                 sales_order.delivery_address = data.get("delivery_address", sales_order.delivery_address)
                 sales_order.contact_person = data.get("contact_person", sales_order.contact_person)
                 sales_order.mobile_number = data.get("mobile_number", sales_order.mobile_number)
+                sales_order.remark=data.get("remark", sales_order.remark)  
                 sales_order.save()
 
                 sales_order.items.all().delete()

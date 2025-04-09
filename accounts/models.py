@@ -201,6 +201,7 @@ class SalesOrder(models.Model):
     due_date = models.DateField()
     salesperson = models.CharField(max_length=255)
     subject = models.TextField(blank=True)
+    remark = models.CharField(max_length=255, blank=True)
     attachments = models.URLField(blank=True)
     order_amount = models.DecimalField(max_digits=10, decimal_places=2)
     quantity = models.DecimalField(max_digits=10, decimal_places=2, null=False, blank=False, default=1)
@@ -401,6 +402,7 @@ class SalesOrderModel(models.Model):
         sales_date = models.DateField()  # Sales Order Date
         purchase_order_number = models.CharField(max_length=50, blank=True, null=True)  # PO Number
         terms = models.CharField(max_length=255, blank=True)  # Payment terms
+        remark = models.CharField(max_length=255, blank=True)
         due_date = models.DateField()  # Payment Due Date
         salesperson = models.ForeignKey(SalesPerson, on_delete=models.CASCADE)  # Salesperson responsible
         delivery_location = models.CharField(max_length=255, blank=True)  # Location for delivery

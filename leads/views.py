@@ -231,6 +231,8 @@ class MeetingSearchView(APIView):
         lead_name = request.query_params.get('lead_name', '').strip()
         from_date_str = request.query_params.get('from_date')
         to_date_str = request.query_params.get('to_date')
+        status_filter = request.query_params.get('status', '').strip()
+
 
         # Validate missing dates
         if (from_date_str and not to_date_str) or (to_date_str and not from_date_str):
@@ -239,11 +241,13 @@ class MeetingSearchView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        if not lead_name and not (from_date_str and to_date_str):
+        if not lead_name and not (from_date_str and to_date_str) and not status_filter:
             return Response(
                 {"status": "0", "message": "Provide at least 'lead_name' or both 'from_date' and 'to_date'."},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        
+
 
         meetings = Meeting.objects.filter(lead__CustomUser=request.user).order_by('-created_at')
 
@@ -285,6 +289,15 @@ class MeetingSearchView(APIView):
             for term in search_terms:
                 query &= Q(lead__name__icontains=term)
             meetings = meetings.filter(query)
+        
+        if status_filter:
+            if status_filter not in ['scheduled', 'completed', 'canceled']:
+                return Response(
+                    {"status": "0", "message": "Invalid status value. Choose from 'scheduled', 'completed', or 'canceled'."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            meetings = meetings.filter(status=status_filter)
+
 
         serializer = MeetingSerializerDisplay(meetings, many=True)
         return Response({

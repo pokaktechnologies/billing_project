@@ -46,7 +46,7 @@ class LeadDetailView(APIView):
         if not lead:
             return Response({"status": "0", "message": "Lead not found"}, status=status.HTTP_404_NOT_FOUND)
         serializer = LeadSerializer(lead)
-        return Response({"status": "1", "message": "success", "data": serializer.data})
+        return Response({"status": "1", "message": "success", "data": [serializer.data]})
 
     def patch(self, request, pk):
         lead = self.get_object(pk, request.user)
@@ -67,7 +67,7 @@ class LeadDetailView(APIView):
         except Exception as e:
             return Response({"status": "0", "message": "Lead deletion failed", "errors": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         # If deletion is successful, return a success message
-        return Response({"status": "1", "message": "Lead deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+        return Response({"status": "1", "message": "Lead deleted successfully"}, status=status.HTTP_200_OK)
 
 
 

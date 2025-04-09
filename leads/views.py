@@ -2,8 +2,15 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+from django.utils.timezone import make_aware
+from django.utils.dateparse import parse_date
+from datetime import datetime
+from django.db.models import Q
+
 from .models import Lead
 from .serializers import LeadSerializer
+
+
 
 class LeadsView(APIView):
     permission_classes = [IsAuthenticated]
@@ -55,7 +62,7 @@ class LeadDetailView(APIView):
         serializer = LeadSerializer(lead, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
-            return Response({"status": "1", "message": "Lead updated successfully", "data": serializer.data})
+            return Response({"status": "1", "message": "Lead updated successfully"})
         return Response({"status": "0", "message": "Update failed", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
@@ -68,6 +75,83 @@ class LeadDetailView(APIView):
             return Response({"status": "0", "message": "Lead deletion failed", "errors": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         # If deletion is successful, return a success message
         return Response({"status": "1", "message": "Lead deleted successfully"}, status=status.HTTP_200_OK)
+
+
+
+
+
+class LeadSearchView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        name = request.query_params.get('name', '').strip()
+        from_date_str = request.query_params.get('from_date')
+        to_date_str = request.query_params.get('to_date')
+
+        # Validate missing dates
+        if (from_date_str and not to_date_str) or (to_date_str and not from_date_str):
+            return Response(
+                {"status": "0", "message": "Both 'from_date' and 'to_date' must be provided"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not name and not (from_date_str and to_date_str):
+            return Response(
+                {"status": "0", "message": "Provide at least 'name' or both 'from_date' and 'to_date'."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        leads = Lead.objects.filter(CustomUser=request.user)
+
+        if from_date_str and to_date_str:
+            try:
+                from_parsed = parse_date(from_date_str)
+                to_parsed = parse_date(to_date_str)
+
+                if not from_parsed or not to_parsed:
+                    raise ValueError
+
+                # Check if from_date is greater than to_date
+                if from_parsed > to_parsed:
+                    return Response(
+                        {"status": "0", "message": "'from_date' cannot be greater than 'to_date'."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # Convert to aware datetime
+                if from_parsed == to_parsed:
+                    # Same day filter
+                    day_start = make_aware(datetime.combine(from_parsed, datetime.min.time()))
+                    day_end = make_aware(datetime.combine(from_parsed, datetime.max.time()))
+                    leads = leads.filter(created_at__range=(day_start, day_end))
+                else:
+                    from_date = make_aware(datetime.combine(from_parsed, datetime.min.time()))
+                    to_date = make_aware(datetime.combine(to_parsed, datetime.max.time()))
+                    leads = leads.filter(created_at__range=(from_date, to_date))
+
+            except ValueError:
+                return Response(
+                    {"status": "0", "message": "Invalid date format. Use 'YYYY-MM-DD'."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        if name:
+            # leads = leads.filter(name__icontains=name)
+            search_terms = name.strip().split()
+            query = Q()
+            for term in search_terms:
+                query &= Q(name__icontains=term)
+            leads = leads.filter(query)
+
+        serializer = LeadSerializer(leads, many=True)
+        return Response({
+            "status": "1",
+            "message": "success",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+
 
 
 

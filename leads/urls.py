@@ -7,4 +7,5 @@ urlpatterns = [
     path('search/', LeadSearchView.as_view(), name='lead_search'),
     path('meeting/', MeetingsView.as_view(), name='meeting_view'),
     path('meeting/<int:pk>/', MeetingDetailView.as_view(), name='meeting_detail'),
+    path('meeting/search/', MeetingSearchView.as_view(), name='meeting_search'),
 ]

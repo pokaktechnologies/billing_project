@@ -17,7 +17,7 @@ class LeadsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        leads = Lead.objects.filter(CustomUser=request.user)
+        leads = Lead.objects.filter(CustomUser=request.user).order_by('-created_at')
         serializer = LeadSerializer(leads, many=True)
         return Response({
             "status": "1",
@@ -103,7 +103,7 @@ class LeadSearchView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        leads = Lead.objects.filter(CustomUser=request.user)
+        leads = Lead.objects.filter(CustomUser=request.user).order_by('-created_at')
 
         if from_date_str and to_date_str:
             try:
@@ -155,14 +155,12 @@ class LeadSearchView(APIView):
 
 
 
-
-
 class MeetingsView(APIView):
     permission_classes = [IsAuthenticated]
 
 
     def get(self, request):
-        meetings = Meeting.objects.filter(lead__CustomUser=request.user)
+        meetings = Meeting.objects.filter(lead__CustomUser=request.user).order_by('-created_at')
         serializer = MeetingSerializerDisplay(meetings, many=True)
         return Response({
             "status": "1",
@@ -224,6 +222,78 @@ class MeetingDetailView(APIView):
             return Response({"status": "0", "message": "Meeting deletion failed", "errors": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         # If deletion is successful, return a success message
         return Response({"status": "1", "message": "Meeting deleted successfully"}, status=status.HTTP_200_OK)
+
+
+class MeetingSearchView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        lead_name = request.query_params.get('lead_name', '').strip()
+        from_date_str = request.query_params.get('from_date')
+        to_date_str = request.query_params.get('to_date')
+
+        # Validate missing dates
+        if (from_date_str and not to_date_str) or (to_date_str and not from_date_str):
+            return Response(
+                {"status": "0", "message": "Both 'from_date' and 'to_date' must be provided"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not lead_name and not (from_date_str and to_date_str):
+            return Response(
+                {"status": "0", "message": "Provide at least 'lead_name' or both 'from_date' and 'to_date'."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        meetings = Meeting.objects.filter(lead__CustomUser=request.user).order_by('-created_at')
+
+        if from_date_str and to_date_str:
+            try:
+                from_parsed = parse_date(from_date_str)
+                to_parsed = parse_date(to_date_str)
+
+                if not from_parsed or not to_parsed:
+                    raise ValueError
+
+                # Check if from_date is greater than to_date
+                if from_parsed > to_parsed:
+                    return Response(
+                        {"status": "0", "message": "'from_date' cannot be greater than 'to_date'."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # Convert to aware datetime
+                if from_parsed == to_parsed:
+                    # Same day filter
+                    day_start = make_aware(datetime.combine(from_parsed, datetime.min.time()))
+                    day_end = make_aware(datetime.combine(from_parsed, datetime.max.time()))
+                    meetings = meetings.filter(date__range=(day_start, day_end))
+                else:
+                    from_date = make_aware(datetime.combine(from_parsed, datetime.min.time()))
+                    to_date = make_aware(datetime.combine(to_parsed, datetime.max.time()))
+                    meetings = meetings.filter(date__range=(from_date, to_date))
+
+            except ValueError:
+                return Response(
+                    {"status": "0", "message": "Invalid date format. Use 'YYYY-MM-DD'."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        if lead_name:
+            search_terms = lead_name.split()
+            query = Q()
+            for term in search_terms:
+                query &= Q(lead__name__icontains=term)
+            meetings = meetings.filter(query)
+
+        serializer = MeetingSerializerDisplay(meetings, many=True)
+        return Response({
+            "status": "1",
+            "message": "success",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+
 
 
 

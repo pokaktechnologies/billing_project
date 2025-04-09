@@ -2,13 +2,14 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+
 from django.utils.timezone import make_aware
 from django.utils.dateparse import parse_date
 from datetime import datetime
 from django.db.models import Q
 
-from .models import Lead
-from .serializers import LeadSerializer
+from .models import *
+from .serializers import *
 
 
 
@@ -152,6 +153,77 @@ class LeadSearchView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+
+
+
+
+class MeetingsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+
+    def get(self, request):
+        meetings = Meeting.objects.filter(lead__CustomUser=request.user)
+        serializer = MeetingSerializerDisplay(meetings, many=True)
+        return Response({
+            "status": "1",
+            "message": "success",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = MeetingSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "status": "1",
+                "message": "Meeting created successfully"
+            }, status=status.HTTP_201_CREATED)
+        return Response({
+            "status": "0",
+            "message": "Meeting creation failed",
+            "errors": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+
+class MeetingDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+
+    def get_object(self, pk, user):
+        try:
+            return Meeting.objects.get(pk=pk, lead__CustomUser=user)
+        except Meeting.DoesNotExist:
+            return None
+        
+    def get(self, request, pk):
+        meeting = self.get_object(pk, request.user)
+        if not meeting:
+            return Response({"status": "0", "message": "Meeting not found"}, status=status.HTTP_404_NOT_FOUND)
+        serializer = MeetingSerializerDisplay(meeting)
+        return Response({"status": "1", "message": "success", "data": [serializer.data]})
+    
+    def patch(self, request, pk):
+        meeting = self.get_object(pk, request.user)
+        if not meeting:
+            return Response({"status": "0", "message": "Meeting not found"}, status=status.HTTP_404_NOT_FOUND)
+        serializer = MeetingSerializer(meeting, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"status": "1", "message": "Meeting updated successfully"})
+        return Response({"status": "0", "message": "Update failed", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+    
+    def delete(self, request, pk):
+        meeting = self.get_object(pk, request.user)
+        if not meeting:
+            return Response({"status": "0", "message": "Meeting not found"}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            meeting.delete()
+        except Exception as e:
+            return Response({"status": "0", "message": "Meeting deletion failed", "errors": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        # If deletion is successful, return a success message
+        return Response({"status": "1", "message": "Meeting deleted successfully"}, status=status.HTTP_200_OK)
 
 
 

@@ -24,3 +24,18 @@ class Lead(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class Meeting(models.Model):
+    lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name='meetings')
+    date = models.DateTimeField()
+    status = models.CharField(max_length=50, choices=[
+        ('scheduled', 'Scheduled'),
+        ('completed', 'Completed'),
+        ('canceled', 'Canceled'),
+    ], default='scheduled')
+    created_at = models.DateTimeField(default=timezone.now)
+
+    def __str__(self):
+        return f"Meeting with {self.lead.name} on {self.date}"  
+

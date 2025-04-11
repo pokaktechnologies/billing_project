@@ -5,7 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 
 from django.utils.timezone import make_aware
 from django.utils.dateparse import parse_date
-from datetime import datetime
+from datetime import datetime, date
 from django.db.models import Q
 
 from .models import *
@@ -169,7 +169,7 @@ class MeetingsView(APIView):
         }, status=status.HTTP_200_OK)
 
     def post(self, request):
-        serializer = MeetingSerializer(data=request.data)
+        serializer = MeetingSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save()
             return Response({
@@ -243,7 +243,7 @@ class MeetingSearchView(APIView):
 
         if not lead_name and not (from_date_str and to_date_str) and not status_filter:
             return Response(
-                {"status": "0", "message": "Provide at least 'lead_name' or both 'from_date' and 'to_date'."},
+                {"status": "0", "message": "Provide at least 'lead_name' or both 'from_date' and 'to_date or 'status'."},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -308,5 +308,25 @@ class MeetingSearchView(APIView):
 
 
 
+#display all Todays meetings 
+class MeetingRemiderView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        today = date.today()
+        meetings = Meeting.objects.filter(date__date=today, lead__CustomUser=request.user).order_by('date')
+        # meetings = Meeting.objects.filter(date__date=today, lead__CustomUser=request.user).order_by('-created_at')
+
+        if not meetings.exists():
+            return Response({
+                "status": "0",
+                "message": "No meetings found for today"
+            }, status=status.HTTP_404_NOT_FOUND)
+        serializer = MeetingSerializerDisplay(meetings, many=True)
+        return Response({
+            "status": "1",
+            "message": "success",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
 
 

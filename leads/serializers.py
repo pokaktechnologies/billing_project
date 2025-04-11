@@ -30,6 +30,10 @@ class MeetingSerializer(serializers.ModelSerializer):
         time = validated_data.pop('time')
         combined_datetime = datetime.combine(date, time)
         validated_data['date'] = combined_datetime
+        # check the lead is cooresponding to the user
+        lead = validated_data.get('lead')
+        if lead and lead.CustomUser != self.context['request'].user:
+            raise serializers.ValidationError("You do not have permission to create a meeting for this lead.")
         return super().create(validated_data)
 
     def update(self, instance, validated_data):

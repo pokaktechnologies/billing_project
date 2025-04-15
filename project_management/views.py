@@ -43,7 +43,7 @@ class project_management_detail(APIView):
     def get_project(self, pk, user):
         try:
             project = ProjectManagement.objects.get(pk=pk, user=user)
-            if project.user != user:
+            if project:
                 return None, Response(
                     {"status": "0", "message": "Project not found"},
                     status=status.HTTP_404_NOT_FOUND

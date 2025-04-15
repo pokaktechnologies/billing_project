@@ -316,12 +316,6 @@ class MeetingRemiderView(APIView):
         today = date.today()
         meetings = Meeting.objects.filter(date__date=today, lead__CustomUser=request.user).order_by('date')
         # meetings = Meeting.objects.filter(date__date=today, lead__CustomUser=request.user).order_by('-created_at')
-
-        if not meetings.exists():
-            return Response({
-                "status": "0",
-                "message": "No meetings found for today"
-            }, status=status.HTTP_404_NOT_FOUND)
         serializer = MeetingSerializerDisplay(meetings, many=True)
         return Response({
             "status": "1",

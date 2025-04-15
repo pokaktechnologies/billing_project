@@ -61,6 +61,7 @@ class MeetingSerializerDisplay(serializers.ModelSerializer):
 
     def get_time(self, obj):
         return obj.date.time().isoformat()
+        # return obj.date.strftime("%I:%M %p")
     
     def get_status(self, obj):
         return obj.get_status_display()

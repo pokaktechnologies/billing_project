@@ -375,13 +375,18 @@ class QuotationItem(models.Model):
     
     def save(self, *args, **kwargs):
         """Calculate and update total, SGST, CGST, and sub_total before saving."""
-        if self.unit_price is None:  
+        if self.unit_price == 0:  
             self.unit_price = self.product.unit_price  # Default if not
         # Use unit_price from the payload if provided; otherwise, fallback to product's unit_price
-        unit_price = self.product.unit_price   
-        self.total = unit_price * self.quantity
-        self.sgst = ((self.sgst_percentage * unit_price) / 100) * self.quantity
-        self.cgst = ((self.cgst_percentage * unit_price) / 100) * self.quantity
+        # self.unit_price = self.unit_price   
+        unit_price_decimal = Decimal(self.unit_price)
+        quantity_decimal = Decimal(self.quantity)
+        sgst_percentage_decimal = Decimal(str(self.sgst_percentage))
+        cgst_percentage_decimal = Decimal(str(self.cgst_percentage))
+        
+        self.total = unit_price_decimal * quantity_decimal
+        self.sgst = ((sgst_percentage_decimal * unit_price_decimal) / Decimal(100)) * quantity_decimal
+        self.cgst = ((cgst_percentage_decimal * unit_price_decimal) / Decimal(100)) * quantity_decimal
         self.sub_total = self.total + self.sgst + self.cgst
         super().save(*args, **kwargs)
         
@@ -399,6 +404,7 @@ class QuotationItem(models.Model):
 class SalesOrderModel(models.Model):
         customer_name = models.CharField(max_length=255)
         sales_order_id = models.CharField(max_length=50, unique=True)  # Unique Sales Order ID
+        quotation_number = models.CharField(max_length=50, blank=True, null=True)  
         sales_date = models.DateField()  # Sales Order Date
         purchase_order_number = models.CharField(max_length=50, blank=True, null=True)  # PO Number
         terms = models.CharField(max_length=255, blank=True)  # Payment terms
@@ -412,22 +418,26 @@ class SalesOrderModel(models.Model):
         # attachments = models.FileField(upload_to='salesorder/', blank=True, null=True)  # File upload
 
         grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # Total sales amount
-
         def update_grand_total(self):
-            """Recalculate grand total based on related SalesOrderItems."""
+            """Recalculate grand total based on related sales order Items."""
             total_amount = sum(item.sub_total for item in self.items.all())  # Sum of all items' sub_total
             self.grand_total = total_amount
-            self.save(update_fields=["grand_total"])
+            self.save(update_fields=["grand_total"])  # Save ````only the g
 
         def __str__(self):
             return f"Sales Order {self.sales_order_id} - {self.customer_name}"
 
 
 class SalesOrderItem(models.Model):
-    sales_order = models.ForeignKey(SalesOrderModel, related_name='items', on_delete=models.CASCADE)
+    sales_order = models.ForeignKey(SalesOrderModel, on_delete=models.CASCADE,related_name='items')
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    sgst_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # Store SGST percentage
+    cgst_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # Store CGST percentage
+    quotation = models.ForeignKey(QuotationItem, on_delete=models.SET_NULL, null=True, blank=True)  # Add this line
 
+    
     total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # quantity * unit_price
     sgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # 9% SGST
     cgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # 9% CGST
@@ -435,19 +445,23 @@ class SalesOrderItem(models.Model):
 
     def save(self, *args, **kwargs):
         """Calculate and update total, SGST, CGST, and sub_total before saving."""
-        self.total = self.product.unit_price * self.quantity
-        self.sgst = (self.total * Decimal("9")) / Decimal("100")  # 9% SGST
-        self.cgst = (self.total * Decimal("9")) / Decimal("100")  # 9% CGST
+        if self.unit_price is None:  
+            self.unit_price = self.product.unit_price  # Default if not
+        # Use unit_price from the payload if provided; otherwise, fallback to product's unit_price
+        unit_price = self.product.unit_price   
+        self.total = unit_price * self.quantity
+        self.sgst = ((self.sgst_percentage * unit_price) / 100) * self.quantity
+        self.cgst = ((self.cgst_percentage * unit_price) / 100) * self.quantity
         self.sub_total = self.total + self.sgst + self.cgst
         super().save(*args, **kwargs)
-
-        self.sales_order.update_grand_total()
+        
+        self.quotation.update_grand_total()
 
     def delete(self, *args, **kwargs):
         """Ensure grand total updates when an item is deleted."""
         super().delete(*args, **kwargs)
         self.sales_order.update_grand_total()
-
+            
     def __str__(self):
         return self.product.name
     

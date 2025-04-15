@@ -308,3 +308,23 @@ class BankAccountSerializer(serializers.ModelSerializer):
     class Meta:
         model = BankAccount
         fields = '__all__'                      
+        
+class QuotationItemUpdateSerializer(serializers.ModelSerializer):
+    """
+    Serializer for updating only quantity and unit_price of a QuotationItem
+    """
+    class Meta:
+        model = QuotationItem
+        fields = ['quantity', 'unit_price', 'sgst_percentage', 'cgst_percentage']
+        
+    def validate(self, data):
+        """
+        Validate that quantity is greater than zero if provided
+        """
+        if 'quantity' in data and data['quantity'] <= 0:
+            raise serializers.ValidationError("Quantity must be greater than zero")
+        
+        if 'unit_price' in data and data['unit_price'] < 0:
+            raise serializers.ValidationError("Unit price cannot be negative")
+            
+        return data        

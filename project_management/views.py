@@ -632,3 +632,70 @@ class ProjectSearchView(APIView):
             status=status.HTTP_200_OK
         )
 
+class ProjectMemebrsSearchView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        member_name = request.query_params.get('name', '').strip()
+        stack = request.query_params.get('stack', '').strip()
+
+        # Ensure at least one filter is provided
+        if not member_name and not stack:
+            return Response(
+                {"status": "0", "message": "At least one filter ('name' or 'stack') must be provided."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Base QuerySet: All project members for the logged-in user
+        project_members = ProjectMember.objects.filter(project__user=request.user).order_by('-created_at')
+
+        # Filter by member name if provided
+        if member_name:
+            project_members = project_members.filter(member__name__icontains=member_name)
+        
+        # Filter by stack if provided
+        if stack:
+            project_members = project_members.filter(stack__id=stack)
+
+        # Serialize the filtered data
+        serializer = ProjectMemberSerializer(project_members, many=True)
+
+        return Response(
+            {"status": "1", "message": "success", "data": serializer.data},
+            status=status.HTTP_200_OK
+        )
+
+
+class MembersSearchView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        member_name = request.query_params.get('name', '').strip()
+        role = request.query_params.get('role', '').strip()
+
+        # Ensure at least one filter is provided
+        if not member_name and not role:
+            return Response(
+                {"status": "0", "message": "At least one filter ('name' or 'role') must be provided."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Base QuerySet: All members for the logged-in user
+        members = Member.objects.filter(user=request.user).order_by('-created_at')
+
+        # Filter by member name if provided
+        if member_name:
+            members = members.filter(name__icontains=member_name)
+
+        # Filter by role if provided
+        if role:
+            members = members.filter(role=role)
+
+        # Serialize the filtered data
+        serializer = MemberSerializer(members, many=True)
+
+        return Response(
+            {"status": "1", "message": "success", "data": serializer.data},
+            status=status.HTTP_200_OK
+        )
+

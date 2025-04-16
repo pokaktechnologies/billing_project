@@ -566,5 +566,69 @@ class TaskListByProjectMember(APIView):
             status=status.HTTP_200_OK
         )
 
+# search views
 
+from datetime import datetime
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+
+class ProjectSearchView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        project_name = request.query_params.get('name', '').strip()
+        start_date_str = request.query_params.get('start_date')
+        end_date_str = request.query_params.get('end_date')
+
+        # Ensure at least one filter is provided
+        if not project_name and not start_date_str and not end_date_str:
+            return Response(
+                {"status": "0", "message": "At least one filter ('name', 'start_date', or 'end_date') must be provided."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Base QuerySet: All projects for the logged-in user
+        projects = ProjectManagement.objects.filter(user=request.user).order_by('-created_at')
+
+        # Filter by project name if provided
+        if project_name:
+            projects = projects.filter(project_name__icontains=project_name)
+
+        try:
+            # Filter by overlapping date range if both dates are provided
+            if start_date_str and end_date_str:
+                start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+                end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+
+                projects = projects.filter(
+                    start_date__gte=start_date,   # Starts after or on the provided start date
+                    end_date__lte=end_date        # Ends before or on the provided end date
+                )
+
+
+            #  Filter by start_date only
+            elif start_date_str:
+                start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+                projects = projects.filter(start_date__gte=start_date)
+
+            #  Filter by end_date only
+            elif end_date_str:
+                end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+                projects = projects.filter(end_date__lte=end_date)
+
+        except ValueError:
+            return Response(
+                {"status": "0", "message": "Invalid date format. Use YYYY-MM-DD."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        #  Serialize the filtered data
+        serializer = ProjectManagementSerializer(projects, many=True)
+
+        return Response(
+            {"status": "1", "message": "success", "data": serializer.data},
+            status=status.HTTP_200_OK
+        )
 

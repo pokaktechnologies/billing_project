@@ -15,4 +15,6 @@ urlpatterns = [
     path('task/<int:pk>/', TaskDetail.as_view(), name='task_detail'),
     path('task/<int:member_id>/members/', TaskListByMembers.as_view(), name='task_list_by_members'),
     path('task/<int:project_member_id>/project_members/', TaskListByProjectMember.as_view(), name='task_list_by_project_member'),
+
+    path('search/', ProjectSearchView.as_view(), name='project_search'),
 ]

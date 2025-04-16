@@ -890,7 +890,8 @@ class QuotationOrderAPI(APIView):
         if qid:
             quotation = get_object_or_404(QuotationOrderModel, id=qid)
             if pid:
-                quotation_item = QuotationItem.objects.get(quotation=quotation, product_id=pid)
+                # quotation_item = QuotationItem.objects.get(quotation=quotation, product_id=pid)
+                quotation_item = get_object_or_404(QuotationItem,quotation=quotation, product_id=pid)
                 serializer = QuotationItemSerializer(quotation_item)
                 return Response({   "status": "1",
                     "message": "Quotation created successfully.",
@@ -915,7 +916,7 @@ class QuotationOrderAPI(APIView):
                 item_data = {
                     "id": item.id,
                     "name": item.product.name,  # Product name   
-                
+                    "product_id": item.product.pk,
                     "quantity": item.quantity,
                     "unit_price": item.product.unit_price if item.unit_price == 0 else item.unit_price,  # Added unit price
                     "total": item.total,
@@ -980,6 +981,7 @@ class QuotationOrderAPI(APIView):
         data = request.data
         try:
             if qid:
+                quotation = get_object_or_404(QuotationOrderModel, id=qid)
                 pid = request.data.get("product", None)
                 if pid:
                     product = get_object_or_404(Product, id=pid)
@@ -987,8 +989,14 @@ class QuotationOrderAPI(APIView):
                     cgst_percentage = request.data.get("cgst_percentage", 0)
                     quantity = request.data.get("quantity", 1)
                     unit_price = request.data.get("unit_price", 0)
-                    quotation = get_object_or_404(QuotationOrderModel, id=qid)
-                    QuotationItem.objects.create(quotation=quotation, product=product, cgst_percentage=cgst_percentage, sgst_percentage=sgst_percentage, unit_price=unit_price, quantity=quantity)
+                    
+                    # QuotationItem.objects.get_or_create(quotation=quotation, product=product, cgst_percentage=cgst_percentage, sgst_percentage=sgst_percentage, unit_price=unit_price, quantity=quantity)
+                    new_item, is_created = QuotationItem.objects.get_or_create(quotation=quotation, product=product)
+                    new_item.cgst_percentage=cgst_percentage
+                    new_item.sgst_percentage=sgst_percentage
+                    new_item.unit_price= unit_price
+                    new_item.quantity=quantity
+                    new_item.save() 
                     return Response({"status": "1", "message": "success"})
                 else:
                     return Response({"status": "0", "message": "You must provide product id"})
@@ -1089,22 +1097,85 @@ class QuotationOrderAPI(APIView):
         Update specific fields of a QuotationItem for the given quotation_id and product_id
         """
         # First, get the quotation or return 404
-        quotation = get_object_or_404(QuotationOrderModel, id=qid)
-        
-        # Then, get the specific item from this quotation that matches the product_id
-        item = get_object_or_404(QuotationItem, quotation=quotation, product_id=pid)
-        
-        # Use a serializer to validate the data
-        serializer = QuotationItemUpdateSerializer(item, data=request.data, partial=True)
-        
-        if serializer.is_valid():
-            # Save the updated item (which will trigger the save method in QuotationItem)
-            serializer.save()
+        if qid and pid:
+            quotation = get_object_or_404(QuotationOrderModel, id=qid)
             
-            # Return the updated item data
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            # Then, get the specific item from this quotation that matches the product_id
+            item = get_object_or_404(QuotationItem, quotation=quotation, product_id=pid)
+            
+            # Use a serializer to validate the data
+            serializer = QuotationItemUpdateSerializer(item, data=request.data, partial=True)
+            
+            if serializer.is_valid():
+                # Save the updated item (which will trigger the save method in QuotationItem)
+                serializer.save()
+                
+                # Return the updated item data
+                return Response(serializer.data, status=status.HTTP_200_OK)
         
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)   
+        else:
+            try:
+                data= request.data
+                with transaction.atomic():
+                    # Get the quotation object
+                    try:
+                        quotation = QuotationOrderModel.objects.get(id=qid)
+                    except QuotationOrderModel.DoesNotExist:
+                        return Response({"error": "Quotation not found"}, status=status.HTTP_404_NOT_FOUND)
+                    
+                    print("\n--- DEBUGGING PATCH ---")
+                    print(f"Updating Quotation ID: {qid}")
+                    
+                    # Update main quotation fields if provided
+                    if 'customer_name' in data:
+                        quotation.customer_name = data.get('customer_name')
+                    
+                    if 'address' in data:
+                        quotation.address = data.get('address')
+                    
+                    if 'quotation_date' in data:
+                        quotation.quotation_date = data.get('quotation_date')
+                        
+                    if 'salesperson' in data:
+                        salesperson_id = data.get('salesperson')
+                        if not SalesPerson.objects.filter(id=salesperson_id).exists():
+                            return Response({"error": "Invalid salesperson ID"}, status=status.HTTP_400_BAD_REQUEST)
+                        quotation.salesperson_id = salesperson_id
+                        
+                    if 'email_id' in data:
+                        quotation.email_id = data.get('email_id')
+                        
+                    if 'remark' in data:
+                        quotation.remark = data.get('remark')
+                        
+                    if 'delivery_location' in data:
+                        quotation.delivery_location = data.get('delivery_location')
+                        
+                    if 'bank_account' in data:
+                        bank_account_id = data.get('bank_account')
+                        if not BankAccount.objects.filter(id=bank_account_id).exists():
+                            return Response({"error": "Invalid bank account ID"}, status=status.HTTP_400_BAD_REQUEST)
+                        quotation.bank_account_id = bank_account_id
+                    
+                    # Save the quotation changes
+                    quotation.save()
+                    
+                    
+                    
+                    # Return success response with updated data
+                    return Response({
+                        "status": "1",
+                        "message": "Quotation updated successfully.",
+                        "quotation_id": quotation.id,
+                        "grand_total": str(quotation.grand_total)
+                    }, status=status.HTTP_200_OK)
+                    
+            except Exception as e:
+                print(f"Error in PATCH: {str(e)}")
+                return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        
+    #     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)   
     # def patch(self, request, qid=None):
     #     if not qid:
     #         return Response({"error": "Quotation ID is required"}, status=status.HTTP_400_BAD_REQUEST)

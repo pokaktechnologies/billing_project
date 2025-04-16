@@ -250,9 +250,14 @@ class QuotationOrderSerializer(serializers.ModelSerializer):
 
 
 class QuotationItemSerializer(serializers.ModelSerializer):
+    unit_price = serializers.SerializerMethodField()
     class Meta:
         model = QuotationItem
-        fields = '__all__'               
+        fields = ['quotation', 'product','quantity','unit_price','sgst_percentage','cgst_percentage','total','sgst','cgst','sub_total']   
+    def get_unit_price(self, obj):
+        if obj.unit_price == 0:
+            return obj.product.unit_price
+        return obj.unit_price            
         
 class NewQuotationOrderSerializer(serializers.ModelSerializer):
     class Meta:

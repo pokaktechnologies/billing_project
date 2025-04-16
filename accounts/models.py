@@ -361,7 +361,7 @@ class QuotationItem(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     # product_description = models.TextField()
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
-    unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, null=True, blank=True)
     # discount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     sgst_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # Store SGST percentage
     cgst_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # Store CGST percentage
@@ -375,11 +375,16 @@ class QuotationItem(models.Model):
     
     def save(self, *args, **kwargs):
         """Calculate and update total, SGST, CGST, and sub_total before saving."""
-        if self.unit_price == 0:  
-            self.unit_price = self.product.unit_price  # Default if not
+        # if self.unit_price == 0:  
+        #     self.unit_price = self.product.unit_price  # Default if not
         # Use unit_price from the payload if provided; otherwise, fallback to product's unit_price
-        # self.unit_price = self.unit_price   
-        unit_price_decimal = Decimal(self.unit_price)
+        # self.unit_price = self.unit_price
+    
+        if self.unit_price == 0:
+            unit_price_decimal = self.product.unit_price
+        else:
+            unit_price_decimal = self.unit_price                
+        unit_price_decimal = Decimal(unit_price_decimal)
         quantity_decimal = Decimal(self.quantity)
         sgst_percentage_decimal = Decimal(str(self.sgst_percentage))
         cgst_percentage_decimal = Decimal(str(self.cgst_percentage))

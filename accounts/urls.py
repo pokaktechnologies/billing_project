@@ -31,35 +31,19 @@ urlpatterns = [
     path('delivery-orders/', DeliveryFormAPI.as_view(), name='create_delivery_order'),
      path('delivery-orders/<int:did>/', DeliveryFormAPI.as_view(), name='create_delivery_order'),
 
-    # path('quotation-orders/', CreateQuotationOrderAPI.as_view(), name='create_quotation_order'),
-    # path('get-quotation-orders/', QuotationOrderListAPI.as_view(), name='quotation_order_list'),
-    # path('quotation-update-orders/<pk>/', QuotationOrderUpdateAPI.as_view(), name='quotation_order_list'),
-    # path('quotation-delete-orders/<pk>/', QuotationOrderDeleteAPI.as_view(), name='quotation_order_list'),
-    # path('quotations/', QuotationOrderAPIView.as_view(), name='quotations-list'),
-    # path('quotations/<int:pk>/', QuotationOrderAPIView.as_view(), name='quotations-detail'), 
-    # path('quotations/<int:quotation_pk>/items/', QuotationItemAPIView.as_view(), name='quotation-items-list'),
-    # path('quotations/<int:quotation_pk>/items/<int:item_pk>/', QuotationItemAPIView.as_view(), name='quotation-items-detail'),
-    
-    # path('quotations/', QuotationOrderAPIView.as_view(), name='quotations-list'),
-    # path('quotations/<int:pk>/', QuotationOrderAPIView.as_view(), name='quotations-detail'),
-    
-    # path('quotations/<int:quotation_pk>/items/', QuotationItemAPIView.as_view(), name='quotation-items-list'),
-    # path('quotations/<int:quotation_pk>/items/<int:item_pk>/', QuotationItemAPIView.as_view(), name='quotation-items-detail'),
-    
-        
-    # path('quotations/<int:quotation_pk>/items/', QuotationItemAPIView.as_view(), name='quotation-items-list'),
-    # path('quotations/<int:quotation_pk>/items/<int:item_pk>/', QuotationItemAPIView.as_view(), name='quotation-items-detail'),
+
     
     path('quotations/', QuotationOrderAPI.as_view(), name='quotation-items-detail'),
     path('quotations/<int:qid>/', QuotationOrderAPI.as_view(), name='quotation-items-detail'),
+    path('quotations/<int:qid>/<int:pid>/', QuotationOrderAPI.as_view(), name='quotation-items-detail'),
     # path('quotations/<int:qid>/items/', QuotationItemUpdateView.as_view(), name='quotation-items-list'),
     # path('quotations/<int:qid>/items/<int:item_id>/', QuotationItemUpdateView.as_view(), name='quotation-item-detail'),
   
-  path('quotations/<int:quotation_id>/items/<int:product_id>/', 
-         QuotationItemUpdateView.as_view(), 
-         name='quotation-item-update'),
+#   path('quotations/<int:qid>/<int:pid>/', 
+        #  QuotationItemUpdateView.as_view(), 
+        #  name='quotation-item-update'),
 
-    # path('print-quotation/', PrintQuotationAPI.as_view(), name='quotation-items-detail'),
+    path('print-quotation/<int:qid>/', PrintQuotationAPI.as_view(), name='quotation-items-detail'),
     path('invoice-orders/', CreateInvoiceOrderAPI.as_view(), name='create_invoice_order'),
     path('get-invoice-orders/', InvoiceOrderListAPI.as_view(), name='invoice_order_list'),
 

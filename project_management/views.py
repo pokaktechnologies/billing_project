@@ -7,8 +7,9 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from .serializers import *
 from .models import *
 from django.db import transaction
+from datetime import datetime
 
-
+# Project management views
 class project_management(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -101,6 +102,7 @@ class project_management_detail(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+# Members views
 
 class MembersView(APIView):
     authentication_classes = [JWTAuthentication]
@@ -193,6 +195,7 @@ class MembersViewDetail(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+# Stack views
 
 class StackView(APIView):
     authentication_classes = [JWTAuthentication]
@@ -281,6 +284,8 @@ class StackViewDetail(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+
+# Project members views
 
 class ProjectMembersView(APIView):
     authentication_classes = [JWTAuthentication]
@@ -436,6 +441,9 @@ class ProjectMembersListByProjectView(APIView):
             status=status.HTTP_200_OK
         )
 
+
+# Task views
+
 class TaskView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -568,12 +576,6 @@ class TaskListByProjectMember(APIView):
 
 # search views
 
-from datetime import datetime
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
-
 class ProjectSearchView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -699,3 +701,116 @@ class MembersSearchView(APIView):
             status=status.HTTP_200_OK
         )
 
+
+
+
+class TaskSearchByProjectMembersView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, project_member_id, format=None):
+        start_date_str = request.query_params.get('start_date')
+        end_date_str = request.query_params.get('end_date')
+        task_status = request.query_params.get('status', '').strip()  # ✅ Renamed
+
+        if not start_date_str and not end_date_str and not task_status:
+            return Response(
+                {"status": "0", "message": "At least one filter ('start_date', 'end_date', or 'status') must be provided."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        task = Task.objects.filter(
+            project_member__project__user=request.user,
+            project_member__id=project_member_id
+        ).order_by('-created_at')
+
+        if task_status:
+            task = task.filter(status=task_status)
+        
+        try:
+            if start_date_str and end_date_str:
+                start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+                end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+                task = task.filter(start_date__gte=start_date, end_date__lte=end_date)
+
+            elif start_date_str:
+                start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+                task = task.filter(start_date__gte=start_date)
+
+            elif end_date_str:
+                end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+                task = task.filter(end_date__lte=end_date)
+
+        except ValueError:
+            return Response(
+                {"status": "0", "message": "Invalid date format. Use YYYY-MM-DD."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = TaskSerializer(task, many=True)
+
+        if not serializer.data:
+            return Response(
+                {"status": "0", "message": "No tasks found for the given filters."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        return Response(
+            {"status": "1", "message": "success", "data": serializer.data},
+            status=status.HTTP_200_OK
+        )
+
+
+class TaskSearchByMembersView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, member_id, format=None):
+        start_date_str = request.query_params.get('start_date')
+        end_date_str = request.query_params.get('end_date')
+        task_status = request.query_params.get('status', '').strip()  # ✅ Renamed
+
+        if not start_date_str and not end_date_str and not task_status:
+            return Response(
+                {"status": "0", "message": "At least one filter ('start_date', 'end_date', or 'status') must be provided."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        task = Task.objects.filter(
+            project_member__project__user=request.user,
+            project_member__member__id=member_id
+        ).order_by('-created_at')
+
+        if task_status:
+            task = task.filter(status=task_status)
+        
+        try:
+            if start_date_str and end_date_str:
+                start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+                end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+                task = task.filter(start_date__gte=start_date, end_date__lte=end_date)
+
+            elif start_date_str:
+                start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+                task = task.filter(start_date__gte=start_date)
+
+            elif end_date_str:
+                end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+                task = task.filter(end_date__lte=end_date)
+
+        except ValueError:
+            return Response(
+                {"status": "0", "message": "Invalid date format. Use YYYY-MM-DD."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = TaskSerializer(task, many=True)
+
+        if not serializer.data:
+            return Response(
+                {"status": "0", "message": "No tasks found for the given filters."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        return Response(
+            {"status": "1", "message": "success", "data": serializer.data},
+            status=status.HTTP_200_OK
+        )

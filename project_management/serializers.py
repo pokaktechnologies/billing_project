@@ -36,15 +36,20 @@ class ProjectManagementSerializer(serializers.ModelSerializer):
         
 
 class MemberSerializer(serializers.ModelSerializer):
+
+    role_display = serializers.SerializerMethodField()  # for human-readable display only
+
     class Meta:
         model = Member
-        fields = ['id', 'name', 'email', 'phone_number', 'role', 'created_at']
+        fields = ['id', 'name', 'email', 'phone_number', 'role','role_display', 'created_at']
+    
+    def get_role_display(self, obj):
+        return obj.get_role_display()
 
 class StackSerializer(serializers.ModelSerializer):
     class Meta:
         model = Stack
         fields = ['id', 'name']
-# serializers.py
 
 class ProjectMemberSerializer(serializers.ModelSerializer):
     member_name = serializers.CharField(source='member.name', read_only=True)
@@ -63,6 +68,7 @@ class ProjectMemberSerializer(serializers.ModelSerializer):
 
 class TaskSerializer(serializers.ModelSerializer):
     project_name = serializers.CharField(source='project_member.project.project_name', read_only=True)
+    status_display = serializers.SerializerMethodField()  # for human-readable display only
 
     class Meta:
         model = Task
@@ -75,6 +81,12 @@ class TaskSerializer(serializers.ModelSerializer):
             'start_date',
             'end_date',
             'status',
+            'status_display',
             'created_at',
             'updated_at'
         ]
+
+    def get_status_display(self, obj):
+        return obj.get_status_display()
+
+

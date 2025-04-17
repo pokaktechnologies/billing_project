@@ -883,8 +883,8 @@ class SalesPersonListCreateAPIView(APIView):
         )
 class QuotationOrderAPI(APIView):
     
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    # authentication_classes = [JWTAuthentication]
+    # permission_classes = [IsAuthenticated]
 
     def get(self, request, qid=None, pid=None):
         if qid:
@@ -1666,7 +1666,7 @@ class QuotationItemUpdateView(APIView):
     """
     API view to update a specific quotation item's quantity and price.
     """
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
 
     def patch(self, request, qid, pid):
         """
@@ -1690,7 +1690,7 @@ class QuotationItemUpdateView(APIView):
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
-class PrintQuotationAPI(APIView):
+class  PrintQuotationAPI(APIView):
 
     def get(self, request, qid=None):
         # Fetch specific quotation by ID

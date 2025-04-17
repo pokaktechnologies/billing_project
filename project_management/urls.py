@@ -17,6 +17,6 @@ urlpatterns = [
     path('task/<int:project_member_id>/project_members/', TaskListByProjectMember.as_view(), name='task_list_by_project_member'),
 
     path('search/', ProjectSearchView.as_view(), name='project_search'),
-    path('project_members/search/', ProjectMemebrsSearchView.as_view(), name='member_search'),
+    path('project_members/<int:project_id>/search/', ProjectMemebrsSearchView.as_view(), name='member_search'),
     path('members/search/', MembersSearchView.as_view(), name='members_search'),
 ]

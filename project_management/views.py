@@ -635,7 +635,7 @@ class ProjectSearchView(APIView):
 class ProjectMemebrsSearchView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request):
+    def get(self, request, project_id,format=None):
         member_name = request.query_params.get('name', '').strip()
         stack = request.query_params.get('stack', '').strip()
 
@@ -647,7 +647,7 @@ class ProjectMemebrsSearchView(APIView):
             )
         
         # Base QuerySet: All project members for the logged-in user
-        project_members = ProjectMember.objects.filter(project__user=request.user).order_by('-created_at')
+        project_members = ProjectMember.objects.filter(project__user=request.user, project__id=project_id).order_by('-created_at')
 
         # Filter by member name if provided
         if member_name:

@@ -185,7 +185,7 @@ class ProductSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Product
-        fields = ['id','name', 'product_description', 'unit', 'unit_price', 'category']
+        fields = ['id','name', 'product_description', 'unit', 'unit_price', 'category','sgst','cgst']
         
 
     def validate_unit(self, value):

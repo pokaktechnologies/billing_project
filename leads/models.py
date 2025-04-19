@@ -9,7 +9,7 @@ class Lead(models.Model):
     company = models.CharField(max_length=100)
     email = models.EmailField(unique=False)
     phone = models.CharField(max_length=15, unique=False)
-    interested_in = models.CharField(max_length=100)
+    enquiry = models.CharField(max_length=100)
     notes = models.TextField(blank=True, null=True)
     lead_status = models.CharField(max_length=50, choices=[
         ('new', 'New'),
@@ -19,6 +19,7 @@ class Lead(models.Model):
         ('in_progress', 'In Progress'),
         ('converted', 'Converted'),
     ], default='new')
+    location = models.CharField(max_length=100, blank=True, null=True)
     lead_source = models.CharField(max_length=50)
     created_at = models.DateTimeField(default=timezone.now)
 
@@ -29,6 +30,7 @@ class Lead(models.Model):
 class Meeting(models.Model):
     lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name='meetings')
     date = models.DateTimeField()
+    subject = models.CharField(max_length=100, blank=True, null=True)
     status = models.CharField(max_length=50, choices=[
         ('scheduled', 'Scheduled'),
         ('completed', 'Completed'),

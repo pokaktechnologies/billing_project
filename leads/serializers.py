@@ -23,7 +23,7 @@ class MeetingSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Meeting
-        fields = ['id','lead', 'date', 'time', 'datetime', 'status']
+        fields = ['id','lead','subject', 'date', 'time', 'datetime', 'status']
 
     def create(self, validated_data):
         date = validated_data.pop('date')
@@ -54,7 +54,7 @@ class MeetingSerializerDisplay(serializers.ModelSerializer):
 
     class Meta:
         model = Meeting
-        fields = ['id', 'lead_name','lead_id', 'date', 'time','status']
+        fields = ['id', 'lead_name','subject','lead_id', 'date', 'time','status']
 
     def get_date(self, obj):
         return obj.date.date().isoformat()

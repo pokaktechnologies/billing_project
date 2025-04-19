@@ -1,5 +1,22 @@
 from rest_framework import serializers
-from .models import ProjectManagement, Member, Stack, ProjectMember, Task
+from .models import ProjectManagement, Member, Stack, ProjectMember, Task,ClientContract
+
+
+class ClientContractSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ClientContract
+        fields = [
+            'id',
+            'client',
+            'contract_name',
+            'description',
+            'contract_date',
+            'start_date',
+            'end_date',
+            'duration',         # duration in days
+            'created_at',
+            'updated_at',
+        ]
 
 
 class ProjectManagementSerializer(serializers.ModelSerializer):
@@ -10,10 +27,12 @@ class ProjectManagementSerializer(serializers.ModelSerializer):
         model = ProjectManagement
         fields = [
             'id',
+            'contract',  # ForeignKey to ClientContract
             'project_name',
             'project_description',
             'start_date',
             'end_date',
+            'duration',         # duration in days
             'status',           # accept "on_hold", "in_progress", etc.
             'status_display',   # shows "On Hold", "In Progress", etc.
             'created_at',
@@ -29,10 +48,10 @@ class ProjectManagementSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Start date cannot be after end date.")
         return data
     
+
+    
     def get_members_count(self, obj):
         return obj.projectmember_set.count()
-
-
         
 
 class MemberSerializer(serializers.ModelSerializer):

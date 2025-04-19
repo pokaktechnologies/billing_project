@@ -9,6 +9,94 @@ from .models import *
 from django.db import transaction
 from datetime import datetime
 
+
+
+#Client contract views
+class ClientContractView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, format=None):
+        contracts = ClientContract.objects.filter(user=request.user).order_by('-created_at')
+        serializer = ClientContractSerializer(contracts, many=True)
+        return Response(
+            {"status": "1", "message": "success", "data": serializer.data},
+            status=status.HTTP_200_OK
+        )
+
+    def post(self, request, format=None):
+        serializer = ClientContractSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(user=request.user)
+            return Response(
+                {"status": "1", "message": "Contract created successfully"},
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(
+            {"status": "0", "message": "Contract creation failed", "errors": serializer.errors},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+class ClientContractDetailView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get_contract(self, pk, user):
+        try:
+            return ClientContract.objects.get(pk=pk, user=user)
+        except ClientContract.DoesNotExist:
+            return None
+
+    def get(self, request, pk, format=None):
+        contract = self.get_contract(pk, request.user)
+        if not contract:
+            return Response(
+                {"status": "0", "message": "Contract not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = ClientContractSerializer(contract)
+        return Response(
+            {"status": "1", "message": "success", "data": [serializer.data]},
+            status=status.HTTP_200_OK
+        )
+
+    def patch(self, request, pk, format=None):
+        contract = self.get_contract(pk, request.user)
+        if not contract:
+            return Response(
+                {"status": "0", "message": "Contract not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = ClientContractSerializer(contract, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                {"status": "1", "message": "Contract updated successfully"},
+                status=status.HTTP_200_OK
+            )
+
+        return Response(
+            {"status": "0", "message": "Contract update failed", "errors": serializer.errors},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    def delete(self, request, pk, format=None):
+        contract = self.get_contract(pk, request.user)
+        if not contract:
+            return Response(
+                {"status": "0", "message": "Contract not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        contract.delete()
+        return Response(
+            {"status": "1", "message": "Contract deleted successfully"},
+            status=status.HTTP_200_OK
+        )
+
 # Project management views
 class project_management(APIView):
     authentication_classes = [JWTAuthentication]
@@ -25,6 +113,13 @@ class project_management(APIView):
     def post(self, request, format=None):
         serializer = ProjectManagementSerializer(data=request.data)
         if serializer.is_valid():
+            #check contract is belongs to user or not 
+            contract = ClientContract.objects.filter(pk=request.data.get('contract'), user=request.user).first()
+            if not contract:
+                return Response(
+                    {"status": "0", "message": "Contract not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
             serializer.save(user=request.user)
             return Response(
                 {"status": "1", "message": "Project created successfully"},
@@ -44,7 +139,7 @@ class project_management_detail(APIView):
     def get_project(self, pk, user):
         try:
             project = ProjectManagement.objects.get(pk=pk, user=user)
-            if project:
+            if not project:
                 return None, Response(
                     {"status": "0", "message": "Project not found"},
                     status=status.HTTP_404_NOT_FOUND

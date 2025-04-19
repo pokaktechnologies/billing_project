@@ -2,6 +2,10 @@ from django.urls import path
 from .views import *
 
 urlpatterns = [
+    # Client contract
+    path('client_contract/', ClientContractView.as_view(), name='client_contract_list'),
+    path('client_contract/<int:pk>/', ClientContractDetailView.as_view(), name='client_contract_detail'),
+
     # Project management
     path('', project_management.as_view(), name='project_management'),
     path('<int:pk>/', project_management_detail.as_view(), name='project_management_detail'),

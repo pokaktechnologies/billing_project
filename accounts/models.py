@@ -181,7 +181,7 @@ class Product(models.Model):
     category = models.ForeignKey('Category', on_delete=models.CASCADE, related_name='products')
     sgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="SGST percentage (e.g. 9.00)")  
     cgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="CGST percentage (e.g. 9.00)")  
-
+    salesperson = models.ForeignKey('SalesPerson', on_delete=models.CASCADE, related_name='products')
     def __str__(self):
         return self.name
 
@@ -340,7 +340,7 @@ class QuotationOrderModel(models.Model):
     # customer = models.ForeignKey(Customer,on_delete=models.SET_NULL, null=True, blank=True) # Fetching from
     address = models.TextField(max_length=100, blank=True )  
     delivery_location = models.TextField(max_length=100, blank=True)
-    email_id = models.EmailField(default=1)  # New field
+  
     bank_account = models.ForeignKey(
         BankAccount, on_delete=models.SET_NULL, null=True, blank=True, related_name="quotations"
     )   

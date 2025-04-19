@@ -942,7 +942,7 @@ class QuotationOrderAPI(APIView):
                         "bank_account": bank_account_data,
                         "quotation_date": str(quotation.quotation_date),
                         "remark": quotation.remark,
-                        "email_id": quotation.email_id,
+                        # "email_id": quotation.email_id,
                         "grand_total": quotation.grand_total,
                         # "salesperson": f"{quotation.salesperson.first_name} {quotation.salesperson.last_name}".strip() if quotation.salesperson else None,
                         "salesperson": {
@@ -1020,7 +1020,7 @@ class QuotationOrderAPI(APIView):
                     quotation_date=data.get("quotation_date"),
                     # due_date=data.get("due_date"),
                     salesperson_id=salesperson_id,
-                    email_id=data.get("email_id"),
+                    # email_id=data.get("email_id"),
                     
                     # subject=data.get("subject", ""),
                     remark=data.get("remark", ""),
@@ -1142,8 +1142,8 @@ class QuotationOrderAPI(APIView):
                             return Response({"error": "Invalid salesperson ID"}, status=status.HTTP_400_BAD_REQUEST)
                         quotation.salesperson_id = salesperson_id
                         
-                    if 'email_id' in data:
-                        quotation.email_id = data.get('email_id')
+                    # if 'email_id' in data:
+                    #     quotation.email_id = data.get('email_id')
                         
                     if 'remark' in data:
                         quotation.remark = data.get('remark')

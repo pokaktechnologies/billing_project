@@ -1719,9 +1719,11 @@ class  PrintQuotationAPI(APIView):
         for item in quotation_items:
             item_data = {
                 "item_name": item.product.name,  # Assuming 'product' is a ForeignKey to a Product model
-                # "description": item.product.description,  # Assuming 'description' exists in the Product model
+                "description": item.product.product_description,  # Assuming 'description' exists in the Product model
                 "quantity": item.quantity,
                 "rate": item.product.unit_price,
+                "cgst": item.cgst,
+                "sgst": item.sgst,
                 "tax": item.sgst + item.cgst,  # Assuming tax is stored as SGST and CGST in QuotationItem
                 "amount": item.total,  # Total amount for the item (rate * quantity + tax)
                 # "total": item.total,  # Total amount for the item (rate * quantity + tax)
@@ -1740,7 +1742,7 @@ class  PrintQuotationAPI(APIView):
             "quotation_number": quotation.quotation_number,
             "quotation_date": str(quotation.quotation_date),
             "bank_account": bank_account_data,
-            "email_id": quotation.email_id,
+            # "email_id": quotation.email_id,
             "remark": quotation.remark,
             "subtotal": sum(item['amount'] - item['tax'] for item in item_list),
             "total": sum(item['amount'] for item in item_list),

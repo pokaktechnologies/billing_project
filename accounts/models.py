@@ -70,27 +70,7 @@ class Quotation(models.Model):
     def __str__(self):
         return self.invoice_number
 
-class Customer(models.Model):
-    CUSTOMER_TYPES = [
-        ('individual', 'Individual'),
-        ('business', 'Business'),
-    ]
 
-    customer_type = models.CharField(max_length=10, choices=CUSTOMER_TYPES, default='individual')
-    first_name = models.CharField(max_length=100, blank=True, null=True)
-    last_name = models.CharField(max_length=100, blank=True, null=True)
-    country = models.CharField(max_length=100, blank=True, null=True)
-    state = models.CharField(max_length=100, blank=True, null=True)
-    company_name = models.CharField(max_length=255, blank=True, null=True)
-    address = models.TextField()
-    email = models.EmailField(unique=True)
-    phone = models.CharField(max_length=15, blank=True, null=True)
-    mobile = models.CharField(max_length=15)
-
-    def __str__(self):
-        if self.customer_type == 'individual':
-            return f"{self.first_name} {self.last_name}"
-        return self.company_name    
     
 class BankAccount(models.Model):
     customer = models.ForeignKey(
@@ -560,3 +540,25 @@ class Category(models.Model):
     def __str__(self):
         return self.name    
     
+class Customer(models.Model):
+    CUSTOMER_TYPES = [
+        ('individual', 'Individual'),
+        ('business', 'Business'),
+    ]
+
+    customer_type = models.CharField(max_length=10, choices=CUSTOMER_TYPES, default='individual')
+    first_name = models.CharField(max_length=100, blank=True, null=True)
+    last_name = models.CharField(max_length=100, blank=True, null=True)
+    salesperson = models.ForeignKey(SalesPerson, on_delete=models.CASCADE)
+    country = models.CharField(max_length=100, blank=True, null=True)
+    state = models.CharField(max_length=100, blank=True, null=True)
+    company_name = models.CharField(max_length=255, blank=True, null=True)
+    address = models.TextField()
+    email = models.EmailField(unique=True)
+    phone = models.CharField(max_length=15, blank=True, null=True)
+    mobile = models.CharField(max_length=15)
+
+    def __str__(self):
+        if self.customer_type == 'individual':
+            return f"{self.first_name} {self.last_name}"
+        return self.company_name    

@@ -297,9 +297,23 @@ class StateSerializer(serializers.ModelSerializer):
         fields = ['name', 'country']
                 
 class CustomerSerializer(serializers.ModelSerializer):
+    salesperson_id = serializers.PrimaryKeyRelatedField(
+        queryset=SalesPerson.objects.all(),
+        source='salesperson'
+    )
+    salesperson_name = serializers.SerializerMethodField()
     class Meta:
         model = Customer
-        fields = '__all__'                
+        fields = [
+            'id', 'customer_type', 'first_name', 'last_name',
+            'salesperson_id', 'salesperson_name',
+            'country', 'state', 'company_name', 'address',
+            'email', 'phone', 'mobile'
+        ]
+    def get_salesperson_name(self, obj):
+        if obj.salesperson:
+            return f"{obj.salesperson.first_name} {obj.salesperson.last_name}".strip()
+        return None    
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -340,6 +354,10 @@ class QuotationItemUpdateSerializer(serializers.ModelSerializer):
 class ProductSerializer(serializers.ModelSerializer):
     unit = serializers.CharField()  #
     category=serializers.CharField()
+        # Output fields
+    category_id = serializers.IntegerField(source='category.id', read_only=True)
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    
     salesperson_id=serializers.PrimaryKeyRelatedField(
         queryset=SalesPerson.objects.all(), source='salesperson'
     )
@@ -350,7 +368,7 @@ class ProductSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Product
-        fields = ['id','name', 'product_description', 'unit', 'unit_price', 'category','sgst','cgst','salesperson_id','salesperson_name']
+        fields = ['id','name', 'product_description', 'unit', 'unit_price', 'category','category_id','category_name','sgst','cgst','salesperson_id','salesperson_name']
         
     def get_salesperson_name(self, obj):
         if obj.salesperson:

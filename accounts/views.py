@@ -1758,8 +1758,91 @@ class  PrintQuotationAPI(APIView):
         }, status=status.HTTP_200_OK)
 
   
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from django.db import transaction
+from .models import SalesOrderModel, SalesOrderItem, Product, Customer
+import random
+
 class SalesOrderAPI(APIView):
-    
+    def post(self, request, *args, **kwargs):
+        data = request.data
+        try:
+            with transaction.atomic():
+                print("\n--- DEBUGGING SALES ORDER POST ---")
+                print(f"Received Data: {data}")
+
+                # Generate Sales Order ID
+                sales_order_id = f"SO-{random.randint(111111, 999999)}"
+
+                # Fetch customer using the customer_id
+                customer_id = data.get("customer")
+                try:
+                    customer = Customer.objects.get(id=customer_id)
+                except Customer.DoesNotExist:
+                    return Response({"error": f"Customer with ID {customer_id} does not exist."}, status=status.HTTP_400_BAD_REQUEST)
+                
+                bank_account_id = data.get('bank_account')
+                try:
+                    bank_account = BankAccount.objects.get(id=bank_account_id)
+                except BankAccount.DoesNotExist:
+                    return Response({"error": f"Bank account with ID {bank_account_id} does not exist."}, status=status.HTTP_400_BAD_REQUEST)
+
+                # Create SalesOrderModel
+                sales_order = SalesOrderModel.objects.create(
+                    customer=customer,  # Customer instance
+                    sales_order_id=sales_order_id,
+                    sales_date=data.get("sales_date"),
+                    purchase_order_number=data.get("purchase_order_number"),
+                    terms=data.get("terms", ""),
+                    remark=data.get("remark", ""),
+                    due_date=data.get("due_date"),
+                    delivery_location=data.get("delivery_location", ""),
+                    delivery_address=data.get("delivery_address", ""),
+                    bank_account=bank_account,  # BankAccount instance
+                    grand_total=0
+                )
+
+                items = data.get("items", [])
+                if not items:
+                    return Response({"error": "Sales order must have at least one item."}, status=status.HTTP_400_BAD_REQUEST)
+
+                total_amount = 0
+
+                # Process each item
+                for item in items:
+                    product_id = item.get("product")
+                    try:
+                        product = Product.objects.get(id=product_id)
+                    except Product.DoesNotExist:
+                        return Response({"error": f"Invalid product ID {product_id}"}, status=status.HTTP_400_BAD_REQUEST)
+
+                    quantity = item.get("quantity", 0)
+                    unit_price = item.get("unit_price", 0)
+                    sub_total = quantity * unit_price
+                    total_amount += sub_total
+
+                    # Create SalesOrderItem
+                    SalesOrderItem.objects.create(
+                        sales_order=sales_order,
+                        product=product,  # Assign the product instance
+                        quantity=quantity,
+                        unit_price=unit_price,
+                        sgst_percentage=item.get("sgst_percentage", 0),
+                        cgst_percentage=item.get("cgst_percentage", 0)
+                    )
+
+                # Update the grand total for the sales order
+                sales_order.grand_total = total_amount
+                sales_order.save()
+
+                return Response({"message": "Sales Order created successfully", "sales_order_id": sales_order.sales_order_id}, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
     def get(self, request, sid=None):
         if sid:
             sales_order = get_object_or_404(SalesOrderModel, id=sid)
@@ -1769,7 +1852,7 @@ class SalesOrderAPI(APIView):
             item_list = []
 
             print("\n--- DEBUGGING ---")
-            print(f"Sales Order ID: {sales_order.id}, Customer: {sales_order.customer_name}")
+            print(f"Sales Order ID: {sales_order.id}, Customer: {sales_order.customer}")
 
             for item in sales_items:
                 product_serializer = ProductSerializer(item.product)
@@ -1777,6 +1860,8 @@ class SalesOrderAPI(APIView):
                 
                 product_data["quantity"] = item.quantity
                 product_data["total"] = item.total
+                product_data["unit_price"] = item.unit_price
+                product_data["product_id"] = item.product.id
                 product_data["sgst"] = item.sgst
                 product_data["cgst"] = item.cgst
                 product_data["sub_total"] = item.sub_total
@@ -1794,123 +1879,94 @@ class SalesOrderAPI(APIView):
             serializer =  NewsalesOrderSerializer(sales_orders, many=True)
             return Response({"status": "1", "data": serializer.data}, status=status.HTTP_200_OK)
 
-    def post(self, request, *args, **kwargs):
-            data = request.data
-            try:
-                with transaction.atomic():
-                    print("\n--- DEBUGGING SALES ORDER POST ---")
-                    print(f"Received Data: {data}")
-                    
-                    salesperson_id = data.get("salesperson")
-                    if not SalesPerson.objects.filter(id=salesperson_id).exists():
-                        return Response({"error": "Invalid salesperson ID"}, status=status.HTTP_400_BAD_REQUEST)
 
-                    # Generate Sales Order ID
-                    sales_order_id = f"SO-{random.randint(111111, 999999)}"
-
-                    # Get Quotation Number (optional)
-                    quotation_number = data.get("quotation_number", None)
-
-                    sales_order = SalesOrderModel.objects.create(
-                        customer_name=data.get("customer_name"),
-                        sales_order_id=sales_order_id,
-                        quotation_number=quotation_number,
-                        sales_date=data.get("sales_date"),
-                        purchase_order_number=data.get("purchase_order_number"),
-                        terms=data.get("terms", ""),
-                        remark=data.get("remark", ""),
-                        due_date=data.get("due_date"),
-                        salesperson_id=salesperson_id,
-                        delivery_location=data.get("delivery_location", ""),
-                        delivery_address=data.get("delivery_address", ""),
-                        contact_person=data.get("contact_person", ""),
-                        mobile_number=data.get("mobile_number", ""),
-                        grand_total=0
-                    )
-
-                    items = data.get("items", [])
-                    if not items:
-                        return Response({"error": "Sales order must have at least one item."}, status=status.HTTP_400_BAD_REQUEST)
-
-                    total_amount = 0
-
-                    for item in items:
-                        product_id = item.get("product")
-                        if not Product.objects.filter(id=product_id).exists():
-                            return Response({"error": f"Invalid product ID {product_id}"}, status=status.HTTP_400_BAD_REQUEST)
-
-                        quantity = item.get("quantity", 0)
-                        unit_price = item.get("unit_price", 0)
-                        sub_total = quantity * unit_price
-                        total_amount += sub_total
-
-                        SalesOrderItem.objects.create(
-                            sales_order=sales_order,
-                            product_id=product_id,
-                            quantity=item.get("quantity", 1),
-                            unit_price=item.get("unit_price", 0),
-                            sgst_percentage=item.get("sgst_percentage", 0),
-                            cgst_percentage=item.get("cgst_percentage", 0),
-                            quotation_id=item.get("quotation_id")  # Optional
-                        )
-
-                    # Update grand total
-                    sales_order.update_grand_total()
-
-                    return Response({"message": "Sales Order created successfully", "sales_order_id": sales_order.sales_order_id}, status=status.HTTP_201_CREATED)
-
-            except Exception as e:
-                return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    def patch(self, request, sid=None):
-        if not sid:
-            return Response({"error": "Sales Order ID is required"}, status=status.HTTP_400_BAD_REQUEST)
-
+    def patch(self, request, *args, **kwargs):
+        """
+        Updates an existing sales order.
+        """
+        sales_order_id = kwargs.get('sid')
         data = request.data
+        print(sales_order_id)
         try:
-            with transaction.atomic():
-                sales_order = get_object_or_404(SalesOrderModel, id=sid)
-                
-                sales_order.customer_name = data.get("customer_name", sales_order.customer_name)
-                sales_order.sales_date = data.get("sales_date", sales_order.sales_date)
-                sales_order.purchase_order_number = data.get("purchase_order_number", sales_order.purchase_order_number)
-                sales_order.terms = data.get("terms", sales_order.terms)
-                sales_order.due_date = data.get("due_date", sales_order.due_date)
-                sales_order.salesperson_id = data.get("salesperson", sales_order.salesperson_id)
-                sales_order.delivery_location = data.get("delivery_location", sales_order.delivery_location)
-                sales_order.delivery_address = data.get("delivery_address", sales_order.delivery_address)
-                sales_order.contact_person = data.get("contact_person", sales_order.contact_person)
-                sales_order.mobile_number = data.get("mobile_number", sales_order.mobile_number)
-                sales_order.remark=data.get("remark", sales_order.remark)  
-                sales_order.save()
+            sales_order = get_object_or_404(SalesOrderModel, id=sales_order_id)
 
-                sales_order.items.all().delete()
-                
-                for item in data.get("items", []):
+
+            print(f"Sales Order ID: {sales_order.id}")
+            print(f"Received Data: {data}")
+             # Update fields in SalesOrderModel
+            if 'customer' in data:
+                customer_id = data.get('customer')
+                if not Customer.objects.filter(id=customer_id).exists():
+                    return Response({"error": "Invalid customer ID"}, status=status.HTTP_400_BAD_REQUEST)
+                sales_order.customer_id = customer_id
+            if "sales_date" in data:
+                sales_order.sales_date = data["sales_date"]
+            if "purchase_order_number" in data:
+                sales_order.purchase_order_number = data["purchase_order_number"]
+            if "terms" in data:
+                sales_order.terms = data["terms"]
+            if "remark" in data:
+                sales_order.remark = data["remark"]
+            if "due_date" in data:
+                sales_order.due_date = data["due_date"]
+            if "delivery_location" in data:
+                sales_order.delivery_location = data["delivery_location"]
+            if "delivery_address" in data:
+                sales_order.delivery_address = data["delivery_address"]
+            if 'bank_account' in data:
+                bank_account_id = data.get('bank_account')
+                if not BankAccount.objects.filter(id=bank_account_id).exists():
+                    return Response({"error": "Invalid bank account ID"}, status=status.HTTP_400_BAD_REQUEST)
+                sales_order.bank_account_id = bank_account_id
+   
+            
+            # Check if customer_id is provided and update it
+            if "customer_id" in data:
+                try:
+                    customer = Customer.objects.get(id=data["customer_id"])
+                    sales_order.customer = customer
+                except Customer.DoesNotExist:
+                    return Response({"error": "Customer not found."}, status=status.HTTP_400_BAD_REQUEST)
+            
+            sales_order.save()  # Save the updated sales order
+            
+            # Handle item updates if provided
+            if "items" in data:
+                total_amount = 0  # Recalculate the total amount after item changes
+                for item in data["items"]:
                     product_id = item.get("product")
-                    if not Product.objects.filter(id=product_id).exists():
-                        return Response({"error": f"Invalid product ID {product_id}"}, status=status.HTTP_400_BAD_REQUEST)
-                    
-                    product = Product.objects.get(id=product_id)
-                    quantity = Decimal(str(item.get("quantity", 1)))
-                    
-                    SalesOrderItem.objects.create(
+                    try:
+                        product = Product.objects.get(id=product_id)
+                    except Product.DoesNotExist:
+                        return Response({"error": f"Product with ID {product_id} does not exist."}, status=status.HTTP_400_BAD_REQUEST)
+
+                    quantity = item.get("quantity", 0)
+                    unit_price = item.get("unit_price", 0)
+                    sgst_percentage = item.get("sgst_percentage", 0)
+                    cgst_percentage = item.get("cgst_percentage", 0)
+
+                    # Add or update the SalesOrderItem
+                    sales_order_item, created = SalesOrderItem.objects.update_or_create(
                         sales_order=sales_order,
                         product=product,
-                        quantity=quantity
+                        defaults={
+                            'quantity': quantity,
+                            'unit_price': unit_price,
+                            'sgst_percentage': sgst_percentage,
+                            'cgst_percentage': cgst_percentage,
+                        }
                     )
-                
-                sales_order.update_grand_total()
-                
-                return Response({
-                    "status": "1",
-                    "message": "Sales order updated successfully.",
-                    "sales_order_id": sales_order.id,
-                    "grand_total": str(sales_order.grand_total)
-                }, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+                    total_amount += sales_order_item.sub_total  # Add the item's subtotal to the total amount
+
+                # After item updates, update the grand total of the Sales Order
+                sales_order.grand_total = total_amount
+                sales_order.save()
+        except SalesOrderModel.DoesNotExist:
+            return Response({"error": "Sales Order not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"status": "1", "message": "success"}, status=status.HTTP_200_OK)
+  
+    
     def delete(self, request, sid=None):
         if not sid:
             return Response({"error": "Sales Order ID is required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -1923,6 +1979,7 @@ class SalesOrderAPI(APIView):
                 return Response({"status": "1", "message": "Sales order deleted successfully."}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     
 
 class DeliveryFormAPI(APIView):

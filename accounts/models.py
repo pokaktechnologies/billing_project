@@ -451,9 +451,6 @@ class SalesOrderItem(models.Model):
         
         self.sales_order.update_grand_total()
 
-    def __str__(self):
-        return self.product.name
-
     def delete(self, *args, **kwargs):
         super().delete(*args, **kwargs)
         if self.sales_order:

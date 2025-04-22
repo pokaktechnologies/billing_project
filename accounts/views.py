@@ -1758,14 +1758,10 @@ class  PrintQuotationAPI(APIView):
         }, status=status.HTTP_200_OK)
 
   
-from rest_framework import status
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from django.db import transaction
-from .models import SalesOrderModel, SalesOrderItem, Product, Customer
-import random
 
 class SalesOrderAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request, *args, **kwargs):
         data = request.data
         try:

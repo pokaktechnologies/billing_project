@@ -190,7 +190,8 @@ class SalesOrder(models.Model):
 
 
     def __str__(self):
-        return f"Sales Order {self.order_number} - {self.customer_name}"    
+        return f"Sales Order {self.order_number} - {self.customer_name}"  
+
 
 # class QuotationOrder(models.Model):
 #     customer_name = models.CharField(max_length=255)

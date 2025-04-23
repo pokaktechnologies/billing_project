@@ -1887,7 +1887,7 @@ class SalesOrderAPI(APIView):
                 # Update specific SalesOrderItem
                 sales_order = get_object_or_404(SalesOrderModel, id=sid)
                 item = get_object_or_404(SalesOrderItem, sales_order=sales_order, id=pid)
-                serializer = SalesOrderItemUpdateSerializer(item, data=request.data, partial=True)
+                serializer = SalesOrderItemSerializer(item, data=request.data, partial=True)
 
                 if serializer.is_valid():
                     serializer.save()
@@ -1950,7 +1950,6 @@ class SalesOrderAPI(APIView):
                     "status": "1",
                     "message": "Sales order updated successfully.",
                     "sales_order_id": sales_order.id,
-                    "grand_total": str(sales_order.grand_total)
                 }, status=status.HTTP_200_OK)
 
             else:
@@ -1987,7 +1986,82 @@ class SalesOrderAPI(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    
+
+class  PrintSalesOrderAPI(APIView):
+
+    def get(self, request, sid=None):
+        sales_order = get_object_or_404(SalesOrderModel, id=sid)
+        serializer = PrintSalesOrderSerializer(sales_order)
+        sales_order_data = serializer.data
+        return Response({
+            "status": "1",
+            "message": "success",
+            "data": sales_order_data
+        }, status=status.HTTP_200_OK)
+
+        
+        # print(f"Quotation Address: {quotation.address}")  # This will print the address in your console/logs
+        
+        # salesperson_address = quotation.salesperson.address if quotation.salesperson else None
+      
+        # salesperson_name = (
+        #     f"{quotation.salesperson.first_name} {quotation.salesperson.last_name}"
+        #     if quotation.salesperson else None
+        # )
+
+            
+        # if quotation.bank_account:
+        #     bank_account_serializer = BankAccountSerializer(quotation.bank_account)
+        #     bank_account_data = [bank_account_serializer.data]  # wrap in list
+        # else:
+        #     bank_account_data = []  # empty array if no account
+        # # Get quotation items
+        # quotation_items = QuotationItem.objects.filter(quotation=quotation)
+        # item_list = []
+
+        # # Prepare item details for the print view
+        # for item in quotation_items:
+        #     item_data = {
+        #         "item_name": item.product.name,  # Assuming 'product' is a ForeignKey to a Product model
+        #         "description": item.product.product_description,  # Assuming 'description' exists in the Product model
+        #         "quantity": item.quantity,
+        #         "rate": item.product.unit_price,
+        #         "cgst": item.cgst,
+        #         "sgst": item.sgst,
+        #         "tax": item.sgst + item.cgst,  # Assuming tax is stored as SGST and CGST in QuotationItem
+        #         "amount": item.total,  # Total amount for the item (rate * quantity + tax)
+        #         # "total": item.total,  # Total amount for the item (rate * quantity + tax)
+
+        #     }
+        #     item_list.append(item_data)
+         
+
+        # # Prepare the response data
+        #     quotation_data = {
+        #     "quotation_id": quotation.id,
+        #     "customer_name": quotation.customer_name,
+        #     "address": quotation.address if quotation.address else None,
+        #     "salesperson_name": salesperson_name,
+        #     "salesperson_address": salesperson_address,
+        #     "quotation_number": quotation.quotation_number,
+        #     "quotation_date": str(quotation.quotation_date),
+        #     "bank_account": bank_account_data,
+        #     # "email_id": quotation.email_id,
+        #     "remark": quotation.remark,
+        #     "subtotal": sum(item['amount'] - item['tax'] for item in item_list),
+        #     "total": sum(item['amount'] for item in item_list),
+        #     "items": item_list,
+
+        # }
+
+        # # Return the quotation data wrapped in an array (as requested)
+        # return Response({
+        #     "status": "1",
+        #     "message": "success",
+        #     "data": [quotation_data]  # Wrap the response data in a list (array of objects)
+        # }, status=status.HTTP_200_OK)
+
+  
 
 class DeliveryFormAPI(APIView):
     

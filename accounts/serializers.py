@@ -235,7 +235,10 @@ class DeliveryChallanSerializer(serializers.ModelSerializer):
     #     return instance
     
     
-
+class CustomerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Customer
+        fields = '__all__'
         
  
 
@@ -289,15 +292,69 @@ class NewsalesOrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = SalesOrderModel
         fields = '__all__'
-        read_only_fields = ('sales_order_id', 'grand_total', 'client_name', 'mobile_number', 'bank_name', 'bank_account_number')  # Ensure correct spelling
+        read_only_fields = ('sales_order_id', 'grand_total', 'client_name', 'mobile_number', 'bank_name', 'bank_account_number') 
 
-class SalesOrderItemUpdateSerializer(serializers.ModelSerializer):
-    """
-    Serializer for updating only quantity and unit_price of a SalesItem
-    """
+class SalesOrderItemSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    product_description = serializers.CharField(source='product.product_description', read_only=True)
     class Meta:
         model = SalesOrderItem
-        fields = '__all__'  # Include all fields in the serializere
+        fields = '__all__'
+
+
+
+class PrintSalesOrderSerializer(serializers.ModelSerializer):
+    bank = serializers.SerializerMethodField()
+    items = SalesOrderItemSerializer(many=True, read_only=True)
+    customer = CustomerSerializer(read_only=True)
+    salesperson = serializers.SerializerMethodField()
+    subtotal = serializers.SerializerMethodField()
+    total = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SalesOrderModel
+        fields = '__all__'
+        read_only_fields = ('sales_order_id', 'grand_total','customer', 'bank', 'items', 'salesperson', 'subtotal', 'total')
+
+    def get_bank(self, obj):
+        bank = obj.bank_account
+        return BankAccountSerializer(bank).data if bank else None
+
+    def get_salesperson(self, obj):
+        salesperson = obj.customer.salesperson
+        return SalesPersonSerializer(salesperson).data if salesperson else None
+    
+    def get_subtotal(self, obj):
+        #calculate subtotal from items
+        subtotal = 0
+        for item in obj.items.all():
+            subtotal += item.sub_total
+        return subtotal
+
+    def get_total(self, obj):
+        total = 0
+        for item in obj.items.all():
+            total += item.sub_total + item.sgst + item.cgst  # Add SGST and CGST to subtotal
+        return total
+
+    
+
+
+
+    # def to_representation(self, instance):
+    #     data = super().to_representation(instance)
+
+    #     # Remove nested 'salesperson' inside customer
+    #     customer_data = data.get("customer")
+    #     if customer_data and "salesperson" in customer_data:
+    #         customer_data.pop("salesperson")
+
+    #     # Remove nested 'customer' inside bank
+    #     bank_data = data.get("bank")
+    #     if bank_data and "customer" in bank_data:
+    #         bank_data.pop("customer")
+
+    #     return data
 
 
 

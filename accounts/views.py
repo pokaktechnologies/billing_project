@@ -1757,7 +1757,6 @@ class  PrintQuotationAPI(APIView):
             "data": [quotation_data]  # Wrap the response data in a list (array of objects)
         }, status=status.HTTP_200_OK)
 
-  
 
 class SalesOrderAPI(APIView):
     permission_classes = [IsAuthenticated]
@@ -1769,25 +1768,18 @@ class SalesOrderAPI(APIView):
                 print("\n--- DEBUGGING SALES ORDER POST ---")
                 print(f"Received Data: {data}")
 
-                # Generate Sales Order ID
                 sales_order_id = f"SO-{random.randint(111111, 999999)}"
 
-                # Fetch customer using the customer_id
                 customer_id = data.get("customer")
-                try:
-                    customer = Customer.objects.get(id=customer_id)
-                except Customer.DoesNotExist:
-                    return Response({"error": f"Customer with ID {customer_id} does not exist."}, status=status.HTTP_400_BAD_REQUEST)
-                
-                bank_account_id = data.get('bank_account')
-                try:
-                    bank_account = BankAccount.objects.get(id=bank_account_id)
-                except BankAccount.DoesNotExist:
-                    return Response({"error": f"Bank account with ID {bank_account_id} does not exist."}, status=status.HTTP_400_BAD_REQUEST)
+                customer = get_object_or_404(Customer, id=customer_id)
 
-                # Create SalesOrderModel
+                bank_account = None
+                bank_account_id = data.get("bank_account")
+                if bank_account_id:
+                    bank_account = get_object_or_404(BankAccount, id=bank_account_id)
+
                 sales_order = SalesOrderModel.objects.create(
-                    customer=customer,  # Customer instance
+                    customer=customer,
                     sales_order_id=sales_order_id,
                     sales_date=data.get("sales_date"),
                     purchase_order_number=data.get("purchase_order_number"),
@@ -1796,172 +1788,120 @@ class SalesOrderAPI(APIView):
                     due_date=data.get("due_date"),
                     delivery_location=data.get("delivery_location", ""),
                     delivery_address=data.get("delivery_address", ""),
-                    bank_account=bank_account,  # BankAccount instance
-                    grand_total=0
+                    bank_account=bank_account
                 )
 
                 items = data.get("items", [])
                 if not items:
                     return Response({"error": "Sales order must have at least one item."}, status=status.HTTP_400_BAD_REQUEST)
 
-                total_amount = 0
-
-                # Process each item
                 for item in items:
-                    product_id = item.get("product")
-                    try:
-                        product = Product.objects.get(id=product_id)
-                    except Product.DoesNotExist:
-                        return Response({"error": f"Invalid product ID {product_id}"}, status=status.HTTP_400_BAD_REQUEST)
-
-                    quantity = item.get("quantity", 0)
-                    unit_price = item.get("unit_price", 0)
-                    sub_total = quantity * unit_price
-                    total_amount += sub_total
-
-                    # Create SalesOrderItem
+                    product = get_object_or_404(Product, id=item.get("product"))
                     SalesOrderItem.objects.create(
                         sales_order=sales_order,
-                        product=product,  # Assign the product instance
-                        quantity=quantity,
-                        unit_price=unit_price,
+                        product=product,
+                        quantity=item.get("quantity", 1),
+                        unit_price=item.get("unit_price", 0),
                         sgst_percentage=item.get("sgst_percentage", 0),
-                        cgst_percentage=item.get("cgst_percentage", 0)
+                        cgst_percentage=item.get("cgst_percentage", 0),
                     )
 
-                # Update the grand total for the sales order
-                sales_order.grand_total = total_amount
-                sales_order.save()
+                sales_order.update_grand_total()
 
-                return Response({"message": "Sales Order created successfully", "sales_order_id": sales_order.sales_order_id}, status=status.HTTP_201_CREATED)
+                return Response({
+                    "message": "Sales Order created successfully",
+                    "sales_order_id": sales_order.sales_order_id
+                }, status=status.HTTP_201_CREATED)
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
     def get(self, request, sid=None):
         if sid:
             sales_order = get_object_or_404(SalesOrderModel, id=sid)
-            sales_order_serializer =  NewsalesOrderSerializer(sales_order)
-            
-            sales_items = SalesOrderItem.objects.filter(sales_order=sales_order)
+            serializer = NewsalesOrderSerializer(sales_order)
+            items = SalesOrderItem.objects.filter(sales_order=sales_order)
+
             item_list = []
-
-            print("\n--- DEBUGGING ---")
-            print(f"Sales Order ID: {sales_order.id}, Customer: {sales_order.customer}")
-
-            for item in sales_items:
-                product_serializer = ProductSerializer(item.product)
-                product_data = product_serializer.data
-                
-                product_data["id"] = item.id
-                product_data["quantity"] = item.quantity
-                product_data["total"] = item.total
-                product_data["unit_price"] = item.unit_price
-                product_data["product_id"] = item.product.id
-                product_data["sgst"] = item.sgst
-                product_data["cgst"] = item.cgst
-                product_data["sub_total"] = item.sub_total
-
+            for item in items:
+                product_data = ProductSerializer(item.product).data
+                product_data.update({
+                    "id": item.id,
+                    "product_id": item.product.id,
+                    "quantity": item.quantity,
+                    "unit_price": item.unit_price,
+                    "total": item.total,
+                    "sgst": item.sgst,
+                    "cgst": item.cgst,
+                    "sub_total": item.sub_total,
+                })
                 item_list.append(product_data)
-            
+
             return Response({
                 'status': '1',
                 'message': 'success',
-                'sales_order': sales_order_serializer.data,
+                'sales_order': serializer.data,
                 'items': item_list
             })
+
         else:
             sales_orders = SalesOrderModel.objects.all()
-            serializer =  NewsalesOrderSerializer(sales_orders, many=True)
+            serializer = NewsalesOrderSerializer(sales_orders, many=True)
             return Response({"status": "1", "data": serializer.data}, status=status.HTTP_200_OK)
 
     def patch(self, request, sid=None, pid=None):
-        """
-        PATCH: 
-        - If sid and pid are provided, update specific SalesOrderItem.
-        - If only sid is provided, update the main SalesOrderModel and add or update SalesOrderItems.
-        """
         try:
             if sid and pid:
-                # Update specific SalesOrderItem
                 sales_order = get_object_or_404(SalesOrderModel, id=sid)
                 item = get_object_or_404(SalesOrderItem, sales_order=sales_order, id=pid)
                 serializer = SalesOrderItemSerializer(item, data=request.data, partial=True)
 
+                new_product_id = request.data.get("product")
+                if new_product_id and new_product_id != item.product.id:
+                    if SalesOrderItem.objects.filter(sales_order=sales_order, product_id=new_product_id).exists():
+                        return Response({"error": "This product already exists in the sales order."}, status=status.HTTP_400_BAD_REQUEST)
+
                 if serializer.is_valid():
                     serializer.save()
+                    sales_order.update_grand_total()
                     return Response(serializer.data, status=status.HTTP_200_OK)
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
             elif sid:
-                # Update SalesOrderModel
-                data = request.data
                 sales_order = get_object_or_404(SalesOrderModel, id=sid)
-
-                # Update main sales order information
-                serializer = NewsalesOrderSerializer(sales_order, data=data, partial=True)
-                if not serializer.is_valid():
+                serializer = NewsalesOrderSerializer(sales_order, data=request.data, partial=True)
+                if serializer.is_valid():
+                    serializer.save()
+                else:
                     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-                serializer.save()
+                for item_data in request.data.get("items", []):
+                    product_id = item_data.get("product")
+                    product = get_object_or_404(Product, id=product_id)
 
-                # Handle items (add or update)
-                for item_data in data.get('items', []):
-                    product_id = item_data.get('product')  # Get the product ID from the data
-                    quantity = item_data.get('quantity')
-                    unit_price = item_data.get('unit_price')
-                    sgst_percentage = item_data.get('sgst_percentage')
-                    cgst_percentage = item_data.get('cgst_percentage')
-
-                    # Fetch the Product instance using the provided product ID
-                    try:
-                        product = Product.objects.get(id=product_id)
-                    except Product.DoesNotExist:
-                        return Response({"error": f"Product with ID {product_id} does not exist."}, status=status.HTTP_400_BAD_REQUEST)
-
-                    # Check if this item already exists in the sales order
                     existing_item = SalesOrderItem.objects.filter(sales_order=sales_order, product=product).first()
-
-
                     if existing_item:
-                        # If item exists, update it
-                        existing_item.quantity = quantity
-                        existing_item.unit_price = unit_price
-                        existing_item.sgst_percentage = sgst_percentage
-                        existing_item.cgst_percentage = cgst_percentage
+                        existing_item.quantity = item_data.get("quantity", existing_item.quantity)
+                        existing_item.unit_price = item_data.get("unit_price", existing_item.unit_price)
+                        existing_item.sgst_percentage = item_data.get("sgst_percentage", existing_item.sgst_percentage)
+                        existing_item.cgst_percentage = item_data.get("cgst_percentage", existing_item.cgst_percentage)
                         existing_item.save()
                     else:
-                        # If item doesn't exist, create a new one
                         SalesOrderItem.objects.create(
                             sales_order=sales_order,
-                            product=product,  # Assign the actual Product instance
-                            quantity=quantity,
-                            unit_price=unit_price,
-                            sgst_percentage=sgst_percentage,
-                            cgst_percentage=cgst_percentage
+                            product=product,
+                            quantity=item_data.get("quantity", 1),
+                            unit_price=item_data.get("unit_price", 0),
+                            sgst_percentage=item_data.get("sgst_percentage", 0),
+                            cgst_percentage=item_data.get("cgst_percentage", 0),
                         )
 
-                # Recalculate and update the grand total of the sales order
-                sales_order.grand_total = sum(item.total for item in sales_order.items.all())
-                sales_order.save()
+                sales_order.update_grand_total()
 
-                return Response({
-                    "status": "1",
-                    "message": "Sales order updated successfully.",
-                    "sales_order_id": sales_order.id,
-                }, status=status.HTTP_200_OK)
-
-            else:
-                return Response({"error": "Sales Order ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "Sales Order updated successfully."}, status=status.HTTP_200_OK)
 
         except Exception as e:
-            print(f"Error in PATCH: {str(e)}")
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-
-
     def delete(self, request, sid=None, pid=None):
         if not sid:
             return Response({"error": "Sales Order ID is required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -1984,7 +1924,8 @@ class SalesOrderAPI(APIView):
                         "message": "Sales Order deleted successfully."
                     }, status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)            
+
 
 
 class  PrintSalesOrderAPI(APIView):

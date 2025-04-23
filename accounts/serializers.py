@@ -291,6 +291,16 @@ class NewsalesOrderSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ('sales_order_id', 'grand_total', 'client_name', 'mobile_number', 'bank_name', 'bank_account_number')  # Ensure correct spelling
 
+class SalesOrderItemUpdateSerializer(serializers.ModelSerializer):
+    """
+    Serializer for updating only quantity and unit_price of a SalesItem
+    """
+    class Meta:
+        model = SalesOrderItem
+        fields = '__all__'  # Include all fields in the serializere
+
+
+
 class NewDeliverySerializer(serializers.ModelSerializer):
     class Meta:
         model = DeliveryFormModel

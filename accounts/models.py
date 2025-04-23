@@ -457,7 +457,7 @@ class SalesOrderItem(models.Model):
             self.sales_order.update_grand_total()
 
     def __str__(self):
-        return f"{self.product.name} - Qty: {self.quantity}"
+        return f"{self.product.name} - {self.sales_order.sales_order_id}"  # Use sales_order_id for clarity
 
 
     

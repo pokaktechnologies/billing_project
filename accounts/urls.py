@@ -23,6 +23,7 @@ urlpatterns = [
     # path('sales-orders/', CreateSalesOrderAPI.as_view(), name='create_sales_order'),
     path('sales-orders/', SalesOrderAPI.as_view(), name='sales_order_list'),
     path('sales-orders/<int:sid>/', SalesOrderAPI.as_view(), name='sales_order_list'),
+    path('sales-orders/<int:sid>/<int:pid>/', SalesOrderAPI.as_view(), name='sales_order_list'),
     
     path('countries/', CountryView.as_view(), name='get_states'),
     path('states/', StateView.as_view(), name='get_cities'),

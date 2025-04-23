@@ -281,10 +281,15 @@ class NewQuotationItemSerializer(serializers.ModelSerializer):
         fields = ['quotation', 'product', 'quantity']           
         
 class NewsalesOrderSerializer(serializers.ModelSerializer):
+    client_name = serializers.CharField(source='customer.first_name', read_only=True)
+    mobile_number = serializers.CharField(source='customer.mobile', read_only=True)
+    bank_name = serializers.CharField(source='bank_account.bank_name', read_only=True)
+    bank_account_number = serializers.CharField(source='bank_account.account_number', read_only=True)
+
     class Meta:
         model = SalesOrderModel
         fields = '__all__'
-        read_only_fields = ('sales_order_id', 'grand_total')  # Ensure correct spelling
+        read_only_fields = ('sales_order_id', 'grand_total', 'client_name', 'mobile_number', 'bank_name', 'bank_account_number')  # Ensure correct spelling
 
 class NewDeliverySerializer(serializers.ModelSerializer):
     class Meta:

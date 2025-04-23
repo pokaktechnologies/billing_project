@@ -1960,7 +1960,7 @@ class SalesOrderAPI(APIView):
                 sales_order.save()
         except SalesOrderModel.DoesNotExist:
             return Response({"error": "Sales Order not found"}, status=status.HTTP_404_NOT_FOUND)
-        return Response({"status": "1", "message": "success"}, status=status.HTTP_200_OK)
+        return Response({"status": "1", "message": "success", "sales_order_id":  sales_order.sales_order_id }, status=status.HTTP_200_OK)
   
     
     def delete(self, request, sid=None):

@@ -975,8 +975,6 @@ class QuotationOrderAPI(APIView):
             return Response({"status": "1", "data": serializer.data}, status=status.HTTP_200_OK)
 
         
-
-    # def post(self, request, *args, **kwargs):
     def post(self, request, qid=None, pid=None):
         data = request.data
         try:
@@ -1018,21 +1016,17 @@ class QuotationOrderAPI(APIView):
                     address=data.get("address"),
                     quotation_number=quotation_number,
                     quotation_date=data.get("quotation_date"),
-                    # due_date=data.get("due_date"),
                     salesperson_id=salesperson_id,
-                    # email_id=data.get("email_id"),
-                    
-                    # subject=data.get("subject", ""),
+          
                     remark=data.get("remark", ""),
                     
                     # attachments=data.get("attachments", None),
-                    grand_total=0  ,
+                    #grand_total=0  ,
                     delivery_location=data.get("delivery_location", ""),  # New Field
                     bank_account_id= bank_account_id
 
 
                 )
-                print("----------------------->")
 
                 # Create Quotation Items
                 items = data.get("items", [])
@@ -1041,7 +1035,7 @@ class QuotationOrderAPI(APIView):
                 
                 total_amount = Decimal(0) 
 
-
+                tot_grand = []
                 for item in items:
                     product_id = item.get("product")
                     if not Product.objects.filter(id=product_id).exists():
@@ -1049,7 +1043,7 @@ class QuotationOrderAPI(APIView):
 
                     product = Product.objects.get(id=product_id)
                     quantity = Decimal(str(item.get("quantity", 1)))
-                    # unit_price = Decimal(str(item.get("unit_price", product.unit_price)))
+                    
                     unit_price = Decimal(str(item.get("unit_price", 0)))
                     sgst_percentage = Decimal(str(item.get("sgst_percentage", 0)))
                     cgst_percentage = Decimal(str(item.get("cgst_percentage", 0)))
@@ -1057,26 +1051,34 @@ class QuotationOrderAPI(APIView):
                     
                     print(f"Adding Item: Product ID: {product_id}, Quantity: {quantity}, Unit Price: {unit_price}")
 
-                    item_total = quantity * unit_price
-                    total_amount += item_total  
+                    # item_total = quantity * unit_price
+                    # total_amount += item_total  
                     print("qwiueqiuytruiqwyeuityiwer")
-                    QuotationItem.objects.create(
+                    if unit_price == 0:
+                        
+                        unit_price = product.unit_price
+                    item_total = quantity * unit_price
+                    # total_amount += item_total
+                    print("0000000000000---------0", unit_price)
+                    quotation_item = QuotationItem.objects.create(
                         quotation=quotation,
                         product=product,
                         quantity=quantity, 
                         sgst_percentage=sgst_percentage,
                         cgst_percentage=cgst_percentage,
                         unit_price= unit_price
-                        # discount=item.get("discount", 0)
+                   
                     )
-                    print("mmmmmmmmmmmmmmmmmmmmmmm")
-                print("Total amount: fefe")
-                # Update Grand Total
-                # quotation.update_grand_total()
-                quotation.grand_total = total_amount
-                print("llllllllllllllllllll")
+                    tot_grand.append(quotation_item.sub_total)
+                print("zzzzzzzzzzz", tot_grand)
+       
+
+                total_amount += item_total
+                print("8888888888888888888", quotation_item.sub_total)
+
+                quotation.grand_total = sum(tot_grand)
+              
                 quotation.save()
-                print("ooooooooooooooooooooooo")
 
                 print(f"Final Grand Total Saved: {quotation.grand_total}")
                 print("--- END DEBUGGING ---\n")
@@ -1091,7 +1093,7 @@ class QuotationOrderAPI(APIView):
         except Exception as e:
             print(str(e))
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-      
+        
     def patch(self, request, qid=None, pid=None):
         """
         Update specific fields of a QuotationItem for the given quotation_id and product_id

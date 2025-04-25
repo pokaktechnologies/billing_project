@@ -406,12 +406,19 @@ class ProjectMembersView(APIView):
     def post(self, request, format=None):
         serializer = ProjectMemberSerializer(data=request.data)
 
-        # Check project belongs to user or not
-        project = ProjectManagement.objects.filter(pk=request.data.get('project'), user=request.user).first()
-        # check stack is belongs to user or not
-        stack = Stack.objects.filter(pk=request.data.get('stack'), user=request.user).first()
-        # check member is belongs to user or not
-        member = Member.objects.filter(pk=request.data.get('member'), user=request.user).first()
+        project_id = request.data.get('project')
+        stack_id = request.data.get('stack')
+        member_id = request.data.get('member')
+
+        if not project_id or not stack_id or not member_id:
+            return Response(
+                {"status": "0", "message": "Project, Stack, and Member fields are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        project = ProjectManagement.objects.filter(pk=project_id, user=request.user).first()
+        stack = Stack.objects.filter(pk=stack_id, user=request.user).first()
+        member = Member.objects.filter(pk=member_id, user=request.user).first()
 
         missing_entities = []
         if not project:
@@ -423,19 +430,16 @@ class ProjectMembersView(APIView):
 
         if missing_entities:
             return Response(
-            {"status": "0", "message": f"{', '.join(missing_entities)} not found"},
-            status=status.HTTP_404_NOT_FOUND
+                {"status": "0", "message": f"The following items were not found: {', '.join(missing_entities)}"},
+                status=status.HTTP_404_NOT_FOUND
             )
 
-        # Check if member is already in the project
-        if ProjectMember.objects.filter(project=request.data['project'], member=request.data['member']).exists():
+        if ProjectMember.objects.filter(project=project, member=member).exists():
             return Response(
                 {"status": "0", "message": "Member already exists in this project"},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
 
-        # Start a transaction block
         with transaction.atomic():
             if serializer.is_valid():
                 serializer.save()
@@ -444,10 +448,11 @@ class ProjectMembersView(APIView):
                     status=status.HTTP_201_CREATED
                 )
 
-        return Response(
-            {"status": "0", "message": "Project member creation failed", "errors": serializer.errors},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+            return Response(
+                {"status": "0", "message": "Project member creation failed", "errors": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
 
 
 class ProjectMembersDetail(APIView):

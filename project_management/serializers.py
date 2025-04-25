@@ -22,12 +22,17 @@ class ClientContractSerializer(serializers.ModelSerializer):
 class ProjectManagementSerializer(serializers.ModelSerializer):
     status_display = serializers.SerializerMethodField()  # for human-readable display only
     members_count = serializers.SerializerMethodField()  # for human-readable display only
+    client_first_name =  serializers.CharField(source='contract.client.first_name', read_only=True)
+    client_last_name =  serializers.CharField(source='contract.client.last_name', read_only=True)
+    project_members = serializers.SerializerMethodField()  # for human-readable display only
 
     class Meta:
         model = ProjectManagement
         fields = [
             'id',
             'contract',  # ForeignKey to ClientContract
+            'client_first_name', # shows client name from ClientContract
+            'client_last_name',
             'project_name',
             'project_description',
             'start_date',
@@ -38,6 +43,7 @@ class ProjectManagementSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
             'members_count',    # shows number of members in the project
+            'project_members',  # shows project members
         ]
 
     def get_status_display(self, obj):
@@ -48,7 +54,11 @@ class ProjectManagementSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Start date cannot be after end date.")
         return data
     
-
+    def get_project_members(self, obj):
+        print(obj)
+        project_members = ProjectMember.objects.filter(project=obj)
+        return ProjectMemberSerializer(project_members, many=True).data
+    
     
     def get_members_count(self, obj):
         return obj.projectmember_set.count()

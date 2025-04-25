@@ -24,6 +24,46 @@ class ProjectManagementSerializer(serializers.ModelSerializer):
     members_count = serializers.SerializerMethodField()  # for human-readable display only
     client_first_name =  serializers.CharField(source='contract.client.first_name', read_only=True)
     client_last_name =  serializers.CharField(source='contract.client.last_name', read_only=True)
+
+    class Meta:
+        model = ProjectManagement
+        fields = [
+            'id',
+            'contract',  # ForeignKey to ClientContract
+            'client_first_name', # shows client name from ClientContract
+            'client_last_name',
+            'project_name',
+            'project_description',
+            'start_date',
+            'end_date',
+            'duration',         # duration in days
+            'status',           # accept "on_hold", "in_progress", etc.
+            'status_display',   # shows "On Hold", "In Progress", etc.
+            'created_at',
+            'updated_at',
+            'members_count',    # shows number of members in the project
+        ]
+
+    def get_status_display(self, obj):
+        return obj.get_status_display()
+    
+    def validate(self, data):
+        if data['start_date'] > data['end_date']:
+            raise serializers.ValidationError("Start date cannot be after end date.")
+        return data
+    
+
+    
+    
+    def get_members_count(self, obj):
+        return obj.projectmember_set.count()
+
+
+class ProjectManagementDetailsSerializer(serializers.ModelSerializer):
+    status_display = serializers.SerializerMethodField()  # for human-readable display only
+    members_count = serializers.SerializerMethodField()  # for human-readable display only
+    client_first_name =  serializers.CharField(source='contract.client.first_name', read_only=True)
+    client_last_name =  serializers.CharField(source='contract.client.last_name', read_only=True)
     project_members = serializers.SerializerMethodField()  # for human-readable display only
 
     class Meta:
@@ -55,7 +95,6 @@ class ProjectManagementSerializer(serializers.ModelSerializer):
         return data
     
     def get_project_members(self, obj):
-        print(obj)
         project_members = ProjectMember.objects.filter(project=obj)
         return ProjectMemberSerializer(project_members, many=True).data
     

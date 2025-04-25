@@ -156,7 +156,7 @@ class project_management_detail(APIView):
         if error_response:
             return error_response
 
-        serializer = ProjectManagementSerializer(project)
+        serializer = ProjectManagementDetailsSerializer(project)
         return Response(
             {"status": "1", "message": "success", "data": [serializer.data]},
             status=status.HTTP_200_OK

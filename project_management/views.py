@@ -122,7 +122,7 @@ class project_management(APIView):
                 )
             serializer.save(user=request.user)
             return Response(
-                {"status": "1", "message": "Project created successfully"},
+                 {"status": "1", "message": "Project created successfully", "project_id": serializer.data['id']},
                 status=status.HTTP_201_CREATED
             )
 

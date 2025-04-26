@@ -3,11 +3,16 @@ from .models import ProjectManagement, Member, Stack, ProjectMember, Task,Client
 
 
 class ClientContractSerializer(serializers.ModelSerializer):
+    client_first_name =  serializers.CharField(source='client.first_name', read_only=True)
+    client_last_name =  serializers.CharField(source='client.last_name', read_only=True)
+
     class Meta:
         model = ClientContract
         fields = [
             'id',
             'client',
+            'client_first_name',
+            'client_last_name',
             'contract_name',
             'description',
             'contract_date',

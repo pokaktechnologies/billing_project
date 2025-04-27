@@ -1842,8 +1842,12 @@ class SalesOrderAPI(APIView):
             return Response({
                 'status': '1',
                 'message': 'success',
-                'sales_order': serializer.data,
-                'items': item_list
+                'data': [
+                    {
+                        **serializer.data,
+                        'items': item_list
+                    }
+                ]
             })
 
         else:

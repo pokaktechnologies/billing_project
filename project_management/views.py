@@ -112,17 +112,50 @@ class project_management(APIView):
 
     def post(self, request, format=None):
         serializer = ProjectManagementSerializer(data=request.data)
+        members = request.data.get('members')  # [{'member': 1, 'stack': 1}, {'member': 2, 'stack': 1}]
+
+        # check the members duplication in the members list
+        member_ids = [item['member'] for item in members]
+        if len(member_ids) != len(set(member_ids)):
+            return Response(
+                {"status": "0", "message": "Members list contains duplicate members"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         if serializer.is_valid():
-            #check contract is belongs to user or not 
+            # check contract belongs to user or not 
             contract = ClientContract.objects.filter(pk=request.data.get('contract'), user=request.user).first()
             if not contract:
                 return Response(
                     {"status": "0", "message": "Contract not found"},
                     status=status.HTTP_404_NOT_FOUND
                 )
+            
             serializer.save(user=request.user)
+            
+            # allocate the members to the project
+            for member in members:
+                try:
+                    member_instance = Member.objects.get(pk=member['member'])
+                    stack_instance = Stack.objects.get(pk=member['stack'])
+                    ProjectMember.objects.create(
+                        project=serializer.instance,
+                        member=member_instance,
+                        stack=stack_instance
+                    )
+                except Member.DoesNotExist:
+                    return Response(
+                        {"status": "0", "message": f"Member with ID {member['member']} not found"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                except Stack.DoesNotExist:
+                    return Response(
+                        {"status": "0", "message": f"Stack with ID {member['stack']} not found"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
             return Response(
-                 {"status": "1", "message": "Project created successfully", "project_id": serializer.data['id']},
+                {"status": "1", "message": "Project created successfully", "project_id": serializer.data['id']},
                 status=status.HTTP_201_CREATED
             )
 
@@ -130,6 +163,7 @@ class project_management(APIView):
             {"status": "0", "message": "Project creation failed", "errors": serializer.errors},
             status=status.HTTP_400_BAD_REQUEST
         )
+
 
 
 class project_management_detail(APIView):
@@ -167,6 +201,49 @@ class project_management_detail(APIView):
         if error_response:
             return error_response
 
+        members = request.data.get('members', [])
+        if not isinstance(members, list):
+            return Response(
+                {"status": "0", "message": "Members should be provided as a list"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Collect all member and stack IDs
+        member_ids = [m.get('member') for m in members]
+        stack_ids = [m.get('stack') for m in members]
+
+        member_instances = {m.id: m for m in Member.objects.filter(id__in=member_ids)}
+        stack_instances = {s.id: s for s in Stack.objects.filter(id__in=stack_ids)}
+
+        for member in members:
+            member_id = member.get('member')
+            stack_id = member.get('stack')
+
+            member_instance = member_instances.get(member_id)
+            stack_instance = stack_instances.get(stack_id)
+
+            if not member_instance or not stack_instance:
+                return Response(
+                    {"status": "0", "message": f"Invalid member {member_id} or stack {stack_id}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Check if the ProjectMember already exists in the project
+            project_member = ProjectMember.objects.filter(project=project, member=member_instance).first()
+
+            if project_member:
+                # ✅ Member exists in the project: Update the stack
+                project_member.stack = stack_instance
+                project_member.save()
+            else:
+                # ✅ Member does not exist: Create a new ProjectMember
+                ProjectMember.objects.create(
+                    project=project,
+                    member=member_instance,
+                    stack=stack_instance
+                )
+
+        # Serialize the updated project data
         serializer = ProjectManagementSerializer(project, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -179,6 +256,10 @@ class project_management_detail(APIView):
             {"status": "0", "message": "Project update failed", "errors": serializer.errors},
             status=status.HTTP_400_BAD_REQUEST
         )
+
+
+
+
 
     def delete(self, request, pk, format=None):
         project, error_response = self.get_project(pk, request.user)

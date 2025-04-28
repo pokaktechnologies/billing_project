@@ -41,7 +41,7 @@ class ProjectManagement(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.project_name} ({self.user.id})"
+        return f"{self.project_name} ({self.user.first_name})"
 
 
 

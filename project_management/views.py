@@ -112,47 +112,49 @@ class project_management(APIView):
 
     def post(self, request, format=None):
         serializer = ProjectManagementSerializer(data=request.data)
-        members = request.data.get('members')  # [{'member': 1, 'stack': 1}, {'member': 2, 'stack': 1}]
+        members = request.data.get('members')  # Optional
 
-        # check the members duplication in the members list
-        member_ids = [item['member'] for item in members]
-        if len(member_ids) != len(set(member_ids)):
-            return Response(
-                {"status": "0", "message": "Members list contains duplicate members"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        # Validate members only if provided
+        if members:
+            member_ids = [item['member'] for item in members]
+            if len(member_ids) != len(set(member_ids)):
+                return Response(
+                    {"status": "0", "message": "Members list contains duplicate members"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
         if serializer.is_valid():
-            # check contract belongs to user or not 
+            # Check if the contract belongs to the user
             contract = ClientContract.objects.filter(pk=request.data.get('contract'), user=request.user).first()
             if not contract:
                 return Response(
                     {"status": "0", "message": "Contract not found"},
                     status=status.HTTP_404_NOT_FOUND
                 )
-            
+
             serializer.save(user=request.user)
-            
-            # allocate the members to the project
-            for member in members:
-                try:
-                    member_instance = Member.objects.get(pk=member['member'])
-                    stack_instance = Stack.objects.get(pk=member['stack'])
-                    ProjectMember.objects.create(
-                        project=serializer.instance,
-                        member=member_instance,
-                        stack=stack_instance
-                    )
-                except Member.DoesNotExist:
-                    return Response(
-                        {"status": "0", "message": f"Member with ID {member['member']} not found"},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-                except Stack.DoesNotExist:
-                    return Response(
-                        {"status": "0", "message": f"Stack with ID {member['stack']} not found"},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
+
+            # Allocate members if any
+            if members:
+                for member in members:
+                    try:
+                        member_instance = Member.objects.get(pk=member['member'])
+                        stack_instance = Stack.objects.get(pk=member['stack'])
+                        ProjectMember.objects.create(
+                            project=serializer.instance,
+                            member=member_instance,
+                            stack=stack_instance
+                        )
+                    except Member.DoesNotExist:
+                        return Response(
+                            {"status": "0", "message": f"Member with ID {member['member']} not found"},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                    except Stack.DoesNotExist:
+                        return Response(
+                            {"status": "0", "message": f"Stack with ID {member['stack']} not found"},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
 
             return Response(
                 {"status": "1", "message": "Project created successfully", "project_id": serializer.data['id']},
@@ -163,6 +165,7 @@ class project_management(APIView):
             {"status": "0", "message": "Project creation failed", "errors": serializer.errors},
             status=status.HTTP_400_BAD_REQUEST
         )
+
 
 
 

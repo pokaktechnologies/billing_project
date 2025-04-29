@@ -483,3 +483,16 @@ class ProductSerializer(serializers.ModelSerializer):
         # validated_data['salesperson'] = salesperson_instance
 
         return Product.objects.create(**validated_data)
+
+
+class TermsAndConditionsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TermsAndConditions
+        fields = ['id', 'title', 'created_at']
+
+class TermsAndConditionsPointSerializer(serializers.ModelSerializer):
+    terms_and_conditions_title = serializers.CharField(source='terms_and_conditions.title', read_only=True)
+
+    class Meta:
+        model = TermsAndConditionsPoint
+        fields = ['id', 'terms_and_conditions', 'terms_and_conditions_title', 'point', 'created_at']

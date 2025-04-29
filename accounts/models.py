@@ -321,6 +321,7 @@ class QuotationOrderModel(models.Model):
     # customer = models.ForeignKey(Customer,on_delete=models.SET_NULL, null=True, blank=True) # Fetching from
     address = models.TextField(max_length=100, blank=True )  
     delivery_location = models.TextField(max_length=100, blank=True)
+    termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.CASCADE,  null=True, blank=True, related_name="termsandconditions")
   
     bank_account = models.ForeignKey(
         BankAccount, on_delete=models.SET_NULL, null=True, blank=True, related_name="quotations"
@@ -393,6 +394,7 @@ class QuotationItem(models.Model):
 
 class SalesOrderModel(models.Model):
     customer = models.ForeignKey('Customer', on_delete=models.CASCADE)
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE,null=True, blank=True)
     sales_order_id = models.CharField(max_length=50, unique=True)
     sales_date = models.DateField()
     purchase_order_number = models.CharField(max_length=50, blank=True, null=True)
@@ -572,3 +574,19 @@ class Customer(models.Model):
         if self.customer_type == 'individual':
             return f"{self.first_name} {self.last_name}"
         return self.company_name    
+
+
+class TermsAndConditions(models.Model):
+    title = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True,null=True,blank=True)
+
+    def str(self):
+        return f"{self.title}"
+
+class TermsAndConditionsPoint(models.Model):
+    terms_and_conditions = models.ForeignKey(TermsAndConditions, on_delete=models.CASCADE)
+    point = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True,null=True,blank=True)
+
+    def str(self):
+        return f"{self.point} - ({self.terms_and_conditions.title})"

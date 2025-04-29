@@ -24,6 +24,7 @@ urlpatterns = [
     path('sales-orders/', SalesOrderAPI.as_view(), name='sales_order_list'),
     path('sales-orders/<int:sid>/', SalesOrderAPI.as_view(), name='sales_order_list'),
     path('sales-orders/<int:sid>/<int:pid>/', SalesOrderAPI.as_view(), name='sales_order_list'),
+    path('sales-orders/<int:sid>/items/', SalesOrderItemsList.as_view(), name='sales_order_items_list'),
     path('print-sales-orders/<int:sid>/', PrintSalesOrderAPI.as_view(), name='print_sales_order'),
     
     path('countries/', CountryView.as_view(), name='get_states'),
@@ -69,5 +70,10 @@ urlpatterns = [
     path('units/<int:pk>/', UnitAPIView.as_view(), name='unit-detail'),  # Retrieve, Update, Delete
     path('bank-accounts/', BankAccountAPI.as_view(), name='bank_account_list'),  # Get all, Post new
     path('bank-accounts/<int:account_id>/', BankAccountAPI.as_view(), name='bank_account_detail'),  # Get, Put, Delete
+    
+    path('terms/', TermsAndConditionsAPI.as_view()),
+    path('terms/<int:pk>/', TermsAndConditionsAPI.as_view()),
+    path('terms-points/', TermsAndConditionsPointAPI.as_view()),
+    path('terms-points/<int:pk>/', TermsAndConditionsPointAPI.as_view()),
 
 ]

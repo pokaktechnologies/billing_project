@@ -1762,7 +1762,6 @@ class  PrintQuotationAPI(APIView):
 
 class SalesOrderAPI(APIView):
     permission_classes = [IsAuthenticated]
-
     def post(self, request, *args, **kwargs):
         data = request.data
         try:
@@ -1782,6 +1781,7 @@ class SalesOrderAPI(APIView):
 
                 sales_order = SalesOrderModel.objects.create(
                     customer=customer,
+                    user=request.user,
                     sales_order_id=sales_order_id,
                     sales_date=data.get("sales_date"),
                     purchase_order_number=data.get("purchase_order_number"),
@@ -1935,7 +1935,7 @@ class SalesOrderAPI(APIView):
 
 
 class  PrintSalesOrderAPI(APIView):
-
+    permission_classes = [IsAuthenticated]
     def get(self, request, sid=None):
         sales_order = get_object_or_404(SalesOrderModel, id=sid)
         serializer = PrintSalesOrderSerializer(sales_order)
@@ -1945,6 +1945,14 @@ class  PrintSalesOrderAPI(APIView):
             "message": "success",
             "data": sales_order_data
         }, status=status.HTTP_200_OK)
+
+class SalesOrderItemsList(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request, sid=None):
+        sales_order = get_object_or_404(SalesOrderModel, id=sid)
+        items = SalesOrderItem.objects.filter(sales_order=sales_order)
+        serializer = SalesOrderItemSerializer(items, many=True)
+        return Response({"status": "1", "data": serializer.data}, status=status.HTTP_200_OK)
 
         
         # print(f"Quotation Address: {quotation.address}")  # This will print the address in your console/logs
@@ -2376,3 +2384,68 @@ class BankAccountAPI(APIView):
         bank_account = get_object_or_404(BankAccount, id=account_id)
         bank_account.delete()
         return Response({"status": "1", "message": "Bank account deleted successfully"}, status=status.HTTP_200_OK)    
+
+
+class TermsAndConditionsAPI(APIView):
+    def get(self, request, pk=None):
+        if pk:
+            term = get_object_or_404(TermsAndConditions, pk=pk)
+            serializer = TermsAndConditionsSerializer(term)
+            return Response({"status": "1", "data": serializer.data})
+        else:
+            terms = TermsAndConditions.objects.all()
+            serializer = TermsAndConditionsSerializer(terms, many=True)
+            return Response({"status": "1", "data": serializer.data})
+
+    def post(self, request):
+        serializer = TermsAndConditionsSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"status": "1", "message": "Term created successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
+        return Response({"status": "0", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request, pk):
+        term = get_object_or_404(TermsAndConditions, pk=pk)
+        serializer = TermsAndConditionsSerializer(term, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"status": "1", "message": "Term updated successfully", "data": serializer.data})
+        return Response({"status": "0", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        term = get_object_or_404(TermsAndConditions, pk=pk)
+        term.delete()
+        return Response({"status": "1", "message": "Term deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+
+
+
+class TermsAndConditionsPointAPI(APIView):
+    def get(self, request, pk=None):
+        if pk:
+            point = get_object_or_404(TermsAndConditionsPoint, pk=pk)
+            serializer = TermsAndConditionsPointSerializer(point)
+            return Response({"status": "1", "data": serializer.data})
+        else:
+            points = TermsAndConditionsPoint.objects.all()
+            serializer = TermsAndConditionsPointSerializer(points, many=True)
+            return Response({"status": "1", "data": serializer.data})
+
+    def post(self, request):
+        serializer = TermsAndConditionsPointSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"status": "1", "message": "Point created successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
+        return Response({"status": "0", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request, pk):
+        point = get_object_or_404(TermsAndConditionsPoint, pk=pk)
+        serializer = TermsAndConditionsPointSerializer(point, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"status": "1", "message": "Point updated successfully", "data": serializer.data})
+        return Response({"status": "0", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        point = get_object_or_404(TermsAndConditionsPoint, pk=pk)
+        point.delete()
+        return Response({"status": "1", "message": "Point deleted successfully"}, status=status.HTTP_204_NO_CONTENT)

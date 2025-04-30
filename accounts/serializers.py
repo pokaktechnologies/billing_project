@@ -288,11 +288,21 @@ class NewsalesOrderSerializer(serializers.ModelSerializer):
     mobile_number = serializers.CharField(source='customer.mobile', read_only=True)
     bank_name = serializers.CharField(source='bank_account.bank_name', read_only=True)
     bank_account_number = serializers.CharField(source='bank_account.account_number', read_only=True)
+    termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
 
     class Meta:
         model = SalesOrderModel
         fields = '__all__'
-        read_only_fields = ('sales_order_id', 'grand_total', 'client_name', 'mobile_number', 'bank_name', 'bank_account_number') 
+        read_only_fields = (
+            'sales_order_id', 
+            'grand_total', 
+            'client_name',
+             'mobile_number', 
+             'bank_name', 
+             'bank_account_number', 
+             'termsandconditions_title', 
+             'is_delivered'
+             ) 
 
 class SalesOrderItemSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
@@ -337,6 +347,8 @@ class PrintSalesOrderSerializer(serializers.ModelSerializer):
             total += item.sub_total + item.sgst + item.cgst  # Add SGST and CGST to subtotal
         return total
 
+
+
     
 
 
@@ -361,7 +373,12 @@ class PrintSalesOrderSerializer(serializers.ModelSerializer):
 class NewDeliverySerializer(serializers.ModelSerializer):
     class Meta:
         model = DeliveryFormModel
-        fields = '__all__'        
+        fields = '__all__'    
+
+class DeliveryItemsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DeliveryItem
+        fields = '__all__'    
         
 class CountrySerializer(serializers.ModelSerializer):
     class Meta:

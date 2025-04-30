@@ -25,6 +25,7 @@ urlpatterns = [
     path('sales-orders/<int:sid>/', SalesOrderAPI.as_view(), name='sales_order_list'),
     path('sales-orders/<int:sid>/<int:pid>/', SalesOrderAPI.as_view(), name='sales_order_list'),
     path('sales-orders/<int:sid>/items/', SalesOrderItemsList.as_view(), name='sales_order_items_list'),
+    path('sales-orders/not-delivered/', SalesOrderByNotDelivered.as_view(), name='sales_order_not_delivered'),
     path('print-sales-orders/<int:sid>/', PrintSalesOrderAPI.as_view(), name='print_sales_order'),
     
     path('countries/', CountryView.as_view(), name='get_states'),

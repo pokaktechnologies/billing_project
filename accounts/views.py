@@ -1766,8 +1766,8 @@ class SalesOrderAPI(APIView):
         data = request.data
         try:
             with transaction.atomic():
-                print("\n--- DEBUGGING SALES ORDER POST ---")
-                print(f"Received Data: {data}")
+                # print("\n--- DEBUGGING SALES ORDER POST ---")
+                # print(f"Received Data: {data}")
 
                 sales_order_id = f"SO-{random.randint(111111, 999999)}"
 
@@ -1776,6 +1776,16 @@ class SalesOrderAPI(APIView):
 
                 bank_account = None
                 bank_account_id = data.get("bank_account")
+                terms_and_conditions = data.get("termsandconditions")
+
+                if not terms_and_conditions:
+                    return Response({"error": "Terms and conditions not provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+                # This will raise 404 if the object doesn't exist
+                terms_and_conditions_obj = get_object_or_404(TermsAndConditions, id=terms_and_conditions)
+                print(terms_and_conditions_obj)
+
+                    
                 if bank_account_id:
                     bank_account = get_object_or_404(BankAccount, id=bank_account_id)
 
@@ -1787,11 +1797,12 @@ class SalesOrderAPI(APIView):
                     purchase_order_number=data.get("purchase_order_number"),
                     terms=data.get("terms", ""),
                     remark=data.get("remark", ""),
-                    termsandconditions=data.get("termsandconditions"),
+                    termsandconditions=terms_and_conditions_obj,
                     due_date=data.get("due_date"),
                     delivery_location=data.get("delivery_location", ""),
                     delivery_address=data.get("delivery_address", ""),
-                    bank_account=bank_account
+                    bank_account=bank_account,
+                    is_delivered=data.get("is_delivered", False)
                 )
 
                 items = data.get("items", [])
@@ -1804,9 +1815,11 @@ class SalesOrderAPI(APIView):
                         sales_order=sales_order,
                         product=product,
                         quantity=item.get("quantity", 1),
+                        pending_quantity=item.get("quantity", 1),
                         unit_price=item.get("unit_price", 0),
                         sgst_percentage=item.get("sgst_percentage", 0),
                         cgst_percentage=item.get("cgst_percentage", 0),
+                        is_item_delivered=item.get("is_item_delivered", False)
                     )
 
                 sales_order.update_grand_total()
@@ -1836,6 +1849,7 @@ class SalesOrderAPI(APIView):
                     "total": item.total,
                     "sgst": item.sgst,
                     "cgst": item.cgst,
+                    "is_item_delivered": item.is_item_delivered,
                     "sub_total": item.sub_total,
                 })
                 item_list.append(product_data)
@@ -1951,71 +1965,33 @@ class SalesOrderItemsList(APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request, sid=None):
         sales_order = get_object_or_404(SalesOrderModel, id=sid)
-        items = SalesOrderItem.objects.filter(sales_order=sales_order)
+        items = SalesOrderItem.objects.filter(sales_order=sales_order,is_item_delivered=False)
         serializer = SalesOrderItemSerializer(items, many=True)
         return Response({"status": "1", "data": serializer.data}, status=status.HTTP_200_OK)
 
-        
-        # print(f"Quotation Address: {quotation.address}")  # This will print the address in your console/logs
-        
-        # salesperson_address = quotation.salesperson.address if quotation.salesperson else None
-      
-        # salesperson_name = (
-        #     f"{quotation.salesperson.first_name} {quotation.salesperson.last_name}"
-        #     if quotation.salesperson else None
-        # )
 
-            
-        # if quotation.bank_account:
-        #     bank_account_serializer = BankAccountSerializer(quotation.bank_account)
-        #     bank_account_data = [bank_account_serializer.data]  # wrap in list
-        # else:
-        #     bank_account_data = []  # empty array if no account
-        # # Get quotation items
-        # quotation_items = QuotationItem.objects.filter(quotation=quotation)
-        # item_list = []
 
-        # # Prepare item details for the print view
-        # for item in quotation_items:
-        #     item_data = {
-        #         "item_name": item.product.name,  # Assuming 'product' is a ForeignKey to a Product model
-        #         "description": item.product.product_description,  # Assuming 'description' exists in the Product model
-        #         "quantity": item.quantity,
-        #         "rate": item.product.unit_price,
-        #         "cgst": item.cgst,
-        #         "sgst": item.sgst,
-        #         "tax": item.sgst + item.cgst,  # Assuming tax is stored as SGST and CGST in QuotationItem
-        #         "amount": item.total,  # Total amount for the item (rate * quantity + tax)
-        #         # "total": item.total,  # Total amount for the item (rate * quantity + tax)
+class SalesOrderByNotDelivered(APIView):
+    permission_classes = [IsAuthenticated]
 
-        #     }
-        #     item_list.append(item_data)
-         
+    def get(self, request):
+        # Fetch all sales orders where is_delivered is False
+        sales_orders = SalesOrderModel.objects.filter(is_delivered=False)
 
-        # # Prepare the response data
-        #     quotation_data = {
-        #     "quotation_id": quotation.id,
-        #     "customer_name": quotation.customer_name,
-        #     "address": quotation.address if quotation.address else None,
-        #     "salesperson_name": salesperson_name,
-        #     "salesperson_address": salesperson_address,
-        #     "quotation_number": quotation.quotation_number,
-        #     "quotation_date": str(quotation.quotation_date),
-        #     "bank_account": bank_account_data,
-        #     # "email_id": quotation.email_id,
-        #     "remark": quotation.remark,
-        #     "subtotal": sum(item['amount'] - item['tax'] for item in item_list),
-        #     "total": sum(item['amount'] for item in item_list),
-        #     "items": item_list,
+        # Create a list to hold the sales order data
+        data = []
+        for order in sales_orders:
+            data.append({
+                "id": order.id,
+                "sales_order_id": order.sales_order_id,
+                "client_first_name": order.customer.first_name,
+                "client_last_name": order.customer.last_name,
+                
+            })
 
-        # }
+        # Return the response with the data
+        return Response({"status": "1", "data": data}, status=status.HTTP_200_OK)
 
-        # # Return the quotation data wrapped in an array (as requested)
-        # return Response({
-        #     "status": "1",
-        #     "message": "success",
-        #     "data": [quotation_data]  # Wrap the response data in a list (array of objects)
-        # }, status=status.HTTP_200_OK)
 
   
 
@@ -2027,23 +2003,13 @@ class DeliveryFormAPI(APIView):
             delivery_serializer = NewDeliverySerializer(delivery)
             
             delivery_items = DeliveryItem.objects.filter(delivery_form=delivery)
-            item_list = []
-
-            for item in delivery_items:
-                product_serializer = ProductSerializer(item.product)
-                product_data = product_serializer.data
-                
-                product_data["quantity"] = item.quantity
-                product_data["delivered_quantity"] = item.delivered_quantity
-                product_data["status"] = item.status
-
-                item_list.append(product_data)
+            delivery_item_serializer = DeliveryItemsSerializer(delivery_items, many=True)
             
             return Response({
                 'status': '1',
                 'message': 'success',
                 'delivery': delivery_serializer.data,
-                'items': item_list
+                'items': delivery_item_serializer.data
             })
         else:
             deliveries = DeliveryFormModel.objects.all()
@@ -2054,65 +2020,92 @@ class DeliveryFormAPI(APIView):
         data = request.data
         try:
             with transaction.atomic():
-                # Validate Sales Order ID
-                sales_order_id = data.get("sales_order")
-                if not SalesOrderModel.objects.filter(id=sales_order_id).exists():
-                    return Response({"error": "Invalid sales order ID"}, status=status.HTTP_400_BAD_REQUEST)
 
-                # Validate Salesperson ID
-                salesperson_id = data.get("salesperson")
-                if not SalesPerson.objects.filter(id=salesperson_id).exists():
-                    return Response({"error": "Invalid salesperson ID"}, status=status.HTTP_400_BAD_REQUEST)
+                delivery_id = f"DN-{random.randint(111111, 999999)}"
 
-                # Create Delivery Form
+                customer_id = data.get("customer")
+                customer = get_object_or_404(Customer, id=customer_id)
+
+                bank_account = None
+                bank_account_id = data.get("bank_account")
+                terms_and_conditions = data.get("termsandconditions")
+                sales_order = data.get("sales_order")
+
+                if not terms_and_conditions:
+                    return Response({"error": "Terms and conditions not provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+                if not sales_order:
+                    return Response({"error": "Sales order not provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+                # This will raise 404 if the object doesn't exist
+                terms_and_conditions_obj = get_object_or_404(TermsAndConditions, id=terms_and_conditions)
+                sales_order_obj = get_object_or_404(SalesOrderModel, id=sales_order)
+
+                # Create the DeliveryFormModel object
                 delivery_form = DeliveryFormModel.objects.create(
-                    customer_name=data.get("customer_name"),
-                    delivery_number=f"DLV-{random.randint(111111, 999999)}",  # Unique delivery number
+                    customer=customer,
+                    delivery_number=delivery_id,
+                    user=request.user,
+                    sales_order=sales_order_obj,
                     delivery_date=data.get("delivery_date"),
-                    sales_order_id=sales_order_id,
-                    terms=data.get("terms", ""),
-                    due_date=data.get("due_date"),
-                    salesperson_id=salesperson_id,
+                    time=data.get("time"),  # Add time here
+                    termsandconditions=terms_and_conditions_obj,
                     delivery_location=data.get("delivery_location", ""),
                     delivery_address=data.get("delivery_address", ""),
-                    contact_person=data.get("contact_person"),
-                    mobile_number=data.get("mobile_number"),
-                    time=data.get("time"),
-                    date=data.get("date"),
-                    grand_total=0  # Will be updated after adding items
                 )
 
-                # Validate and Add Delivery Items
                 items = data.get("items", [])
                 if not items:
                     return Response({"error": "Delivery must have at least one item."}, status=status.HTTP_400_BAD_REQUEST)
 
                 for item in items:
-                    product_id = item.get("product")
-                    if not Product.objects.filter(id=product_id).exists():
-                        return Response({"error": f"Invalid product ID {product_id}"}, status=status.HTTP_400_BAD_REQUEST)
-
-                    product = Product.objects.get(id=product_id)
-                    quantity = Decimal(str(item.get("quantity", 1)))
-
-                    DeliveryItem.objects.create(
+                    product = get_object_or_404(Product, id=item.get("product"))
+                    delivered_qty = Decimal(item.get("delivered_quantity", 0))
+                    delivery_item = DeliveryItem.objects.create(
                         delivery_form=delivery_form,
                         product=product,
-                        quantity=quantity
-                    ) 
+                        delivered_quantity=delivered_qty,
+                        unit_price=item.get("unit_price", 0),
+                        sgst_percentage=item.get("sgst_percentage", 0),
+                        cgst_percentage=item.get("cgst_percentage", 0),
+                    )
 
-                # Update grand total
-                delivery_form.update_grand_total()
+                    # Update the pending quantity in sales order items
+                    sales_order_items = SalesOrderItem.objects.filter(sales_order=sales_order_obj, product=product)
+                    for sales_order_item in sales_order_items:
+
+                        if delivered_qty > sales_order_item.pending_quantity:
+                            raise ValueError(f"Delivered quantity ({delivered_qty}) exceeds pending quantity ({sales_order_item.pending_quantity}) for product {product.name}")
+
+                        if sales_order_item.pending_quantity >= delivered_qty:
+                            sales_order_item.pending_quantity -= delivered_qty
+                            if sales_order_item.pending_quantity == 0:
+                                sales_order_item.is_item_delivered = True
+                        else:
+                            sales_order_item.pending_quantity = Decimal(0)
+                        sales_order_item.save(update_fields=["pending_quantity", "is_item_delivered"])
+
+                    # Update grand total of the delivery form
+                    delivery_form.update_grand_total()
+
+                # After updating the items, check if all items are delivered by querying the model
+                all_items_delivered = not SalesOrderItem.objects.filter(sales_order=sales_order_obj, is_item_delivered=False).exists()
+
+                if all_items_delivered:
+                    sales_order_obj.is_delivered = True
+                    sales_order_obj.save(update_fields=["is_delivered"])
 
                 return Response({
-                    "status": "1",
-                    "message": "Delivery form created successfully.",
-                    "delivery_number": delivery_form.delivery_number,
-                    "grand_total": delivery_form.grand_total
+                    "message": "Delivery Form created successfully",
+                    "delivery_number": delivery_form.delivery_number
                 }, status=status.HTTP_201_CREATED)
-        
+
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+
         
 
     def patch(self, request, did=None):

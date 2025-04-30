@@ -408,6 +408,7 @@ class SalesOrderModel(models.Model):
         'BankAccount', on_delete=models.SET_NULL, null=True, blank=True, related_name="sales_orders"
     )
     grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
+    is_delivered = models.BooleanField(default=False)
 
     def update_grand_total(self):
         total = sum(item.sub_total for item in self.items.all())
@@ -422,6 +423,7 @@ class SalesOrderItem(models.Model):
     sales_order = models.ForeignKey(SalesOrderModel, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey('Product', on_delete=models.CASCADE)
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
+    pending_quantity = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     sgst_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     cgst_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
@@ -430,6 +432,7 @@ class SalesOrderItem(models.Model):
     sgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
     cgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
     sub_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
+    is_item_delivered = models.BooleanField(default=False)
 
     def save(self, *args, **kwargs):
         """Calculate and update total, SGST, CGST, and sub_total before saving."""
@@ -448,6 +451,7 @@ class SalesOrderItem(models.Model):
         cgst_percentage_decimal = Decimal(str(self.cgst_percentage))
         
         self.total = unit_price_decimal * quantity_decimal
+
         self.sgst = ((sgst_percentage_decimal * unit_price_decimal) / Decimal(100)) * quantity_decimal
         self.cgst = ((cgst_percentage_decimal * unit_price_decimal) / Decimal(100)) * quantity_decimal
         self.sub_total = self.total + self.sgst + self.cgst
@@ -467,69 +471,69 @@ class SalesOrderItem(models.Model):
     
     
 class DeliveryFormModel(models.Model):
-    customer_name = models.CharField(max_length=255)
-    delivery_number = models.CharField(max_length=50, unique=True)  # Unique Delivery Number
-    delivery_date = models.DateField()  # Delivery Date
-    # sales_order_number = models.CharField(max_length=50, blank=True, null=True)  # Sales Order Number
-    sales_order = models.ForeignKey(
-        SalesOrderModel, on_delete=models.CASCADE, related_name="deliveries"
-    )
-    terms = models.CharField(max_length=255, blank=True)  # Payment terms
-    due_date = models.DateField()  # Payment Due Date
-    salesperson = models.ForeignKey(SalesPerson, on_delete=models.CASCADE)  # Salesperson responsible
-    delivery_location = models.CharField(max_length=255, blank=True)  # Location for delivery
-    delivery_address = models.TextField(blank=True)  # Full delivery address
-    contact_person = models.CharField(max_length=255)  # Contact person for delivery
-    mobile_number = models.CharField(max_length=15)  # Mobile number of contact person
-    
-    # New Fields
-    time = models.TimeField()  # Time of Delivery
-    date = models.DateField()  # Date of Delivery
-
-    grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # Total delivery amount
-    delivery_status = models.CharField(max_length=50, default="Pending")  
-
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE,null=True, blank=True)
+    customer = models.ForeignKey('Customer', on_delete=models.CASCADE,null=True, blank=True)
+    delivery_number = models.CharField(max_length=50, unique=True)
+    delivery_date = models.DateField()
+    sales_order = models.ForeignKey(SalesOrderModel, on_delete=models.CASCADE, related_name="deliveries")
+    delivery_location = models.CharField(max_length=255, blank=True)
+    delivery_address = models.TextField(blank=True)
+    termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.CASCADE,  null=True, blank=True)
+    time = models.TimeField()
+    grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
 
     def update_grand_total(self):
-        """Recalculate grand total based on related DeliveryItems."""
-        total_amount = sum(item.sub_total for item in self.items.all())  # Sum of all items' sub_total
+        total_amount = sum(item.sub_total for item in self.items.all())
         self.grand_total = total_amount
         self.save(update_fields=["grand_total"])
 
     def __str__(self):
-        return f"Delivery {self.delivery_number} - {self.customer_name}"
+        return f"Delivery {self.delivery_number} - {self.customer}"
 
 
 class DeliveryItem(models.Model):
     delivery_form = models.ForeignKey(DeliveryFormModel, related_name='items', on_delete=models.CASCADE)
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
-    quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
-    delivered_quantity = models.DecimalField(max_digits=10, decimal_places=2, default=0)  # Add this field
-    status = models.CharField(max_length=50, default="Pending")  # Example status choices can be added
+    # sales_order_quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
+    delivered_quantity = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
-    
-    total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # quantity * unit_price
-    sgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # 9% SGST
-    cgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # 9% CGST
-    sub_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # Total + SGST + CGST
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    sgst_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    cgst_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+
+    total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
+    sgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
+    cgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
+    sub_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
 
     def save(self, *args, **kwargs):
-        """Calculate and update total, SGST, CGST, and sub_total before saving."""
-        self.total = self.product.unit_price * self.quantity
-        self.sgst = (self.total * Decimal("9")) / Decimal("100")  # 9% SGST
-        self.cgst = (self.total * Decimal("9")) / Decimal("100")  # 9% CGST
+        # Price calculations
+        if self.unit_price == 0:
+            unit_price_decimal = self.product.unit_price
+        else:
+            unit_price_decimal = self.unit_price                
+        unit_price_decimal = Decimal(unit_price_decimal)
+        quantity_decimal = Decimal(self.delivered_quantity)
+        sgst_percentage_decimal = Decimal(str(self.sgst_percentage))
+        cgst_percentage_decimal = Decimal(str(self.cgst_percentage))
+
+        self.total = unit_price_decimal * quantity_decimal
+        self.sgst = ((sgst_percentage_decimal * unit_price_decimal) / Decimal(100)) * quantity_decimal
+        self.cgst = ((cgst_percentage_decimal * unit_price_decimal) / Decimal(100)) * quantity_decimal
         self.sub_total = self.total + self.sgst + self.cgst
+
         super().save(*args, **kwargs)
 
+        # Update the DeliveryForm grand total
         self.delivery_form.update_grand_total()
 
+
     def delete(self, *args, **kwargs):
-        """Ensure grand total updates when an item is deleted."""
         super().delete(*args, **kwargs)
         self.delivery_form.update_grand_total()
 
     def __str__(self):
-        return self.product.name    
+        return self.product.name 
     
 
 class Country(models.Model):

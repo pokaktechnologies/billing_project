@@ -403,6 +403,7 @@ class SalesOrderModel(models.Model):
     due_date = models.DateField()
     delivery_location = models.CharField(max_length=255, blank=True)
     delivery_address = models.TextField(blank=True)
+    termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.CASCADE,  null=True, blank=True)
     bank_account = models.ForeignKey(
         'BankAccount', on_delete=models.SET_NULL, null=True, blank=True, related_name="sales_orders"
     )

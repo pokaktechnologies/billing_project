@@ -1787,6 +1787,7 @@ class SalesOrderAPI(APIView):
                     purchase_order_number=data.get("purchase_order_number"),
                     terms=data.get("terms", ""),
                     remark=data.get("remark", ""),
+                    termsandconditions=data.get("termsandconditions"),
                     due_date=data.get("due_date"),
                     delivery_location=data.get("delivery_location", ""),
                     delivery_address=data.get("delivery_address", ""),

@@ -51,10 +51,11 @@ class MeetingSerializerDisplay(serializers.ModelSerializer):
     status = serializers.SerializerMethodField()
     lead_name = serializers.CharField(source='lead.name', read_only=True)
     lead_id = serializers.IntegerField(source='lead.id', read_only=True)
+    phone = serializers.CharField(source='lead.phone', read_only=True)
 
     class Meta:
         model = Meeting
-        fields = ['id', 'lead_name','subject','lead_id', 'date', 'time','status']
+        fields = ['id', 'lead_name','subject','lead_id', 'date', 'time','status','phone']
 
     def get_date(self, obj):
         return obj.date.date().isoformat()

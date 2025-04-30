@@ -2392,7 +2392,7 @@ class TermsAndConditionsAPI(APIView):
         if pk:
             term = get_object_or_404(TermsAndConditions, pk=pk)
             serializer = TermsAndConditionsSerializer(term)
-            return Response({"status": "1", "data": serializer.data})
+            return Response({"status": "1", "data": [serializer.data]})
         else:
             terms = TermsAndConditions.objects.all()
             serializer = TermsAndConditionsSerializer(terms, many=True)
@@ -2423,9 +2423,9 @@ class TermsAndConditionsAPI(APIView):
 class TermsAndConditionsPointAPI(APIView):
     def get(self, request, pk=None):
         if pk:
-            point = get_object_or_404(TermsAndConditionsPoint, pk=pk)
-            serializer = TermsAndConditionsPointSerializer(point)
-            return Response({"status": "1", "data": serializer.data})
+            point = get_object_or_404( TermsAndConditionsPoint, pk=pk)
+            serializer = TermsAndConditionsPointSerializer([point])
+            return Response({"status": "1", "data": [serializer.data]})
         else:
             points = TermsAndConditionsPoint.objects.all()
             serializer = TermsAndConditionsPointSerializer(points, many=True)

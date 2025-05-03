@@ -2162,6 +2162,18 @@ class DeliveryFormAPI(APIView):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class PrintDeliveryOrderAPI(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request, did=None):
+        delivery = get_object_or_404(DeliveryFormModel, id=did)
+        serializer = PrintDeliverySerializer(delivery)
+        
+        return Response({
+            "status": "1",
+            "message": "success",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
 
 class InvoiceOrderAPI(APIView):
     permission_classes = [IsAuthenticated]

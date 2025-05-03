@@ -113,6 +113,14 @@ class FeedbackSerializer(serializers.ModelSerializer):
 #         if value < 0:
 #             raise serializers.ValidationError("Discount cannot be negative.")
 #         return value
+
+class PrintTermsAndConditionsSerializer(serializers.ModelSerializer):
+    termsandconditions = serializers.CharField(source='terms_and_conditions.title', read_only=True)
+
+    class Meta:
+        model = TermsAndConditionsPoint
+        fields = '__all__'
+
     
 
 
@@ -360,17 +368,45 @@ class NewDeliverySerializer(serializers.ModelSerializer):
 class DeliveryItemsSerializer(serializers.ModelSerializer):
     class Meta:
         model = DeliveryItem
-        fields = '__all__'  
+        fields = '__all__' 
+
+
+
+
+
+class PrintDeliverySerializer(serializers.ModelSerializer):
+    items = DeliveryItemsSerializer(many=True, read_only=True)
+    customer = CustomerSerializer(read_only=True)
+    termsandconditions = serializers.SerializerMethodField()
+    sales_order_id = serializers.CharField(source='sales_order.sales_order_id', read_only=True)
+
+    class Meta:
+        model = DeliveryFormModel
+        fields = '__all__'
+
+    def get_termsandconditions(self, obj):
+        # Get related TermsAndConditions
+        terms = obj.termsandconditions
+        # Get points related to this TermsAndConditions
+        points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=terms)
+        return PrintTermsAndConditionsSerializer(points, many=True).data
+
+    
+
+
+        
 
 class InvoiceModelSerializer(serializers.ModelSerializer):
     client_name = serializers.CharField(source='client.first_name', read_only=True)
     # salesperson = serializers.CharField(source='salesperson.first_name', read_only=True)
     sales_order_id = serializers.CharField(source='sales_order.sales_order_id', read_only=True)
     termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
-    
+
     class Meta:
         model = InvoiceModel
         fields = '__all__'  
+    
+
         
 class CountrySerializer(serializers.ModelSerializer):
     class Meta:

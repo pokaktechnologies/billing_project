@@ -34,6 +34,7 @@ urlpatterns = [
     
     path('delivery-orders/', DeliveryFormAPI.as_view(), name='create_delivery_order'),
     path('delivery-orders/<int:did>/', DeliveryFormAPI.as_view(), name='create_delivery_order'),
+    path('print-delivery-orders/<int:did>/', PrintDeliveryOrderAPI.as_view(), name='print_delivery_order'),
 
     path('invoice-orders/', InvoiceOrderAPI.as_view(), name='invoice-order'),
     path('invoice-orders/<int:did>/', InvoiceOrderAPI.as_view(), name='invoice-order'),

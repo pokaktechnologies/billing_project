@@ -26,6 +26,7 @@ urlpatterns = [
     path('sales-orders/<int:sid>/<int:pid>/', SalesOrderAPI.as_view(), name='sales_order_list'),
     path('sales-orders/<int:sid>/items/', SalesOrderItemsList.as_view(), name='sales_order_items_list'),
     path('sales-orders/not-delivered/<int:customer_id>/', SalesOrderByNotDelivered.as_view(), name='sales_order_not_delivered'),
+    path('sales-orders/is-invoiced/<int:customer_id>/', SalesOrderByInvoiced.as_view(), name='sales_order_is_invoiced'),
     path('print-sales-orders/<int:sid>/', PrintSalesOrderAPI.as_view(), name='print_sales_order'),
     
     path('countries/', CountryView.as_view(), name='get_states'),
@@ -35,6 +36,7 @@ urlpatterns = [
     path('delivery-orders/', DeliveryFormAPI.as_view(), name='create_delivery_order'),
     path('delivery-orders/<int:did>/', DeliveryFormAPI.as_view(), name='create_delivery_order'),
     path('print-delivery-orders/<int:did>/', PrintDeliveryOrderAPI.as_view(), name='print_delivery_order'),
+    path('delivery-orders/is_invoiced/<int:sid>/', DeliveryOrderIsInvoiced.as_view(), name='delivery_order_is_invoiced'),
 
     path('invoice-orders/', InvoiceOrderAPI.as_view(), name='invoice-order'),
     path('invoice-orders/<int:did>/', InvoiceOrderAPI.as_view(), name='invoice-order'),

@@ -1994,6 +1994,33 @@ class SalesOrderByNotDelivered(APIView):
         # Return the response with the data
         return Response({"status": "1", "data": data}, status=status.HTTP_200_OK)
 
+class SalesOrderByInvoiced(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, customer_id=None):
+        # Fetch deliveries where is_invoiced is False
+        deliveries = DeliveryFormModel.objects.filter(sales_order__customer=customer_id, is_invoiced=False)
+
+        # Create a set to store unique sales order ids (to avoid duplicates)
+        sales_order_ids = set(delivery.sales_order.id for delivery in deliveries)
+
+        # Fetch the sales orders that have deliveries with is_invoiced=False
+        sales_orders = SalesOrderModel.objects.filter(id__in=sales_order_ids)
+
+        # Create a list to hold the sales order data
+        data = []
+        for order in sales_orders:
+            data.append({
+                "id": order.id,
+                "sales_order_id": order.sales_order_id,
+                "client_first_name": order.customer.first_name,
+                "client_last_name": order.customer.last_name,
+            })
+
+        # Return the response with the data
+        return Response({"status": "1", "data": data}, status=status.HTTP_200_OK)
+
+
 
   
 
@@ -2037,6 +2064,11 @@ class DeliveryFormAPI(APIView):
 
                 if not sales_order:
                     return Response({"error": "Sales order not provided."}, status=status.HTTP_400_BAD_REQUEST)
+                
+                # check the sales order belongs to the customer
+                sales_order_obj = get_object_or_404(SalesOrderModel, id=sales_order)
+                if sales_order_obj.customer.id != customer_id:
+                    return Response({"error": "Sales order does not belong to the customer."}, status=status.HTTP_400_BAD_REQUEST)
 
                 # This will raise 404 if the object doesn't exist
                 terms_and_conditions_obj = get_object_or_404(TermsAndConditions, id=terms_and_conditions)
@@ -2174,6 +2206,33 @@ class PrintDeliveryOrderAPI(APIView):
             "data": serializer.data
         }, status=status.HTTP_200_OK)
 
+class DeliveryOrderIsInvoiced(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request,sid=None):
+        sales_order = get_object_or_404(SalesOrderModel, id=sid)
+        deliveries = DeliveryFormModel.objects.filter(sales_order=sales_order, is_invoiced=False)
+
+        # Get delivery forms linked to the sales order
+
+        if not deliveries.exists():
+            return Response({"status": "0", "message": "No deliveries found.", "data": []}, status=status.HTTP_200_OK)
+
+        # Create a list to hold the sales order data
+        data = []
+        for deli in deliveries:
+            data.append({
+                "id": deli.id,
+                "delivery_order_id": deli.delivery_number,
+                "client_first_name": deli.customer.first_name,
+                "client_last_name": deli.customer.last_name,
+            })
+
+        # Return the response with the data
+        return Response({"status": "1", "data": data}, status=status.HTTP_200_OK)
+
+
+
 
 class InvoiceOrderAPI(APIView):
     permission_classes = [IsAuthenticated]
@@ -2251,6 +2310,14 @@ class InvoiceOrderAPI(APIView):
                 if not delivery_ids or not isinstance(delivery_ids, list):
                     return Response({"error": "Deliveries must be a list of IDs."}, status=status.HTTP_400_BAD_REQUEST)
 
+                # check deliveries belong to same customer and sales order
+                for delivery_id in delivery_ids:
+                    delivery = get_object_or_404(DeliveryFormModel, id=delivery_id)
+                    if delivery.customer.id != customer_id:
+                        return Response({"error": f"Delivery {delivery.id} does not belong to the provided customer."}, status=status.HTTP_400_BAD_REQUEST)
+                    if delivery.sales_order.id != sales_order_id:
+                        return Response({"error": f"Delivery {delivery.id} does not belong to the provided sales order."}, status=status.HTTP_400_BAD_REQUEST)
+
                     # check the delivary is already invoiced or not
                 deliveries = DeliveryFormModel.objects.filter(id__in=delivery_ids)
                 if deliveries.count() != len(delivery_ids):
@@ -2289,6 +2356,7 @@ class InvoiceOrderAPI(APIView):
                 for delivery in deliveries:
                     delivery.is_invoiced = True
                     delivery.save()
+
 
                 return Response({
                     "message": "Invoice created successfully",

@@ -118,24 +118,6 @@ class FeedbackSerializer(serializers.ModelSerializer):
 
 
             
-class InvoiceOrderSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = InvoiceOrder
-        fields = [
-            'id',
-            'customer_name',
-            'invoice_number',
-            'invoice_date',
-            'terms',
-            'due_date',
-            'salesperson',
-            'subject',
-            'attachments',
-            'invoice_amount',
-            'quantity'
-        ]
-        read_only_fields = ['invoice_number']
-
 class DeliveryOrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = DeliveryOrder
@@ -378,7 +360,17 @@ class NewDeliverySerializer(serializers.ModelSerializer):
 class DeliveryItemsSerializer(serializers.ModelSerializer):
     class Meta:
         model = DeliveryItem
-        fields = '__all__'    
+        fields = '__all__'  
+
+class InvoiceModelSerializer(serializers.ModelSerializer):
+    client_name = serializers.CharField(source='client.first_name', read_only=True)
+    # salesperson = serializers.CharField(source='salesperson.first_name', read_only=True)
+    sales_order_id = serializers.CharField(source='sales_order.sales_order_id', read_only=True)
+    termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
+    
+    class Meta:
+        model = InvoiceModel
+        fields = '__all__'  
         
 class CountrySerializer(serializers.ModelSerializer):
     class Meta:

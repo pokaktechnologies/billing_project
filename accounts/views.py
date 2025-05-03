@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.generics import get_object_or_404
 from .models import CustomUser, Feature
 from django.db.models import Q
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -1974,9 +1974,11 @@ class SalesOrderItemsList(APIView):
 class SalesOrderByNotDelivered(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request):
-        # Fetch all sales orders where is_delivered is False
-        sales_orders = SalesOrderModel.objects.filter(is_delivered=False)
+    def get(self, request,customer_id=None):
+        sales_orders = SalesOrderModel.objects.filter(is_delivered=False,customer=customer_id)
+
+        if not sales_orders.exists():
+            return Response({"status": "0", "message": "No sales orders found.", "data": []}, status=status.HTTP_200_OK)
 
         # Create a list to hold the sales order data
         data = []
@@ -1995,8 +1997,7 @@ class SalesOrderByNotDelivered(APIView):
 
   
 
-class DeliveryFormAPI(APIView):
-    
+class DeliveryFormAPI(APIView): 
     def get(self, request, did=None):
         if did:
             delivery = get_object_or_404(DeliveryFormModel, id=did)
@@ -2104,8 +2105,6 @@ class DeliveryFormAPI(APIView):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-
-
         
 
     def patch(self, request, did=None):
@@ -2161,6 +2160,136 @@ class DeliveryFormAPI(APIView):
                 return Response({"status": "1", "message": "Delivery deleted successfully."}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+class InvoiceOrderAPI(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, did=None):
+        if did:
+            invoice = get_object_or_404(InvoiceModel, id=did)
+            invoice_items = InvoiceItem.objects.filter(invoice=invoice)
+
+            # Get delivery forms linked to the invoice
+            delivery_forms = DeliveryFormModel.objects.filter(
+                id__in=invoice_items.values_list('delivary__id', flat=True)
+            ).distinct()
+
+            delivery_items = DeliveryItem.objects.filter(delivery_form__in=delivery_forms).distinct()
+
+            # Serialize invoice
+            invoice_serializer = InvoiceModelSerializer(invoice)
+
+            # Build the deliveries list with grouped items
+            deliveries_data = []
+            mega_grand_total = Decimal("0.00")
+
+            for delivery in delivery_forms:
+                items = delivery_items.filter(delivery_form=delivery)
+                item_serializer = DeliveryItemsSerializer(items, many=True)
+
+                grand_total = delivery.grand_total or Decimal("0.00")
+                mega_grand_total += grand_total
+
+                deliveries_data.append({
+                    "delivery_id": delivery.id,
+                    "delivery_number": delivery.delivery_number,
+                    "grand_total": float(grand_total),
+                    "items": item_serializer.data
+                })
+
+            return Response({
+                "status": "1",
+                "data": {
+                    **invoice_serializer.data,
+                    "mega_grand_total": float(mega_grand_total),
+                    "deliveries": deliveries_data
+                }
+            }, status=status.HTTP_200_OK)
+
+
+        else:
+            invoices = InvoiceModel.objects.filter(user=request.user).order_by("-created_at")
+            serializer = InvoiceModelSerializer(invoices, many=True)
+            return Response({"status": "1", "data": serializer.data}, status=status.HTTP_200_OK)
+
+
+
+    def post(self, request):
+        data = request.data
+        try:
+            # Generate a random invoice ID
+            invoice_id = f"INV-{random.randint(111111, 999999)}"
+
+            with transaction.atomic():
+                # Required field extraction
+                customer_id = data.get("client")
+                terms_id = data.get("termsandconditions")
+                sales_order_id = data.get("sales_order")
+                invoice_date = data.get("invoice_date")
+                delivery_ids = data.get("deliveries", [])  # Expecting a list
+
+                if not customer_id:
+                    return Response({"error": "Customer not provided."}, status=status.HTTP_400_BAD_REQUEST)
+                if not terms_id:
+                    return Response({"error": "Terms and conditions not provided."}, status=status.HTTP_400_BAD_REQUEST)
+                if not sales_order_id:
+                    return Response({"error": "Sales order not provided."}, status=status.HTTP_400_BAD_REQUEST)
+                if not delivery_ids or not isinstance(delivery_ids, list):
+                    return Response({"error": "Deliveries must be a list of IDs."}, status=status.HTTP_400_BAD_REQUEST)
+
+                    # check the delivary is already invoiced or not
+                deliveries = DeliveryFormModel.objects.filter(id__in=delivery_ids)
+                if deliveries.count() != len(delivery_ids):
+                    return Response({"error": "Some delivery IDs are invalid."}, status=status.HTTP_400_BAD_REQUEST)
+
+                for delivery in deliveries:
+                    if delivery.is_invoiced:
+                        return Response({"error": f"Delivery {delivery.id} is already invoiced."}, status=status.HTTP_400_BAD_REQUEST)
+
+                    # Fetch related models
+                customer = get_object_or_404(Customer, id=customer_id)
+                terms = get_object_or_404(TermsAndConditions, id=terms_id)
+                sales_order = get_object_or_404(SalesOrderModel, id=sales_order_id)
+                deliveries = DeliveryFormModel.objects.filter(id__in=delivery_ids)
+
+                if deliveries.count() != len(delivery_ids):
+                    return Response({"error": "Some delivery IDs are invalid."}, status=status.HTTP_400_BAD_REQUEST)
+
+                # Create the invoice
+                invoice_form = InvoiceModel.objects.create(
+                    client=customer,
+                    invoice_number=invoice_id,
+                    user=request.user,
+                    sales_order=sales_order,
+                    invoice_date=invoice_date,
+                    termsandconditions=terms,
+                    remark=data.get("remark", "")
+                )
+
+                # Create InvoiceItems and assign deliveries (M2M)
+                for delivery in deliveries:
+                    invoice_item = InvoiceItem.objects.create(invoice=invoice_form)
+                    invoice_item.delivary.add(delivery)  # M2M assignment
+                
+                #updated is_invoiced field in DeliveryFormModel
+                for delivery in deliveries:
+                    delivery.is_invoiced = True
+                    delivery.save()
+
+                return Response({
+                    "message": "Invoice created successfully",
+                    "invoice_number": invoice_form.invoice_number
+                }, status=status.HTTP_201_CREATED)
+
+        except IntegrityError as e:
+            return Response({"error": f"Database error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception as e:
+            return Response({"error": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+    
 
 class CountryView(APIView):
     def get(self, request):

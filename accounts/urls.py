@@ -25,7 +25,7 @@ urlpatterns = [
     path('sales-orders/<int:sid>/', SalesOrderAPI.as_view(), name='sales_order_list'),
     path('sales-orders/<int:sid>/<int:pid>/', SalesOrderAPI.as_view(), name='sales_order_list'),
     path('sales-orders/<int:sid>/items/', SalesOrderItemsList.as_view(), name='sales_order_items_list'),
-    path('sales-orders/not-delivered/', SalesOrderByNotDelivered.as_view(), name='sales_order_not_delivered'),
+    path('sales-orders/not-delivered/<int:customer_id>/', SalesOrderByNotDelivered.as_view(), name='sales_order_not_delivered'),
     path('print-sales-orders/<int:sid>/', PrintSalesOrderAPI.as_view(), name='print_sales_order'),
     
     path('countries/', CountryView.as_view(), name='get_states'),
@@ -33,8 +33,10 @@ urlpatterns = [
 
     
     path('delivery-orders/', DeliveryFormAPI.as_view(), name='create_delivery_order'),
-     path('delivery-orders/<int:did>/', DeliveryFormAPI.as_view(), name='create_delivery_order'),
+    path('delivery-orders/<int:did>/', DeliveryFormAPI.as_view(), name='create_delivery_order'),
 
+    path('invoice-orders/', InvoiceOrderAPI.as_view(), name='invoice-order'),
+    path('invoice-orders/<int:did>/', InvoiceOrderAPI.as_view(), name='invoice-order'),
 
     
     path('quotations/', QuotationOrderAPI.as_view(), name='quotation-items-detail'),
@@ -48,8 +50,6 @@ urlpatterns = [
         #  name='quotation-item-update'),
 
     path('print-quotations/<int:qid>/', PrintQuotationAPI.as_view(), name='quotation-items-detail'),
-    path('invoice-orders/', CreateInvoiceOrderAPI.as_view(), name='create_invoice_order'),
-    path('get-invoice-orders/', InvoiceOrderListAPI.as_view(), name='invoice_order_list'),
 
     path('get-delivery-orders/', DeliveryOrderListAPI.as_view(), name='delivery_order_list'),
     path('create-purchase/', CreateSupplierPurchaseAPI.as_view(), name='create_supplier_purchase'),

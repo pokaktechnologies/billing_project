@@ -306,11 +306,11 @@ class QuotationOrderModel(models.Model):
     # customer = models.ForeignKey(Customer,on_delete=models.SET_NULL, null=True, blank=True) # Fetching from
     address = models.TextField(max_length=100, blank=True )  
     delivery_location = models.TextField(max_length=100, blank=True)
-    termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.CASCADE,  null=True, blank=True, related_name="termsandconditions")
+    termsandconditions = models.ForeignKey('TermsAndConditionsPoint', on_delete=models.CASCADE,  null=True, blank=True, related_name="termsandconditionspoint")
   
-    bank_account = models.ForeignKey(
-        BankAccount, on_delete=models.SET_NULL, null=True, blank=True, related_name="quotations"
-    )   
+    # bank_account = models.ForeignKey(
+    #     BankAccount, on_delete=models.SET_NULL, null=True, blank=True, related_name="quotations"
+    # )   
     # attachments = models.FileField(upload_to='quotations/', blank=True, null=True)  # File upload
 
     grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)

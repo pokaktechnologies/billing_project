@@ -883,8 +883,8 @@ class SalesPersonListCreateAPIView(APIView):
         )
 class QuotationOrderAPI(APIView):
     
-    # authentication_classes = [JWTAuthentication]
-    # permission_classes = [IsAuthenticated]
+    authentication_classes = []
+    permission_classes = []
 
     def get(self, request, qid=None, pid=None):
         if qid:
@@ -899,11 +899,18 @@ class QuotationOrderAPI(APIView):
             # quotation = get_object_or_404(QuotationOrderModel, id=qid)
             quotation_serializer = NewQuotationOrderSerializer(quotation)
             
-            if quotation.bank_account:
-                bank_account_serializer = BankAccountSerializer(quotation.bank_account)
-                bank_account_data = [bank_account_serializer.data]  # wrap in list
+            # if quotation.bank_account:
+            #     bank_account_serializer = BankAccountSerializer(quotation.bank_account)
+            #     bank_account_data = [bank_account_serializer.data]  # wrap in list
+            # else:
+                # bank_account_data = []  # empty array if no account
+            if quotation.termsandconditions:
+                terms_serializer = TermsAndConditionsPointSerializer(quotation.termsandconditions)
+                terms_data = [terms_serializer.data]
             else:
-                bank_account_data = []  # empty array if no account
+                terms_data = []
+    
+                
             # Get quotation items
             quotation_items = QuotationItem.objects.filter(quotation=quotation)
             item_list = []
@@ -939,7 +946,9 @@ class QuotationOrderAPI(APIView):
                         "address":quotation.address,
                         "delivery_location": quotation.delivery_location,
                         "quotation_number": quotation.quotation_number,
-                        "bank_account": bank_account_data,
+                        # "bank_account": bank_account_data,
+                        "termsandconditions": terms_data,  # Added terms and conditions
+
                         "quotation_date": str(quotation.quotation_date),
                         "remark": quotation.remark,
                         # "email_id": quotation.email_id,
@@ -1006,9 +1015,13 @@ class QuotationOrderAPI(APIView):
                 salesperson_id = data.get("salesperson")
                 if not SalesPerson.objects.filter(id=salesperson_id).exists():
                     return Response({"error": "Invalid salesperson ID"}, status=status.HTTP_400_BAD_REQUEST)
-                bank_account_id = data.get("bank_account")
-                if not BankAccount.objects.filter(id=bank_account_id).exists():
-                    return Response({"error": "Invalid bank account ID"}, status=status.HTTP_400_BAD_REQUEST)
+                # bank_account_id = data.get("bank_account")
+                # if not BankAccount.objects.filter(id=bank_account_id).exists():
+                #     return Response({"error": "Invalid bank account ID"}, status=status.HTTP_400_BAD_REQUEST)
+                
+                terms_id = data.get("termsandconditions")
+                if terms_id and not TermsAndConditionsPoint.objects.filter(id=terms_id).exists():
+                    return Response({"error": "Invalid terms and conditions ID"}, status=status.HTTP_400_BAD_REQUEST)
                 quotation_number = f"QUO-{random.randint(111111, 999999)}"
                 print("------------------------")
                 quotation = QuotationOrderModel.objects.create(
@@ -1023,7 +1036,8 @@ class QuotationOrderAPI(APIView):
                     # attachments=data.get("attachments", None),
                     #grand_total=0  ,
                     delivery_location=data.get("delivery_location", ""),  # New Field
-                    bank_account_id= bank_account_id
+                    # bank_account_id= bank_account_id,
+                    termsandconditions_id=terms_id  # Add terms and conditions
 
 
                 )
@@ -2626,7 +2640,7 @@ class TermsAndConditionsPointAPI(APIView):
     def get(self, request, pk=None):
         if pk:
             point = get_object_or_404( TermsAndConditionsPoint, pk=pk)
-            serializer = TermsAndConditionsPointSerializer([point])
+            serializer = TermsAndConditionsPointSerializer(point)
             return Response({"status": "1", "data": [serializer.data]})
         else:
             points = TermsAndConditionsPoint.objects.all()

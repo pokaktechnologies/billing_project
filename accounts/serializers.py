@@ -310,6 +310,7 @@ class PrintSalesOrderSerializer(serializers.ModelSerializer):
     salesperson = serializers.SerializerMethodField()
     subtotal = serializers.SerializerMethodField()
     total = serializers.SerializerMethodField()
+    termsandconditions = serializers.SerializerMethodField()
 
     class Meta:
         model = SalesOrderModel
@@ -336,27 +337,17 @@ class PrintSalesOrderSerializer(serializers.ModelSerializer):
         for item in obj.items.all():
             total += item.sub_total + item.sgst + item.cgst  # Add SGST and CGST to subtotal
         return total
-
-
-
     
+    def get_termsandconditions(self, obj):
+        # Get related TermsAndConditions
+        terms = obj.termsandconditions
+        # Get points related to this TermsAndConditions
+        points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=terms)
+        return PrintTermsAndConditionsSerializer(points, many=True).data
 
 
 
-    # def to_representation(self, instance):
-    #     data = super().to_representation(instance)
 
-    #     # Remove nested 'salesperson' inside customer
-    #     customer_data = data.get("customer")
-    #     if customer_data and "salesperson" in customer_data:
-    #         customer_data.pop("salesperson")
-
-    #     # Remove nested 'customer' inside bank
-    #     bank_data = data.get("bank")
-    #     if bank_data and "customer" in bank_data:
-    #         bank_data.pop("customer")
-
-    #     return data
 
 
 

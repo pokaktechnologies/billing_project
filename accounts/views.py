@@ -2251,9 +2251,9 @@ class DeliveryOrderIsInvoiced(APIView):
 class InvoiceOrderAPI(APIView):
     permission_classes = [IsAuthenticated]
     
-    def get(self, request, did=None):
-        if did:
-            invoice = get_object_or_404(InvoiceModel, id=did)
+    def get(self, request, ioid=None):
+        if ioid:
+            invoice = get_object_or_404(InvoiceModel, id=ioid)
             invoice_items = InvoiceItem.objects.filter(invoice=invoice)
 
             # Get delivery forms linked to the invoice
@@ -2381,6 +2381,47 @@ class InvoiceOrderAPI(APIView):
             return Response({"error": f"Database error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
             return Response({"error": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class PrintInvoiceView(APIView):
+    def get(self, request, ioid=None):
+        invoice = get_object_or_404(InvoiceModel, id=ioid)
+        invoice_items = InvoiceItem.objects.filter(invoice=invoice)
+
+        # Get delivery forms linked to the invoice
+        delivery_forms = DeliveryFormModel.objects.filter(
+            id__in=invoice_items.values_list('delivary__id', flat=True)
+        ).distinct()
+
+        # Get all delivery items related to the delivery forms
+        delivery_items = DeliveryItem.objects.filter(delivery_form__in=delivery_forms).distinct()
+
+        # Initialize total
+        mega_grand_total = Decimal("0.00")
+        items_data = []
+
+        for delivery in delivery_forms:
+            grand_total = delivery.grand_total or Decimal("0.00")
+            mega_grand_total += grand_total
+
+        for item in delivery_items:
+            item_data = DeliveryItemsSerializer(item).data
+            item_data.update({
+                "delivary_number": item.delivery_form.delivery_number,
+                "delivary_id": item.delivery_form.id,
+            })
+            items_data.append(item_data)
+
+        invoice_serializer = PrintInvoiceSerializer(invoice)
+
+        return Response({
+            "status": "1",
+            "data": {
+                **invoice_serializer.data,
+                "items": items_data,
+                "mega_grand_total": float(mega_grand_total),
+            }
+        }, status=status.HTTP_200_OK)
+
 
 
     

@@ -396,6 +396,27 @@ class InvoiceModelSerializer(serializers.ModelSerializer):
     class Meta:
         model = InvoiceModel
         fields = '__all__'  
+
+class PrintInvoiceSerializer(serializers.ModelSerializer):
+    client = CustomerSerializer(read_only=True)
+    termsandconditions = serializers.SerializerMethodField()
+    sales_order_id = serializers.CharField(source='sales_order.sales_order_id', read_only=True)
+    salesperson = serializers.SerializerMethodField()
+
+    class Meta:
+        model = InvoiceModel
+        fields = '__all__'
+    
+    def get_salesperson(self, obj):
+        salesperson = obj.sales_order.customer.salesperson
+        return SalesPersonSerializer(salesperson).data if salesperson else None
+
+    def get_termsandconditions(self, obj):
+        # Get related TermsAndConditions
+        terms = obj.termsandconditions
+        # Get points related to this TermsAndConditions
+        points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=terms)
+        return PrintTermsAndConditionsSerializer(points, many=True).data
     
 
         

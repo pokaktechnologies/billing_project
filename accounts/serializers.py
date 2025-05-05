@@ -292,14 +292,17 @@ class NewsalesOrderSerializer(serializers.ModelSerializer):
              'bank_account_number', 
              'termsandconditions_title', 
              'is_delivered'
-             ) 
+             )
 
 class SalesOrderItemSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
     product_description = serializers.CharField(source='product.product_description', read_only=True)
+    
     class Meta:
         model = SalesOrderItem
         fields = '__all__'
+    
+
 
 
 
@@ -402,6 +405,7 @@ class PrintInvoiceSerializer(serializers.ModelSerializer):
     termsandconditions = serializers.SerializerMethodField()
     sales_order_id = serializers.CharField(source='sales_order.sales_order_id', read_only=True)
     salesperson = serializers.SerializerMethodField()
+    termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
 
     class Meta:
         model = InvoiceModel
@@ -549,7 +553,6 @@ class TermsAndConditionsSerializer(serializers.ModelSerializer):
 
 class TermsAndConditionsPointSerializer(serializers.ModelSerializer):
     terms_and_conditions_title = serializers.CharField(source='terms_and_conditions.title', read_only=True)
-
     class Meta:
         model = TermsAndConditionsPoint
         fields = ['id', 'terms_and_conditions', 'terms_and_conditions_title', 'point', 'created_at']

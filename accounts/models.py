@@ -306,7 +306,7 @@ class QuotationOrderModel(models.Model):
     # customer = models.ForeignKey(Customer,on_delete=models.SET_NULL, null=True, blank=True) # Fetching from
     address = models.TextField(max_length=100, blank=True )  
     delivery_location = models.TextField(max_length=100, blank=True)
-    termsandconditions = models.ForeignKey('TermsAndConditionsPoint', on_delete=models.CASCADE,  null=True, blank=True, related_name="termsandconditionspoint")
+    termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.CASCADE, null=True, blank=True)
   
     # bank_account = models.ForeignKey(
     #     BankAccount, on_delete=models.SET_NULL, null=True, blank=True, related_name="quotations"
@@ -383,9 +383,7 @@ class SalesOrderModel(models.Model):
     sales_order_id = models.CharField(max_length=50, unique=True)
     sales_date = models.DateField()
     purchase_order_number = models.CharField(max_length=50, blank=True, null=True)
-    terms = models.CharField(max_length=255, blank=True)
     remark = models.CharField(max_length=255, blank=True)
-    due_date = models.DateField()
     delivery_location = models.CharField(max_length=255, blank=True)
     delivery_address = models.TextField(blank=True)
     termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.CASCADE,  null=True, blank=True)

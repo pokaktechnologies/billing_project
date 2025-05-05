@@ -80,5 +80,5 @@ urlpatterns = [
     path('terms/<int:pk>/', TermsAndConditionsAPI.as_view()),
     path('terms-points/', TermsAndConditionsPointAPI.as_view()),
     path('terms-points/<int:pk>/', TermsAndConditionsPointAPI.as_view()),
-
+    path('terms-points/<int:term_id>/terms/',  ListTermsandConditionsPointsAPI.as_view()),
 ]

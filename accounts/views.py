@@ -905,8 +905,10 @@ class QuotationOrderAPI(APIView):
             # else:
                 # bank_account_data = []  # empty array if no account
             if quotation.termsandconditions:
-                terms_serializer = TermsAndConditionsPointSerializer(quotation.termsandconditions)
-                terms_data = [terms_serializer.data]
+                termsandconditions_points = TermsAndConditionsPoint.objects.filter(
+                    terms_and_conditions=quotation.termsandconditions
+                )
+                terms_data = TermsAndConditionsPointSerializer(termsandconditions_points, many=True).data
             else:
                 terms_data = []
     
@@ -948,6 +950,7 @@ class QuotationOrderAPI(APIView):
                         "quotation_number": quotation.quotation_number,
                         # "bank_account": bank_account_data,
                         "termsandconditions": terms_data,  # Added terms and conditions
+                        "termsandcondtions_title": quotation.termsandconditions.title if quotation.termsandconditions else "",
 
                         "quotation_date": str(quotation.quotation_date),
                         "remark": quotation.remark,
@@ -1809,10 +1812,8 @@ class SalesOrderAPI(APIView):
                     sales_order_id=sales_order_id,
                     sales_date=data.get("sales_date"),
                     purchase_order_number=data.get("purchase_order_number"),
-                    terms=data.get("terms", ""),
                     remark=data.get("remark", ""),
                     termsandconditions=terms_and_conditions_obj,
-                    due_date=data.get("due_date"),
                     delivery_location=data.get("delivery_location", ""),
                     delivery_address=data.get("delivery_address", ""),
                     bank_account=bank_account,
@@ -1851,6 +1852,7 @@ class SalesOrderAPI(APIView):
             sales_order = get_object_or_404(SalesOrderModel, id=sid)
             serializer = NewsalesOrderSerializer(sales_order)
             items = SalesOrderItem.objects.filter(sales_order=sales_order)
+            termsandconditions_points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=sales_order.termsandconditions)
 
             item_list = []
             for item in items:
@@ -1874,13 +1876,14 @@ class SalesOrderAPI(APIView):
                 'data': [
                     {
                         **serializer.data,
+                        'termsandconditions_points': PrintTermsAndConditionsSerializer(termsandconditions_points, many=True).data,
                         'items': item_list
                     }
                 ]
             })
 
         else:
-            sales_orders = SalesOrderModel.objects.all()
+            sales_orders = SalesOrderModel.objects.filter(user=request.user).order_by('-id')
             serializer = NewsalesOrderSerializer(sales_orders, many=True)
             return Response({"status": "1", "data": serializer.data}, status=status.HTTP_200_OK)
 
@@ -1972,7 +1975,7 @@ class  PrintSalesOrderAPI(APIView):
         return Response({
             "status": "1",
             "message": "success",
-            "data": sales_order_data
+            "data": [sales_order_data]
         }, status=status.HTTP_200_OK)
 
 class SalesOrderItemsList(APIView):
@@ -2046,15 +2049,19 @@ class DeliveryFormAPI(APIView):
             
             delivery_items = DeliveryItem.objects.filter(delivery_form=delivery)
             delivery_item_serializer = DeliveryItemsSerializer(delivery_items, many=True)
-            
+            termsandconditions_points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=delivery.termsandconditions)
+            termsandconditions_point_serializer = TermsAndConditionsPointSerializer(termsandconditions_points, many=True)
             return Response({
                 'status': '1',
                 'message': 'success',
-                'delivery': delivery_serializer.data,
-                'items': delivery_item_serializer.data
+                'data':[{
+                    **delivery_serializer.data,
+                    'termsandconditions_points': termsandconditions_point_serializer.data,
+                    'items': delivery_item_serializer.data
+                }]
             })
         else:
-            deliveries = DeliveryFormModel.objects.all()
+            deliveries = DeliveryFormModel.objects.all().order_by('-id')
             serializer = NewDeliverySerializer(deliveries, many=True)
             return Response({"status": "1", "data": serializer.data}, status=status.HTTP_200_OK)
 
@@ -2217,7 +2224,7 @@ class PrintDeliveryOrderAPI(APIView):
         return Response({
             "status": "1",
             "message": "success",
-            "data": serializer.data
+            "data": [serializer.data]
         }, status=status.HTTP_200_OK)
 
 class DeliveryOrderIsInvoiced(APIView):
@@ -2255,6 +2262,8 @@ class InvoiceOrderAPI(APIView):
         if ioid:
             invoice = get_object_or_404(InvoiceModel, id=ioid)
             invoice_items = InvoiceItem.objects.filter(invoice=invoice)
+            termsandconditions_points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=invoice.termsandconditions)
+            termsandconditions_point_serializer = TermsAndConditionsPointSerializer(termsandconditions_points, many=True)
 
             # Get delivery forms linked to the invoice
             delivery_forms = DeliveryFormModel.objects.filter(
@@ -2286,11 +2295,12 @@ class InvoiceOrderAPI(APIView):
 
             return Response({
                 "status": "1",
-                "data": {
+                "data": [{
                     **invoice_serializer.data,
                     "mega_grand_total": float(mega_grand_total),
+                    "termsandconditions_points": termsandconditions_point_serializer.data,
                     "deliveries": deliveries_data
-                }
+                }]
             }, status=status.HTTP_200_OK)
 
 
@@ -2415,11 +2425,11 @@ class PrintInvoiceView(APIView):
 
         return Response({
             "status": "1",
-            "data": {
+            "data": [{
                 **invoice_serializer.data,
                 "items": items_data,
                 "mega_grand_total": float(mega_grand_total),
-            }
+            }]
         }, status=status.HTTP_200_OK)
 
 
@@ -2676,7 +2686,6 @@ class TermsAndConditionsAPI(APIView):
         return Response({"status": "1", "message": "Term deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
 
 
-
 class TermsAndConditionsPointAPI(APIView):
     def get(self, request, pk=None):
         if pk:
@@ -2707,3 +2716,16 @@ class TermsAndConditionsPointAPI(APIView):
         point = get_object_or_404(TermsAndConditionsPoint, pk=pk)
         point.delete()
         return Response({"status": "1", "message": "Point deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+
+class ListTermsandConditionsPointsAPI(APIView):
+    def get(self, request, term_id=None):
+        if term_id is None:
+            return Response({"status": "0", "message": "Invalid Term ID"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not TermsAndConditions.objects.filter(pk=term_id).exists():
+            return Response({"status": "0", "message": "Term ID not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        points = TermsAndConditionsPoint.objects.filter(terms_and_conditions_id=term_id)
+        serializer = TermsAndConditionsPointSerializer(points, many=True)
+        
+        return Response({"status": "1", "data": serializer.data})

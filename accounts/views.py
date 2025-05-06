@@ -1725,11 +1725,11 @@ class  PrintQuotationAPI(APIView):
         )
 
             
-        if quotation.bank_account:
-            bank_account_serializer = BankAccountSerializer(quotation.bank_account)
-            bank_account_data = [bank_account_serializer.data]  # wrap in list
-        else:
-            bank_account_data = []  # empty array if no account
+        # if quotation.bank_account:
+        #     bank_account_serializer = BankAccountSerializer(quotation.bank_account)
+        #     bank_account_data = [bank_account_serializer.data]  # wrap in list
+        # else:
+        #     bank_account_data = []  # empty array if no account
         # Get quotation items
         quotation_items = QuotationItem.objects.filter(quotation=quotation)
         item_list = []
@@ -1752,7 +1752,7 @@ class  PrintQuotationAPI(APIView):
          
 
         # Prepare the response data
-            quotation_data = {
+        quotation_data = {
             "quotation_id": quotation.id,
             "customer_name": quotation.customer_name,
             "address": quotation.address if quotation.address else None,

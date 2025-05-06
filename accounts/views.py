@@ -2161,68 +2161,151 @@ class DeliveryFormAPI(APIView):
 
                 return Response({
                     "message": "Delivery Form created successfully",
-                    "delivery_number": delivery_form.delivery_number
+                    "delivery_number": delivery_form.delivery_number,
+                    "delivery_id": delivery_form.id
                 }, status=status.HTTP_201_CREATED)
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-        
-
     def patch(self, request, did=None):
         if not did:
             return Response({"error": "Delivery ID is required"}, status=status.HTTP_400_BAD_REQUEST)
-        
-        data = request.data
+
         try:
             with transaction.atomic():
-                delivery = get_object_or_404(DeliveryFormModel, id=did)
-                
-                delivery.delivery_date = data.get("delivery_date", delivery.delivery_date)
-                delivery.delivery_location = data.get("delivery_location", delivery.delivery_location)
-                delivery.delivery_status = data.get("delivery_status", delivery.delivery_status)
-                delivery.save()
-                
-                delivery.items.all().delete()
-                
-                for item in data.get("items", []):
-                    product_id = item.get("product")
-                    if not Product.objects.filter(id=product_id).exists():
-                        return Response({"error": f"Invalid product ID {product_id}"}, status=status.HTTP_400_BAD_REQUEST)
-                    
-                    product = Product.objects.get(id=product_id)
-                    quantity = Decimal(str(item.get("quantity", 1)))
-                    delivered_quantity = Decimal(str(item.get("delivered_quantity", 0)))
-                    
-                    DeliveryItem.objects.create(
-                        delivery_form=delivery,
-                        product=product,
-                        quantity=quantity,
-                        delivered_quantity=delivered_quantity,
-                        status=item.get("status", "Pending")
+                # 1) Load and update the DeliveryForm itself
+                delivery_form = get_object_or_404(DeliveryFormModel, id=did)
+                delivery_form.delivery_date     = request.data.get("delivery_date", delivery_form.delivery_date)
+                delivery_form.time              = request.data.get("time", delivery_form.time)
+                delivery_form.delivery_location = request.data.get("delivery_location", delivery_form.delivery_location)
+                delivery_form.delivery_address  = request.data.get("delivery_address", delivery_form.delivery_address)
+                delivery_form.save()
+
+                # 2) Build a lookup of SalesOrderItems by product_id
+                sales_order = delivery_form.sales_order
+                soi_map = {
+                    soi.product_id: soi
+                    for soi in SalesOrderItem.objects.filter(sales_order=sales_order)
+                }
+
+                # 3) Process each item in the payload
+                items = request.data.get("items", [])
+                if not items:
+                    return Response({"error": "At least one item is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+                for item_data in items:
+                    product_id = item_data.get("product")
+                    if not product_id:
+                        return Response({"error": "Each item must include a product ID."},
+                                        status=status.HTTP_400_BAD_REQUEST)
+
+                    # Lookup the existing DeliveryItem by product
+                    di = get_object_or_404(
+                        DeliveryItem,
+                        delivery_form=delivery_form,
+                        product_id=product_id
                     )
+
+                    # Compute how much the delivered quantity has changed
+                    old_qty = di.delivered_quantity
+                    new_qty = Decimal(item_data.get("delivered_quantity", old_qty))
+                    delta   = new_qty - old_qty
+
+                    # check the new quantity is not more than the pending quantity + the old quantity
+                    if new_qty > (soi_map.get(product_id).pending_quantity + old_qty):
+                        raise ValueError(f"New quantity ({new_qty}) exceeds pending quantity ({soi_map.get(product_id).pending_quantity}) + old quantity ({old_qty}) for product {product_id} = {soi_map.get(product_id).pending_quantity + old_qty}")
+
+                    # Update the DeliveryItem fields
+                    di.delivered_quantity = new_qty
+                    di.unit_price         = item_data.get("unit_price", di.unit_price)
+                    di.sgst_percentage    = item_data.get("sgst_percentage", di.sgst_percentage)
+                    di.cgst_percentage    = item_data.get("cgst_percentage", di.cgst_percentage)
+                    di.save()
+
+                    # 4) Apply delta to the corresponding SalesOrderItem
+                    soi = soi_map.get(product_id)
+                    if not soi:
+                        raise ValueError(f"No SalesOrderItem for product ID {product_id}")
+
+                    soi.pending_quantity -= delta
+                    # check the delivery quantity is less than or equal to zero
+
+                    if soi.pending_quantity <= 0:
+                        soi.pending_quantity   = Decimal(0)
+                        soi.is_item_delivered = True
+                    else:
+                        soi.is_item_delivered = False
+                    soi.save(update_fields=["pending_quantity", "is_item_delivered"])
+
+                # 5) Recalculate totals
+                delivery_form.update_grand_total()
+
                 
+                # After updating the items, check if all items are delivered by querying the model
+                all_items_delivered = not SalesOrderItem.objects.filter(sales_order=sales_order, is_item_delivered=False).exists()
+                print(all_items_delivered)
+                if all_items_delivered:
+                    sales_order.is_delivered = True
+                    sales_order.save(update_fields=["is_delivered"])
+                else:
+                    sales_order.is_delivered = False
+                    sales_order.save(update_fields=["is_delivered"])
+
                 return Response({
                     "status": "1",
-                    "message": "Delivery updated successfully.",
-                    "delivery_id": delivery.id
+                    "message": "Delivery updated successfully."
                 }, status=status.HTTP_200_OK)
+
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def delete(self, request, did=None):
         if not did:
             return Response({"error": "Delivery ID is required"}, status=status.HTTP_400_BAD_REQUEST)
-        
+
         try:
             with transaction.atomic():
-                delivery = get_object_or_404(DeliveryFormModel, id=did)
-                delivery.items.all().delete()
-                delivery.delete()
-                return Response({"status": "1", "message": "Delivery deleted successfully."}, status=status.HTTP_200_OK)
+                # 1) Load the delivery form
+                delivery_form = get_object_or_404(DeliveryFormModel, id=did)
+                sales_order = delivery_form.sales_order
+
+                # 2) For each delivery‐item, revert its effect on the SalesOrderItem
+                for di in DeliveryItem.objects.filter(delivery_form=delivery_form):
+                    # Find matching order line
+                    soi = SalesOrderItem.objects.filter(
+                        sales_order=sales_order,
+                        product=di.product
+                    ).first()
+
+                    if soi:
+                        # "Give back" the delivered quantity
+                        soi.pending_quantity += di.delivered_quantity
+                        # If after reverting there's still pending, mark it undelivered
+                        soi.is_item_delivered = False
+                        soi.save(update_fields=["pending_quantity", "is_item_delivered"])
+
+                # 3) Now delete all the delivery’s items and the form itself
+                delivery_form.items.all().delete()
+                delivery_form.delete()
+
+                # 4) Re‐evaluate the parent sales order’s delivery flag
+                still_pending = SalesOrderItem.objects.filter(
+                    sales_order=sales_order,
+                    is_item_delivered=False
+                ).exists()
+                sales_order.is_delivered = not still_pending
+                sales_order.save(update_fields=["is_delivered"])
+
+                return Response({
+                    "status": "1",
+                    "message": "Delivery deleted and order quantities reverted successfully."
+                }, status=status.HTTP_200_OK)
+
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
 class PrintDeliveryOrderAPI(APIView):
@@ -2394,13 +2477,125 @@ class InvoiceOrderAPI(APIView):
 
                 return Response({
                     "message": "Invoice created successfully",
-                    "invoice_number": invoice_form.invoice_number
+                    "invoice_number": invoice_form.invoice_number,
+                    "invoice_id": invoice_form.id
                 }, status=status.HTTP_201_CREATED)
 
         except IntegrityError as e:
             return Response({"error": f"Database error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
             return Response({"error": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+    def patch(self, request, ioid=None):
+        if not ioid:
+            return Response({"error": "Invoice ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        invoice = get_object_or_404(InvoiceModel, id=ioid)
+
+        data = request.data
+        new_client_id      = data.get("client",       invoice.client_id)
+        new_sales_order_id = data.get("sales_order",  invoice.sales_order_id)
+        new_delivery_ids   = data.get("deliveries",   None)  # only validate if present
+
+        # 1) Validate client
+        if "client" in data and not Customer.objects.filter(id=new_client_id).exists():
+            return Response({"error": "Invalid client ID."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 2) Validate sales_order
+        if "sales_order" in data:
+            if not SalesOrderModel.objects.filter(id=new_sales_order_id).exists():
+                return Response({"error": "Invalid sales order ID."}, status=status.HTTP_400_BAD_REQUEST)
+            # ensure the invoice.client matches the sales_order.customer
+            so = SalesOrderModel.objects.get(id=new_sales_order_id)
+            if so.customer_id != new_client_id:
+                return Response({"error": "Sales order does not belong to the client."},
+                                status=status.HTTP_400_BAD_REQUEST)
+
+        # 3) Validate deliveries list if provided
+        if new_delivery_ids is not None:
+            if not isinstance(new_delivery_ids, list) or not new_delivery_ids:
+                return Response({"error": "Deliveries must be a non-empty list of IDs."},
+                                status=status.HTTP_400_BAD_REQUEST)
+
+            # ensure each delivery exists, belongs to the client & sales_order, and is not already invoiced by another invoice
+            for did in new_delivery_ids:
+                delivery = DeliveryFormModel.objects.filter(id=did).first()
+                if not delivery:
+                    return Response({"error": f"Delivery {did} does not exist."},
+                                    status=status.HTTP_400_BAD_REQUEST)
+                if delivery.customer_id != new_client_id or delivery.sales_order_id != new_sales_order_id:
+                    return Response({"error": f"Delivery {did} mismatch client/sales order."},
+                                    status=status.HTTP_400_BAD_REQUEST)
+                # if it's already linked to THIS invoice, that's fine; if linked to another invoice, reject
+                if delivery.is_invoiced and not invoice.items.filter(delivary=delivery).exists():
+                    return Response({"error": f"Delivery {did} is already invoiced."},
+                                    status=status.HTTP_400_BAD_REQUEST)
+
+        # 4) Now perform the update
+        serializer = InvoiceModelSerializer(invoice, data=data, partial=True)
+        if not serializer.is_valid():
+            return Response({"status": "0", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+
+        # 5) If deliveries were provided, replace M2M links
+        if new_delivery_ids is not None:
+            with transaction.atomic():
+                # un‐invoice old deliveries we’re unlinking
+                old_dids = invoice.items.values_list('delivary__id', flat=True)
+                for old in old_dids:
+                    if old not in new_delivery_ids:
+                        d = DeliveryFormModel.objects.get(id=old)
+                        d.is_invoiced = False
+                        d.save(update_fields=["is_invoiced"])
+
+                # drop existing join‐rows
+                invoice.items.all().delete()
+
+                # link new set and mark them invoiced
+                for did in new_delivery_ids:
+                    delivery = DeliveryFormModel.objects.get(id=did)
+                    inv_item = InvoiceItem.objects.create(invoice=invoice)
+                    inv_item.delivary.add(delivery)
+                    delivery.is_invoiced = True
+                    delivery.save(update_fields=["is_invoiced"])
+
+        # 6) Return updated invoice
+        updated = InvoiceModelSerializer(invoice)
+        return Response({"status": "1", "message": "Invoice updated successfully.",}, status=status.HTTP_200_OK)
+
+    def delete(self, request, ioid=None):
+        if not ioid:
+            return Response({"error": "Invoice ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            with transaction.atomic():
+                invoice = get_object_or_404(InvoiceModel, id=ioid)
+
+                # 1) Collect all linked deliveries
+                linked_delivery_ids = invoice.items.values_list('delivary__id', flat=True)
+
+                # 2) Revert their is_invoiced flags
+                for did in linked_delivery_ids:
+                    delivery = DeliveryFormModel.objects.get(id=did)
+                    delivery.is_invoiced = False
+                    delivery.save(update_fields=["is_invoiced"])
+
+                # 3) Delete all InvoiceItem rows for this invoice
+                invoice.items.all().delete()
+
+                # 4) Finally delete the invoice itself
+                invoice.delete()
+
+                return Response({
+                    "status": "1",
+                    "message": "Invoice deleted and linked deliveries marked uninvoiced."
+                }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 
 class PrintInvoiceView(APIView):
     def get(self, request, ioid=None):

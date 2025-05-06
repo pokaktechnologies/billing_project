@@ -1799,12 +1799,12 @@ class SalesOrderAPI(APIView):
                 bank_account_id = data.get("bank_account")
                 terms_and_conditions = data.get("termsandconditions")
 
-                if not terms_and_conditions:
-                    return Response({"error": "Terms and conditions not provided."}, status=status.HTTP_400_BAD_REQUEST)
+                # if not terms_and_conditions:
+                #     return Response({"error": "Terms and conditions not provided."}, status=status.HTTP_400_BAD_REQUEST)
 
                 # This will raise 404 if the object doesn't exist
-                terms_and_conditions_obj = get_object_or_404(TermsAndConditions, id=terms_and_conditions)
-                print(terms_and_conditions_obj)
+                if terms_and_conditions:
+                    terms_and_conditions_obj = get_object_or_404(TermsAndConditions, id=terms_and_conditions)
 
                     
                 if bank_account_id:
@@ -1817,7 +1817,7 @@ class SalesOrderAPI(APIView):
                     sales_date=data.get("sales_date"),
                     purchase_order_number=data.get("purchase_order_number"),
                     remark=data.get("remark", ""),
-                    termsandconditions=terms_and_conditions_obj,
+                    termsandconditions=terms_and_conditions_obj or None,
                     delivery_location=data.get("delivery_location", ""),
                     delivery_address=data.get("delivery_address", ""),
                     bank_account=bank_account,
@@ -1924,7 +1924,14 @@ class SalesOrderAPI(APIView):
 
                     existing_item = SalesOrderItem.objects.filter(sales_order=sales_order, product=product).first()
                     if existing_item:
-                        existing_item.quantity = item_data.get("quantity", existing_item.quantity)
+                        # Get delivery state before update
+                        old_qty     = existing_item.quantity
+                        old_pending = existing_item.pending_quantity
+                        delivered   = old_qty - old_pending
+                        # update quantity & compute new pending
+                        new_qty = Decimal(item_data.get("quantity", 0))
+                        existing_item.quantity = new_qty
+                        existing_item.pending_quantity = max(new_qty - delivered, Decimal(0))
                         existing_item.unit_price = item_data.get("unit_price", existing_item.unit_price)
                         existing_item.sgst_percentage = item_data.get("sgst_percentage", existing_item.sgst_percentage)
                         existing_item.cgst_percentage = item_data.get("cgst_percentage", existing_item.cgst_percentage)
@@ -1990,8 +1997,6 @@ class SalesOrderItemsList(APIView):
         items = SalesOrderItem.objects.filter(sales_order=sales_order,is_item_delivered=False)
         serializer = SalesOrderItemSerializer(items, many=True)
         return Response({"status": "1", "data": serializer.data}, status=status.HTTP_200_OK)
-
-
 
 class SalesOrderByNotDelivered(APIView):
     permission_classes = [IsAuthenticated]

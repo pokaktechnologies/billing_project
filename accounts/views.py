@@ -1104,6 +1104,7 @@ class QuotationOrderAPI(APIView):
                     "status": "1",
                     "message": "Quotation created successfully.",
                     "quotation_id": quotation.id,
+                    "quotation_number": quotation.quotation_number,
                     "grand_total": str(quotation.grand_total)
                 }, status=status.HTTP_201_CREATED)
 
@@ -1718,6 +1719,7 @@ class  PrintQuotationAPI(APIView):
         print(f"Quotation Address: {quotation.address}")  # This will print the address in your console/logs
         
         salesperson_address = quotation.salesperson.address if quotation.salesperson else None
+        termsandconditions_points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=quotation.termsandconditions)
       
         salesperson_name = (
             f"{quotation.salesperson.first_name} {quotation.salesperson.last_name}"
@@ -1762,6 +1764,8 @@ class  PrintQuotationAPI(APIView):
             "quotation_date": str(quotation.quotation_date),
             # "bank_account": bank_account_data,
             # "email_id": quotation.email_id,
+            "termsandconditions_title": quotation.termsandconditions.title if quotation.termsandconditions else None, 
+            "termsandconditions": PrintTermsAndConditionsSerializer(termsandconditions_points, many=True).data,
             "remark": quotation.remark,
             "subtotal": sum(item['amount'] - item['tax'] for item in item_list),
             "total": sum(item['amount'] for item in item_list),
@@ -1841,7 +1845,8 @@ class SalesOrderAPI(APIView):
 
                 return Response({
                     "message": "Sales Order created successfully",
-                    "sales_order_id": sales_order.sales_order_id
+                    "sales_order_number": sales_order.sales_order_id,
+                    "sales_order_id": sales_order.id,
                 }, status=status.HTTP_201_CREATED)
 
         except Exception as e:

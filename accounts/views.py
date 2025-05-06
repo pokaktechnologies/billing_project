@@ -1760,7 +1760,7 @@ class  PrintQuotationAPI(APIView):
             "salesperson_address": salesperson_address,
             "quotation_number": quotation.quotation_number,
             "quotation_date": str(quotation.quotation_date),
-            "bank_account": bank_account_data,
+            # "bank_account": bank_account_data,
             # "email_id": quotation.email_id,
             "remark": quotation.remark,
             "subtotal": sum(item['amount'] - item['tax'] for item in item_list),

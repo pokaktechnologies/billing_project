@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from .models import *
+import random
 
 # Serializer for user registration
 class CustomUserCreateSerializer(serializers.ModelSerializer):
@@ -421,6 +422,56 @@ class PrintInvoiceSerializer(serializers.ModelSerializer):
         # Get points related to this TermsAndConditions
         points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=terms)
         return PrintTermsAndConditionsSerializer(points, many=True).data
+
+
+class ReceiptSerializer(serializers.ModelSerializer):
+    termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
+    client_name = serializers.CharField(source='client.first_name', read_only=True)
+    invoice_number = serializers.CharField(source='invoice.invoice_number', read_only=True)
+
+    class Meta:
+        model = ReceiptModel
+        fields = '__all__'
+        extra_kwargs = {
+            'receipt_number': {'read_only': True}
+        }
+    
+    def create(self, validated_data):
+        # Generate a receipt number like "RP1234"
+        receipt_number = f"REC-{random.randint(10000, 99999)}"
+
+        # Ensure uniqueness (since receipt_number is unique=True)
+        while ReceiptModel.objects.filter(receipt_number=receipt_number).exists():
+            receipt_number = f"REC-{random.randint(10000, 99999)}"
+
+        validated_data['receipt_number'] = receipt_number
+        return super().create(validated_data)
+
+class PrintReceiptSerializer(serializers.ModelSerializer):
+    termsandconditions = serializers.SerializerMethodField()
+    termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
+    salesperson = serializers.SerializerMethodField()
+    client = CustomerSerializer(read_only=True)
+    invoice_number = serializers.CharField(source='invoice.invoice_number', read_only=True)
+    invoice_grand_total = serializers.CharField(source='invoice.invoice_grand_total', read_only=True)
+
+    class Meta:
+        model = ReceiptModel
+        fields = '__all__'
+    
+    def get_termsandconditions(self, obj):
+        # Get related TermsAndConditions
+        terms = obj.termsandconditions
+        # Get points related to this TermsAndConditions
+        points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=terms)
+        return PrintTermsAndConditionsSerializer(points, many=True).data
+    
+    def get_salesperson(self, obj):
+        salesperson = obj.client.salesperson
+        return SalesPersonSerializer(salesperson).data if salesperson else None
+
+
+
     
 
         

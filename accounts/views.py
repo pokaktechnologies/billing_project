@@ -2370,14 +2370,14 @@ class InvoiceOrderAPI(APIView):
 
             # Build the deliveries list with grouped items
             deliveries_data = []
-            mega_grand_total = Decimal("0.00")
+            # mega_grand_total = Decimal("0.00")
 
             for delivery in delivery_forms:
                 items = delivery_items.filter(delivery_form=delivery)
                 item_serializer = DeliveryItemsSerializer(items, many=True)
 
                 grand_total = delivery.grand_total or Decimal("0.00")
-                mega_grand_total += grand_total
+                # mega_grand_total += grand_total
 
                 deliveries_data.append({
                     "delivery_id": delivery.id,
@@ -2390,7 +2390,7 @@ class InvoiceOrderAPI(APIView):
                 "status": "1",
                 "data": [{
                     **invoice_serializer.data,
-                    "mega_grand_total": float(mega_grand_total),
+                    # "mega_grand_total": float(mega_grand_total),
                     "termsandconditions_points": termsandconditions_point_serializer.data,
                     "deliveries": deliveries_data
                 }]
@@ -2452,6 +2452,10 @@ class InvoiceOrderAPI(APIView):
 
                 if deliveries.count() != len(delivery_ids):
                     return Response({"error": "Some delivery IDs are invalid."}, status=status.HTTP_400_BAD_REQUEST)
+                
+                invoice_grand_total_amount = Decimal("0.00")
+                for delivery in deliveries:
+                    invoice_grand_total_amount += delivery.grand_total
 
                 # Create the invoice
                 invoice_form = InvoiceModel.objects.create(
@@ -2460,6 +2464,7 @@ class InvoiceOrderAPI(APIView):
                     user=request.user,
                     sales_order=sales_order,
                     invoice_date=invoice_date,
+                    invoice_grand_total=invoice_grand_total_amount,
                     termsandconditions=terms,
                     remark=data.get("remark", "")
                 )
@@ -2525,6 +2530,7 @@ class InvoiceOrderAPI(APIView):
                     return Response({"error": f"Delivery {did} does not exist."},
                                     status=status.HTTP_400_BAD_REQUEST)
                 if delivery.customer_id != new_client_id or delivery.sales_order_id != new_sales_order_id:
+                    # print(delivery.customer_id, new_client_id, delivery.sales_order_id, new_sales_order_id)
                     return Response({"error": f"Delivery {did} mismatch client/sales order."},
                                     status=status.HTTP_400_BAD_REQUEST)
                 # if it's already linked to THIS invoice, that's fine; if linked to another invoice, reject
@@ -2532,8 +2538,14 @@ class InvoiceOrderAPI(APIView):
                     return Response({"error": f"Delivery {did} is already invoiced."},
                                     status=status.HTTP_400_BAD_REQUEST)
 
+
+
+
         # 4) Now perform the update
         serializer = InvoiceModelSerializer(invoice, data=data, partial=True)
+        # update the invoice grand total
+        # print(new_delivery_ids)
+
         if not serializer.is_valid():
             return Response({"status": "0", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
         serializer.save()
@@ -2559,8 +2571,19 @@ class InvoiceOrderAPI(APIView):
                     inv_item.delivary.add(delivery)
                     delivery.is_invoiced = True
                     delivery.save(update_fields=["is_invoiced"])
+        
+        # 6) Recompute the invoice’s grand total
+        total = Decimal("0.00")
+        for inv_item in invoice.items.all():
+            # each InvoiceItem has exactly one delivery in your design
+            delivery = inv_item.delivary.first()
+            if delivery and delivery.grand_total:
+                total += delivery.grand_total
 
-        # 6) Return updated invoice
+        invoice.invoice_grand_total = total
+        invoice.save(update_fields=["invoice_grand_total"])
+
+        # 7) Return updated invoice
         updated = InvoiceModelSerializer(invoice)
         return Response({"status": "1", "message": "Invoice updated successfully.",}, status=status.HTTP_200_OK)
 
@@ -2611,12 +2634,12 @@ class PrintInvoiceView(APIView):
         delivery_items = DeliveryItem.objects.filter(delivery_form__in=delivery_forms).distinct()
 
         # Initialize total
-        mega_grand_total = Decimal("0.00")
+        # mega_grand_total = Decimal("0.00")
         items_data = []
 
         for delivery in delivery_forms:
             grand_total = delivery.grand_total or Decimal("0.00")
-            mega_grand_total += grand_total
+            # mega_grand_total += grand_total
 
         for item in delivery_items:
             item_data = DeliveryItemsSerializer(item).data
@@ -2633,13 +2656,137 @@ class PrintInvoiceView(APIView):
             "data": [{
                 **invoice_serializer.data,
                 "items": items_data,
-                "mega_grand_total": float(mega_grand_total),
+                # "mega_grand_total": float(mega_grand_total),
             }]
         }, status=status.HTTP_200_OK)
 
 
+class ReceiptView(APIView):
+    def get(self, request, rec_id=None):
+        if rec_id:
+            receipt = get_object_or_404(ReceiptModel, id=rec_id)
+            termsandconditions_points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=receipt.termsandconditions_id)
+            invoice_items = InvoiceItem.objects.filter(invoice=receipt.invoice_id)
+            items = DeliveryItem.objects.filter(delivery_form__in=invoice_items.values_list('delivary__id', flat=True)).distinct()
 
+            serializer = ReceiptSerializer(receipt)
+            return Response({
+                'Status': '1',
+                'Message': 'Success',
+                'Data': [{
+                    **serializer.data,
+                    'termsandconditions_points': TermsAndConditionsPointSerializer(termsandconditions_points, many=True).data,
+                    'items': DeliveryItemsSerializer(items, many=True).data
+                }]
+            })
+        else:
+            receipts = ReceiptModel.objects.filter(user=request.user).order_by('-created_at')
+            serializer = ReceiptSerializer(receipts, many=True)
+        return Response({
+            'Status': '1',
+            'Message': 'Success',
+            'Data': serializer.data
+        })
     
+    def post(self, request):
+        serializer = ReceiptSerializer(data=request.data)
+        if serializer.is_valid():
+            invoice = get_object_or_404(InvoiceModel, id=request.data['invoice'])
+            invoice.is_receipted = True
+            invoice.save(update_fields=['is_receipted'])
+            serializer.save()
+            return Response(
+                {
+                    "status": "1",
+                    "message": "Receipt created successfully.",
+                    "receipt_number": serializer.data['receipt_number'],
+                    "receipt_id": serializer.data['id'],
+
+                },
+                status=status.HTTP_201_CREATED
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def patch(self, request, rec_id=None):
+        receipt = get_object_or_404(ReceiptModel, id=rec_id)
+        old_invoice = receipt.invoice
+
+        serializer = ReceiptSerializer(receipt, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        new_invoice_id = request.data.get('invoice')
+        if new_invoice_id and new_invoice_id != old_invoice.id:
+            # 3) If user is reassigning the receipt to a different invoice:
+            #    a) Un-mark the old invoice
+            old_invoice.is_receipted = False
+            old_invoice.save(update_fields=['is_receipted'])
+            #    b) Mark the new invoice
+            new_invoice = get_object_or_404(InvoiceModel, id=new_invoice_id)
+            new_invoice.is_receipted = True
+            new_invoice.save(update_fields=['is_receipted'])
+
+        else:
+            # 4) If invoice stayed the same (or wasn't provided), ensure it's marked
+            old_invoice.is_receipted = True
+            old_invoice.save(update_fields=['is_receipted'])
+
+        # 5) Save the updated receipt
+        serializer.save()
+        return Response({
+            "status": "1",
+            "message": "Receipt updated successfully."
+        }, status=status.HTTP_200_OK)
+
+    def delete(self, request, rec_id=None):
+        if not rec_id:
+            return Response({"error": "Receipt ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            with transaction.atomic():
+                receipt = get_object_or_404(ReceiptModel, id=rec_id)
+                invoice = receipt.invoice
+
+                # 1) Delete the receipt
+                receipt.delete()
+
+                # 2) Mark the invoice as not receipted
+                invoice.is_receipted = False
+                invoice.save(update_fields=["is_receipted"])
+
+                return Response({
+                    "status": "1",
+                    "message": "Receipt deleted and invoice marked un-receipted."
+                }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+class PrintReceiptView(APIView):
+    def get(self, request, rec_id=None):
+        receipt = get_object_or_404(ReceiptModel, id=rec_id)
+        invoice_items = InvoiceItem.objects.filter(invoice=receipt.invoice_id)
+        items = DeliveryItem.objects.filter(delivery_form__in=invoice_items.values_list('delivary__id', flat=True)).distinct()
+        # Initialize total
+        items_data = []        
+
+        for item in items:
+            item_data = DeliveryItemsSerializer(item).data
+            item_data.update({
+                "delivary_number": item.delivery_form.delivery_number,
+                "delivary_id": item.delivery_form.id,
+            })
+            items_data.append(item_data)
+
+        serializer = PrintReceiptSerializer(receipt)
+        return Response({
+            'Status': '1',
+            'Message': 'Success',
+            'Data': [{
+                **serializer.data,
+                'items': items_data,
+            }]
+        })
 
 class CountryView(APIView):
     def get(self, request):

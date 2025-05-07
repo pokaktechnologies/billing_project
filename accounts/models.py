@@ -528,14 +528,27 @@ class InvoiceModel(models.Model):
     client = models.ForeignKey('Customer', on_delete=models.CASCADE,null=True, blank=True)
     sales_order = models.ForeignKey(SalesOrderModel, on_delete=models.CASCADE)
     # delivery = models.ForeignKey(DeliveryFormModel, on_delete=models.SET_NULL, null=True, blank=True)
+    invoice_grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
 
     termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.CASCADE, null=True, blank=True)
     remark = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True,null=True,blank=True)
+    is_receipted = models.BooleanField(default=False)
 
 class InvoiceItem(models.Model):
     invoice = models.ForeignKey(InvoiceModel, related_name='items', on_delete=models.CASCADE)
     delivary = models.ManyToManyField(DeliveryFormModel)
+
+
+class ReceiptModel(models.Model):
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE,null=True, blank=True)
+    receipt_number = models.CharField(max_length=50, unique=True)
+    receipt_date = models.DateField()
+    client = models.ForeignKey('Customer', on_delete=models.CASCADE,null=True, blank=True)
+    invoice = models.OneToOneField(InvoiceModel, on_delete=models.SET_NULL, null=True, blank=True)
+    termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.CASCADE, null=True, blank=True)
+    remark = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True,null=True,blank=True)
 
 
 class Country(models.Model):

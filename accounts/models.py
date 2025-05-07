@@ -380,7 +380,7 @@ class QuotationItem(models.Model):
 class SalesOrderModel(models.Model):
     customer = models.ForeignKey('Customer', on_delete=models.CASCADE)
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE,null=True, blank=True)
-    sales_order_id = models.CharField(max_length=50, unique=True)
+    sales_order_number = models.CharField(max_length=50, unique=True)
     sales_date = models.DateField()
     purchase_order_number = models.CharField(max_length=50, blank=True, null=True)
     remark = models.CharField(max_length=255, blank=True)

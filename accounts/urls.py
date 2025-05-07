@@ -46,6 +46,8 @@ urlpatterns = [
     path('receipts/<int:rec_id>/', ReceiptView.as_view(), name='receipt'),
     path('print-receipts/<int:rec_id>/', PrintReceiptView.as_view(), name='print_receipt'),
 
+    path('orders/generate-number/', OrderNumberGeneratorView.as_view(), name='order_number_generator'),
+
     
     path('quotations/', QuotationOrderAPI.as_view(), name='quotation-items-detail'),
     path('quotations/<int:qid>/', QuotationOrderAPI.as_view(), name='quotation-items-detail'),

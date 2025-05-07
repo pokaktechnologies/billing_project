@@ -285,7 +285,7 @@ class NewsalesOrderSerializer(serializers.ModelSerializer):
         model = SalesOrderModel
         fields = '__all__'
         read_only_fields = (
-            'sales_order_id', 
+            'sales_order_number', 
             'grand_total', 
             'client_name',
              'mobile_number', 
@@ -319,7 +319,7 @@ class PrintSalesOrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = SalesOrderModel
         fields = '__all__'
-        read_only_fields = ('sales_order_id', 'grand_total','customer', 'bank', 'items', 'salesperson', 'subtotal', 'total')
+        read_only_fields = ('sales_order_number', 'grand_total','customer', 'bank', 'items', 'salesperson', 'subtotal', 'total')
 
     def get_bank(self, obj):
         bank = obj.bank_account
@@ -349,12 +349,6 @@ class PrintSalesOrderSerializer(serializers.ModelSerializer):
         points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=terms)
         return PrintTermsAndConditionsSerializer(points, many=True).data
 
-
-
-
-
-
-
 class NewDeliverySerializer(serializers.ModelSerializer):
     class Meta:
         model = DeliveryFormModel
@@ -373,7 +367,7 @@ class PrintDeliverySerializer(serializers.ModelSerializer):
     items = DeliveryItemsSerializer(many=True, read_only=True)
     customer = CustomerSerializer(read_only=True)
     termsandconditions = serializers.SerializerMethodField()
-    sales_order_id = serializers.CharField(source='sales_order.sales_order_id', read_only=True)
+    sales_order_number = serializers.CharField(source='sales_order.sales_order_number', read_only=True)
 
     class Meta:
         model = DeliveryFormModel
@@ -394,7 +388,7 @@ class PrintDeliverySerializer(serializers.ModelSerializer):
 class InvoiceModelSerializer(serializers.ModelSerializer):
     client_name = serializers.CharField(source='client.first_name', read_only=True)
     # salesperson = serializers.CharField(source='salesperson.first_name', read_only=True)
-    sales_order_id = serializers.CharField(source='sales_order.sales_order_id', read_only=True)
+    sales_order_number = serializers.CharField(source='sales_order.sales_order_number', read_only=True)
     termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
 
     class Meta:
@@ -404,7 +398,7 @@ class InvoiceModelSerializer(serializers.ModelSerializer):
 class PrintInvoiceSerializer(serializers.ModelSerializer):
     client = CustomerSerializer(read_only=True)
     termsandconditions = serializers.SerializerMethodField()
-    sales_order_id = serializers.CharField(source='sales_order.sales_order_id', read_only=True)
+    sales_order_number = serializers.CharField(source='sales_order.sales_order_number', read_only=True)
     salesperson = serializers.SerializerMethodField()
     termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
 
@@ -432,20 +426,20 @@ class ReceiptSerializer(serializers.ModelSerializer):
     class Meta:
         model = ReceiptModel
         fields = '__all__'
-        extra_kwargs = {
-            'receipt_number': {'read_only': True}
-        }
+        # extra_kwargs = {
+        #     'receipt_number': {'read_only': True}
+        # }
     
-    def create(self, validated_data):
-        # Generate a receipt number like "RP1234"
-        receipt_number = f"REC-{random.randint(10000, 99999)}"
+    # def create(self, validated_data):
+    #     # Generate a receipt number like "RP1234"
+    #     receipt_number = f"REC-{random.randint(10000, 99999)}"
 
-        # Ensure uniqueness (since receipt_number is unique=True)
-        while ReceiptModel.objects.filter(receipt_number=receipt_number).exists():
-            receipt_number = f"REC-{random.randint(10000, 99999)}"
+    #     # Ensure uniqueness (since receipt_number is unique=True)
+    #     while ReceiptModel.objects.filter(receipt_number=receipt_number).exists():
+    #         receipt_number = f"REC-{random.randint(10000, 99999)}"
 
-        validated_data['receipt_number'] = receipt_number
-        return super().create(validated_data)
+    #     validated_data['receipt_number'] = receipt_number
+    #     return super().create(validated_data)
 
 class PrintReceiptSerializer(serializers.ModelSerializer):
     termsandconditions = serializers.SerializerMethodField()

@@ -1025,12 +1025,12 @@ class QuotationOrderAPI(APIView):
                 terms_id = data.get("termsandconditions")
                 if terms_id and not TermsAndConditionsPoint.objects.filter(id=terms_id).exists():
                     return Response({"error": "Invalid terms and conditions ID"}, status=status.HTTP_400_BAD_REQUEST)
-                quotation_number = f"QUO-{random.randint(111111, 999999)}"
+                
                 print("------------------------")
                 quotation = QuotationOrderModel.objects.create(
                     customer_name=data.get("customer_name"),
                     address=data.get("address"),
-                    quotation_number=quotation_number,
+                    quotation_number=data.get('quotation_number'),
                     quotation_date=data.get("quotation_date"),
                     salesperson_id=salesperson_id,
           
@@ -1790,7 +1790,7 @@ class SalesOrderAPI(APIView):
                 # print("\n--- DEBUGGING SALES ORDER POST ---")
                 # print(f"Received Data: {data}")
 
-                sales_order_id = f"SO-{random.randint(111111, 999999)}"
+                # sales_order_id = f"SO-{random.randint(111111, 999999)}"
 
                 customer_id = data.get("customer")
                 customer = get_object_or_404(Customer, id=customer_id)
@@ -1813,7 +1813,7 @@ class SalesOrderAPI(APIView):
                 sales_order = SalesOrderModel.objects.create(
                     customer=customer,
                     user=request.user,
-                    sales_order_id=sales_order_id,
+                    sales_order_number=data.get("sales_order_number"),
                     sales_date=data.get("sales_date"),
                     purchase_order_number=data.get("purchase_order_number"),
                     remark=data.get("remark", ""),
@@ -1845,7 +1845,7 @@ class SalesOrderAPI(APIView):
 
                 return Response({
                     "message": "Sales Order created successfully",
-                    "sales_order_number": sales_order.sales_order_id,
+                    "sales_order_number": sales_order.sales_order_number,
                     "sales_order_id": sales_order.id,
                 }, status=status.HTTP_201_CREATED)
 
@@ -2012,7 +2012,7 @@ class SalesOrderByNotDelivered(APIView):
         for order in sales_orders:
             data.append({
                 "id": order.id,
-                "sales_order_id": order.sales_order_id,
+                "sales_order_number": order.sales_order_number,
                 "client_first_name": order.customer.first_name,
                 "client_last_name": order.customer.last_name,
                 
@@ -2039,7 +2039,7 @@ class SalesOrderByInvoiced(APIView):
         for order in sales_orders:
             data.append({
                 "id": order.id,
-                "sales_order_id": order.sales_order_id,
+                "sales_order_number": order.sales_order_number,
                 "client_first_name": order.customer.first_name,
                 "client_last_name": order.customer.last_name,
             })
@@ -2048,8 +2048,6 @@ class SalesOrderByInvoiced(APIView):
         return Response({"status": "1", "data": data}, status=status.HTTP_200_OK)
 
 
-
-  
 
 class DeliveryFormAPI(APIView): 
     def get(self, request, did=None):
@@ -2080,7 +2078,7 @@ class DeliveryFormAPI(APIView):
         try:
             with transaction.atomic():
 
-                delivery_id = f"DN-{random.randint(111111, 999999)}"
+                # delivery_id = f"DN-{random.randint(111111, 999999)}"
 
                 customer_id = data.get("customer")
                 customer = get_object_or_404(Customer, id=customer_id)
@@ -2108,7 +2106,7 @@ class DeliveryFormAPI(APIView):
                 # Create the DeliveryFormModel object
                 delivery_form = DeliveryFormModel.objects.create(
                     customer=customer,
-                    delivery_number=delivery_id,
+                    delivery_number=data.get("delivery_number"),
                     user=request.user,
                     sales_order=sales_order_obj,
                     delivery_date=data.get("delivery_date"),
@@ -2408,7 +2406,7 @@ class InvoiceOrderAPI(APIView):
         data = request.data
         try:
             # Generate a random invoice ID
-            invoice_id = f"INV-{random.randint(111111, 999999)}"
+            # invoice_id = f"INV-{random.randint(111111, 999999)}"
 
             with transaction.atomic():
                 # Required field extraction
@@ -2460,7 +2458,7 @@ class InvoiceOrderAPI(APIView):
                 # Create the invoice
                 invoice_form = InvoiceModel.objects.create(
                     client=customer,
-                    invoice_number=invoice_id,
+                    invoice_number=data.get("invoice_number"),
                     user=request.user,
                     sales_order=sales_order,
                     invoice_date=invoice_date,
@@ -2787,6 +2785,52 @@ class PrintReceiptView(APIView):
                 'items': items_data,
             }]
         })
+
+
+class OrderNumberGeneratorView(APIView):
+    def generate_order_number(self, code: str, length: int) -> str:
+        rand_suffix = ''.join([str(random.randint(0, 9)) for _ in range(length)])
+        return f"{code}|{rand_suffix}"
+
+
+    def get(self, request):
+        order_type = request.query_params.get('type')
+
+        if order_type == "QU":
+            while True:
+                order_number = self.generate_order_number("QU",8)
+                if not QuotationOrderModel.objects.filter(quotation_number=order_number).exists():
+                    break
+
+        elif order_type == "SO":
+            while True:
+                order_number = self.generate_order_number("SO",6)
+                if not SalesOrderModel.objects.filter(sales_order_number=order_number).exists():
+                    break
+        elif order_type == "DO":
+            while True:
+                order_number = self.generate_order_number("DO",8)
+                if not DeliveryFormModel.objects.filter(delivery_number=order_number).exists():
+                    break
+        elif order_type == "INV":
+            while True:
+                order_number = self.generate_order_number("INV",6)
+                if not InvoiceModel.objects.filter(invoice_number=order_number).exists():
+                    break
+        elif order_type == "RP":
+            while True:
+                order_number = self.generate_order_number("RE",6)
+                if not ReceiptModel.objects.filter(receipt_number=order_number).exists():
+                    break
+
+        return Response({
+            'status': '1',
+            'message': 'Success',
+            'order_number': order_number
+        }, status=status.HTTP_200_OK)
+
+
+
 
 class CountryView(APIView):
     def get(self, request):

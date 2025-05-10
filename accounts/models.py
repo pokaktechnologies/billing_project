@@ -586,7 +586,7 @@ class Customer(models.Model):
     state = models.CharField(max_length=100, blank=True, null=True)
     company_name = models.CharField(max_length=255, blank=True, null=True)
     address = models.TextField()
-    email = models.EmailField(unique=True)
+    email = models.EmailField(blank=True, null=True)
     phone = models.CharField(max_length=15, blank=True, null=True)
     mobile = models.CharField(max_length=15)
 

@@ -1899,10 +1899,10 @@ class SalesOrderAPI(APIView):
                 item = get_object_or_404(SalesOrderItem, sales_order=sales_order, id=pid)
                 serializer = SalesOrderItemSerializer(item, data=request.data, partial=True)
 
-                new_product_id = request.data.get("product")
-                if new_product_id and new_product_id != item.product.id:
-                    if SalesOrderItem.objects.filter(sales_order=sales_order, product_id=new_product_id).exists():
-                        return Response({"error": "This product already exists in the sales order."}, status=status.HTTP_400_BAD_REQUEST)
+                # new_product_id = request.data.get("product")
+                # if new_product_id and new_product_id != item.product.id:
+                #     if SalesOrderItem.objects.filter(sales_order=sales_order, product_id=new_product_id).exists():
+                #         return Response({"error": "This product already exists in the sales order."}, status=status.HTTP_400_BAD_REQUEST)
 
                 if serializer.is_valid():
                     serializer.save()
@@ -1917,8 +1917,14 @@ class SalesOrderAPI(APIView):
                     serializer.save()
                 else:
                     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                
+                # check if product payload have duplicate
+                product_ids = [item.get("product") for item in request.data.get("items", [])]
+                if len(product_ids) != len(set(product_ids)):
+                    return Response({"error": "Duplicate product id found in payload."}, status=status.HTTP_400_BAD_REQUEST)
 
                 for item_data in request.data.get("items", []):
+                    
                     product_id = item_data.get("product")
                     product = get_object_or_404(Product, id=product_id)
 

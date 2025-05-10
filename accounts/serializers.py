@@ -353,11 +353,13 @@ class NewDeliverySerializer(serializers.ModelSerializer):
     client_firstname = serializers.CharField(source='customer.first_name', read_only=True)
     client_lastname = serializers.CharField(source='customer.last_name', read_only=True)
     sales_order_number = serializers.CharField(source='sales_order.sales_order_number', read_only=True)
+    termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
     class Meta:
         model = DeliveryFormModel
         fields = '__all__'    
 
 class DeliveryItemsSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='product.name', read_only=True)
     class Meta:
         model = DeliveryItem
         fields = '__all__' 

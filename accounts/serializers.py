@@ -350,6 +350,9 @@ class PrintSalesOrderSerializer(serializers.ModelSerializer):
         return PrintTermsAndConditionsSerializer(points, many=True).data
 
 class NewDeliverySerializer(serializers.ModelSerializer):
+    client_firstname = serializers.CharField(source='customer.first_name', read_only=True)
+    client_lastname = serializers.CharField(source='customer.last_name', read_only=True)
+    sales_order_number = serializers.CharField(source='sales_order.sales_order_number', read_only=True)
     class Meta:
         model = DeliveryFormModel
         fields = '__all__'    

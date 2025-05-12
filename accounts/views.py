@@ -15,6 +15,7 @@ from .models import *
 from .serializers import *
 from rest_framework.authtoken.models import Token 
 from decimal import Decimal
+from django.utils.dateparse import parse_date
 
 # from .serializers import CustomUserCreateSerializer, OTPSerializer, GettingStartedSerializer,HelpLinkSerializer,NotificationSerializer, UserSettingSerializer, FeedbackSerializer,QuotationOrderSerializer,InvoiceOrderSerializer,DeliveryOrderSerializer,SupplierPurchaseSerializer,SupplierSerializer,DeliveryChallanSerializer
 from django.core.mail import send_mail
@@ -2837,6 +2838,115 @@ class OrderNumberGeneratorView(APIView):
 
 
 
+ # Report Views
+
+ # Sales Report by Client (Invoice)
+
+
+
+class SalesReportByClientView(APIView):
+
+    def get(self, request):
+        client_id = request.GET.get('client')
+        from_date = parse_date(request.GET.get('from_date'))
+        to_date = parse_date(request.GET.get('to_date'))
+        sales_by_type = request.GET.get('type')
+
+
+
+        # Validate inputs
+        if not all([from_date, to_date, sales_by_type]):
+            return Response({
+                'Status': '0',
+                'Message': 'Missing or invalid parameters: from_date, to_date, and type are required.',
+                'Data': []
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if sales_by_type == 'INV':
+            return self._get_invoice_data(client_id, from_date, to_date)
+
+        elif sales_by_type == 'DO':
+            return self._get_delivery_data(client_id, from_date, to_date)
+
+        return Response({
+            'Status': '0',
+            'Message': 'Invalid sales type.',
+            'Data': []
+        }, status=status.HTTP_400_BAD_REQUEST)
+    def _get_invoice_data(self, client_id, from_date, to_date):
+        invoices = InvoiceModel.objects.filter(invoice_date__range=[from_date, to_date])
+        if client_id != 'all':
+            invoices = invoices.filter(client_id=client_id)
+
+        invoices = invoices.select_related('sales_order')
+
+        all_items_data = []
+
+        # Prefetch delivary in InvoiceItem and DeliveryItem in one go
+        invoice_items = InvoiceItem.objects.filter(invoice__in=invoices).prefetch_related('delivary')
+
+        # Gather all the delivery IDs
+        delivery_ids = invoice_items.values_list('delivary__id', flat=True)
+
+        # Now, filter all delivery items that match the delivery_form IDs in the delivery_ids list
+        delivery_items = DeliveryItem.objects.filter(delivery_form_id__in=delivery_ids).select_related('delivery_form')
+
+        # For each invoice, find the related delivery items
+        for invoice in invoices:
+            # Instead of filtering again, directly iterate over the pre-fetched items
+            items = delivery_items.filter(delivery_form__invoiceitem__invoice=invoice)
+
+            for item in items:
+                item_data = DeliveryItemsSerializer(item).data
+                item_data.update({
+                    "delivary_number": item.delivery_form.delivery_number,
+                    "delivary_id": item.delivery_form.id,
+                    "invoice_number": invoice.invoice_number,
+                    "sales_order_number": invoice.sales_order.sales_order_number,
+                    "sales_order_id": invoice.sales_order.id,
+                    "is_invoiced": item.delivery_form.is_invoiced,
+                    "client_id": invoice.client_id,
+                })
+                all_items_data.append(item_data)
+
+        return Response({
+            'Status': '1',
+            'Message': 'Success',
+            'Data': all_items_data
+        })
+
+
+    def _get_delivery_data(self, client_id, from_date, to_date):
+        deliveries = DeliveryFormModel.objects.filter(delivery_date__range=[from_date, to_date])
+        if client_id != 'all':
+            deliveries = deliveries.filter(customer_id=client_id)
+
+        deliveries = deliveries.select_related('sales_order')
+
+        all_items_data = []
+
+        delivery_items = DeliveryItem.objects.filter(delivery_form__in=deliveries).select_related('delivery_form')
+
+        for item in delivery_items:
+            delivery_form = item.delivery_form
+            item_data = DeliveryItemsSerializer(item).data
+            item_data.update({
+                "delivary_number": delivery_form.delivery_number,
+                "delivary_date": delivery_form.delivery_date,
+                "sales_order_number": delivery_form.sales_order.sales_order_number,
+                "sales_order_id": delivery_form.sales_order.id,
+                "is_invoiced": delivery_form.is_invoiced,
+                "client_id": delivery_form.customer_id,
+            })
+            all_items_data.append(item_data)
+
+        return Response({
+            'Status': '1',
+            'Message': 'Success',
+            'Data': all_items_data
+        })
+
+
 
 class CountryView(APIView):
     def get(self, request):
@@ -3131,3 +3241,5 @@ class ListTermsandConditionsPointsAPI(APIView):
         serializer = TermsAndConditionsPointSerializer(points, many=True)
         
         return Response({"status": "1", "data": serializer.data})
+
+

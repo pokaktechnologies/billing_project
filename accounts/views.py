@@ -3263,6 +3263,7 @@ class PurchaseOrderView(APIView):
 
 
 class ContractListCreateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
     def get(self, request):
         contracts = Contract.objects.all()
         serializer = ContractSerializer(contracts, many=True)
@@ -3277,6 +3278,7 @@ class ContractListCreateAPIView(APIView):
 
 
 class ContractDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated]
     def get(self, request, contract_id):
         contract = get_object_or_404(Contract, id=contract_id)
         serializer = ContractSerializer(contract)
@@ -3298,6 +3300,7 @@ class ContractDetailAPIView(APIView):
 
 # Section
 class ContractSectionListCreateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
     def get(self, request, contract_id):
         sections = ContractSection.objects.filter(contract_id=contract_id)
         serializer = ContractSectionSerializer(sections, many=True)
@@ -3314,6 +3317,7 @@ class ContractSectionListCreateAPIView(APIView):
 
 
 class ContractSectionDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated]
     def get(self, request, contract_id, section_id):
         section = get_object_or_404(ContractSection, contract_id=contract_id, id=section_id)
         serializer = ContractSectionSerializer(section)
@@ -3335,6 +3339,7 @@ class ContractSectionDetailAPIView(APIView):
 
 # Point
 class ContractPointListCreateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
     def get(self, request, contract_id, section_id):
         points = ContractPoint.objects.filter(section_id=section_id, section__contract_id=contract_id)
         serializer = ContractPointSerializer(points, many=True)
@@ -3351,6 +3356,7 @@ class ContractPointListCreateAPIView(APIView):
 
 
 class ContractPointDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated]
     def get(self, request, contract_id, section_id, point_id):
         point = get_object_or_404(
             ContractPoint,

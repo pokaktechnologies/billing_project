@@ -9,4 +9,4 @@ class ProfileAPIView(APIView):
     def get(self, request):
         user = request.user
         serializer = ProfileSerializer(user)
-        return Response({"status": "1", "message": "success", "data": serializer.data})
+        return Response({"status": "1", "message": "success", "data": [serializer.data]})

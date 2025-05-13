@@ -1,5 +1,6 @@
 from django.urls import path
-from .views import *
+from .views.views import *
+from accounts.views.user import ProfileAPIView
 
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -10,8 +11,11 @@ urlpatterns = [
     
     path('signup/', SignupView.as_view(), name='signup'),
     path('verify-otp/', OTPVerificationView.as_view(), name='verify_otp'),
+    path('profile/', ProfileAPIView.as_view()),
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+
+
     path('getting-started/', GettingStartedView.as_view(), name='getting_started'),
     path('homepage/', HomePageView.as_view(), name='homepage'),
     path('help-links/', HelpLinkView.as_view(), name='help'),

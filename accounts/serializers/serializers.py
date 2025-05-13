@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
-from .models import *
+from ..models import *
 import random
 
 # Serializer for user registration

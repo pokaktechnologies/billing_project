@@ -230,22 +230,22 @@ class DeliveryOrder(models.Model):
     def __str__(self):
         return f"Delivery {self.delivery_number} - {self.customer_name}"
     
-class SupplierPurchase(models.Model):
-    supplier_name = models.CharField(max_length=255)
-    purchase_number = models.CharField(max_length=50, unique=True, default='Unknown')
-    date = models.DateField()
-    product_name = models.CharField(max_length=255, default=1)
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
-    terms = models.CharField(max_length=255, blank=True)
-    due_date = models.DateField()
-    purchase_person = models.CharField(max_length=255, default='Unknown')
-    subject = models.TextField(blank=True)
-    add_stock = models.BooleanField(default=False)
-    attachments = models.URLField(blank=True)
-    quantity = models.DecimalField(max_digits=10, decimal_places=2,null=False, blank=False , default=1)
+# class SupplierPurchase(models.Model):
+#     supplier_name = models.CharField(max_length=255)
+#     purchase_number = models.CharField(max_length=50, unique=True, default='Unknown')
+#     date = models.DateField()
+#     product_name = models.CharField(max_length=255, default=1)
+#     amount = models.DecimalField(max_digits=10, decimal_places=2)
+#     terms = models.CharField(max_length=255, blank=True)
+#     due_date = models.DateField()
+#     purchase_person = models.CharField(max_length=255, default='Unknown')
+#     subject = models.TextField(blank=True)
+#     add_stock = models.BooleanField(default=False)
+#     attachments = models.URLField(blank=True)
+#     quantity = models.DecimalField(max_digits=10, decimal_places=2,null=False, blank=False , default=1)
 
-    def __str__(self):
-        return f"Purchase {self.supplier_number} - {self.supplier_name}"        
+#     def __str__(self):
+#         return f"Purchase {self.supplier_number} - {self.supplier_name}"        
     
 class Supplier(models.Model):
     SUPPLIER_TYPE_CHOICES = [
@@ -610,3 +610,98 @@ class TermsAndConditionsPoint(models.Model):
 
     def str(self):
         return f"{self.point} - ({self.terms_and_conditions.title})"
+    
+
+
+
+class PurchaseOrder(models.Model):
+    supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE)
+    purchase_order_number = models.CharField(max_length=50, unique=True)
+    purchase_order_date = models.DateField()
+    contact_person_name = models.CharField(max_length=50)
+    contact_person_number = models.CharField(max_length=50)
+    quotation_number = models.CharField(max_length=50, blank=True, null=True)
+    remark = models.CharField(max_length=255, blank=True)
+    terms_and_conditions = models.ForeignKey('TermsAndConditions', on_delete=models.CASCADE, null=True, blank=True)
+
+    def __str__(self):
+        return self.purchase_order_number
+    
+
+class PurchaseOrderItem(models.Model):
+    purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name='items')
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # Quantity * Unit Price
+    sgst_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    cgst_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    sub_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # Total + SGST + CGST
+
+
+# class MaterialReceive(models.Model):
+#     supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE)
+#     purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE)
+#     material_receive_number = models.CharField(max_length=50, unique=True)
+#     received_date = models.DateField()
+
+
+# class MaterialReceiveItem(models.Model):
+#     material_receive = models.ForeignKey(MaterialReceive, on_delete=models.CASCADE, related_name='items')
+#     product = models.ForeignKey(Product, on_delete=models.CASCADE)
+#     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
+#     unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+#     total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False) # Quantity * Unit Price
+#     sgst_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+#     cgst_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+#     sub_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # Total + SGST + CGST
+
+
+    # def save(self, *args, **kwargs):
+    #     """Calculate and update total, SGST, CGST, and sub_total before saving."""
+    #     if self.unit_price == 0:
+    #         unit_price_decimal = self.product.unit_price
+    #     else:
+    #         unit_price_decimal = self.unit_price
+
+    #     unit_price_decimal = Decimal(unit_price_decimal)
+    #     quantity_decimal = Decimal(self.quantity)
+    #     sgst_percentage_decimal = Decimal(str(self.sgst_percentage))
+    #     cgst_percentage_decimal = Decimal(str(self.cgst_percentage))
+        
+    #     self.total = unit_price_decimal * quantity_decimal
+    #     self.sgst = ((sgst_percentage_decimal * unit_price_decimal) / Decimal(100)) * quantity_decimal
+    #     self.cgst = ((cgst_percentage_decimal * unit_price_decimal) / Decimal(100)) * quantity_decimal
+    #     self.sub_total = self.total + self.sgst + self.cgst
+    #     super().save(*args, **kwargs)
+
+
+
+
+
+class Contract(models.Model):
+    title = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.title
+
+
+class ContractSection(models.Model):
+    contract = models.ForeignKey(Contract, related_name='sections', on_delete=models.CASCADE)
+    title = models.CharField(max_length=255, blank=True)
+
+    
+
+    def __str__(self):
+        return f'{self.contract.title} - {self.title}'
+
+
+class ContractPoint(models.Model):
+    section = models.ForeignKey(ContractSection, related_name='points', on_delete=models.CASCADE)
+    points = models.TextField()
+
+    
+
+    def __str__(self):
+        return self.points[:50]

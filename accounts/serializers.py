@@ -147,14 +147,14 @@ class DeliveryOrderSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['delivery_number']        
         
-class SupplierPurchaseSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = SupplierPurchase
-        fields = [
-                'id', 'supplier_name', 'purchase_number', 'date', 'amount', 'terms', 
-                'due_date', 'purchase_person', 'subject', 'add_stock', 'attachments','quantity'
-            ]
-        read_only_fields = ['supplier_number']        
+# class SupplierPurchaseSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = SupplierPurchase
+#         fields = [
+#                 'id', 'supplier_name', 'purchase_number', 'date', 'amount', 'terms', 
+#                 'due_date', 'purchase_person', 'subject', 'add_stock', 'attachments','quantity'
+#             ]
+#         read_only_fields = ['supplier_number']        
         
 
 class SupplierSerializer(serializers.ModelSerializer):
@@ -606,3 +606,41 @@ class TermsAndConditionsPointSerializer(serializers.ModelSerializer):
     class Meta:
         model = TermsAndConditionsPoint
         fields = ['id', 'terms_and_conditions', 'terms_and_conditions_title', 'point', 'created_at']
+
+
+
+
+class PurchaseOrderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PurchaseOrder
+        fields = ['id', 'supplier', 'purchase_order_number', 'purchase_order_date', 'contact_person_name', 'contact_person_number', 'quotation_number', 'remark', 'terms_and_conditions']
+
+
+
+class PurchaseOrderItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PurchaseOrderItem
+        fields = ['id', 'purchase_order', 'product', 'quantity', 'unit_price', 'total', 'sgst_percentage', 'cgst_percentage', 'sub_total']
+
+
+
+
+
+class ContractPointSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ContractPoint
+        fields = ['id', 'points', 'section']
+
+
+class ContractSectionSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = ContractSection
+        fields = ['id', 'title', 'contract']
+
+
+class ContractSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Contract
+        fields = ['id', 'title', 'created_at']

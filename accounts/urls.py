@@ -64,8 +64,8 @@ urlpatterns = [
     path('print-quotations/<int:qid>/', PrintQuotationAPI.as_view(), name='quotation-items-detail'),
 
     path('get-delivery-orders/', DeliveryOrderListAPI.as_view(), name='delivery_order_list'),
-    path('create-purchase/', CreateSupplierPurchaseAPI.as_view(), name='create_supplier_purchase'),
-    path('list-purchase/', SupplierPurchaseListAPI.as_view(), name='supplier_purchase_list'),
+    # path('create-purchase/', CreateSupplierPurchaseAPI.as_view(), name='create_supplier_purchase'),
+    # path('list-purchase/', SupplierPurchaseListAPI.as_view(), name='supplier_purchase_list'),
     path('suppliers/', CreateSupplierAPI.as_view(), name='create_supplier'),
     path('get-suppliers/', SupplierListAPI.as_view(), name='supplier_list'),
     path('create-delivery-challan/', CreateDeliveryChallanAPI.as_view(), name='create_delivery_challan'),
@@ -89,4 +89,15 @@ urlpatterns = [
     path('terms-points/', TermsAndConditionsPointAPI.as_view()),
     path('terms-points/<int:pk>/', TermsAndConditionsPointAPI.as_view()),
     path('terms-points/<int:term_id>/terms/',  ListTermsandConditionsPointsAPI.as_view()),
+
+    path('contracts/', ContractListCreateAPIView.as_view()),
+    path('contracts/<int:contract_id>/', ContractDetailAPIView.as_view()),
+
+    # Sections
+    path('contracts/<int:contract_id>/sections/', ContractSectionListCreateAPIView.as_view()),
+    path('contracts/<int:contract_id>/sections/<int:section_id>/', ContractSectionDetailAPIView.as_view()),
+
+    # Points
+    path('contracts/<int:contract_id>/sections/<int:section_id>/points/', ContractPointListCreateAPIView.as_view()),
+    path('contracts/<int:contract_id>/sections/<int:section_id>/points/<int:point_id>/', ContractPointDetailAPIView.as_view()),
 ]

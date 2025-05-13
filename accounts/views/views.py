@@ -3264,26 +3264,23 @@ class PurchaseOrderView(APIView):
 
 class ContractListCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]
-    def get(self, request):
+    def get(self, request, contract_id=None):
+        if contract_id:
+            contract = get_object_or_404(Contract, id=contract_id)
+            serializer = ContractSerializer(contract)
+            return Response({"status": "1", "message": "success", "data": [serializer.data]})
         contracts = Contract.objects.all()
         serializer = ContractSerializer(contracts, many=True)
         return Response({"status": "1", "message": "success", "data": serializer.data})
 
-    def post(self, request):
+    def post(self, request, contract_id=None):
         serializer = ContractSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
             return Response({"status": "1", "message": "success", "data": serializer.data}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
-class ContractDetailAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-    def get(self, request, contract_id):
-        contract = get_object_or_404(Contract, id=contract_id)
-        serializer = ContractSerializer(contract)
-        return Response({"status": "1", "message": "success", "data": [serializer.data]})
-
+    
     def patch(self, request, contract_id):
         contract = get_object_or_404(Contract, id=contract_id)
         serializer = ContractSerializer(contract, data=request.data, partial=True)
@@ -3291,22 +3288,28 @@ class ContractDetailAPIView(APIView):
             serializer.save()
             return Response({"status": "1", "message": "success", "data": [serializer.data]})
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+    
     def delete(self, request, contract_id):
         contract = get_object_or_404(Contract, id=contract_id)
         contract.delete()
         return Response({"status": "1", "message": "Contract Deleted Succesfully"}, status=status.HTTP_204_NO_CONTENT)
 
 
+
+
 # Section
 class ContractSectionListCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]
-    def get(self, request, contract_id):
+    def get(self, request, contract_id, section_id=None):
+        if section_id:
+            section = get_object_or_404(ContractSection, contract_id=contract_id, id=section_id)
+            serializer = ContractSectionSerializer(section)
+            return Response({"status": "1", "message": "success", "data": [serializer.data]})
         sections = ContractSection.objects.filter(contract_id=contract_id)
         serializer = ContractSectionSerializer(sections, many=True)
         return Response({"status": "1", "message": "success", "data": serializer.data})
 
-    def post(self, request, contract_id):
+    def post(self, request, contract_id, section_id=None):
         data = request.data.copy()
         data['contract'] = contract_id
         serializer = ContractSectionSerializer(data=data)
@@ -3315,13 +3318,6 @@ class ContractSectionListCreateAPIView(APIView):
             return Response({"status": "1", "message": "success", "data": [serializer.data]}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
-class ContractSectionDetailAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-    def get(self, request, contract_id, section_id):
-        section = get_object_or_404(ContractSection, contract_id=contract_id, id=section_id)
-        serializer = ContractSectionSerializer(section)
-        return Response({"status": "1", "message": "success", "data": [serializer.data]})
 
     def patch(self, request, contract_id, section_id):
         section = get_object_or_404(ContractSection, contract_id=contract_id, id=section_id)
@@ -3334,18 +3330,27 @@ class ContractSectionDetailAPIView(APIView):
     def delete(self, request, contract_id, section_id):
         section = get_object_or_404(ContractSection, contract_id=contract_id, id=section_id)
         section.delete()
-        return Response({"status": "1", "message": "Contract Deleted Succesfully"}, status=status.HTTP_204_NO_CONTENT)
+        return Response({"status": "1", "message": "Section Deleted Succesfully"}, status=status.HTTP_204_NO_CONTENT)
 
 
 # Point
 class ContractPointListCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]
-    def get(self, request, contract_id, section_id):
+    def get(self, request, contract_id, section_id, point_id=None):
+        if point_id:
+            point = get_object_or_404(
+            ContractPoint,
+            id=point_id,
+            section_id=section_id,
+            section__contract_id=contract_id
+        )
+            serializer = ContractPointSerializer(point)
+            return Response({"status": "1", "message": "success", "data": [serializer.data]})
         points = ContractPoint.objects.filter(section_id=section_id, section__contract_id=contract_id)
         serializer = ContractPointSerializer(points, many=True)
         return Response({"status": "1", "message": "success", "data": serializer.data})
 
-    def post(self, request, contract_id, section_id):
+    def post(self, request, contract_id, section_id, point_id=None):
         data = request.data.copy()
         data['section'] = section_id
         serializer = ContractPointSerializer(data=data)
@@ -3354,18 +3359,6 @@ class ContractPointListCreateAPIView(APIView):
             return Response({"status": "1", "message": "success", "data": [serializer.data]}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
-class ContractPointDetailAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-    def get(self, request, contract_id, section_id, point_id):
-        point = get_object_or_404(
-            ContractPoint,
-            id=point_id,
-            section_id=section_id,
-            section__contract_id=contract_id
-        )
-        serializer = ContractPointSerializer(point)
-        return Response({"status": "1", "message": "success", "data": [serializer.data]})
 
     def patch(self, request, contract_id, section_id, point_id):
         point = get_object_or_404(
@@ -3388,6 +3381,6 @@ class ContractPointDetailAPIView(APIView):
             section__contract_id=contract_id
         )
         point.delete()
-        return Response({"status": "1", "message": "Contract Deleted Succesfully"}, status=status.HTTP_204_NO_CONTENT)
+        return Response({"status": "1", "message": "Point Deleted Succesfully"}, status=status.HTTP_204_NO_CONTENT)
 
 

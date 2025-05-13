@@ -95,13 +95,13 @@ urlpatterns = [
     path('terms-points/<int:term_id>/terms/',  ListTermsandConditionsPointsAPI.as_view()),
 
     path('contracts/', ContractListCreateAPIView.as_view()),
-    path('contracts/<int:contract_id>/', ContractDetailAPIView.as_view()),
+    path('contracts/<int:contract_id>/', ContractListCreateAPIView.as_view()),
 
     # Sections
     path('contracts/<int:contract_id>/sections/', ContractSectionListCreateAPIView.as_view()),
-    path('contracts/<int:contract_id>/sections/<int:section_id>/', ContractSectionDetailAPIView.as_view()),
+    path('contracts/<int:contract_id>/sections/<int:section_id>/', ContractSectionListCreateAPIView.as_view()),
 
     # Points
     path('contracts/<int:contract_id>/sections/<int:section_id>/points/', ContractPointListCreateAPIView.as_view()),
-    path('contracts/<int:contract_id>/sections/<int:section_id>/points/<int:point_id>/', ContractPointDetailAPIView.as_view()),
+    path('contracts/<int:contract_id>/sections/<int:section_id>/points/<int:point_id>/', ContractPointListCreateAPIView.as_view()),
 ]

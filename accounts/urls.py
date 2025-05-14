@@ -54,7 +54,8 @@ urlpatterns = [
 
     path('reports/sales-by-client/',SalesReportByClientView.as_view(), name='sales_report_by_client'),
     path('reports/sales-by-items/',SalesReportByItemsView.as_view(), name='sales_report_by_items'),
-
+    path('reports/sales-by-salesperson/',SalesReportBySalespersonView.as_view(), name='sales_report_by_salesperson'),
+    path('reports/sales-by-category/',SalesReportByCategoryView.as_view(), name='sales_report_by_category'),
 
     
     path('quotations/', QuotationOrderAPI.as_view(), name='quotation-items-detail'),

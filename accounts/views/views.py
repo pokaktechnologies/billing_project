@@ -1948,6 +1948,7 @@ class SalesOrderAPI(APIView):
                             sales_order=sales_order,
                             product=product,
                             quantity=item_data.get("quantity", 1),
+                            pending_quantity=item_data.get("quantity", 1),
                             unit_price=item_data.get("unit_price", 0),
                             sgst_percentage=item_data.get("sgst_percentage", 0),
                             cgst_percentage=item_data.get("cgst_percentage", 0),
@@ -2985,7 +2986,7 @@ class SalesReportByItemsView(APIView):
         client = request.GET.get('client')
 
         # Validate inputs
-        validation_result = self._validate_inputs(from_date_str, to_date_str, sales_by_type, client)
+        validation_result = self._validate_inputs(from_date_str, to_date_str, sales_by_type, client,item)
         if isinstance(validation_result, Response):
             return validation_result
 
@@ -3002,7 +3003,7 @@ class SalesReportByItemsView(APIView):
             'Data': []
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    def _validate_inputs(self, from_date_str, to_date_str, sales_by_type, client_id):
+    def _validate_inputs(self, from_date_str, to_date_str, sales_by_type, client_id,item):
         if not from_date_str or not to_date_str:
             return Response({
                 'Status': '0',
@@ -3034,6 +3035,12 @@ class SalesReportByItemsView(APIView):
             return Response({
                 'Status': '0',
                 'Message': 'Invalid client ID.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if item != 'all' and not Product.objects.filter(id=item).exists():
+            return Response({
+                'Status': '0',
+                'Message': 'Invalid item ID.'
             }, status=status.HTTP_400_BAD_REQUEST)
 
         return from_date, to_date
@@ -3073,6 +3080,7 @@ class SalesReportByItemsView(APIView):
                     "sales_order_id": invoice.sales_order.id,
                     "is_invoiced": delivery_form.is_invoiced,
                     "client_id": invoice.client_id,
+                    "client_name": invoice.client.first_name + ' ' + invoice.client.last_name,
                     "invoice_date": invoice.invoice_date,
                     "delivery_date": delivery_form.delivery_date
                 })
@@ -3107,6 +3115,7 @@ class SalesReportByItemsView(APIView):
                 "sales_order_number": delivery_form.sales_order.sales_order_number,
                 "sales_order_id": delivery_form.sales_order.id,
                 "is_invoiced": delivery_form.is_invoiced,
+                "client_name": delivery_form.customer.first_name + ' ' + delivery_form.customer.last_name,
                 "client_id": delivery_form.customer_id,
                 "delivery_date": delivery_form.delivery_date
             })
@@ -3117,6 +3126,332 @@ class SalesReportByItemsView(APIView):
             'Message': 'Success',
             'Data': all_items_data
         })
+    
+
+class SalesReportBySalespersonView(APIView):
+    def get(self, request,):
+        from_date_str = request.GET.get('from_date')
+        to_date_str = request.GET.get('to_date')
+        sales_by_type = request.GET.get('type')
+        salesperson = request.GET.get('salesperson')
+        item = request.GET.get('item')
+
+        # Validate inputs
+        validation_result = self._validate_inputs(from_date_str, to_date_str, sales_by_type, salesperson,item)
+        if isinstance(validation_result, Response):
+            return validation_result
+
+        from_date, to_date = validation_result
+
+        if sales_by_type == 'INV':
+            return self._get_invoice_data(from_date, to_date, item, salesperson)
+        elif sales_by_type == 'DO':
+            return self._get_delivery_data(from_date, to_date, item, salesperson)
+
+
+
+        return Response({
+            'Status': '1',
+            'Message': 'Success',
+            'Data': []
+        })
+    
+    def _validate_inputs(self, from_date_str, to_date_str, sales_by_type, salesperson,item):
+        if not from_date_str or not to_date_str:
+            return Response({
+                'Status': '0',
+                'Message': 'Both from_date and to_date are required.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        from_date = parse_date(from_date_str)
+        to_date = parse_date(to_date_str)
+
+        if not from_date or not to_date:
+            return Response({
+                'Status': '0',
+                'Message': 'Invalid date format. Use YYYY-MM-DD.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if from_date > to_date:
+            return Response({
+                'Status': '0',
+                'Message': 'Invalid date range. from_date must be before or equal to to_date.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if sales_by_type not in ['INV', 'DO']:
+            return Response({
+                'Status': '0',
+                'Message': 'Invalid sales type. Use "INV" or "DO".'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if salesperson != 'all' and not SalesPerson.objects.filter(id=salesperson).exists():
+            return Response({
+                'Status': '0',
+                'Message': 'Invalid salesperson ID.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if item != 'all' and not Product.objects.filter(id=item).exists():
+            return Response({
+                'Status': '0',
+                'Message': 'Invalid item ID.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        return from_date, to_date
+        
+    
+    def _get_invoice_data(self, from_date, to_date, item, salesperson):
+        invoices = InvoiceModel.objects.filter(invoice_date__range=[from_date, to_date])
+
+        if salesperson != 'all':
+            invoices = invoices.filter(client__salesperson=salesperson)
+            print(invoices)
+
+        invoice_items = InvoiceItem.objects.filter(invoice__in=invoices).prefetch_related('delivary')
+
+        # Get all related delivery forms
+        delivery_forms = set()
+        for inv_item in invoice_items:
+            delivery_forms.update(inv_item.delivary.all())
+
+        if item != 'all':
+            delivery_items = DeliveryItem.objects.filter(delivery_form__in=delivery_forms, product=item).select_related('delivery_form')
+        else:
+            delivery_items = DeliveryItem.objects.filter(delivery_form__in=delivery_forms).select_related('delivery_form')
+
+        all_items_data = []
+
+        for delivery_item in delivery_items:
+            delivery_form = delivery_item.delivery_form
+            invoice = invoices.filter(sales_order=delivery_form.sales_order).first()
+
+            if invoice:
+                item_data = DeliveryItemsSerializer(delivery_item).data
+                item_data.update({
+                    "delivary_number": delivery_form.delivery_number,
+                    "delivary_id": delivery_form.id,
+                    "invoice_number": invoice.invoice_number,
+                    "sales_order_number": invoice.sales_order.sales_order_number,
+                    "sales_order_id": invoice.sales_order.id,
+                    "is_invoiced": delivery_form.is_invoiced,
+                    "client_id": invoice.client_id,
+                    "client_name": invoice.client.first_name + ' ' + invoice.client.last_name,
+                    "salesperson": invoice.client.salesperson.id,
+                    "salesperson_name": invoice.client.salesperson.first_name + ' ' + invoice.client.salesperson.last_name,
+                    "invoice_date": invoice.invoice_date,
+                    "delivery_date": delivery_form.delivery_date
+                })
+                all_items_data.append(item_data)
+
+        return Response({
+            'Status': '1',
+            'Message': 'Success',
+            'Data': all_items_data
+        })
+    
+    def _get_delivery_data(self, from_date, to_date, item, salesperson):
+        delivery_forms = DeliveryFormModel.objects.filter(delivery_date__range=[from_date, to_date])
+
+        if salesperson != 'all':
+            delivery_forms = delivery_forms.filter(client__salesperson=salesperson)
+        if item != 'all':
+            delivery_items = DeliveryItem.objects.filter(delivery_form__in=delivery_forms, product=item).select_related('delivery_form')
+        else:
+            delivery_items = DeliveryItem.objects.filter(delivery_form__in=delivery_forms).select_related('delivery_form')
+
+        all_items_data = []
+        for delivery_item in delivery_items:
+            delivery_form = delivery_item.delivery_form
+            invoice = InvoiceModel.objects.filter(sales_order=delivery_form.sales_order).first()
+
+            item_data = DeliveryItemsSerializer(delivery_item).data
+            item_data.update({
+                "delivary_number": delivery_form.delivery_number,
+                "delivary_id": delivery_form.id,
+                "sales_order_number": delivery_form.sales_order.sales_order_number,
+                "sales_order_id": delivery_form.sales_order.id,
+                "is_invoiced": delivery_form.is_invoiced,
+                "client_name": delivery_form.customer.first_name + ' ' + delivery_form.customer.last_name,
+                "client_id": delivery_form.customer_id,
+                "delivery_date": delivery_form.delivery_date
+            })
+            all_items_data.append(item_data)
+
+        return Response({
+            'Status': '1',
+            'Message': 'Success',
+            'Data': all_items_data
+        })
+    
+
+class SalesReportByCategoryView(APIView):
+    def get(self, request):
+        from_date = request.GET.get('from_date')
+        to_date = request.GET.get('to_date')
+        sales_by_type = request.GET.get('type')
+        category = request.GET.get('category')
+        item = request.GET.get('item')
+
+        # Validate inputs
+        validation_result = self._validate_inputs(from_date, to_date, sales_by_type, category, item)
+        if isinstance(validation_result, Response):
+            return validation_result
+
+        from_date, to_date = validation_result
+
+        if sales_by_type == 'INV':
+            return self._get_invoice_data(from_date, to_date, category, item)
+        elif sales_by_type == 'DO':
+            return self._get_delivery_data(from_date, to_date, category, item)
+        
+        return Response({
+            'Status': '0',
+            'Message': 'Invalid sales type.',
+            'Data': []
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    def _validate_inputs(self, from_date_str, to_date_str, sales_by_type, category, item):
+        if not from_date_str or not to_date_str:
+            return Response({
+                'Status': '0',
+                'Message': 'Both from_date and to_date are required.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        from_date = parse_date(from_date_str)
+        to_date = parse_date(to_date_str)
+
+        if not from_date or not to_date:
+            return Response({
+                'Status': '0',
+                'Message': 'Invalid date format. Use YYYY-MM-DD.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if from_date > to_date:
+            return Response({
+                'Status': '0',
+                'Message': 'Invalid date range. from_date must be before or equal to to_date.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if sales_by_type not in ['INV', 'DO']:
+            return Response({
+                'Status': '0',
+                'Message': 'Invalid sales type. Use "INV" or "DO".'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if item != 'all' and not Product.objects.filter(id=item).exists():
+            return Response({
+                'Status': '0',
+                'Message': 'Invalid item ID.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if category != 'all' and (not category.isdigit() or not Category.objects.filter(id=category).exists()):
+            return Response({
+                'Status': '0',
+                'Message': 'Invalid category ID.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate that the product belongs to the selected category
+        if item != 'all' and category != 'all':
+            product = Product.objects.get(id=item)
+            if product.category_id != int(category):
+                return Response({
+                    'Status': '0',
+                    'Message': 'The product does not belong to the specified category.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+        return from_date, to_date    
+
+    def _get_invoice_data(self, from_date, to_date, category, item):
+        invoices = InvoiceModel.objects.filter(invoice_date__range=[from_date, to_date])
+
+        invoice_items = InvoiceItem.objects.filter(invoice__in=invoices).prefetch_related('delivary')
+
+        # Gather all delivery forms linked to invoice items
+        delivery_forms = set()
+        for inv_item in invoice_items:
+            delivery_forms.update(inv_item.delivary.all())
+
+        # Build base delivery item queryset
+        delivery_items = DeliveryItem.objects.filter(delivery_form__in=delivery_forms).prefetch_related('delivery_form__sales_order')
+
+        if item != 'all':
+            delivery_items = delivery_items.filter(product_id=item)
+
+        if category != 'all':
+            delivery_items = delivery_items.filter(product__category_id=category)
+
+        all_items_data = []
+
+        for delivery_item in delivery_items:
+            delivery_form = delivery_item.delivery_form
+            invoice = invoices.filter(sales_order=delivery_form.sales_order).first()
+
+            if invoice:
+                item_data = DeliveryItemsSerializer(delivery_item).data
+                item_data.update({
+                    "delivary_number": delivery_form.delivery_number,
+                    "delivary_id": delivery_form.id,
+                    "invoice_number": invoice.invoice_number,
+                    "sales_order_number": invoice.sales_order.sales_order_number,
+                    "sales_order_id": invoice.sales_order.id,
+                    "is_invoiced": delivery_form.is_invoiced,
+                    "invoice_date": invoice.invoice_date,
+                    "delivery_date": delivery_form.delivery_date,
+                    "catagry": delivery_item.product.category.name,
+                    "catagry_id": delivery_item.product.category.id
+                })
+                all_items_data.append(item_data)
+
+        return Response({
+            'Status': '1',
+            'Message': 'Success',
+            'Data': all_items_data
+        })
+    
+    def _get_delivery_data(self, from_date, to_date, category, item):
+            delivery_forms = DeliveryFormModel.objects.filter(delivery_date__range=[from_date, to_date])
+
+            # Clean item check - make sure to convert to int properly
+            if item not in [None, '', 'all']:
+                try:
+                    item_id = int(item)
+                    delivery_items = DeliveryItem.objects.filter(delivery_form__in=delivery_forms, product_id=item_id)
+                except (ValueError, TypeError):
+                    delivery_items = DeliveryItem.objects.none()
+            else:
+                delivery_items = DeliveryItem.objects.filter(delivery_form__in=delivery_forms)
+
+            # Apply category filter correctly
+            if category not in [None, '', 'all']:
+                delivery_items = delivery_items.filter(product__category=category)
+
+            all_items_data = []
+            for delivery_item in delivery_items:
+                delivery_form = delivery_item.delivery_form
+                invoice = InvoiceModel.objects.filter(sales_order=delivery_form.sales_order).first()
+
+                item_data = DeliveryItemsSerializer(delivery_item).data
+                item_data.update({
+                    "delivary_number": delivery_form.delivery_number,
+                    "delivary_id": delivery_form.id,
+                    "sales_order_number": delivery_form.sales_order.sales_order_number,
+                    "sales_order_id": delivery_form.sales_order.id,
+                    "is_invoiced": delivery_form.is_invoiced,
+                    "client_name": f"{delivery_form.customer.first_name} {delivery_form.customer.last_name}",
+                    "client_id": delivery_form.customer_id,
+                    "delivery_date": delivery_form.delivery_date,
+                    "catagry": delivery_item.product.category.name,
+                    "catagry_id": delivery_item.product.category.id
+                })
+                all_items_data.append(item_data)
+
+            return Response({
+                'Status': '1',
+                'Message': 'Success',
+                'Data': all_items_data
+            })
+
+    
+
 
 
 
@@ -3129,6 +3464,7 @@ class CountryView(APIView):
             'Message': 'Success',
             'Data': serializer.data
         })
+
 
 class StateView(APIView):
     def get(self, request):

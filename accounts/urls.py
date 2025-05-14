@@ -53,6 +53,8 @@ urlpatterns = [
     path('orders/generate-number/', OrderNumberGeneratorView.as_view(), name='order_number_generator'),
 
     path('reports/sales-by-client/',SalesReportByClientView.as_view(), name='sales_report_by_client'),
+    path('reports/sales-by-items/',SalesReportByItemsView.as_view(), name='sales_report_by_items'),
+
 
     
     path('quotations/', QuotationOrderAPI.as_view(), name='quotation-items-detail'),

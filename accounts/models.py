@@ -399,7 +399,7 @@ class SalesOrderModel(models.Model):
         self.save(update_fields=["grand_total"])
 
     def __str__(self):
-        return f"Sales Order {self.sales_order_id} - {self.customer}"  # Use self.customer instead of customer_name
+        return f"Sales Order {self.sales_order_number} - {self.customer}"  # Use self.customer instead of customer_name
 
 
 class SalesOrderItem(models.Model):
@@ -448,7 +448,7 @@ class SalesOrderItem(models.Model):
             self.sales_order.update_grand_total()
 
     def __str__(self):
-        return f"{self.product.name} - {self.sales_order.sales_order_id}"  # Use sales_order_id for clarity
+        return f"{self.product.name} - {self.sales_order.sales_order_number}"  # Use sales_order_id for clarity
 
 
     

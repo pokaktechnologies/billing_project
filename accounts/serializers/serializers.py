@@ -280,7 +280,7 @@ class NewsalesOrderSerializer(serializers.ModelSerializer):
     bank_name = serializers.CharField(source='bank_account.bank_name', read_only=True)
     bank_account_number = serializers.CharField(source='bank_account.account_number', read_only=True)
     termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
-
+    salesperson_name = serializers.CharField(source='customer.salesperson.first_name', read_only=True)
     class Meta:
         model = SalesOrderModel
         fields = '__all__'
@@ -292,7 +292,8 @@ class NewsalesOrderSerializer(serializers.ModelSerializer):
              'bank_name', 
              'bank_account_number', 
              'termsandconditions_title', 
-             'is_delivered'
+             'is_delivered',
+             'salesperson_name',
              )
 
 class SalesOrderItemSerializer(serializers.ModelSerializer):

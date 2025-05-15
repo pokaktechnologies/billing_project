@@ -1871,6 +1871,8 @@ class SalesOrderAPI(APIView):
                     "total": item.total,
                     "sgst": item.sgst,
                     "cgst": item.cgst,
+                    "sgst_percentage": item.sgst_percentage,
+                    "cgst_percentage": item.cgst_percentage,
                     "is_item_delivered": item.is_item_delivered,
                     "sub_total": item.sub_total,
                 })

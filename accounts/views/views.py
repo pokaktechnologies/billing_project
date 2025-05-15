@@ -912,7 +912,26 @@ class QuotationOrderAPI(APIView):
                 terms_data = TermsAndConditionsPointSerializer(termsandconditions_points, many=True).data
             else:
                 terms_data = []
-    
+            
+            if quotation.contract:
+                contract = Contract.objects.get(id=quotation.contract.id)
+                contract_sections = ContractSection.objects.filter(contract=quotation.contract.id)
+
+                # Serialize the contract
+                contract_data = {
+                    **ContractSerializer(contract).data,
+                    'sections': []
+                }
+
+                for section in contract_sections:
+                    section_serialized = ContractSectionSerializer(section).data
+                    points = ContractPoint.objects.filter(section=section.id)
+                    points_serialized = ContractPointSerializer(points, many=True).data
+
+                    # Add points directly into the section
+                    section_serialized['points'] = points_serialized
+
+                    contract_data['sections'].append(section_serialized)
                 
             # Get quotation items
             quotation_items = QuotationItem.objects.filter(quotation=quotation)
@@ -954,7 +973,7 @@ class QuotationOrderAPI(APIView):
                         "termsandcondtions_title": quotation.termsandconditions.title if quotation.termsandconditions else "",
 
                         "quotation_date": str(quotation.quotation_date),
-                        "remark": quotation.remark,
+                        # "remark": quotation.remark,
                         # "email_id": quotation.email_id,
                         "grand_total": quotation.grand_total,
                         # "salesperson": f"{quotation.salesperson.first_name} {quotation.salesperson.last_name}".strip() if quotation.salesperson else None,
@@ -964,6 +983,9 @@ class QuotationOrderAPI(APIView):
                             },
                         "salesperson_address": quotation.salesperson.address,
                         # "customer_address": quotation.Customer.address,
+                        "contract_id": quotation.contract.id if quotation.contract else None,
+                        "contract_title": quotation.contract.title if quotation.contract else "",
+                        "contract": contract_data,
                  # New Field
 
                         "items": item_list,
@@ -1027,6 +1049,10 @@ class QuotationOrderAPI(APIView):
                 if terms_id and not TermsAndConditionsPoint.objects.filter(id=terms_id).exists():
                     return Response({"error": "Invalid terms and conditions ID"}, status=status.HTTP_400_BAD_REQUEST)
                 
+                contract = data.get("contract")
+                if contract and not Contract.objects.filter(id=contract).exists():
+                    return Response({"error": "Invalid contract ID"}, status=status.HTTP_400_BAD_REQUEST)
+                
                 print("------------------------")
                 quotation = QuotationOrderModel.objects.create(
                     customer_name=data.get("customer_name"),
@@ -1034,8 +1060,8 @@ class QuotationOrderAPI(APIView):
                     quotation_number=data.get('quotation_number'),
                     quotation_date=data.get("quotation_date"),
                     salesperson_id=salesperson_id,
-          
-                    remark=data.get("remark", ""),
+                    contract=Contract.objects.get(id=contract) if contract else None,
+                    # remark=data.get("remark", ""),
                     
                     # attachments=data.get("attachments", None),
                     #grand_total=0  ,
@@ -1112,604 +1138,103 @@ class QuotationOrderAPI(APIView):
         except Exception as e:
             print(str(e))
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-    def patch(self, request, qid=None, pid=None):
-        """
-        Update specific fields of a QuotationItem for the given quotation_id and product_id
-        """
-        # First, get the quotation or return 404
-        if qid and pid:
-            quotation = get_object_or_404(QuotationOrderModel, id=qid)
-            
-            # Then, get the specific item from this quotation that matches the product_id
-            item = get_object_or_404(QuotationItem, quotation=quotation, product_id=pid)
-            
-            # Use a serializer to validate the data
-            serializer = QuotationItemUpdateSerializer(item, data=request.data, partial=True)
-            
-            if serializer.is_valid():
-                # Save the updated item (which will trigger the save method in QuotationItem)
-                serializer.save()
-                
-                # Return the updated item data
-                return Response(serializer.data, status=status.HTTP_200_OK)
-        
-        else:
-            try:
-                data= request.data
-                with transaction.atomic():
-                    # Get the quotation object
-                    try:
-                        quotation = QuotationOrderModel.objects.get(id=qid)
-                    except QuotationOrderModel.DoesNotExist:
-                        return Response({"error": "Quotation not found"}, status=status.HTTP_404_NOT_FOUND)
-                    
-                    print("\n--- DEBUGGING PATCH ---")
-                    print(f"Updating Quotation ID: {qid}")
-                    
-                    # Update main quotation fields if provided
-                    if 'customer_name' in data:
-                        quotation.customer_name = data.get('customer_name')
-                    
-                    if 'address' in data:
-                        quotation.address = data.get('address')
-                    
-                    if 'quotation_date' in data:
-                        quotation.quotation_date = data.get('quotation_date')
-                        
-                    if 'salesperson' in data:
-                        salesperson_id = data.get('salesperson')
-                        if not SalesPerson.objects.filter(id=salesperson_id).exists():
-                            return Response({"error": "Invalid salesperson ID"}, status=status.HTTP_400_BAD_REQUEST)
-                        quotation.salesperson_id = salesperson_id
-                        
-                    # if 'email_id' in data:
-                    #     quotation.email_id = data.get('email_id')
-                        
-                    if 'remark' in data:
-                        quotation.remark = data.get('remark')
-                        
-                    if 'delivery_location' in data:
-                        quotation.delivery_location = data.get('delivery_location')
-                        
-                    if 'bank_account' in data:
-                        bank_account_id = data.get('bank_account')
-                        if not BankAccount.objects.filter(id=bank_account_id).exists():
-                            return Response({"error": "Invalid bank account ID"}, status=status.HTTP_400_BAD_REQUEST)
-                        quotation.bank_account_id = bank_account_id
-                    
-                    # Save the quotation changes
-                    quotation.save()
-                    
-                    
-                    
-                    # Return success response with updated data
-                    return Response({
-                        "status": "1",
-                        "message": "Quotation updated successfully.",
-                        "quotation_id": quotation.id,
-                        "grand_total": str(quotation.grand_total)
-                    }, status=status.HTTP_200_OK)
-                    
-            except Exception as e:
-                print(f"Error in PATCH: {str(e)}")
-                return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-        
-    #     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)   
-    # def patch(self, request, qid=None):
-    #     if not qid:
-    #         return Response({"error": "Quotation ID is required"}, status=status.HTTP_400_BAD_REQUEST)
 
-    #     data = request.data
+    def patch(self, request, qid=None, pid=None):
+        try:
+            if qid:
+                quotation = get_object_or_404(QuotationOrderModel, id=qid)
+                serializer = QuotationOrderSerializer(quotation, data=request.data, partial=True)
+                if serializer.is_valid():
+                    serializer.save()
+                else:
+                    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                
+                # check if product payload have duplicate
+                product_ids = [item.get("product") for item in request.data.get("items", [])]
+                if len(product_ids) != len(set(product_ids)):
+                    return Response({"error": "Duplicate product id found in payload."}, status=status.HTTP_400_BAD_REQUEST)
+
+                for item_data in request.data.get("items", []):
+                    
+                    product_id = item_data.get("product")
+                    product = get_object_or_404(Product, id=product_id)
+
+                    existing_item = QuotationItem.objects.filter(quotation=quotation, product=product).first()
+                    if existing_item:
+                        existing_item.quantity = item_data.get("quantity", existing_item.quantity)
+                        existing_item.unit_price = item_data.get("unit_price", existing_item.unit_price)
+                        existing_item.sgst_percentage = item_data.get("sgst_percentage", existing_item.sgst_percentage)
+                        existing_item.cgst_percentage = item_data.get("cgst_percentage", existing_item.cgst_percentage)
+                        existing_item.save()
+                    else:
+                        QuotationItem.objects.create(
+                            quotation=quotation,
+                            product=product,
+                            quantity=item_data.get("quantity", 1),
+                            unit_price=item_data.get("unit_price", 0),
+                            sgst_percentage=item_data.get("sgst_percentage", 0),
+                            cgst_percentage=item_data.get("cgst_percentage", 0),
+                        )
+
+                quotation.update_grand_total()
+
+                return Response({"message": "Sales Order updated successfully."}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)      
         
-    #     try:
-    #         with transaction.atomic():
-    #             # Get the quotation object
-    #             try:
-    #                 quotation = QuotationOrderModel.objects.get(id=qid)
-    #             except QuotationOrderModel.DoesNotExist:
-    #                 return Response({"error": "Quotation not found"}, status=status.HTTP_404_NOT_FOUND)
-                
-    #             print("\n--- DEBUGGING PATCH ---")
-    #             print(f"Updating Quotation ID: {qid}")
-                
-    #             # Update main quotation fields if provided
-    #             if 'customer_name' in data:
-    #                 quotation.customer_name = data.get('customer_name')
-                
-    #             if 'address' in data:
-    #                 quotation.address = data.get('address')
-                
-    #             if 'quotation_date' in data:
-    #                 quotation.quotation_date = data.get('quotation_date')
-                    
-    #             if 'salesperson' in data:
-    #                 salesperson_id = data.get('salesperson')
-    #                 if not SalesPerson.objects.filter(id=salesperson_id).exists():
-    #                     return Response({"error": "Invalid salesperson ID"}, status=status.HTTP_400_BAD_REQUEST)
-    #                 quotation.salesperson_id = salesperson_id
-                    
-    #             if 'email_id' in data:
-    #                 quotation.email_id = data.get('email_id')
-                    
-    #             if 'remark' in data:
-    #                 quotation.remark = data.get('remark')
-                    
-    #             if 'delivery_location' in data:
-    #                 quotation.delivery_location = data.get('delivery_location')
-                    
-    #             if 'bank_account' in data:
-    #                 bank_account_id = data.get('bank_account')
-    #                 if not BankAccount.objects.filter(id=bank_account_id).exists():
-    #                     return Response({"error": "Invalid bank account ID"}, status=status.HTTP_400_BAD_REQUEST)
-    #                 quotation.bank_account_id = bank_account_id
-                
-    #             # Save the quotation changes
-    #             quotation.save()
-                
-    #             # Handle item updates if provided
-    #             if 'items' in data:
-    #                 items_data = data.get('items', [])
-                    
-    #                 # Process items with IDs (existing items to update)
-    #                 updated_item_ids = []
-    #                 for item_data in items_data:
-    #                     item_id = item_data.get('id')
-                        
-    #                     if item_id:  # Update existing item
-    #                         try:
-    #                             item = QuotationItem.objects.get(id=item_id, quotation=quotation)
-                                
-    #                             # Update product if provided
-    #                             if 'product' in item_data:
-    #                                 product_id = item_data.get('product')
-    #                                 if not Product.objects.filter(id=product_id).exists():
-    #                                     return Response({"error": f"Invalid product ID {product_id}"}, 
-    #                                                     status=status.HTTP_400_BAD_REQUEST)
-    #                                 item.product_id = product_id
-                                
-    #                             # Update other fields if provided
-    #                             if 'quantity' in item_data:
-    #                                 item.quantity = Decimal(str(item_data.get('quantity')))
-                                    
-    #                             if 'unit_price' in item_data:
-    #                                 item.unit_price = Decimal(str(item_data.get('unit_price')))
-                                    
-    #                             if 'sgst_percentage' in item_data:
-    #                                 item.sgst_percentage = Decimal(str(item_data.get('sgst_percentage')))
-                                    
-    #                             if 'cgst_percentage' in item_data:
-    #                                 item.cgst_percentage = Decimal(str(item_data.get('cgst_percentage')))
-                                
-    #                             # Save the item (this will trigger calculations via save method)
-    #                             item.save()
-    #                             updated_item_ids.append(item.id)
-                                
-    #                         except QuotationItem.DoesNotExist:
-    #                             return Response({"error": f"Item with ID {item_id} not found in this quotation"}, 
-    #                                         status=status.HTTP_404_NOT_FOUND)
-                        
-    #                     else:  # Create new item
-    #                         product_id = item_data.get('product')
-    #                         if not product_id or not Product.objects.filter(id=product_id).exists():
-    #                             return Response({"error": f"Invalid or missing product ID for new item"}, 
-    #                                         status=status.HTTP_400_BAD_REQUEST)
-                            
-    #                         product = Product.objects.get(id=product_id)
-                            
-    #                         # Convert values to Decimal
-    #                         quantity = Decimal(str(item_data.get('quantity', 1)))
-    #                         unit_price = Decimal(str(item_data.get('unit_price', product.unit_price)))
-    #                         sgst_percentage = Decimal(str(item_data.get('sgst_percentage', 0)))
-    #                         cgst_percentage = Decimal(str(item_data.get('cgst_percentage', 0)))
-                            
-    #                         # Create new item
-    #                         new_item = QuotationItem.objects.create(
-    #                             quotation=quotation,
-    #                             product=product,
-    #                             quantity=quantity,
-    #                             unit_price=unit_price,
-    #                             sgst_percentage=sgst_percentage,
-    #                             cgst_percentage=cgst_percentage
-    #                         )
-    #                         updated_item_ids.append(new_item.id)
-                    
-    #                 # Handle item deletion
-    #                 if 'delete_items' in data:
-    #                     item_ids_to_delete = data.get('delete_items', [])
-    #                     if item_ids_to_delete:
-    #                         for item_id in item_ids_to_delete:
-    #                             try:
-    #                                 item = QuotationItem.objects.get(id=item_id, quotation=quotation)
-    #                                 item.delete()  # This will also update grand_total via delete method
-    #                             except QuotationItem.DoesNotExist:
-    #                                 # Just log this, don't return error for non-existent delete items
-    #                                 print(f"Warning: Attempted to delete non-existent item ID {item_id}")
-                
-    #             # Refresh the quotation to get updated values
-    #             quotation.refresh_from_db()
-                
-    #             print(f"Updated Grand Total: {quotation.grand_total}")
-    #             print("--- END DEBUGGING PATCH ---\n")
-                
-    #             # Return success response with updated data
-    #             return Response({
-    #                 "status": "1",
-    #                 "message": "Quotation updated successfully.",
-    #                 "quotation_id": quotation.id,
-    #                 "grand_total": str(quotation.grand_total)
-    #             }, status=status.HTTP_200_OK)
-                
-    #     except Exception as e:
-    #         print(f"Error in PATCH: {str(e)}")
-    #         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-   
     def delete(self, request, qid=None, pid=None):
         if not qid:
             return Response({"error": "Quotation ID is required"}, status=status.HTTP_400_BAD_REQUEST)
-        
-
         try:
-            quotation = get_object_or_404(QuotationOrderModel, id=qid)
-            # quotation = QuotationOrderModel.objects.get(id=qid)
-            if pid:
-                quotation_item = get_object_or_404(QuotationItem, quotation_id=qid, product_id=pid)
-                quotation_item.delete()
-                return Response({
-                    "status": "1",
-                    "message": "Product(item) deleted successfully."
-                }, status=status.HTTP_200_OK)        
             with transaction.atomic():
-                # quotation = get_object_or_404(QuotationOrderModel, id=qid)
-                
-                print("\n--- DEBUGGING DELETE ---")
-                print(f"Deleting Quotation ID: {quotation.id}")
+                quotation = get_object_or_404(QuotationOrderModel, id=qid)
 
-                # Delete all associated items first
-                # quotation.items.all().delete()  # Ensure `related_name="items"` in `QuotationItem` model
-
-                # Delete the quotation
-                quotation.delete()
-
-                print(f"Quotation ID {qid} deleted successfully")
-                print("--- END DEBUGGING ---\n")
-
-                return Response({
-                    "status": "1",
-                    "message": "Quotation deleted successfully."
-                }, status=status.HTTP_200_OK)
-                
+                if pid:
+                    quotation_item = get_object_or_404(QuotationItem, quotation=quotation, id=pid)
+                    quotation_item.delete()
+                    return Response({
+                        "status": "1",
+                        "message": "Quotation Item deleted successfully."
+                    }, status=status.HTTP_200_OK)
+                else:
+                    quotation.items.all().delete()
+                    quotation.delete()
+                    return Response({
+                        "status": "1",
+                        "message": "Quotation deleted successfully."
+                    }, status=status.HTTP_200_OK)
         except Exception as e:
-            print(str(e))
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)        
-        
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
    
-    # def patch(self, request, qid=None):
-    #     if not qid:
-    #         return Response({"error": "Quotation ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+#   class QuotationItemUpdateView(APIView):
+#     """
+#     API view to update a specific quotation item's quantity and price.
+#     """
+#     # permission_classes = [IsAuthenticated]
 
-    #     data = request.data
-        
-    #     try:
-    #         with transaction.atomic():
-    #             quotation = get_object_or_404(QuotationOrderModel, id=qid)
-
-    #             print("\n--- DEBUGGING PATCH ---")
-    #             print(f"Updating Quotation ID: {quotation.id} with data: {data}")
-
-    #             # Update fields if provided
-    #             quotation.customer_name = data.get("customer_name", quotation.customer_name)
-    #             quotation.quotation_date = data.get("quotation_date", quotation.quotation_date)
-    #             # quotation.due_date = data.get("due_date", quotation.due_date)
-    #             quotation.salesperson_id = data.get("salesperson", quotation.salesperson_id)
-    #             quotation.email_id = data.get("email_id", quotation.email_id)
-    #             quotation.address = data.get("address", quotation.address)
-    #             quotation.delivery_location = data.get("delivery_location", quotation.delivery_location)
-    #             quotation.bank_account_id = data.get("bank_account", quotation.bank_account)
-    #             # quotation.subject = data.get("subject", quotation.subject)
-    #             # quotation.terms = data.get("terms", quotation.terms)
-    #             # quotation.attachments = data.get("attachments", quotation.attachments)
-    #             quotation.save()
-
-    #             # Remove old items
-    #             quotation.items.all().delete()  # Ensure `related_name="items"` in `QuotationItem` model
-
-    #             total_amount = Decimal(0)  # Convert total_amount to Decimal
-
-    #             # Add new items
-    #             for item in data.get("items", []):
-    #                 product_id = item.get("product")
-    #                 if not Product.objects.filter(id=product_id).exists():
-    #                     return Response({"error": f"Invalid product ID {product_id}"}, status=status.HTTP_400_BAD_REQUEST)
-
-    #                 product = Product.objects.get(id=product_id)
-    #                 quantity = Decimal(str(item.get("quantity", 1)))  # Convert quantity to Decimal
-    #                 # unit_price = product.unit_price  # unit_price is already Decimal
-    #                 unit_price = Decimal(str(item.get("unit_price", product.unit_price)))  
-    #                 print(f"Updating Item: Product ID: {product_id}, Quantity: {quantity}, Unit Price: {unit_price}")
-
-    #                 QuotationItem.objects.create(
-    #                     quotation=quotation,
-    #                     product=product,
-    #                     quantity=quantity,
-    #                     unit_price=unit_price  # ✅ Ensure unit price is set correctly
-
-    #                 )
-
-    #                 # Calculate total price using Decimal
-    #                 total_amount += quantity * unit_price
-
-    #             # Update Grand Total
-    #             quotation.grand_total = total_amount
-    #             quotation.save()
-
-    #             print(f"Final Grand Total Saved: {quotation.grand_total}")
-    #             print("--- END DEBUGGING ---\n")
-
-    #             return Response({
-    #                 "status": "1",
-    #                 "message": "Quotation updated successfully.",
-    #                 "quotation_id": quotation.id,
-    #                 "grand_total": str(quotation.grand_total)  # Convert Decimal to string for JSON response
-    #             }, status=status.HTTP_200_OK)
-    #     except Exception as e:
-    #         print(str(e))
-    #         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR) 
-       
-    # def patch(self, request, qid=None):
-    #     if not qid:
-    #         return Response({"error": "Quotation ID is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-    #     data = request.data
-        
-    #     try:
-    #         with transaction.atomic():
-    #             quotation = get_object_or_404(QuotationOrderModel, id=qid)
-
-    #             print("\n--- DEBUGGING PATCH ---")
-    #             print(f"Updating Quotation ID: {quotation.id} with data: {data}")
-
-    #             # Update fields if provided
-    #             quotation.customer_name = data.get("customer_name", quotation.customer_name)
-    #             quotation.quotation_date = data.get("quotation_date", quotation.quotation_date)
-    #             quotation.salesperson_id = data.get("salesperson", quotation.salesperson_id)
-    #             quotation.email_id = data.get("email_id", quotation.email_id)
-    #             quotation.address = data.get("address", quotation.address)
-    #             quotation.delivery_location = data.get("delivery_location", quotation.delivery_location)
-    #             quotation.bank_account_id = data.get("bank_account", quotation.bank_account)
-    #             quotation.save()
-
-    #             total_amount = Decimal(0)  # Convert total_amount to Decimal
-
-    #             # Create a set of incoming item IDs for comparison
-    #             incoming_item_ids = {item.get("id") for item in data.get("items", [])}
-
-    #             # Update or create items based on incoming data
-    #             for item in data.get("items", []):
-    #                 product_id = item.get("product")
-    #                 item_id = item.get("id")  # Assuming each item has an 'id' field
-
-    #                 if not Product.objects.filter(id=product_id).exists():
-    #                     return Response({"error": f"Invalid product ID {product_id}"}, status=status.HTTP_400_BAD_REQUEST)
-
-    #                 product = Product.objects.get(id=product_id)
-    #                 quantity = Decimal(str(item.get("quantity", 1)))  # Convert quantity to Decimal
-    #                 unit_price = Decimal(str(item.get("unit_price", product.unit_price)))  
-
-    #                 if item_id:  # If item_id is provided, update the existing item
-    #                     quotation_item = get_object_or_404(QuotationItem, id=item_id, quotation=quotation)
-    #                     quotation_item.quantity = quantity
-    #                     quotation_item.unit_price = unit_price
-    #                     quotation_item.save()
-    #                 else:  # Create a new item if no item_id is provided
-    #                     QuotationItem.objects.create(
-    #                         quotation=quotation,
-    #                         product=product,
-    #                         quantity=quantity,
-    #                         unit_price=unit_price
-    #                     )
-
-    #                 # Calculate total price using Decimal
-    #                 total_amount += quantity * unit_price
-
-    #             # Optionally, delete items that are not in the incoming request
-    #             existing_items = quotation.items.all()
-    #             for existing_item in existing_items:
-    #                 if existing_item.id not in incoming_item_ids:
-    #                     existing_item.delete()
-
-    #             # Update Grand Total
-    #             quotation.grand_total = total_amount
-    #             quotation.save()
-
-    #             print(f"Final Grand Total Saved: {quotation.grand_total}")
-    #             print("--- END DEBUGGING ---\n")
-
-    #             return Response({
-    #                 "status": "1",
-    #                 "message": "Quotation updated successfully.",
-    #                 "quotation_id": quotation.id,
-    #                 "grand_total": str(quotation.grand_total)  # Convert Decimal to string for JSON response
-    #             }, status=status.HTTP_200_OK)
-    #     except Exception as e:
-    #         print(str(e))
-    #         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
- 
-        
-# class QuotationItemAPI(APIView):
-#     authentication_classes = [JWTAuthentication]
-#     permission_classes = [IsAuthenticated]
-    
-#     def patch(self, request, qid, item_id):
+#     def patch(self, request, qid, pid):
 #         """
-#         PATCH endpoint for updating a specific item in a quotation
+#         Update specific fields of a QuotationItem for the given quotation_id and product_id
 #         """
-#         try:
-#             with transaction.atomic():
-#                 # Verify quotation exists
-#                 quotation = get_object_or_404(QuotationOrderModel, id=qid)
-                
-#                 # Verify item exists and belongs to the quotation
-#                 try:
-#                     item = QuotationItem.objects.get(id=item_id, quotation=quotation)
-#                 except QuotationItem.DoesNotExist:
-#                     return Response({"error": "Item not found in this quotation"}, 
-#                                    status=status.HTTP_404_NOT_FOUND)
-                
-#                 data = request.data
-#                 print(f"\n--- DEBUGGING ITEM PATCH ---")
-#                 print(f"Updating Item ID: {item_id} in Quotation ID: {qid}")
-#                 print(f"Request data: {data}")
-                
-#                 # Update product if provided
-#                 if 'product' in data:
-#                     product_id = data.get('product')
-#                     if not Product.objects.filter(id=product_id).exists():
-#                         return Response({"error": f"Invalid product ID {product_id}"}, 
-#                                       status=status.HTTP_400_BAD_REQUEST)
-#                     item.product_id = product_id
-#                     print(f"Updated product to ID: {product_id}")
-                
-#                 # Update fields if provided
-#                 if 'quantity' in data:
-#                     item.quantity = Decimal(str(data.get('quantity')))
-#                     print(f"Updated quantity to: {item.quantity}")
-                    
-#                 if 'unit_price' in data:
-#                     item.unit_price = Decimal(str(data.get('unit_price')))
-#                     print(f"Updated unit_price to: {item.unit_price}")
-                    
-#                 if 'sgst_percentage' in data:
-#                     item.sgst_percentage = Decimal(str(data.get('sgst_percentage')))
-#                     print(f"Updated sgst_percentage to: {item.sgst_percentage}")
-                    
-#                 if 'cgst_percentage' in data:
-#                     item.cgst_percentage = Decimal(str(data.get('cgst_percentage')))
-#                     print(f"Updated cgst_percentage to: {item.cgst_percentage}")
-                
-#                 # Save the item (triggering any calculations in the save method)
-#                 item.save()
-#                 print(f"Item saved successfully")
-                
-#                 # Update quotation grand total
-#                 items = QuotationItem.objects.filter(quotation=quotation)
-#                 total_amount = Decimal('0')
-                
-#                 for i in items:
-#                     # Calculate the item total
-#                     item_total = i.quantity * i.unit_price
-#                     total_amount += item_total
-                
-#                 quotation.grand_total = total_amount
-#                 quotation.save()
-#                 print(f"Updated quotation grand_total to: {quotation.grand_total}")
-                
-#                 # Refresh item to get updated values
-#                 item.refresh_from_db()
-                
-#                 print("--- END DEBUGGING ITEM PATCH ---\n")
-                
-#                 return Response({
-#                     "status": "1",
-#                     "message": "Item updated successfully",
-#                     "item": {
-#                         "id": item.id,
-#                         "name": item.product.name,
-#                         "product_id": item.product.id,
-#                         "quantity": float(item.quantity),
-#                         "unit_price": float(item.unit_price),
-#                         "total": float(item.quantity * item.unit_price),
-#                         "sgst": float(item.sgst) if hasattr(item, 'sgst') else 0,
-#                         "cgst": float(item.cgst) if hasattr(item, 'cgst') else 0,
-#                         "sub_total": float(item.sub_total) if hasattr(item, 'sub_total') else float(item.quantity * item.unit_price)
-#                     },
-#                     "quotation_grand_total": float(quotation.grand_total)
-#                 }, status=status.HTTP_200_OK)
-                
-#         except Exception as e:
-#             print(f"Error in PATCH: {str(e)}")
-#             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-#     def delete(self, request, qid, item_id):
-#         """
-#         DELETE endpoint for removing an item from a quotation
-#         """
-#         try:
-#             with transaction.atomic():
-#                 # Verify quotation exists
-#                 quotation = get_object_or_404(QuotationOrderModel, id=qid)
-                
-#                 # Verify item exists and belongs to the quotation
-#                 try:
-#                     item = QuotationItem.objects.get(id=item_id, quotation=quotation)
-#                 except QuotationItem.DoesNotExist:
-#                     return Response({"error": "Item not found in this quotation"}, 
-#                                    status=status.HTTP_404_NOT_FOUND)
-                
-#                 print(f"\n--- DEBUGGING ITEM DELETE ---")
-#                 print(f"Deleting Item ID: {item_id} from Quotation ID: {qid}")
-                
-#                 # Store item total before deletion for logging
-#                 item_total = item.quantity * item.unit_price
-#                 print(f"Item total being removed: {item_total}")
-                
-#                 # Delete the item
-#                 item.delete()
-#                 print(f"Item deleted successfully")
-                
-#                 # Update quotation grand total
-#                 items = QuotationItem.objects.filter(quotation=quotation)
-#                 total_amount = Decimal('0')
-                
-#                 for i in items:
-#                     # Calculate the item total
-#                     item_total = i.quantity * i.unit_price
-#                     total_amount += item_total
-                
-#                 quotation.grand_total = total_amount
-#                 quotation.save()
-#                 print(f"Updated quotation grand_total to: {quotation.grand_total}")
-#                 print("--- END DEBUGGING ITEM DELETE ---\n")
-                
-#                 return Response({
-#                     "status": "1",
-#                     "message": "Item deleted successfully",
-#                     "quotation_grand_total": float(quotation.grand_total)
-#                 }, status=status.HTTP_200_OK)
-                
-#         except Exception as e:
-#             print(f"Error in DELETE: {str(e)}")
-#             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-class QuotationItemUpdateView(APIView):
-    """
-    API view to update a specific quotation item's quantity and price.
-    """
-    # permission_classes = [IsAuthenticated]
-
-    def patch(self, request, qid, pid):
-        """
-        Update specific fields of a QuotationItem for the given quotation_id and product_id
-        """
-        # First, get the quotation or return 404
-        quotation = get_object_or_404(QuotationOrderModel, id=qid)
+#         # First, get the quotation or return 404
+#         quotation = get_object_or_404(QuotationOrderModel, id=qid)
         
-        # Then, get the specific item from this quotation that matches the product_id
-        item = get_object_or_404(QuotationItem, quotation=quotation, product_id=pid)
+#         # Then, get the specific item from this quotation that matches the product_id
+#         item = get_object_or_404(QuotationItem, quotation=quotation, product_id=pid)
         
-        # Use a serializer to validate the data
-        serializer = QuotationItemUpdateSerializer(item, data=request.data, partial=True)
+#         # Use a serializer to validate the data
+#         serializer = QuotationItemUpdateSerializer(item, data=request.data, partial=True)
         
-        if serializer.is_valid():
-            # Save the updated item (which will trigger the save method in QuotationItem)
-            serializer.save()
+#         if serializer.is_valid():
+#             # Save the updated item (which will trigger the save method in QuotationItem)
+#             serializer.save()
             
-            # Return the updated item data
-            return Response(serializer.data, status=status.HTTP_200_OK)
+#             # Return the updated item data
+#             return Response(serializer.data, status=status.HTTP_200_OK)
         
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
 class  PrintQuotationAPI(APIView):
 

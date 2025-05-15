@@ -65,55 +65,6 @@ class FeedbackSerializer(serializers.ModelSerializer):
         model = Feedback
         fields = '__all__'        
         
-# class SalesOrderSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model = SalesOrder
-#         fields = [
-#             'id', 
-#             'customer_name', 
-#             'invoice_no', 
-#             'invoice_date', 
-#             'terms', 
-#             'due_date', 
-#             'salesperson', 
-#             'subject', 
-#             'attachments', 
-#             'order_amount',
-#             'quantity'
-#         ]
-#         readonly_fields = ['order_number', 'invoice_no']
-        
-# class QuotationOrderSerializer(serializers.ModelSerializer):
-#     salesperson_name = serializers.CharField(source='salesperson.display_name', read_only=True)
-
-#     class Meta:
-#         model = QuotationOrderModel
-#         fields = [
-#             'id',
-#             'customer_name',
-#             'quotation_number',
-#             'quotation_date',
-#             'terms',
-#             'due_date',
-#             'salesperson',
-#             'salesperson_name',  # Salesperson fetched dynamically
-#             'email_id',
-#             'subject',
-#             'attachments',
-#             'item_name',
-#             'description',
-#             'unit_price',
-#             'discount',
-#             'total_amount',
-#             'quantity'
-#         ]
-#         read_only_fields = ['quotation_number', 'total_amount']
-
-#     def validate_discount(self, value):
-#         """ Ensure discount is not greater than unit price """
-#         if value < 0:
-#             raise serializers.ValidationError("Discount cannot be negative.")
-#         return value
 
 class PrintTermsAndConditionsSerializer(serializers.ModelSerializer):
     termsandconditions = serializers.CharField(source='terms_and_conditions.title', read_only=True)
@@ -160,10 +111,22 @@ class DeliveryOrderSerializer(serializers.ModelSerializer):
 class SupplierSerializer(serializers.ModelSerializer):
     class Meta:
         model = Supplier
-        fields = [
-            'id', 'supplier_type', 'first_name', 'last_name', 'company_name',
-            'supplier_display_name', 'email', 'phone', 'mobile', 'currency', 'payment_terms'
-        ]        
+        fields = '__all__'
+
+class SupplierDetailSerializer(serializers.ModelSerializer):
+    termsandconditions_title = serializers.CharField(source='payment_terms.title', read_only=True)
+    termsandconditions = serializers.SerializerMethodField()
+    class Meta:
+        model = Supplier
+        fields = '__all__' 
+
+    def get_termsandconditions(self, obj):
+        # Get related TermsAndConditions
+        terms = obj.payment_terms
+        # Get points related to this TermsAndConditions
+        points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=terms)
+        return PrintTermsAndConditionsSerializer(points, many=True).data  
+
         
 class DeliveryChallanSerializer(serializers.ModelSerializer):
     class Meta:

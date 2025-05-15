@@ -918,6 +918,7 @@ class QuotationOrderAPI(APIView):
                 contract_sections = ContractSection.objects.filter(contract=quotation.contract.id)
 
                 # Serialize the contract
+                 # Add this line before the if statement
                 contract_data = {
                     **ContractSerializer(contract).data,
                     'sections': []
@@ -932,10 +933,13 @@ class QuotationOrderAPI(APIView):
                     section_serialized['points'] = points_serialized
 
                     contract_data['sections'].append(section_serialized)
-                
+
+            else:
+                contract_data = {}                   
             # Get quotation items
             quotation_items = QuotationItem.objects.filter(quotation=quotation)
             item_list = []
+
 
             # Log debugging info
             print("\n--- DEBUGGING ---")

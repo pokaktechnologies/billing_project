@@ -1255,6 +1255,29 @@ class  PrintQuotationAPI(APIView):
             f"{quotation.salesperson.first_name} {quotation.salesperson.last_name}"
             if quotation.salesperson else None
         )
+        
+        if quotation.contract:
+            contract = Contract.objects.get(id=quotation.contract.id)
+            contract_sections = ContractSection.objects.filter(contract=quotation.contract.id)
+
+            contract_data = {
+                **ContractSerializer(contract).data,
+                'sections': []
+            }
+
+            for section in contract_sections:
+                section_serialized = ContractSectionSerializer(section).data
+                points = ContractPoint.objects.filter(section=section.id)
+                points_serialized = ContractPointSerializer(points, many=True).data
+
+                    # Add points directly into the section
+                section_serialized['points'] = points_serialized
+
+                contract_data['sections'].append(section_serialized)
+
+        else:
+            contract_data = {}        
+
 
             
         # if quotation.bank_account:
@@ -1296,10 +1319,12 @@ class  PrintQuotationAPI(APIView):
             # "email_id": quotation.email_id,
             "termsandconditions_title": quotation.termsandconditions.title if quotation.termsandconditions else None, 
             "termsandconditions": PrintTermsAndConditionsSerializer(termsandconditions_points, many=True).data,
-            "remark": quotation.remark,
             "subtotal": sum(item['amount'] - item['tax'] for item in item_list),
             "total": sum(item['amount'] for item in item_list),
             "items": item_list,
+            "contract_id": quotation.contract.id if quotation.contract else None,
+            "contract_title": quotation.contract.title if quotation.contract else "",
+            "contract": contract_data,
 
         }
 

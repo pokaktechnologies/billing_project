@@ -3755,18 +3755,95 @@ class ListTermsandConditionsPointsAPI(APIView):
 
 
 
-class PurchaseOrderView(APIView):
-    def get(self, request):
-        purchase_orders = PurchaseOrder.objects.all()
-        serializer = PurchaseOrderSerializer(purchase_orders, many=True)
-        return Response({"status": "1", "data": serializer.data})
+# class PurchaseOrderAPIView(APIView):
+#     def get(self, request, purchase_order_id=None):
+#         if purchase_order_id:
+#             purchase_order = get_object_or_404(PurchaseOrder, id=purchase_order_id)
+#             serializer = PurchaseOrderSerializer(purchase_order)
+#             return Response({"status": "1", "data": [serializer.data]})
+#         purchase_orders = PurchaseOrder.objects.all()
+#         serializer = PurchaseOrderSerializer(purchase_orders, many=True)
+#         return Response({"status": "1", "data": serializer.data})
     
-    def post(self, request):
+#     def post(self, request):
+#         serializer = PurchaseOrderSerializer(data=request.data)
+#         if serializer.is_valid():
+#             serializer.save()
+#             return Response({"status": "1", "message": "Purchase order created successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
+#         return Response({"status": "0", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PurchaseOrderAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request, pk=None, format=None):
+        if pk:
+            try:
+                purchase_order = PurchaseOrder.objects.get(pk=pk)
+                serializer = PurchaseOrderSerializer(purchase_order)
+                return Response({"status": "1", "message": "success", "data": [serializer.data]})
+            except PurchaseOrder.DoesNotExist:
+                return Response(
+                    {"error": "Purchase order not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        else:
+            purchase_orders = PurchaseOrder.objects.all()
+
+            supplier = request.query_params.get('supplier')
+            if supplier:
+                purchase_orders = purchase_orders.filter(supplier_id=supplier)
+
+            start_date = request.query_params.get('start_date')
+            end_date = request.query_params.get('end_date')
+            if start_date and end_date:
+                purchase_orders = purchase_orders.filter(
+                    purchase_order_date__gte=start_date,
+                    purchase_order_date__lte=end_date
+                )
+
+            serializer = PurchaseOrderListSerializer(purchase_orders, many=True)
+            return Response({"status": "1", "message": "success", "data": serializer.data})
+
+    def post(self, request, format=None):
         serializer = PurchaseOrderSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return Response({"status": "1", "message": "Purchase order created successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
-        return Response({"status": "0", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"status": "1", "message": "success", "data": serializer.data}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request, pk, format=None):
+        try:
+            purchase_order = PurchaseOrder.objects.get(pk=pk)
+        except PurchaseOrder.DoesNotExist:
+            return Response(
+                {"error": "Purchase order not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        serializer = PurchaseOrderSerializer(
+            purchase_order, 
+            data=request.data, 
+            partial=True
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"status": "1", "message": "success", "data": serializer.data})
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk, format=None):
+        try:
+            purchase_order = PurchaseOrder.objects.get(pk=pk)
+        except PurchaseOrder.DoesNotExist:
+            return Response(
+                {"error": "Purchase order not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        purchase_order.delete()
+        return Response(
+            {"message": "Purchase order deleted successfully"},
+            status=status.HTTP_204_NO_CONTENT
+        )
 
 
 

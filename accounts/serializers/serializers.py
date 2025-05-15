@@ -611,17 +611,107 @@ class TermsAndConditionsPointSerializer(serializers.ModelSerializer):
 
 
 
-class PurchaseOrderSerializer(serializers.ModelSerializer):
+# class PurchaseOrderSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = PurchaseOrder
+#         fields = ['id', 'supplier', 'purchase_order_number', 'purchase_order_date', 'contact_person_name', 'contact_person_number', 'quotation_number', 'remark', 'terms_and_conditions']
+
+
+
+# class PurchaseOrderItemSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = PurchaseOrderItem
+#         fields = ['id', 'purchase_order', 'product', 'quantity', 'unit_price', 'total', 'sgst_percentage', 'cgst_percentage', 'sub_total']
+
+
+
+
+class PurchaseOrderListSerializer(serializers.ModelSerializer):
+    supplier_name = serializers.CharField(source='supplier.supplier_display_name', read_only=True)
+    total_items = serializers.SerializerMethodField()
     class Meta:
         model = PurchaseOrder
-        fields = ['id', 'supplier', 'purchase_order_number', 'purchase_order_date', 'contact_person_name', 'contact_person_number', 'quotation_number', 'remark', 'terms_and_conditions']
-
-
+        fields = [
+            'id', 'purchase_order_date', 'purchase_order_number', 'supplier_name',
+            'total_items', 'contact_person_number', 'grand_total',
+        ]
+    
+    def get_total_items(self, obj):
+        total_items = obj.items.count()
+        return total_items if total_items else 0
 
 class PurchaseOrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = PurchaseOrderItem
-        fields = ['id', 'purchase_order', 'product', 'quantity', 'unit_price', 'total', 'sgst_percentage', 'cgst_percentage', 'sub_total']
+        fields = [
+            'id', 'product', 'quantity', 'unit_price', 'total',
+            'sgst_percentage', 'cgst_percentage', 'sub_total'
+        ]
+
+    def validate(self, data):
+        """
+        Validate that unit_price and quantities are positive numbers
+        """
+        if 'unit_price' in data and data['unit_price'] < 0:
+            raise serializers.ValidationError("Unit price cannot be negative")
+        if 'quantity' in data and data['quantity'] <= 0:
+            raise serializers.ValidationError("Quantity must be positive")
+        return data
+
+class PurchaseOrderSerializer(serializers.ModelSerializer):
+    supplier_name = serializers.CharField(source='supplier.supplier_display_name', read_only=True)
+    items = PurchaseOrderItemSerializer(many=True, required=False)
+    
+    class Meta:
+        model = PurchaseOrder
+        fields = [
+            'id', 'supplier', 'supplier_name', 'purchase_order_number', 'purchase_order_date',
+            'contact_person_name', 'contact_person_number', 'quotation_number',
+            'grand_total', 'remark', 'terms_and_conditions', 'items'
+        ]
+        read_only_fields = ['supplier_name']
+
+    def create(self, validated_data):
+        items_data = validated_data.pop('items', [])
+        purchase_order = PurchaseOrder.objects.create(**validated_data)
+        
+        for item_data in items_data:
+            PurchaseOrderItem.objects.create(purchase_order=purchase_order, **item_data)
+            
+        return purchase_order
+
+    def update(self, instance, validated_data):
+        items_data = validated_data.pop('items', None)
+        
+        # Update PurchaseOrder fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        
+        # Handle items update if provided
+        if items_data is not None:
+            # Delete existing items not in the update
+            existing_item_ids = [item.id for item in instance.items.all()]
+            updated_item_ids = [item.get('id') for item in items_data if item.get('id')]
+            
+            items_to_delete = set(existing_item_ids) - set(updated_item_ids)
+            if items_to_delete:
+                PurchaseOrderItem.objects.filter(id__in=items_to_delete).delete()
+            
+            # Create or update items
+            for item_data in items_data:
+                item_id = item_data.get('id')
+                if item_id:
+                    # Update existing item
+                    item = PurchaseOrderItem.objects.get(id=item_id, purchase_order=instance)
+                    for attr, value in item_data.items():
+                        setattr(item, attr, value)
+                    item.save()
+                else:
+                    # Create new item
+                    PurchaseOrderItem.objects.create(purchase_order=instance, **item_data)
+        
+        return instance
 
 
 

@@ -97,6 +97,9 @@ urlpatterns = [
     path('terms-points/<int:pk>/', TermsAndConditionsPointAPI.as_view()),
     path('terms-points/<int:term_id>/terms/',  ListTermsandConditionsPointsAPI.as_view()),
 
+    path('purchase-orders/', PurchaseOrderAPIView.as_view(), name='purchase-order-list-create'),
+    path('purchase-orders/<int:pk>/', PurchaseOrderAPIView.as_view(), name='purchase-order-retrieve-update-destroy'),
+
     path('contracts/', ContractListCreateAPIView.as_view()),
     path('contracts/<int:contract_id>/', ContractListCreateAPIView.as_view()),
 

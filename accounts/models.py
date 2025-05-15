@@ -253,19 +253,26 @@ class Supplier(models.Model):
         ('Individual', 'Individual'),
     ]
     
+    supplier_number = models.CharField(max_length=50, unique=True)
     supplier_type = models.CharField(max_length=20, choices=SUPPLIER_TYPE_CHOICES)
     first_name = models.CharField(max_length=255, blank=True, null=True)
     last_name = models.CharField(max_length=255, blank=True, null=True)
     company_name = models.CharField(max_length=255, blank=True, null=True)
-    supplier_display_name = models.CharField(max_length=255)
     email = models.EmailField()
+    date = models.DateField()
+    contact_person_name = models.CharField(max_length=255, blank=True, null=True)
+    contact_person_number = models.CharField(max_length=20, blank=True, null=True)
+    state = models.CharField(max_length=255, blank=True, null=True)
+    country = models.CharField(max_length=255, blank=True, null=True)
+    address = models.TextField(blank=True, null=True)
     phone = models.CharField(max_length=20)
     mobile = models.CharField(max_length=20)
     currency = models.CharField(max_length=10)
-    payment_terms = models.CharField(max_length=255, blank=True, null=True)
+    payment_terms = models.ForeignKey('TermsAndConditions', on_delete=models.CASCADE, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True,null=True,blank=True)
 
     def __str__(self):
-        return self.supplier_display_name
+        return self.company_name + " - " + self.contact_person_name
 
 
 class DeliveryChallan(models.Model):

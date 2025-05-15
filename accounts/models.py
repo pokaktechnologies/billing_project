@@ -300,14 +300,14 @@ class QuotationOrderModel(models.Model):
     
     quotation_number = models.CharField(max_length=50, unique=True)
     quotation_date = models.DateField()
-    remark = models.CharField(max_length=255, blank=True)
+    # remark = models.CharField(max_length=255, blank=True)
     # due_date = models.DateField()
     salesperson = models.ForeignKey(SalesPerson, on_delete=models.CASCADE)  # Fetching from SalesPerson model
     # customer = models.ForeignKey(Customer,on_delete=models.SET_NULL, null=True, blank=True) # Fetching from
     address = models.TextField(max_length=100, blank=True )  
     delivery_location = models.TextField(max_length=100, blank=True)
     termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.CASCADE, null=True, blank=True)
-  
+    contract = models.ForeignKey('Contract', on_delete=models.SET_NULL, null=True, blank=True)  
     # bank_account = models.ForeignKey(
     #     BankAccount, on_delete=models.SET_NULL, null=True, blank=True, related_name="quotations"
     # )   

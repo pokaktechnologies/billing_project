@@ -256,8 +256,10 @@ class PrintQuotationOrderSerializer(serializers.ModelSerializer):
         fields = '__all__'
     
     def get_salesperson(self, obj):
-        salesperson = obj.client.salesperson
-        return SalesPersonSerializer(salesperson).data if salesperson else None
+        if obj.client and obj.client.salesperson:
+            return SalesPersonSerializer(obj.client.salesperson).data
+        return None
+
 
     def get_termsandconditions(self, obj):
         # Get related TermsAndConditions

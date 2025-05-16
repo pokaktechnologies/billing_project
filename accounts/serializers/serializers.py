@@ -218,6 +218,7 @@ class QuotationOrderSerializer(serializers.ModelSerializer):
 class QuotationItemSerializer(serializers.ModelSerializer):
     unit_price = serializers.SerializerMethodField()
     product_name = serializers.CharField(source='product.name', read_only=True)
+    product_description = serializers.CharField(source='product.product_description', read_only=True)
     class Meta:
         model = QuotationItem
         fields = "__all__"   

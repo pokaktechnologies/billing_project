@@ -804,75 +804,56 @@ class SalesPersonListCreateAPIView(APIView):
             status=status.HTTP_200_OK
         )
 class QuotationOrderAPI(APIView):
-    
-    authentication_classes = []
-    permission_classes = []
+
+    # authentication_classes = []
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, qid=None, pid=None):
         if qid:
             quotation = get_object_or_404(QuotationOrderModel, id=qid)
-            if pid:
-                # quotation_item = QuotationItem.objects.get(quotation=quotation, product_id=pid)
-                quotation_item = get_object_or_404(QuotationItem,quotation=quotation, product_id=pid)
-                serializer = QuotationItemSerializer(quotation_item)
-                return Response({   "status": "1",
-                    "message": "Quotation created successfully.",
-                    "data": [serializer.data]})
-            # quotation = get_object_or_404(QuotationOrderModel, id=qid)
-            quotation_serializer = NewQuotationOrderSerializer(quotation)
-            
-            # if quotation.bank_account:
-            #     bank_account_serializer = BankAccountSerializer(quotation.bank_account)
-            #     bank_account_data = [bank_account_serializer.data]  # wrap in list
-            # else:
-                # bank_account_data = []  # empty array if no account
-            if quotation.termsandconditions:
-                termsandconditions_points = TermsAndConditionsPoint.objects.filter(
-                    terms_and_conditions=quotation.termsandconditions
-                )
-                terms_data = TermsAndConditionsPointSerializer(termsandconditions_points, many=True).data
-            else:
-                terms_data = []
-            
-            if quotation.contract:
-                contract = Contract.objects.get(id=quotation.contract.id)
-                contract_sections = ContractSection.objects.filter(contract=quotation.contract.id)
 
-                # Serialize the contract
-                 # Add this line before the if statement
-                contract_data = {
-                    **ContractSerializer(contract).data,
-                    'sections': []
-                }
+            if pid:
+                quotation_item = get_object_or_404(QuotationItem, quotation=quotation, product_id=pid)
+                serializer = QuotationItemSerializer(quotation_item)
+                return Response({
+                    "status": "1",
+                    "message": "Quotation item retrieved successfully.",
+                    "data": [serializer.data]
+                })
+
+            quotation_serializer = NewQuotationOrderSerializer(quotation)
+
+            # Terms and Conditions
+            terms_data = []
+            if quotation.termsandconditions:
+                terms_points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=quotation.termsandconditions)
+                terms_data = TermsAndConditionsPointSerializer(terms_points, many=True).data
+
+            # Contract
+            contract_data = {}
+            if quotation.contract:
+                contract = get_object_or_404(Contract, id=quotation.contract.id)
+                contract_sections = ContractSection.objects.filter(contract=contract)
+                contract_data = ContractSerializer(contract).data
+                contract_data['sections'] = []
 
                 for section in contract_sections:
-                    section_serialized = ContractSectionSerializer(section).data
-                    points = ContractPoint.objects.filter(section=section.id)
-                    points_serialized = ContractPointSerializer(points, many=True).data
+                    section_data = ContractSectionSerializer(section).data
+                    points = ContractPoint.objects.filter(section=section)
+                    section_data['points'] = ContractPointSerializer(points, many=True).data
+                    contract_data['sections'].append(section_data)
 
-                    # Add points directly into the section
-                    section_serialized['points'] = points_serialized
-
-                    contract_data['sections'].append(section_serialized)
-
-            else:
-                contract_data = {}                   
-            # Get quotation items
-            quotation_items = QuotationItem.objects.filter(quotation=quotation)
+            # Quotation Items
+            quotation_items = quotation.items.all()
             item_list = []
-
-
-            # Log debugging info
-            print("\n--- DEBUGGING ---")
-            print(f"Quotation ID: {quotation.id}, Customer: {quotation.customer_name}")
 
             for item in quotation_items:
                 item_data = {
                     "id": item.id,
-                    "name": item.product.name,  # Product name   
+                    "name": item.product.name,
                     "product_id": item.product.pk,
                     "quantity": item.quantity,
-                    "unit_price": item.product.unit_price if item.unit_price == 0 else item.unit_price,  # Added unit price
+                    "unit_price": item.unit_price if item.unit_price else item.product.unit_price,
                     "total": item.total,
                     "sgst": item.sgst,
                     "cgst": item.cgst,
@@ -880,42 +861,28 @@ class QuotationOrderAPI(APIView):
                 }
                 item_list.append(item_data)
 
-            print("--- END DEBUGGING ---\n")
-
-            # Return in the required format
+            # Response structure
             return Response({
                 'status': '1',
                 'message': 'success',
-                'quotation': [
-                    {
-                        "id": quotation.id,
-                        "customer_name": quotation.customer_name,
-                        "address":quotation.address,
-                        "delivery_location": quotation.delivery_location,
-                        "quotation_number": quotation.quotation_number,
-                        # "bank_account": bank_account_data,
-                        "termsandconditions": terms_data,  # Added terms and conditions
-                        "termsandcondtions_title": quotation.termsandconditions.title if quotation.termsandconditions else "",
-
-                        "quotation_date": str(quotation.quotation_date),
-                        # "remark": quotation.remark,
-                        # "email_id": quotation.email_id,
-                        "grand_total": quotation.grand_total,
-                        # "salesperson": f"{quotation.salesperson.first_name} {quotation.salesperson.last_name}".strip() if quotation.salesperson else None,
-                        "salesperson": {
-                                "id": quotation.salesperson.id if quotation.salesperson else None,
-                                "name": f"{quotation.salesperson.first_name} {quotation.salesperson.last_name}".strip() if quotation.salesperson else None
-                            },
-                        "salesperson_address": quotation.salesperson.address,
-                        # "customer_address": quotation.Customer.address,
-                        "contract_id": quotation.contract.id if quotation.contract else None,
-                        "contract_title": quotation.contract.title if quotation.contract else "",
-                        "contract": contract_data,
-                 # New Field
-
-                        "items": item_list,
-                    }
-                ]
+                'quotation': [{
+                    "id": quotation.id,
+                    "client_name": f"{quotation.client.first_name} {quotation.client.last_name}" if quotation.client else "",
+                    "client_id": quotation.client.id if quotation.client else None,
+                    "address": quotation.delivery_address,
+                    "delivery_location": quotation.delivery_location,
+                    "quotation_number": quotation.quotation_number,
+                    "termsandconditions": terms_data,
+                    "termsandcondtions_title": quotation.termsandconditions.title if quotation.termsandconditions else "",
+                    "quotation_date": str(quotation.quotation_date),
+                    "grand_total": quotation.grand_total,
+                    "selesperson": quotation.client.salesperson.id if quotation.client.salesperson else "",
+                    "salesperson_name": f"{quotation.client.salesperson.first_name} {quotation.client.salesperson.last_name}"if quotation.client.salesperson else "",
+                    "contract_id": quotation.contract.id if quotation.contract else None,
+                    "contract_title": quotation.contract.title if quotation.contract else "",
+                    "contract": contract_data,
+                    "items": item_list,
+                }]
             }, status=status.HTTP_200_OK)
 
         else:
@@ -960,16 +927,6 @@ class QuotationOrderAPI(APIView):
                     return Response({"status": "0", "message": "You must provide product id"})
             
             with transaction.atomic():
-                # Validate and create Quotation Order
-                print("\n--- DEBUGGING POST ---")
-                # print(f"Received Data: {data}")
-                salesperson_id = data.get("salesperson")
-                if not SalesPerson.objects.filter(id=salesperson_id).exists():
-                    return Response({"error": "Invalid salesperson ID"}, status=status.HTTP_400_BAD_REQUEST)
-                # bank_account_id = data.get("bank_account")
-                # if not BankAccount.objects.filter(id=bank_account_id).exists():
-                #     return Response({"error": "Invalid bank account ID"}, status=status.HTTP_400_BAD_REQUEST)
-                
                 terms_id = data.get("termsandconditions")
                 if terms_id and not TermsAndConditionsPoint.objects.filter(id=terms_id).exists():
                     return Response({"error": "Invalid terms and conditions ID"}, status=status.HTTP_400_BAD_REQUEST)
@@ -978,13 +935,19 @@ class QuotationOrderAPI(APIView):
                 if contract and not Contract.objects.filter(id=contract).exists():
                     return Response({"error": "Invalid contract ID"}, status=status.HTTP_400_BAD_REQUEST)
                 
+            # if not request.user.is_authenticated:
+            #     return Response({"error": "User is not authenticated."}, status=401)
+            
+
+
+                
                 print("------------------------")
                 quotation = QuotationOrderModel.objects.create(
-                    customer_name=data.get("customer_name"),
-                    address=data.get("address"),
+                    user=CustomUser.objects.get(id=request.user.id),
+                    client=Customer.objects.get(id=data.get("client")),
+                    delivery_address=data.get("delivery_address"),
                     quotation_number=data.get('quotation_number'),
                     quotation_date=data.get("quotation_date"),
-                    salesperson_id=salesperson_id,
                     contract=Contract.objects.get(id=contract) if contract else None,
                     # remark=data.get("remark", ""),
                     
@@ -1161,99 +1124,111 @@ class QuotationOrderAPI(APIView):
         
 #         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
-class  PrintQuotationAPI(APIView):
+# class  PrintQuotationAPI(APIView):
 
-    def get(self, request, qid=None):
-        # Fetch specific quotation by ID
-        quotation = get_object_or_404(QuotationOrderModel, id=qid)
+#     def get(self, request, qid=None):
+#         # Fetch specific quotation by ID
+#         quotation = get_object_or_404(QuotationOrderModel, id=qid)
         
-        print(f"Quotation Address: {quotation.address}")  # This will print the address in your console/logs
+#         print(f"Quotation Address: {quotation.address}")  # This will print the address in your console/logs
         
-        salesperson_address = quotation.salesperson.address if quotation.salesperson else None
-        termsandconditions_points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=quotation.termsandconditions)
+#         salesperson_address = quotation.salesperson.address if quotation.salesperson else None
+#         termsandconditions_points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=quotation.termsandconditions)
       
-        salesperson_name = (
-            f"{quotation.salesperson.first_name} {quotation.salesperson.last_name}"
-            if quotation.salesperson else None
-        )
+#         salesperson_name = (
+#             f"{quotation.salesperson.first_name} {quotation.salesperson.last_name}"
+#             if quotation.salesperson else None
+#         )
         
-        if quotation.contract:
-            contract = Contract.objects.get(id=quotation.contract.id)
-            contract_sections = ContractSection.objects.filter(contract=quotation.contract.id)
+#         if quotation.contract:
+#             contract = Contract.objects.get(id=quotation.contract.id)
+#             contract_sections = ContractSection.objects.filter(contract=quotation.contract.id)
 
-            contract_data = {
-                **ContractSerializer(contract).data,
-                'sections': []
-            }
+#             contract_data = {
+#                 **ContractSerializer(contract).data,
+#                 'sections': []
+#             }
 
-            for section in contract_sections:
-                section_serialized = ContractSectionSerializer(section).data
-                points = ContractPoint.objects.filter(section=section.id)
-                points_serialized = ContractPointSerializer(points, many=True).data
+#             for section in contract_sections:
+#                 section_serialized = ContractSectionSerializer(section).data
+#                 points = ContractPoint.objects.filter(section=section.id)
+#                 points_serialized = ContractPointSerializer(points, many=True).data
 
-                    # Add points directly into the section
-                section_serialized['points'] = points_serialized
+#                     # Add points directly into the section
+#                 section_serialized['points'] = points_serialized
 
-                contract_data['sections'].append(section_serialized)
+#                 contract_data['sections'].append(section_serialized)
 
-        else:
-            contract_data = {}        
+#         else:
+#             contract_data = {}        
 
 
             
-        # if quotation.bank_account:
-        #     bank_account_serializer = BankAccountSerializer(quotation.bank_account)
-        #     bank_account_data = [bank_account_serializer.data]  # wrap in list
-        # else:
-        #     bank_account_data = []  # empty array if no account
-        # Get quotation items
-        quotation_items = QuotationItem.objects.filter(quotation=quotation)
-        item_list = []
+#         # if quotation.bank_account:
+#         #     bank_account_serializer = BankAccountSerializer(quotation.bank_account)
+#         #     bank_account_data = [bank_account_serializer.data]  # wrap in list
+#         # else:
+#         #     bank_account_data = []  # empty array if no account
+#         # Get quotation items
+#         quotation_items = QuotationItem.objects.filter(quotation=quotation)
+#         item_list = []
 
-        # Prepare item details for the print view
-        for item in quotation_items:
-            item_data = {
-                "item_name": item.product.name,  # Assuming 'product' is a ForeignKey to a Product model
-                "description": item.product.product_description,  # Assuming 'description' exists in the Product model
-                "quantity": item.quantity,
-                "rate": item.product.unit_price,
-                "cgst": item.cgst,
-                "sgst": item.sgst,
-                "tax": item.sgst + item.cgst,  # Assuming tax is stored as SGST and CGST in QuotationItem
-                "amount": item.total,  # Total amount for the item (rate * quantity + tax)
-                # "total": item.total,  # Total amount for the item (rate * quantity + tax)
+#         # Prepare item details for the print view
+#         for item in quotation_items:
+#             item_data = {
+#                 "item_name": item.product.name,  # Assuming 'product' is a ForeignKey to a Product model
+#                 "description": item.product.product_description,  # Assuming 'description' exists in the Product model
+#                 "quantity": item.quantity,
+#                 "rate": item.product.unit_price,
+#                 "cgst": item.cgst,
+#                 "sgst": item.sgst,
+#                 "tax": item.sgst + item.cgst,  # Assuming tax is stored as SGST and CGST in QuotationItem
+#                 "amount": item.total,  # Total amount for the item (rate * quantity + tax)
+#                 # "total": item.total,  # Total amount for the item (rate * quantity + tax)
 
-            }
-            item_list.append(item_data)
+#             }
+#             item_list.append(item_data)
          
 
-        # Prepare the response data
-        quotation_data = {
-            "quotation_id": quotation.id,
-            "customer_name": quotation.customer_name,
-            "address": quotation.address if quotation.address else None,
-            "salesperson_name": salesperson_name,
-            "salesperson_address": salesperson_address,
-            "quotation_number": quotation.quotation_number,
-            "quotation_date": str(quotation.quotation_date),
-            # "bank_account": bank_account_data,
-            # "email_id": quotation.email_id,
-            "termsandconditions_title": quotation.termsandconditions.title if quotation.termsandconditions else None, 
-            "termsandconditions": PrintTermsAndConditionsSerializer(termsandconditions_points, many=True).data,
-            "subtotal": sum(item['amount'] - item['tax'] for item in item_list),
-            "total": sum(item['amount'] for item in item_list),
-            "items": item_list,
-            "contract_id": quotation.contract.id if quotation.contract else None,
-            "contract_title": quotation.contract.title if quotation.contract else "",
-            "contract": contract_data,
+#         # Prepare the response data
+#         quotation_data = {
+#             "quotation_id": quotation.id,
+#             "": quotation.customer_name,
+#             "address": quotation.address if quotation.address else None,
+#             "salesperson_name": salesperson_name,
+#             "salesperson_address": salesperson_address,
+#             "quotation_number": quotation.quotation_number,
+#             "quotation_date": str(quotation.quotation_date),
+#             # "bank_account": bank_account_data,
+#             # "email_id": quotation.email_id,
+#             "termsandconditions_title": quotation.termsandconditions.title if quotation.termsandconditions else None, 
+#             "termsandconditions": PrintTermsAndConditionsSerializer(termsandconditions_points, many=True).data,
+#             "subtotal": sum(item['amount'] - item['tax'] for item in item_list),
+#             "total": sum(item['amount'] for item in item_list),
+#             "items": item_list,
+#             "contract_id": quotation.contract.id if quotation.contract else None,
+#             "contract_title": quotation.contract.title if quotation.contract else "",
+#             "contract": contract_data,
 
-        }
+#         }
 
-        # Return the quotation data wrapped in an array (as requested)
+#         # Return the quotation data wrapped in an array (as requested)
+#         return Response({
+#             "status": "1",
+#             "message": "success",
+#             "data": [quotation_data]  # Wrap the response data in a list (array of objects)
+#         }, status=status.HTTP_200_OK)
+
+class  PrintQuotationAPI(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request, qid=None):
+        qoutation = get_object_or_404(QuotationOrderModel, id=qid)
+        serializer = PrintQuotationOrderSerializer(qoutation)
+        qoutation_data = serializer.data
         return Response({
             "status": "1",
             "message": "success",
-            "data": [quotation_data]  # Wrap the response data in a list (array of objects)
+            "data": [qoutation_data]
         }, status=status.HTTP_200_OK)
 
 

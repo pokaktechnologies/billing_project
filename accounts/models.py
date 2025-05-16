@@ -304,23 +304,15 @@ class SalesPerson(models.Model):
     
 class QuotationOrderModel(models.Model):
 # Add ForeignKey
-    customer_name = models.CharField(max_length=255)
-    
+    # customer_name = models.CharField(max_length=255)
+    client = models.ForeignKey('Customer', on_delete=models.SET_NULL, null=True, blank=True)
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE,null=True, blank=True)
     quotation_number = models.CharField(max_length=50, unique=True)
     quotation_date = models.DateField()
-    # remark = models.CharField(max_length=255, blank=True)
-    # due_date = models.DateField()
-    salesperson = models.ForeignKey(SalesPerson, on_delete=models.CASCADE)  # Fetching from SalesPerson model
-    # customer = models.ForeignKey(Customer,on_delete=models.SET_NULL, null=True, blank=True) # Fetching from
-    address = models.TextField(max_length=100, blank=True )  
+    delivery_address = models.TextField(max_length=100, blank=True )  
     delivery_location = models.TextField(max_length=100, blank=True)
     termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.CASCADE, null=True, blank=True)
     contract = models.ForeignKey('Contract', on_delete=models.SET_NULL, null=True, blank=True)  
-    # bank_account = models.ForeignKey(
-    #     BankAccount, on_delete=models.SET_NULL, null=True, blank=True, related_name="quotations"
-    # )   
-    # attachments = models.FileField(upload_to='quotations/', blank=True, null=True)  # File upload
-
     grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
 
     def update_grand_total(self):
@@ -330,7 +322,7 @@ class QuotationOrderModel(models.Model):
         self.save(update_fields=["grand_total"])  # Save only the g
 
     def __str__(self):
-        return f"Quotation {self.quotation_number} - {self.customer_name}"    
+        return f"Quotation {self.quotation_number} - {self.client}"    
     
 
 class QuotationItem(models.Model):

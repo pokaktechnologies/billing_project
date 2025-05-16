@@ -217,9 +217,11 @@ class QuotationOrderSerializer(serializers.ModelSerializer):
 
 class QuotationItemSerializer(serializers.ModelSerializer):
     unit_price = serializers.SerializerMethodField()
+    product_name = serializers.CharField(source='product.name', read_only=True)
     class Meta:
         model = QuotationItem
-        fields = ['quotation', 'product','quantity','unit_price','sgst_percentage','cgst_percentage','total','sgst','cgst','sub_total']   
+        fields = "__all__"   
+
     def get_unit_price(self, obj):
         if obj.unit_price == 0:
             return obj.product.unit_price
@@ -235,7 +237,72 @@ class NewQuotationItemSerializer(serializers.ModelSerializer):
     quotation = NewQuotationOrderSerializer()
     class Meta:
         model = QuotationItem
-        fields = ['quotation', 'product', 'quantity']           
+        fields = ['quotation', 'product', 'quantity'] 
+
+
+
+class PrintQuotationOrderSerializer(serializers.ModelSerializer):
+    items = QuotationItemSerializer(many=True)
+    client = CustomerSerializer()
+    salesperson = serializers.SerializerMethodField()
+    termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
+    termsandconditions = serializers.SerializerMethodField()
+    subtotal = serializers.SerializerMethodField()
+    total = serializers.SerializerMethodField()
+    contract_title = serializers.CharField(source='contract.title', read_only=True)
+    contract = serializers.SerializerMethodField()
+    class Meta:
+        model = QuotationOrderModel
+        fields = '__all__'
+    
+    def get_salesperson(self, obj):
+        salesperson = obj.client.salesperson
+        return SalesPersonSerializer(salesperson).data if salesperson else None
+
+    def get_termsandconditions(self, obj):
+        # Get related TermsAndConditions
+        terms = obj.termsandconditions
+        # Get points related to this TermsAndConditions
+        points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=terms)
+        return PrintTermsAndConditionsSerializer(points, many=True).data
+    
+    def get_subtotal(self, obj):
+        #calculate subtotal from items
+        subtotal = 0
+        for item in obj.items.all():
+            subtotal += item.sub_total
+        return subtotal
+    
+    def get_total(self, obj):
+        total = 0
+        for item in obj.items.all():
+            total += item.sub_total + item.sgst + item.cgst  # Add SGST and CGST to subtotal
+        return total
+    
+    def get_contract(self, obj):
+        contract = obj.contract
+        if not contract:
+            return None
+
+        # Convert contract to dict
+        contract_data = {
+            **contract.__dict__,
+            'sections': []
+        }
+        contract_data.pop('_state', None)  # Remove internal Django field
+
+        for section in contract.sections.all():
+            section_data = {
+                **section.__dict__,
+                'points': list(section.points.values())
+            }
+            section_data.pop('_state', None)
+            contract_data['sections'].append(section_data)
+
+        return contract_data
+
+
+
         
 class NewsalesOrderSerializer(serializers.ModelSerializer):
     client_name = serializers.CharField(source='customer.first_name', read_only=True)
@@ -279,11 +346,13 @@ class PrintSalesOrderSerializer(serializers.ModelSerializer):
     subtotal = serializers.SerializerMethodField()
     total = serializers.SerializerMethodField()
     termsandconditions = serializers.SerializerMethodField()
+    termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
+
 
     class Meta:
         model = SalesOrderModel
         fields = '__all__'
-        read_only_fields = ('sales_order_number', 'grand_total','customer', 'bank', 'items', 'salesperson', 'subtotal', 'total')
+        read_only_fields = ('sales_order_number', "termsandconditions_title" 'grand_total','customer', 'bank', 'items', 'salesperson', 'subtotal', 'total')
 
     def get_bank(self, obj):
         bank = obj.bank_account

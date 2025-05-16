@@ -668,28 +668,6 @@ class MaterialReceiveItem(models.Model):
     sub_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
 
-    
-    # def save(self, *args, **kwargs):
-    #     is_update = self.pk is not None  # Check if it's an update
-    #     print("is_update", is_update)
-    #     if self.pk:
-    #         # Get previous quantity before updating
-    #         old_item = MaterialReceiveItem.objects.get(pk=self.pk)
-    #         quantity_diff = self.quantity - old_item.quantity
-    #         self.product.stock += quantity_diff
-    #         print("))))))))))))))))")
-    #     else:
-    #         # It's a new entry
-    #         print("tttttttttttttt")
-    #         self.product.stock += self.quantity
-
-    #     super().save(*args, **kwargs)  # Save the MaterialReceiveItem
-    #     self.product.save()  # Save the updated stock
-
-            
-
-
-
 
 
 

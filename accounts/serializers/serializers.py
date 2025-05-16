@@ -729,38 +729,7 @@ class MaterialReceiveSerializer(serializers.ModelSerializer):
             
         return material_receive
 
-    # def update(self, instance, validated_data):
-    #     items_data = validated_data.pop('items', None)
-        
-        
-    #     for attr, value in validated_data.items():
-    #         setattr(instance, attr, value)
-    #     instance.save()
-        
-        
-    #     if items_data is not None:
-            
-    #         existing_item_ids = [item.id for item in instance.items.all()]
-    #         updated_item_ids = [item.get('id') for item in items_data if item.get('id')]
-            
-    #         items_to_delete = set(existing_item_ids) - set(updated_item_ids)
-    #         if items_to_delete:
-    #             MaterialReceiveItem.objects.filter(id__in=items_to_delete).delete()
-            
-            
-    #         for item_data in items_data:
-    #             item_id = item_data.get('id')
-    #             if item_id:
-                    
-    #                 item = MaterialReceiveItem.objects.get(id=item_id, material_receive=instance)
-    #                 for attr, value in item_data.items():
-    #                     setattr(item, attr, value)
-    #                 item.save()
-    #             else:
-                    
-    #                 MaterialReceiveItem.objects.create(material_receive=instance, **item_data)
-        
-    #     return instance
+    
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', None)
 

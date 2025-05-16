@@ -100,6 +100,9 @@ urlpatterns = [
     path('purchase-orders/', PurchaseOrderAPIView.as_view(), name='purchase-order-list-create'),
     path('purchase-orders/<int:pk>/', PurchaseOrderAPIView.as_view(), name='purchase-order-retrieve-update-destroy'),
 
+    path('material-receive/', MaterialReceiveAPIView.as_view(), name='purchase-order-list-create'),
+    path('material-receive/<int:pk>/', MaterialReceiveAPIView.as_view(), name='purchase-order-retrieve-update-destroy'),
+
     path('contracts/', ContractListCreateAPIView.as_view()),
     path('contracts/<int:contract_id>/', ContractListCreateAPIView.as_view()),
 

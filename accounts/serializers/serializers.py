@@ -712,6 +712,148 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
                     PurchaseOrderItem.objects.create(purchase_order=instance, **item_data)
         
         return instance
+    
+
+
+
+
+class MaterialReceiveListSerializer(serializers.ModelSerializer):
+    supplier_name = serializers.CharField(source='supplier.supplier_display_name', read_only=True)
+    class Meta:
+        model = MaterialReceive
+        fields = [
+            'id', 'received_date', 'material_receive_number', 'supplier_name'
+        ]
+
+
+class MaterialReceiveItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MaterialReceiveItem
+        fields = [
+            'id', 'product', 'quantity', 'unit_price', 'total',
+            'sgst_percentage', 'cgst_percentage', 'sub_total'
+        ]
+
+    def validate(self, data):
+        if 'unit_price' in data and data['unit_price'] < 0:
+            raise serializers.ValidationError("Unit price cannot be negative")
+        if 'quantity' in data and data['quantity'] <= 0:
+            raise serializers.ValidationError("Quantity must be positive")
+        return data
+
+class MaterialReceiveSerializer(serializers.ModelSerializer):
+    supplier_name = serializers.CharField(source='supplier.supplier_display_name', read_only=True)
+    purchase_order_number = serializers.CharField(source='purchase_order.purchase_order_number', read_only=True)
+    items = MaterialReceiveItemSerializer(many=True, required=False)
+    
+    class Meta:
+        model = MaterialReceive
+        fields = [
+            'id', 'supplier', 'supplier_name', 'purchase_order', 'purchase_order_number', 'material_receive_number', 'grand_total', 'received_date', 'remark', 'items'
+        ]
+        read_only_fields = ['supplier_name', 'purchase_order_number']
+
+    def create(self, validated_data):
+        items_data = validated_data.pop('items', [])
+        material_receive = MaterialReceive.objects.create(**validated_data)
+        
+        for item_data in items_data:
+            MaterialReceiveItem.objects.create(material_receive=material_receive, **item_data)
+            product = item_data.get('product')
+            product.stock += item_data.get('quantity', 0)
+            product.save()
+            print("item_data", item_data.get('product').stock)
+            
+        return material_receive
+
+    # def update(self, instance, validated_data):
+    #     items_data = validated_data.pop('items', None)
+        
+        
+    #     for attr, value in validated_data.items():
+    #         setattr(instance, attr, value)
+    #     instance.save()
+        
+        
+    #     if items_data is not None:
+            
+    #         existing_item_ids = [item.id for item in instance.items.all()]
+    #         updated_item_ids = [item.get('id') for item in items_data if item.get('id')]
+            
+    #         items_to_delete = set(existing_item_ids) - set(updated_item_ids)
+    #         if items_to_delete:
+    #             MaterialReceiveItem.objects.filter(id__in=items_to_delete).delete()
+            
+            
+    #         for item_data in items_data:
+    #             item_id = item_data.get('id')
+    #             if item_id:
+                    
+    #                 item = MaterialReceiveItem.objects.get(id=item_id, material_receive=instance)
+    #                 for attr, value in item_data.items():
+    #                     setattr(item, attr, value)
+    #                 item.save()
+    #             else:
+                    
+    #                 MaterialReceiveItem.objects.create(material_receive=instance, **item_data)
+        
+    #     return instance
+    def update(self, instance, validated_data):
+        items_data = validated_data.pop('items', None)
+
+        # Update the MaterialReceive instance
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        if items_data is not None:
+            processed_ids = []
+
+            for item_data in items_data:
+                item_id = item_data.get('id')
+                product = item_data.get('product')
+                quantity = item_data.get('quantity', 0)
+
+                if item_id:
+                    try:
+                        item = MaterialReceiveItem.objects.get(id=item_id, material_receive=instance)
+
+                        # Revert old quantity from stock
+                        item.product.stock -= item.quantity
+
+                        # Update the item fields
+                        for attr, value in item_data.items():
+                            setattr(item, attr, value)
+                        item.save()
+
+                        # Add new quantity to stock
+                        item.product.stock += quantity
+                        item.product.save()
+
+                        processed_ids.append(item.id)
+
+                    except MaterialReceiveItem.DoesNotExist:
+                        continue
+                else:
+                    # Create new item
+                    item = MaterialReceiveItem.objects.create(material_receive=instance, **item_data)
+
+                    # Adjust stock
+                    item.product.stock += quantity
+                    item.product.save()
+
+                    processed_ids.append(item.id)
+
+            # Delete items not included in update
+            items_to_delete = MaterialReceiveItem.objects.filter(material_receive=instance).exclude(id__in=processed_ids)
+            for item in items_to_delete:
+                # Revert stock before deletion
+                item.product.stock -= item.quantity
+                item.product.save()
+                item.delete()
+
+        return instance
+
 
 
 

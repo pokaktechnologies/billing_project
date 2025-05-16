@@ -158,6 +158,7 @@ class Product(models.Model):
     product_description = models.TextField(blank=True)
     unit = models.ForeignKey('Unit', on_delete=models.CASCADE, related_name='products')  # Connected as ForeignKey
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
+    stock = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     category = models.ForeignKey('Category', on_delete=models.CASCADE, related_name='products')
     sgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="SGST percentage (e.g. 9.00)")  
     cgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="CGST percentage (e.g. 9.00)")  
@@ -640,41 +641,46 @@ class PurchaseOrderItem(models.Model):
     sub_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)  # Total + SGST + CGST
 
 
-# class MaterialReceive(models.Model):
-#     supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE)
-#     purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE)
-#     material_receive_number = models.CharField(max_length=50, unique=True)
-#     received_date = models.DateField()
+class MaterialReceive(models.Model):
+    supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE)
+    purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE)
+    material_receive_number = models.CharField(max_length=50, unique=True)
+    received_date = models.DateField()
+    grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    remark = models.CharField(max_length=255, null=True, blank=True)
 
 
-# class MaterialReceiveItem(models.Model):
-#     material_receive = models.ForeignKey(MaterialReceive, on_delete=models.CASCADE, related_name='items')
-#     product = models.ForeignKey(Product, on_delete=models.CASCADE)
-#     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
-#     unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-#     total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False) # Quantity * Unit Price
-#     sgst_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-#     cgst_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-#     sub_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)  # Total + SGST + CGST
+class MaterialReceiveItem(models.Model):
+    material_receive = models.ForeignKey(MaterialReceive, on_delete=models.CASCADE, related_name='items')
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    sgst_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    cgst_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    sub_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
 
+    
     # def save(self, *args, **kwargs):
-    #     """Calculate and update total, SGST, CGST, and sub_total before saving."""
-    #     if self.unit_price == 0:
-    #         unit_price_decimal = self.product.unit_price
+    #     is_update = self.pk is not None  # Check if it's an update
+    #     print("is_update", is_update)
+    #     if self.pk:
+    #         # Get previous quantity before updating
+    #         old_item = MaterialReceiveItem.objects.get(pk=self.pk)
+    #         quantity_diff = self.quantity - old_item.quantity
+    #         self.product.stock += quantity_diff
+    #         print("))))))))))))))))")
     #     else:
-    #         unit_price_decimal = self.unit_price
+    #         # It's a new entry
+    #         print("tttttttttttttt")
+    #         self.product.stock += self.quantity
 
-    #     unit_price_decimal = Decimal(unit_price_decimal)
-    #     quantity_decimal = Decimal(self.quantity)
-    #     sgst_percentage_decimal = Decimal(str(self.sgst_percentage))
-    #     cgst_percentage_decimal = Decimal(str(self.cgst_percentage))
-        
-    #     self.total = unit_price_decimal * quantity_decimal
-    #     self.sgst = ((sgst_percentage_decimal * unit_price_decimal) / Decimal(100)) * quantity_decimal
-    #     self.cgst = ((cgst_percentage_decimal * unit_price_decimal) / Decimal(100)) * quantity_decimal
-    #     self.sub_total = self.total + self.sgst + self.cgst
-    #     super().save(*args, **kwargs)
+    #     super().save(*args, **kwargs)  # Save the MaterialReceiveItem
+    #     self.product.save()  # Save the updated stock
+
+            
+
 
 
 

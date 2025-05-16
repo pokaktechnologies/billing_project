@@ -3328,6 +3328,81 @@ class PurchaseOrderAPIView(APIView):
 
 
 
+class MaterialReceiveAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request, pk=None, format=None):
+        if pk:
+            try:
+                material_receive = MaterialReceive.objects.get(pk=pk)
+                serializer = MaterialReceiveSerializer(material_receive)
+                return Response({"status": "1", "message": "success", "data": [serializer.data]})
+            except MaterialReceive.DoesNotExist:
+                return Response(
+                    {"error": "Material Receive order not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        else:
+            material_receives = MaterialReceive.objects.all()
+
+            supplier = request.query_params.get('supplier')
+            if supplier:
+                material_receives = material_receives.filter(supplier_id=supplier)
+
+            start_date = request.query_params.get('start_date')
+            end_date = request.query_params.get('end_date')
+            if start_date and end_date:
+                material_receives = material_receives.filter(
+                    material_receive_date__gte=start_date,
+                    material_receive_date__lte=end_date
+                )
+
+            serializer = MaterialReceiveListSerializer(material_receives, many=True)
+            return Response({"status": "1", "message": "success", "data": serializer.data})
+
+    def post(self, request, format=None):
+        serializer = MaterialReceiveSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"status": "1", "message": "success", "data": serializer.data}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request, pk, format=None):
+        try:
+            material_receive = MaterialReceive.objects.get(pk=pk)
+        except MaterialReceive.DoesNotExist:
+            return Response(
+                {"error": "Material Receive order not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        serializer = MaterialReceiveSerializer(
+            material_receive, 
+            data=request.data, 
+            partial=True
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"status": "1", "message": "success", "data": serializer.data})
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk, format=None):
+        try:
+            material_receive = MaterialReceive.objects.get(pk=pk)
+        except MaterialReceive.DoesNotExist:
+            return Response(
+                {"error": "Material Receive order not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        material_receive.delete()
+        return Response(
+            {"message": "Material Receive order deleted successfully"},
+            status=status.HTTP_204_NO_CONTENT
+        )
+
+
+
+
 
 class ContractListCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]

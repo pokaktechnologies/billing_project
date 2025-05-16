@@ -857,6 +857,8 @@ class QuotationOrderAPI(APIView):
                     "total": item.total,
                     "sgst": item.sgst,
                     "cgst": item.cgst,
+                    "sgst_percentage": item.sgst_percentage,
+                    "cgst_percentage": item.cgst_percentage,
                     "sub_total": item.sub_total,
                 }
                 item_list.append(item_data)
@@ -872,6 +874,7 @@ class QuotationOrderAPI(APIView):
                     "address": quotation.delivery_address,
                     "delivery_location": quotation.delivery_location,
                     "quotation_number": quotation.quotation_number,
+                    "termsandconditions_id": quotation.termsandconditions.id if quotation.termsandconditions else None,
                     "termsandconditions": terms_data,
                     "termsandcondtions_title": quotation.termsandconditions.title if quotation.termsandconditions else "",
                     "quotation_date": str(quotation.quotation_date),

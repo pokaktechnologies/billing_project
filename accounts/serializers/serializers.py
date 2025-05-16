@@ -519,6 +519,7 @@ class StateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Country
         fields = ['name', 'country']
+        
                 
 class CustomerSerializer(serializers.ModelSerializer):
     salesperson_id = serializers.PrimaryKeyRelatedField(
@@ -576,60 +577,48 @@ class QuotationItemUpdateSerializer(serializers.ModelSerializer):
         return data        
     
 class ProductSerializer(serializers.ModelSerializer):
-    unit = serializers.CharField()  #
-    category=serializers.CharField()
-        # Output fields
+    # Input fields
+    unit = serializers.CharField(write_only=True)
+    category = serializers.CharField(write_only=True)
+    
+    # Output fields
+    unit_id = serializers.IntegerField(source='unit.id', read_only=True)
+    unit_name = serializers.CharField(source='unit.name', read_only=True)
+
     category_id = serializers.IntegerField(source='category.id', read_only=True)
     category_name = serializers.CharField(source='category.name', read_only=True)
-    
-    salesperson_id=serializers.PrimaryKeyRelatedField(
-        queryset=SalesPerson.objects.all(), source='salesperson'
-    )
-    # Display salesperson name in response
-    salesperson_name=serializers.SerializerMethodField()
 
-    
-    
     class Meta:
         model = Product
-        fields = ['id','name', 'product_description', 'unit', 'unit_price', 'category','category_id','category_name','sgst','cgst','salesperson_id','salesperson_name']
-        
-    def get_salesperson_name(self, obj):
-        if obj.salesperson:
-            return f"{obj.salesperson.first_name} {obj.salesperson.last_name}".strip()
-        return None
-    
+        fields = "__all__"
+
     def validate_unit(self, value):
-        """Fetch and return the Unit instance based on its name."""
         try:
+            if str(value).isdigit():
+                return Unit.objects.get(id=value)
             return Unit.objects.get(name=value)
         except Unit.DoesNotExist:
             raise serializers.ValidationError(f"Unit '{value}' does not exist.")
 
+
+
     def validate_category(self, value):
-        """Fetch and return the Category instance based on its name or ID."""
         try:
-            # You can modify this logic based on your input (name or ID)
-            if value.isdigit():  # Check if it's an ID
+            if value.isdigit():
                 return Category.objects.get(id=value)
-            else:  # Otherwise, assume it's a category name
+            else:
                 return Category.objects.get(name=value)
         except Category.DoesNotExist:
             raise serializers.ValidationError(f"Category '{value}' does not exist.")
 
     def create(self, validated_data):
-        """Override create method to handle unit and category assignment."""
-        unit_instance = validated_data.pop('unit')  # `unit` is already validated as a Unit instance
+        unit_instance = validated_data.pop('unit')
         category_instance = validated_data.pop('category')
-        # salesperson_instance = validated_data.pop('salesperson')
-        # `category` is also validated as a Category instance
 
         validated_data['unit'] = unit_instance
         validated_data['category'] = category_instance
-        # validated_data['salesperson'] = salesperson_instance
 
         return Product.objects.create(**validated_data)
-
 
 class TermsAndConditionsSerializer(serializers.ModelSerializer):
     class Meta:

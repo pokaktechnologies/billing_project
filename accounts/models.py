@@ -162,7 +162,7 @@ class Product(models.Model):
     category = models.ForeignKey('Category', on_delete=models.CASCADE, related_name='products')
     sgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="SGST percentage (e.g. 9.00)")  
     cgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="CGST percentage (e.g. 9.00)")  
-    salesperson = models.ForeignKey('SalesPerson', on_delete=models.CASCADE, related_name='products')
+
     def __str__(self):
         return self.name
 

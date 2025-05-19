@@ -6,10 +6,10 @@ from django.utils import timezone
 class Lead(models.Model):
     CustomUser = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='leads')
     name = models.CharField(max_length=100)
-    company = models.CharField(max_length=100)
-    email = models.EmailField(unique=False)
-    phone = models.CharField(max_length=15, unique=False)
-    enquiry = models.CharField(max_length=100)
+    company = models.CharField(max_length=100,blank=True, null=True)
+    email = models.EmailField(unique=False, blank=True, null=True)
+    phone = models.CharField(max_length=15, unique=False, blank=True, null=True)
+    enquiry = models.CharField(max_length=100, blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
     lead_status = models.CharField(max_length=50, choices=[
         ('new', 'New'),

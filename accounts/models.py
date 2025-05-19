@@ -158,7 +158,7 @@ class Product(models.Model):
     product_description = models.TextField(blank=True)
     unit = models.ForeignKey('Unit', on_delete=models.CASCADE, related_name='products')  # Connected as ForeignKey
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
-    stock = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    stock = models.DecimalField(max_digits=10, decimal_places=2, default=0,blank=True, null=True)
     category = models.ForeignKey('Category', on_delete=models.CASCADE, related_name='products')
     sgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="SGST percentage (e.g. 9.00)")  
     cgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="CGST percentage (e.g. 9.00)")  
@@ -585,7 +585,7 @@ class Customer(models.Model):
     country = models.CharField(max_length=100, blank=True, null=True)
     state = models.CharField(max_length=100, blank=True, null=True)
     company_name = models.CharField(max_length=255, blank=True, null=True)
-    address = models.TextField()
+    address = models.TextField(blank=True, null=True)
     email = models.EmailField(blank=True, null=True)
     phone = models.CharField(max_length=15, blank=True, null=True)
     mobile = models.CharField(max_length=15)

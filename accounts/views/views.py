@@ -2295,6 +2295,11 @@ class OrderNumberGeneratorView(APIView):
                 order_number = self.generate_order_number("PO",6)
                 if not PurchaseOrder.objects.filter(purchase_order_number=order_number).exists():
                     break
+        elif order_type == "MR":
+            while True:
+                order_number = self.generate_order_number("MR",6)
+                if not MaterialReceive.objects.filter(material_receive_number=order_number).exists():
+                    break
         else:
             return Response({
                 'status': '0',

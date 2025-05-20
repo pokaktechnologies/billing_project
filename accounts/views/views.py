@@ -2290,6 +2290,17 @@ class OrderNumberGeneratorView(APIView):
                 order_number = self.generate_order_number("SU",6)
                 if not Supplier.objects.filter(supplier_number=order_number).exists():
                     break
+        elif order_type == "PO":
+            while True:
+                order_number = self.generate_order_number("PO",6)
+                if not PurchaseOrder.objects.filter(purchase_order_number=order_number).exists():
+                    break
+        else:
+            return Response({
+                'status': '0',
+                'message': 'Invalid order type.',
+                'order_number': None
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         return Response({
             'status': '1',

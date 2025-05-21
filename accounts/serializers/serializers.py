@@ -651,7 +651,7 @@ class TermsAndConditionsPointSerializer(serializers.ModelSerializer):
 
 
 class PurchaseOrderListSerializer(serializers.ModelSerializer):
-    supplier_name = serializers.CharField(source='supplier.supplier_display_name', read_only=True)
+    supplier_name = serializers.CharField(source='supplier.first_name', read_only=True)
     total_items = serializers.SerializerMethodField()
     class Meta:
         model = PurchaseOrder
@@ -683,17 +683,20 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
         return data
 
 class PurchaseOrderSerializer(serializers.ModelSerializer):
-    supplier_name = serializers.CharField(source='supplier.supplier_display_name', read_only=True)
+    supplier_id = serializers.IntegerField(source='supplier.id', read_only=True)
+    supplier_name = serializers.CharField(source='supplier.first_name', read_only=True)
     items = PurchaseOrderItemSerializer(many=True, required=False)
-    
+    terms_and_conditions_id = serializers.IntegerField(source='terms_and_conditions.id', read_only=True)
+    terms_and_conditions_title = serializers.CharField(source='terms_and_conditions.title', read_only=True)
+    termsandconditions = serializers.SerializerMethodField()
     class Meta:
         model = PurchaseOrder
         fields = [
-            'id', 'supplier', 'supplier_name', 'purchase_order_number', 'purchase_order_date',
+            'id', 'supplier_id', 'supplier_name', 'purchase_order_number', 'purchase_order_date',
             'contact_person_name', 'contact_person_number', 'quotation_number',
-            'grand_total', 'remark', 'terms_and_conditions', 'items'
+            'grand_total', 'remark', 'terms_and_conditions_id', 'terms_and_conditions_title', 'termsandconditions', 'items'
         ]
-        read_only_fields = ['supplier_name']
+        read_only_fields = ['supplier_name', 'termsandconditions']
 
     def create(self, validated_data):
         items_data = validated_data.pop('items', [])
@@ -737,12 +740,18 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
         
         return instance
     
+    def get_termsandconditions(self, obj):
+        if obj.terms_and_conditions:
+            points = obj.terms_and_conditions.termsandconditionspoint_set.all()  # Assuming the related_name is 'points'
+            return TermsAndConditionsPointSerializer(points, many=True).data
+        return []
+    
 
 
 
 
 class MaterialReceiveListSerializer(serializers.ModelSerializer):
-    supplier_name = serializers.CharField(source='supplier.supplier_display_name', read_only=True)
+    supplier_name = serializers.CharField(source='supplier.first_name', read_only=True)
     class Meta:
         model = MaterialReceive
         fields = [
@@ -766,7 +775,7 @@ class MaterialReceiveItemSerializer(serializers.ModelSerializer):
         return data
 
 class MaterialReceiveSerializer(serializers.ModelSerializer):
-    supplier_name = serializers.CharField(source='supplier.supplier_display_name', read_only=True)
+    supplier_name = serializers.CharField(source='supplier.first_name', read_only=True)
     purchase_order_number = serializers.CharField(source='purchase_order.purchase_order_number', read_only=True)
     items = MaterialReceiveItemSerializer(many=True, required=False)
     

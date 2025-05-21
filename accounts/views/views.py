@@ -2251,55 +2251,39 @@ class PrintReceiptView(APIView):
 
 
 class OrderNumberGeneratorView(APIView):
-    def generate_order_number(self, code: str, length: int) -> str:
-        rand_suffix = ''.join([str(random.randint(0, 9)) for _ in range(length)])
-        return f"{code}|{rand_suffix}"
+    def generate_next_number(self, model, field_name: str, prefix: str, length: int) -> str:
+        # Filter by prefix and order descending to get the latest number
+        latest_order = model.objects.filter(**{f"{field_name}__startswith": f"{prefix}|"}).order_by(f"-{field_name}").first()
 
+        if latest_order:
+            latest_number_str = getattr(latest_order, field_name).split('|')[1]
+            next_number = int(latest_number_str) + 1
+            padded_length = len(latest_number_str)  # Use the same length as the latest number
+        else:
+            next_number = 1
+            padded_length = length  # Use the default provided length
+
+        return f"{prefix}|{next_number:0{padded_length}d}"
 
     def get(self, request):
         order_type = request.query_params.get('type')
 
         if order_type == "QU":
-            while True:
-                order_number = self.generate_order_number("QU",8)
-                if not QuotationOrderModel.objects.filter(quotation_number=order_number).exists():
-                    break
-
+            order_number = self.generate_next_number(QuotationOrderModel, "quotation_number", "QU", 8)
         elif order_type == "SO":
-            while True:
-                order_number = self.generate_order_number("SO",6)
-                if not SalesOrderModel.objects.filter(sales_order_number=order_number).exists():
-                    break
+            order_number = self.generate_next_number(SalesOrderModel, "sales_order_number", "SO", 6)
         elif order_type == "DO":
-            while True:
-                order_number = self.generate_order_number("DO",8)
-                if not DeliveryFormModel.objects.filter(delivery_number=order_number).exists():
-                    break
+            order_number = self.generate_next_number(DeliveryFormModel, "delivery_number", "DO", 8)
         elif order_type == "INV":
-            while True:
-                order_number = self.generate_order_number("INV",6)
-                if not InvoiceModel.objects.filter(invoice_number=order_number).exists():
-                    break
+            order_number = self.generate_next_number(InvoiceModel, "invoice_number", "INV", 6)
         elif order_type == "RP":
-            while True:
-                order_number = self.generate_order_number("RE",6)
-                if not ReceiptModel.objects.filter(receipt_number=order_number).exists():
-                    break
+            order_number = self.generate_next_number(ReceiptModel, "receipt_number", "RE", 6)
         elif order_type == "SU":
-            while True:
-                order_number = self.generate_order_number("SU",6)
-                if not Supplier.objects.filter(supplier_number=order_number).exists():
-                    break
+            order_number = self.generate_next_number(Supplier, "supplier_number", "SU", 6)
         elif order_type == "PO":
-            while True:
-                order_number = self.generate_order_number("PO",6)
-                if not PurchaseOrder.objects.filter(purchase_order_number=order_number).exists():
-                    break
+            order_number = self.generate_next_number(PurchaseOrder, "purchase_order_number", "PO", 6)
         elif order_type == "MR":
-            while True:
-                order_number = self.generate_order_number("MR",6)
-                if not MaterialReceive.objects.filter(material_receive_number=order_number).exists():
-                    break
+            order_number = self.generate_next_number(MaterialReceive, "material_receive_number", "MR", 6)
         else:
             return Response({
                 'status': '0',
@@ -2312,6 +2296,8 @@ class OrderNumberGeneratorView(APIView):
             'message': 'Success',
             'order_number': order_number
         }, status=status.HTTP_200_OK)
+
+
 
 
 

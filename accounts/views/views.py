@@ -2277,7 +2277,7 @@ class OrderNumberGeneratorView(APIView):
         elif order_type == "INV":
             order_number = self.generate_next_number(InvoiceModel, "invoice_number", "INV", 6)
         elif order_type == "RP":
-            order_number = self.generate_next_number(ReceiptModel, "receipt_number", "RE", 6)
+            order_number = self.generate_next_number(ReceiptModel, "receipt_number", "RP", 6)
         elif order_type == "SU":
             order_number = self.generate_next_number(Supplier, "supplier_number", "SU", 6)
         elif order_type == "PO":

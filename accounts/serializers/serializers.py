@@ -665,10 +665,11 @@ class PurchaseOrderListSerializer(serializers.ModelSerializer):
         return total_items if total_items else 0
 
 class PurchaseOrderItemSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='product.name', read_only=True)
     class Meta:
         model = PurchaseOrderItem
         fields = [
-            'id', 'product', 'quantity', 'unit_price', 'total',
+            'id', 'product', 'product_name', 'quantity', 'unit_price', 'total',
             'sgst_percentage', 'cgst_percentage', 'sub_total'
         ]
 

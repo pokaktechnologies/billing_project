@@ -874,6 +874,7 @@ class QuotationOrderAPI(APIView):
                     "address": quotation.delivery_address,
                     "delivery_location": quotation.delivery_location,
                     "quotation_number": quotation.quotation_number,
+                    "project_name": quotation.project_name,
                     "termsandconditions_id": quotation.termsandconditions.id if quotation.termsandconditions else None,
                     "termsandconditions": terms_data,
                     "termsandcondtions_title": quotation.termsandconditions.title if quotation.termsandconditions else "",
@@ -948,6 +949,7 @@ class QuotationOrderAPI(APIView):
                 quotation = QuotationOrderModel.objects.create(
                     user=CustomUser.objects.get(id=request.user.id),
                     client=Customer.objects.get(id=data.get("client")),
+                    project_name=data.get("project_name"),
                     delivery_address=data.get("delivery_address"),
                     quotation_number=data.get('quotation_number'),
                     quotation_date=data.get("quotation_date"),

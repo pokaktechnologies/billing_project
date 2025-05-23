@@ -308,6 +308,7 @@ class QuotationOrderModel(models.Model):
     client = models.ForeignKey('Customer', on_delete=models.SET_NULL, null=True, blank=True)
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE,null=True, blank=True)
     quotation_number = models.CharField(max_length=50, unique=True)
+    project_name = models.CharField(max_length=255, blank=True, null=True)
     quotation_date = models.DateField()
     delivery_address = models.TextField(max_length=100, blank=True )  
     delivery_location = models.TextField(max_length=100, blank=True)

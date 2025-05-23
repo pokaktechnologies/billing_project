@@ -2155,7 +2155,7 @@ class ReceiptView(APIView):
             invoice = get_object_or_404(InvoiceModel, id=request.data['invoice'])
             invoice.is_receipted = True
             invoice.save(update_fields=['is_receipted'])
-            serializer.save()
+            serializer.save(user=request.user)
             return Response(
                 {
                     "status": "1",

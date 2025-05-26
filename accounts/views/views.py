@@ -2254,28 +2254,28 @@ class PrintReceiptView(APIView):
 
 class OrderNumberGeneratorView(APIView):
     def generate_next_number(self, model, field_name: str, prefix: str, length: int) -> str:
+        start = 10**(length - 1) + 1  # e.g., for length 6 -> 100001
+
         # Filter by prefix and order descending to get the latest number
         latest_order = model.objects.filter(**{f"{field_name}__startswith": f"{prefix}|"}).order_by(f"-{field_name}").first()
 
         if latest_order:
             latest_number_str = getattr(latest_order, field_name).split('|')[1]
             next_number = int(latest_number_str) + 1
-            padded_length = len(latest_number_str)  # Use the same length as the latest number
         else:
-            next_number = 1
-            padded_length = length  # Use the default provided length
+            next_number = start  # Start from e.g., 100001
 
-        return f"{prefix}|{next_number:0{padded_length}d}"
+        return f"{prefix}|{next_number:0{length}d}"
 
     def get(self, request):
         order_type = request.query_params.get('type')
 
         if order_type == "QU":
-            order_number = self.generate_next_number(QuotationOrderModel, "quotation_number", "QU", 8)
+            order_number = self.generate_next_number(QuotationOrderModel, "quotation_number", "QU", 6)
         elif order_type == "SO":
             order_number = self.generate_next_number(SalesOrderModel, "sales_order_number", "SO", 6)
         elif order_type == "DO":
-            order_number = self.generate_next_number(DeliveryFormModel, "delivery_number", "DO", 8)
+            order_number = self.generate_next_number(DeliveryFormModel, "delivery_number", "DO", 6)
         elif order_type == "INV":
             order_number = self.generate_next_number(InvoiceModel, "invoice_number", "INV", 6)
         elif order_type == "RP":
@@ -2298,6 +2298,7 @@ class OrderNumberGeneratorView(APIView):
             'message': 'Success',
             'order_number': order_number
         }, status=status.HTTP_200_OK)
+
 
 
 

@@ -3312,7 +3312,7 @@ class PurchaseOrderAPIView(APIView):
 
 
 class MaterialReceiveAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
     def get(self, request, pk=None, format=None):
         if pk:
             try:

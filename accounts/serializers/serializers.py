@@ -762,10 +762,12 @@ class MaterialReceiveListSerializer(serializers.ModelSerializer):
 
 
 class MaterialReceiveItemSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    product_description = serializers.CharField(source='product.product_description', read_only=True)
     class Meta:
         model = MaterialReceiveItem
         fields = [
-            'id', 'product', 'quantity', 'unit_price', 'total',
+            'id', 'product', 'product_name', 'product_description', 'quantity', 'unit_price', 'total',
             'sgst_percentage', 'cgst_percentage', 'sub_total'
         ]
 

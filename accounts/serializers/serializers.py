@@ -207,7 +207,8 @@ class QuotationOrderSerializer(serializers.ModelSerializer):
     quotation_date = serializers.SerializerMethodField()
     class Meta:
         model = QuotationOrderModel
-        fields = '__all__'
+        # fields = '__all__'
+        exclude = ['contract']
     
     def get_quotation_date(self, obj):
         # Format: DD-MM-YYYY

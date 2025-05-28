@@ -935,9 +935,13 @@ class QuotationOrderAPI(APIView):
                 if terms_id and not TermsAndConditionsPoint.objects.filter(id=terms_id).exists():
                     return Response({"error": "Invalid terms and conditions ID"}, status=status.HTTP_400_BAD_REQUEST)
                 
-                contract = data.get("contract")
-                if contract and not Contract.objects.filter(id=contract).exists():
-                    return Response({"error": "Invalid contract ID"}, status=status.HTTP_400_BAD_REQUEST)
+                # contract = data.get("contract")
+                # if contract and not Contract.objects.filter(id=contract).exists():
+                #     return Response({"error": "Invalid contract ID"}, status=status.HTTP_400_BAD_REQUEST)
+                
+                contract_data = data.get("contract", [])
+                if not contract_data:
+                    return Response({"error": "Quotation must have a contract."}, status=status.HTTP_400_BAD_REQUEST)
                 
             # if not request.user.is_authenticated:
             #     return Response({"error": "User is not authenticated."}, status=401)
@@ -945,7 +949,7 @@ class QuotationOrderAPI(APIView):
 
 
                 
-                print("------------------------")
+                
                 quotation = QuotationOrderModel.objects.create(
                     user=CustomUser.objects.get(id=request.user.id),
                     client=Customer.objects.get(id=data.get("client")),
@@ -953,7 +957,7 @@ class QuotationOrderAPI(APIView):
                     delivery_address=data.get("delivery_address"),
                     quotation_number=data.get('quotation_number'),
                     quotation_date=data.get("quotation_date"),
-                    contract=Contract.objects.get(id=contract) if contract else None,
+                    # contract=Contract.objects.get(id=contract) if contract else None,
                     # remark=data.get("remark", ""),
                     
                     # attachments=data.get("attachments", None),
@@ -964,6 +968,18 @@ class QuotationOrderAPI(APIView):
 
 
                 )
+
+
+
+                contract = Contract.objects.create(title=contract_data['title'])
+                for section_data in contract_data.get('sections', []):
+                    section = ContractSection.objects.create(contract=contract, title=section_data.get('title', ''))
+                    
+                    for point_data in section_data.get('points', []):
+                        ContractPoint.objects.create(section=section, points=point_data['points'])
+
+                # return contract
+                quotation.contract = contract
 
                 # Create Quotation Items
                 items = data.get("items", [])
@@ -986,17 +1002,13 @@ class QuotationOrderAPI(APIView):
                     cgst_percentage = Decimal(str(item.get("cgst_percentage", 0)))
 
                     
-                    print(f"Adding Item: Product ID: {product_id}, Quantity: {quantity}, Unit Price: {unit_price}")
+                    
 
-                    # item_total = quantity * unit_price
-                    # total_amount += item_total  
-                    print("qwiueqiuytruiqwyeuityiwer")
+                    
                     if unit_price == 0:
                         
                         unit_price = product.unit_price
                     item_total = quantity * unit_price
-                    # total_amount += item_total
-                    print("0000000000000---------0", unit_price)
                     quotation_item = QuotationItem.objects.create(
                         quotation=quotation,
                         product=product,
@@ -1007,18 +1019,16 @@ class QuotationOrderAPI(APIView):
                    
                     )
                     tot_grand.append(quotation_item.sub_total)
-                print("zzzzzzzzzzz", tot_grand)
-       
+
+                
 
                 total_amount += item_total
-                print("8888888888888888888", quotation_item.sub_total)
 
                 quotation.grand_total = sum(tot_grand)
               
                 quotation.save()
 
-                print(f"Final Grand Total Saved: {quotation.grand_total}")
-                print("--- END DEBUGGING ---\n")
+                
 
                 return Response({
                     "status": "1",
@@ -1041,6 +1051,34 @@ class QuotationOrderAPI(APIView):
                     serializer.save()
                 else:
                     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+                contract_data = request.data.get("contract")
+                if contract_data:
+                    # if contract already exists, update it
+                    if quotation.contract:
+                        contract = quotation.contract
+                        contract.title = contract_data.get("title", contract.title)
+                        contract.save()
+
+                        # Delete old sections and points
+                        contract.sections.all().delete()
+                    else:
+                        contract = Contract.objects.create(title=contract_data["title"])
+                        quotation.contract = contract
+
+                    # Create new sections and points
+                    for section_data in contract_data.get("sections", []):
+                        section = ContractSection.objects.create(
+                            contract=contract,
+                            title=section_data.get("title", "")
+                        )
+                        for point_data in section_data.get("points", []):
+                            ContractPoint.objects.create(
+                                section=section,
+                                points=point_data["points"]
+                            )
+                    quotation.save()
                 
                 # check if product payload have duplicate
                 product_ids = [item.get("product") for item in request.data.get("items", [])]

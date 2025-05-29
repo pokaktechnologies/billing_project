@@ -3445,7 +3445,7 @@ class ContractListCreateAPIView(APIView):
 
     
     def patch(self, request, contract_id):
-        contract = get_object_or_404(Contract, id=contract_id)
+        contract = get_object_or_404(Contract, id=contract_id, is_template=True)
         serializer = ContractSerializer(contract, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -3453,11 +3453,19 @@ class ContractListCreateAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def delete(self, request, contract_id):
-        contract = get_object_or_404(Contract, id=contract_id)
+        contract = get_object_or_404(Contract, id=contract_id, is_template=True)
         contract.delete()
         return Response({"status": "1", "message": "Contract Deleted Succesfully"}, status=status.HTTP_204_NO_CONTENT)
 
 
+class ContractDetailViewApiView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, contract_id):
+        contract = get_object_or_404(Contract, id=contract_id, is_template=True)
+        serializer = ContractDetailSerializer(contract)
+        return Response({"status": "1", "message": "success", "data": [serializer.data]})
+    
 
 
 # Section

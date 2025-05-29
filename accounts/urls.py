@@ -105,6 +105,7 @@ urlpatterns = [
 
     path('contracts/', ContractListCreateAPIView.as_view()),
     path('contracts/<int:contract_id>/', ContractListCreateAPIView.as_view()),
+    path('contracts/<int:contract_id>/detail/', ContractDetailViewApiView.as_view()),
 
     # Sections
     path('contracts/<int:contract_id>/sections/', ContractSectionListCreateAPIView.as_view()),

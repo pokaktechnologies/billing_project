@@ -922,3 +922,17 @@ class ContractSerializer(serializers.ModelSerializer):
     class Meta:
         model = Contract
         fields = ['id', 'title', 'created_at']
+
+
+class ContractSectionDetailSerializer(serializers.ModelSerializer):
+    points = ContractPointSerializer(many=True, read_only=True)
+    class Meta:
+        model = ContractSection
+        fields = ['id', 'title', 'contract', 'points']
+
+
+class ContractDetailSerializer(serializers.ModelSerializer):
+    sections = ContractSectionDetailSerializer(many=True, read_only=True)
+    class Meta:
+        model = Contract
+        fields = ['id', 'title', 'created_at', 'sections']

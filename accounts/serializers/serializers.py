@@ -220,6 +220,7 @@ class QuotationItemSerializer(serializers.ModelSerializer):
     unit_price = serializers.SerializerMethodField()
     product_name = serializers.CharField(source='product.name', read_only=True)
     product_description = serializers.CharField(source='product.product_description', read_only=True)
+    quantity = serializers.SerializerMethodField()
     class Meta:
         model = QuotationItem
         fields = "__all__"   
@@ -227,7 +228,11 @@ class QuotationItemSerializer(serializers.ModelSerializer):
     def get_unit_price(self, obj):
         if obj.unit_price == 0:
             return obj.product.unit_price
-        return obj.unit_price            
+        return obj.unit_price   
+
+    def get_quantity(self, obj):
+        q = obj.quantity
+        return int(q) if q == int(q) else float(q)      
         
 class NewQuotationOrderSerializer(serializers.ModelSerializer):
     class Meta:
@@ -237,6 +242,7 @@ class NewQuotationOrderSerializer(serializers.ModelSerializer):
 
 class NewQuotationItemSerializer(serializers.ModelSerializer):
     quotation = NewQuotationOrderSerializer()
+
     class Meta:
         model = QuotationItem
         fields = ['quotation', 'product', 'quantity'] 
@@ -253,6 +259,7 @@ class PrintQuotationOrderSerializer(serializers.ModelSerializer):
     total = serializers.SerializerMethodField()
     contract_title = serializers.CharField(source='contract.title', read_only=True)
     contract = serializers.SerializerMethodField()
+
     class Meta:
         model = QuotationOrderModel
         fields = '__all__'
@@ -333,10 +340,20 @@ class NewsalesOrderSerializer(serializers.ModelSerializer):
 class SalesOrderItemSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
     product_description = serializers.CharField(source='product.product_description', read_only=True)
+    quantity = serializers.SerializerMethodField()
+    pending_quantity = serializers.SerializerMethodField()
     
     class Meta:
         model = SalesOrderItem
         fields = '__all__'
+    
+    def get_quantity(self, obj):
+        q = obj.quantity
+        return int(q) if q == int(q) else float(q)
+    
+    def get_pending_quantity(self, obj):
+        q = obj.pending_quantity
+        return int(q) if q == int(q) else float(q)
     
 
 
@@ -397,9 +414,14 @@ class NewDeliverySerializer(serializers.ModelSerializer):
 
 class DeliveryItemsSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
+    delivered_quantity = serializers.SerializerMethodField()
     class Meta:
         model = DeliveryItem
         fields = '__all__' 
+    
+    def get_delivered_quantity(self, obj):
+        q = obj.delivered_quantity
+        return int(q) if q == int(q) else float(q)
 
 
 

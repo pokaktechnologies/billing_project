@@ -218,21 +218,32 @@ class QuotationOrderSerializer(serializers.ModelSerializer):
 
 class QuotationItemSerializer(serializers.ModelSerializer):
     unit_price = serializers.SerializerMethodField()
+    total = serializers.SerializerMethodField()
+    sub_total = serializers.SerializerMethodField()
     product_name = serializers.CharField(source='product.name', read_only=True)
     product_description = serializers.CharField(source='product.product_description', read_only=True)
     quantity = serializers.SerializerMethodField()
+
     class Meta:
         model = QuotationItem
         fields = "__all__"   
 
     def get_unit_price(self, obj):
-        if obj.unit_price == 0:
-            return obj.product.unit_price
-        return obj.unit_price   
+        price = obj.product.unit_price if obj.unit_price == 0 else obj.unit_price
+        return "{:,.2f}".format(price)
+    
+    def get_total(self, obj):
+        price = obj.product.total if obj.total == 0 else obj.total
+        return "{:,.2f}".format(price)
+    
+    def get_sub_total(self, obj):
+        price = obj.product.sub_total if obj.sub_total == 0 else obj.sub_total
+        return "{:,.2f}".format(price)
 
     def get_quantity(self, obj):
         q = obj.quantity
-        return int(q) if q == int(q) else float(q)      
+        return int(q) if q == int(q) else float(q)
+ 
         
 class NewQuotationOrderSerializer(serializers.ModelSerializer):
     class Meta:
@@ -259,6 +270,7 @@ class PrintQuotationOrderSerializer(serializers.ModelSerializer):
     total = serializers.SerializerMethodField()
     contract_title = serializers.CharField(source='contract.title', read_only=True)
     contract = serializers.SerializerMethodField()
+    grand_total = serializers.SerializerMethodField()
 
     class Meta:
         model = QuotationOrderModel
@@ -268,6 +280,10 @@ class PrintQuotationOrderSerializer(serializers.ModelSerializer):
         if obj.client and obj.client.salesperson:
             return SalesPersonSerializer(obj.client.salesperson).data
         return None
+    
+    def get_grand_total(self, obj):
+        price = obj.grand_total if obj.grand_total == 0 else obj.grand_total
+        return "{:,.2f}".format(price)
 
 
     def get_termsandconditions(self, obj):

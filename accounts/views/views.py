@@ -3429,17 +3429,17 @@ class ContractListCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request, contract_id=None):
         if contract_id:
-            contract = get_object_or_404(Contract, id=contract_id)
+            contract = get_object_or_404(Contract, id=contract_id, is_template=True)
             serializer = ContractSerializer(contract)
             return Response({"status": "1", "message": "success", "data": [serializer.data]})
-        contracts = Contract.objects.all()
+        contracts = Contract.objects.filter(is_template=True)
         serializer = ContractSerializer(contracts, many=True)
         return Response({"status": "1", "message": "success", "data": serializer.data})
 
     def post(self, request, contract_id=None):
         serializer = ContractSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            serializer.save(is_template=True)
             return Response({"status": "1", "message": "success", "data": serializer.data}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

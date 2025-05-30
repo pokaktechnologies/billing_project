@@ -228,17 +228,24 @@ class QuotationItemSerializer(serializers.ModelSerializer):
         model = QuotationItem
         fields = "__all__"   
 
+    def format_currency(self, value):
+        # Format float or Decimal with commas and 2 decimal places
+        return "{:,.2f}".format(value)
+
     def get_unit_price(self, obj):
-        price = obj.product.unit_price if obj.unit_price == 0 else obj.unit_price
-        return "{:,.2f}".format(price)
-    
+        return self.format_currency(obj.unit_price)
+
     def get_total(self, obj):
-        price = obj.product.total if obj.total == 0 else obj.total
-        return "{:,.2f}".format(price)
-    
+        return self.format_currency(obj.total)
+
+    def get_sgst(self, obj):
+        return self.format_currency(obj.sgst)
+
+    def get_cgst(self, obj):
+        return self.format_currency(obj.cgst)
+
     def get_sub_total(self, obj):
-        price = obj.product.sub_total if obj.sub_total == 0 else obj.sub_total
-        return "{:,.2f}".format(price)
+        return self.format_currency(obj.sub_total)
 
     def get_quantity(self, obj):
         q = obj.quantity
@@ -276,47 +283,45 @@ class PrintQuotationOrderSerializer(serializers.ModelSerializer):
         model = QuotationOrderModel
         fields = '__all__'
     
+    def format_price(self, price):
+        try:
+            return "{:,.2f}".format(float(price))
+        except (ValueError, TypeError):
+            return price
+    
     def get_salesperson(self, obj):
         if obj.client and obj.client.salesperson:
             return SalesPersonSerializer(obj.client.salesperson).data
         return None
     
     def get_grand_total(self, obj):
-        price = obj.grand_total if obj.grand_total == 0 else obj.grand_total
-        return "{:,.2f}".format(price)
-
-
+        return self.format_price(obj.grand_total)
+    
     def get_termsandconditions(self, obj):
-        # Get related TermsAndConditions
         terms = obj.termsandconditions
-        # Get points related to this TermsAndConditions
         points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=terms)
         return PrintTermsAndConditionsSerializer(points, many=True).data
     
     def get_subtotal(self, obj):
-        #calculate subtotal from items
-        subtotal = 0
-        for item in obj.items.all():
-            subtotal += item.sub_total
-        return subtotal
-    
+        subtotal = sum(item.sub_total for item in obj.items.all())
+        return "{:,.2f}".format(subtotal)
+
     def get_total(self, obj):
-        total = 0
-        for item in obj.items.all():
-            total += item.sub_total + item.sgst + item.cgst  # Add SGST and CGST to subtotal
-        return total
+        # If total includes taxes outside the sub_total, sum accordingly
+        # But usually sub_total includes taxes, so sum sub_total is enough
+        total = sum(item.total for item in obj.items.all())
+        return "{:,.2f}".format(total)
     
     def get_contract(self, obj):
         contract = obj.contract
         if not contract:
             return None
 
-        # Convert contract to dict
         contract_data = {
             **contract.__dict__,
             'sections': []
         }
-        contract_data.pop('_state', None)  # Remove internal Django field
+        contract_data.pop('_state', None)
 
         for section in contract.sections.all():
             section_data = {
@@ -327,6 +332,7 @@ class PrintQuotationOrderSerializer(serializers.ModelSerializer):
             contract_data['sections'].append(section_data)
 
         return contract_data
+
 
 
 
@@ -353,27 +359,66 @@ class NewsalesOrderSerializer(serializers.ModelSerializer):
              'salesperson_name',
              )
 
+# class SalesOrderItemSerializer(serializers.ModelSerializer):
+#     product_name = serializers.CharField(source='product.name', read_only=True)
+#     product_description = serializers.CharField(source='product.product_description', read_only=True)
+#     quantity = serializers.SerializerMethodField()
+#     pending_quantity = serializers.SerializerMethodField()
+    
+#     class Meta:
+#         model = SalesOrderItem
+#         fields = '__all__'
+    
+#     def get_quantity(self, obj):
+#         q = obj.quantity
+#         return int(q) if q == int(q) else float(q)
+    
+#     def get_pending_quantity(self, obj):
+#         q = obj.pending_quantity
+#         return int(q) if q == int(q) else float(q)
+    
+
 class SalesOrderItemSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
     product_description = serializers.CharField(source='product.product_description', read_only=True)
     quantity = serializers.SerializerMethodField()
     pending_quantity = serializers.SerializerMethodField()
-    
+    unit_price = serializers.SerializerMethodField()
+    total = serializers.SerializerMethodField()
+    sgst = serializers.SerializerMethodField()
+    cgst = serializers.SerializerMethodField()
+    sub_total = serializers.SerializerMethodField()
+
     class Meta:
         model = SalesOrderItem
         fields = '__all__'
-    
+
     def get_quantity(self, obj):
         q = obj.quantity
         return int(q) if q == int(q) else float(q)
-    
+
     def get_pending_quantity(self, obj):
         q = obj.pending_quantity
         return int(q) if q == int(q) else float(q)
-    
 
+    def format_currency(self, value):
+        # Format float or Decimal with commas and 2 decimal places
+        return "{:,.2f}".format(value)
 
+    def get_unit_price(self, obj):
+        return self.format_currency(obj.unit_price)
 
+    def get_total(self, obj):
+        return self.format_currency(obj.total)
+
+    def get_sgst(self, obj):
+        return self.format_currency(obj.sgst)
+
+    def get_cgst(self, obj):
+        return self.format_currency(obj.cgst)
+
+    def get_sub_total(self, obj):
+        return self.format_currency(obj.sub_total)
 
 class PrintSalesOrderSerializer(serializers.ModelSerializer):
     bank = serializers.SerializerMethodField()
@@ -385,39 +430,47 @@ class PrintSalesOrderSerializer(serializers.ModelSerializer):
     termsandconditions = serializers.SerializerMethodField()
     termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
 
-
     class Meta:
         model = SalesOrderModel
         fields = '__all__'
-        read_only_fields = ('sales_order_number', "termsandconditions_title" 'grand_total','customer', 'bank', 'items', 'salesperson', 'subtotal', 'total')
+        read_only_fields = (
+            'sales_order_number', 
+            'termsandconditions_title', 
+            'grand_total',
+            'customer', 
+            'bank', 
+            'items', 
+            'salesperson', 
+            'subtotal', 
+            'total'
+        )
 
     def get_bank(self, obj):
         bank = obj.bank_account
         return BankAccountSerializer(bank).data if bank else None
 
     def get_salesperson(self, obj):
-        salesperson = obj.customer.salesperson
-        return SalesPersonSerializer(salesperson).data if salesperson else None
+        # Get salesperson via customer relation
+        if obj.customer and obj.customer.salesperson:
+            return SalesPersonSerializer(obj.customer.salesperson).data
+        return None
+
     
     def get_subtotal(self, obj):
-        #calculate subtotal from items
-        subtotal = 0
-        for item in obj.items.all():
-            subtotal += item.sub_total
-        return subtotal
+        subtotal = sum(item.sub_total for item in obj.items.all())
+        return "{:,.2f}".format(subtotal)
 
     def get_total(self, obj):
-        total = 0
-        for item in obj.items.all():
-            total += item.sub_total + item.sgst + item.cgst  # Add SGST and CGST to subtotal
-        return total
+        # If total includes taxes outside the sub_total, sum accordingly
+        # But usually sub_total includes taxes, so sum sub_total is enough
+        total = sum(item.total for item in obj.items.all())
+        return "{:,.2f}".format(total)
     
     def get_termsandconditions(self, obj):
-        # Get related TermsAndConditions
         terms = obj.termsandconditions
-        # Get points related to this TermsAndConditions
         points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=terms)
         return PrintTermsAndConditionsSerializer(points, many=True).data
+
 
 class NewDeliverySerializer(serializers.ModelSerializer):
     client_firstname = serializers.CharField(source='customer.first_name', read_only=True)
@@ -431,6 +484,11 @@ class NewDeliverySerializer(serializers.ModelSerializer):
 class DeliveryItemsSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
     delivered_quantity = serializers.SerializerMethodField()
+    unit_price = serializers.SerializerMethodField()
+    total = serializers.SerializerMethodField()
+    sgst = serializers.SerializerMethodField()
+    cgst = serializers.SerializerMethodField()
+    sub_total = serializers.SerializerMethodField()
     class Meta:
         model = DeliveryItem
         fields = '__all__' 
@@ -439,8 +497,24 @@ class DeliveryItemsSerializer(serializers.ModelSerializer):
         q = obj.delivered_quantity
         return int(q) if q == int(q) else float(q)
 
+    def format_currency(self, value):
+        # Format float or Decimal with commas and 2 decimal places
+        return "{:,.2f}".format(value)
 
+    def get_unit_price(self, obj):
+        return self.format_currency(obj.unit_price)
 
+    def get_total(self, obj):
+        return self.format_currency(obj.total)
+
+    def get_sgst(self, obj):
+        return self.format_currency(obj.sgst)
+
+    def get_cgst(self, obj):
+        return self.format_currency(obj.cgst)
+
+    def get_sub_total(self, obj):
+        return self.format_currency(obj.sub_total)
 
 
 class PrintDeliverySerializer(serializers.ModelSerializer):
@@ -448,10 +522,26 @@ class PrintDeliverySerializer(serializers.ModelSerializer):
     customer = CustomerSerializer(read_only=True)
     termsandconditions = serializers.SerializerMethodField()
     sales_order_number = serializers.CharField(source='sales_order.sales_order_number', read_only=True)
+    subtotal = serializers.SerializerMethodField()
+    total = serializers.SerializerMethodField()
+    grand_total = serializers.SerializerMethodField()
 
     class Meta:
         model = DeliveryFormModel
         fields = '__all__'
+
+    def get_subtotal(self, obj):
+        subtotal = sum(item.sub_total for item in obj.items.all())
+        return "{:,.2f}".format(subtotal)
+
+    def get_total(self, obj):
+        # If total includes taxes outside the sub_total, sum accordingly
+        # But usually sub_total includes taxes, so sum sub_total is enough
+        total = sum(item.total for item in obj.items.all())
+        return "{:,.2f}".format(total)
+    
+    def get_grand_total(self, obj):
+        return "{:,.2f}".format(obj.grand_total)
 
     def get_termsandconditions(self, obj):
         # Get related TermsAndConditions
@@ -481,10 +571,15 @@ class PrintInvoiceSerializer(serializers.ModelSerializer):
     sales_order_number = serializers.CharField(source='sales_order.sales_order_number', read_only=True)
     salesperson = serializers.SerializerMethodField()
     termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
+    invoice_grand_total = serializers.SerializerMethodField()
+
 
     class Meta:
         model = InvoiceModel
         fields = '__all__'
+    
+    def get_invoice_grand_total(self, obj):
+        return "{:,.2f}".format(obj.invoice_grand_total)
     
     def get_salesperson(self, obj):
         salesperson = obj.sales_order.customer.salesperson
@@ -527,12 +622,15 @@ class PrintReceiptSerializer(serializers.ModelSerializer):
     salesperson = serializers.SerializerMethodField()
     client = CustomerSerializer(read_only=True)
     invoice_number = serializers.CharField(source='invoice.invoice_number', read_only=True)
-    invoice_grand_total = serializers.CharField(source='invoice.invoice_grand_total', read_only=True)
+    invoice_grand_total = serializers.SerializerMethodField()
 
     class Meta:
         model = ReceiptModel
         fields = '__all__'
-    
+
+    def get_invoice_grand_total(self, obj):
+        return "{:,.2f}".format(obj.invoice.invoice_grand_total)
+        
     def get_termsandconditions(self, obj):
         # Get related TermsAndConditions
         terms = obj.termsandconditions

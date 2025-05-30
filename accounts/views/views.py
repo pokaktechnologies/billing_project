@@ -2143,7 +2143,7 @@ class PrintInvoiceView(APIView):
             # mega_grand_total += grand_total
 
         for item in delivery_items:
-            item_data = DeliveryItemsSerializer(item).data
+            item_data = PrintDeliveryItemsSerializer(item).data
             item_data.update({
                 "delivary_number": item.delivery_form.delivery_number,
                 "delivary_id": item.delivery_form.id,
@@ -2272,7 +2272,7 @@ class PrintReceiptView(APIView):
         items_data = []        
 
         for item in items:
-            item_data = DeliveryItemsSerializer(item).data
+            item_data = PrintDeliveryItemsSerializer(item).data
             item_data.update({
                 "delivary_number": item.delivery_form.delivery_number,
                 "delivary_id": item.delivery_form.id,

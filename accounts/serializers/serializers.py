@@ -420,6 +420,15 @@ class SalesOrderItemSerializer(serializers.ModelSerializer):
     def get_sub_total(self, obj):
         return self.format_currency(obj.sub_total)
 
+
+class SalesOrderItemOnlySerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    product_description = serializers.CharField(source='product.product_description', read_only=True)
+    
+    class Meta:
+        model = SalesOrderItem
+        fields = '__all__'
+
 class PrintSalesOrderSerializer(serializers.ModelSerializer):
     bank = serializers.SerializerMethodField()
     items = SalesOrderItemSerializer(many=True, read_only=True)

@@ -1498,7 +1498,7 @@ class SalesOrderItemsList(APIView):
     def get(self, request, sid=None):
         sales_order = get_object_or_404(SalesOrderModel, id=sid)
         items = SalesOrderItem.objects.filter(sales_order=sales_order,is_item_delivered=False)
-        serializer = SalesOrderItemSerializer(items, many=True)
+        serializer = SalesOrderItemOnlySerializer(items, many=True)
         return Response({"status": "1", "data": serializer.data}, status=status.HTTP_200_OK)
 
 class SalesOrderByNotDelivered(APIView):

@@ -479,9 +479,21 @@ class NewDeliverySerializer(serializers.ModelSerializer):
     termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
     class Meta:
         model = DeliveryFormModel
-        fields = '__all__'    
+        fields = '__all__'
 
 class DeliveryItemsSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    delivered_quantity = serializers.SerializerMethodField()
+    class Meta:
+        model = DeliveryItem
+        fields = '__all__' 
+    
+    def get_delivered_quantity(self, obj):
+        q = obj.delivered_quantity
+        return int(q) if q == int(q) else float(q)
+
+
+class PrintDeliveryItemsSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
     delivered_quantity = serializers.SerializerMethodField()
     unit_price = serializers.SerializerMethodField()
@@ -518,7 +530,7 @@ class DeliveryItemsSerializer(serializers.ModelSerializer):
 
 
 class PrintDeliverySerializer(serializers.ModelSerializer):
-    items = DeliveryItemsSerializer(many=True, read_only=True)
+    items = PrintDeliveryItemsSerializer(many=True, read_only=True)
     customer = CustomerSerializer(read_only=True)
     termsandconditions = serializers.SerializerMethodField()
     sales_order_number = serializers.CharField(source='sales_order.sales_order_number', read_only=True)

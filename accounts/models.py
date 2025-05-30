@@ -633,7 +633,7 @@ class PurchaseOrder(models.Model):
 class PurchaseOrderItem(models.Model):
     purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
-    quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
+    quantity = models.PositiveIntegerField(default=1)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=12, decimal_places=2, default=0)  # Quantity * Unit Price
     sgst_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
@@ -653,7 +653,7 @@ class MaterialReceive(models.Model):
 class MaterialReceiveItem(models.Model):
     material_receive = models.ForeignKey(MaterialReceive, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
-    quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
+    quantity = models.PositiveIntegerField(default=1)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     sgst_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)

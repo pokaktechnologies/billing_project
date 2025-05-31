@@ -848,6 +848,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
     supplier_id = serializers.IntegerField(source='supplier.id', read_only=True)
     supplier_name = serializers.CharField(source='supplier.first_name', read_only=True)
     items = PurchaseOrderItemSerializer(many=True, required=False)
+    supplier_details = SupplierSerializer(source='supplier', read_only=True)
     terms_and_conditions_id = serializers.IntegerField(source='terms_and_conditions.id', read_only=True)
     terms_and_conditions_title = serializers.CharField(source='terms_and_conditions.title', read_only=True)
     termsandconditions = serializers.SerializerMethodField()
@@ -856,7 +857,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'supplier', 'supplier_id', 'supplier_name', 'purchase_order_number', 'purchase_order_date',
             'contact_person_name', 'contact_person_number', 'quotation_number',
-            'grand_total', 'remark', 'terms_and_conditions', 'terms_and_conditions_id', 'terms_and_conditions_title', 'termsandconditions', 'items'
+            'grand_total', 'remark', 'terms_and_conditions', 'terms_and_conditions_id', 'terms_and_conditions_title', 'termsandconditions', 'items', 'supplier_details'
         ]
         read_only_fields = ['supplier_name', 'termsandconditions']
         extra_kwargs = {

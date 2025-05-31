@@ -3288,7 +3288,7 @@ class PurchaseOrderAPIView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
         else:
-            purchase_orders = PurchaseOrder.objects.all()
+            purchase_orders = PurchaseOrder.objects.all().order_by('-id')
 
             supplier = request.query_params.get('supplier')
             if supplier:
@@ -3363,7 +3363,7 @@ class MaterialReceiveAPIView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
         else:
-            material_receives = MaterialReceive.objects.all()
+            material_receives = MaterialReceive.objects.all().order_by('-id')
 
             supplier = request.query_params.get('supplier')
             if supplier:

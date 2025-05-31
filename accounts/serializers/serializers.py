@@ -852,11 +852,15 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = PurchaseOrder
         fields = [
-            'id', 'supplier_id', 'supplier_name', 'purchase_order_number', 'purchase_order_date',
+            'id', 'supplier', 'supplier_id', 'supplier_name', 'purchase_order_number', 'purchase_order_date',
             'contact_person_name', 'contact_person_number', 'quotation_number',
-            'grand_total', 'remark', 'terms_and_conditions_id', 'terms_and_conditions_title', 'termsandconditions', 'items'
+            'grand_total', 'remark', 'terms_and_conditions', 'terms_and_conditions_id', 'terms_and_conditions_title', 'termsandconditions', 'items'
         ]
         read_only_fields = ['supplier_name', 'termsandconditions']
+        extra_kwargs = {
+            'supplier': {'write_only': True},
+            'terms_and_conditions': {'write_only': True},
+        }
 
     def create(self, validated_data):
         items_data = validated_data.pop('items', [])

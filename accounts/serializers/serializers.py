@@ -492,6 +492,7 @@ class NewDeliverySerializer(serializers.ModelSerializer):
 
 class DeliveryItemsSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
+    product_description = serializers.CharField(source='product.product_description', read_only=True)
     delivered_quantity = serializers.SerializerMethodField()
     class Meta:
         model = DeliveryItem
@@ -504,6 +505,7 @@ class DeliveryItemsSerializer(serializers.ModelSerializer):
 
 class PrintDeliveryItemsSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
+    product_description = serializers.CharField(source='product.product_description', read_only=True)
     delivered_quantity = serializers.SerializerMethodField()
     unit_price = serializers.SerializerMethodField()
     total = serializers.SerializerMethodField()

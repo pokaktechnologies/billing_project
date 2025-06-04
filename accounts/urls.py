@@ -1,6 +1,11 @@
 from django.urls import path
 from .views.views import *
-from accounts.views.user import ProfileAPIView
+from accounts.views.user import  (
+    ProfileAPIView,
+    AssignPermissionView,
+    UserModulesView,
+    CreateStaffWithPermissionsView
+)
 
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -14,6 +19,9 @@ urlpatterns = [
     path('profile/', ProfileAPIView.as_view()),
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('create-staff/', CreateStaffWithPermissionsView.as_view(), name="create-staff"),
+    path('admin/assign-permissions/', AssignPermissionView.as_view()),
+    path('user/modules/', UserModulesView.as_view()),
 
 
     path('getting-started/', GettingStartedView.as_view(), name='getting_started'),

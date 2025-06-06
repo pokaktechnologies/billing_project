@@ -704,8 +704,9 @@ class ModulePermission(models.Model):
         ("delivery", "Delivery"),
         ("client", "Client"),
         ("sales_person", "Sales Person"),
+        ("setup", "Setup"),
         ("leads", "Leads"),
-        ("projects", "Projects"),
+        ("project_management", "Project Management"),
         ("supplier", "Supplier"),
         ("purchase", "Purchase"),
         ("material_receive", "Material Receive"),
@@ -714,10 +715,10 @@ class ModulePermission(models.Model):
         ("stock", "Stock"),
         ("expense", "Expense"),
         ("reports", "Reports"),
-        ("returns", "Sales Returns"),
+        ("sales_returns", "Sales Returns"),
         ("accounts", "Accounts"),
         ("payments", "Payments"),
-        ("contracts", "Contracts"),
+        ("products", "Products"),
     ]
 
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="module_permissions")

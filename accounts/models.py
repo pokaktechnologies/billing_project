@@ -158,7 +158,8 @@ class Product(models.Model):
     product_description = models.TextField(blank=True)
     unit = models.ForeignKey('Unit', on_delete=models.CASCADE, related_name='products')  # Connected as ForeignKey
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
-    stock = models.DecimalField(max_digits=10, decimal_places=2, default=0,blank=True, null=True)
+    # stock = models.DecimalField(max_digits=10, decimal_places=2, default=0,blank=True, null=True)
+    stock = models.IntegerField(default=0)  # Stock quantity
     category = models.ForeignKey('Category', on_delete=models.CASCADE, related_name='products')
     sgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="SGST percentage (e.g. 9.00)")  
     cgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="CGST percentage (e.g. 9.00)")  
@@ -691,3 +692,38 @@ class ContractPoint(models.Model):
 
     def __str__(self):
         return self.points[:50]
+    
+
+
+# models.py
+class ModulePermission(models.Model):
+    MODULE_CHOICES = [
+        ("quotation", "Quotation"),
+        ("sales_order", "Sales Order"),
+        ("delivery", "Delivery"),
+        ("client", "Client"),
+        ("sales_person", "Sales Person"),
+        ("leads", "Leads"),
+        ("projects", "Projects"),
+        ("supplier", "Supplier"),
+        ("purchase", "Purchase"),
+        ("material_receive", "Material Receive"),
+        ("invoice", "Invoice"),
+        ("receipt", "Receipt"),
+        ("stock", "Stock"),
+        ("expense", "Expense"),
+        ("reports", "Reports"),
+        ("returns", "Sales Returns"),
+        ("accounts", "Accounts"),
+        ("payments", "Payments"),
+        ("contracts", "Contracts"),
+    ]
+
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="module_permissions")
+    module_name = models.CharField(max_length=50, choices=MODULE_CHOICES)
+
+    class Meta:
+        unique_together = ('user', 'module_name')
+
+    def __str__(self):
+        return f"{self.user.email} - {self.module_name}"

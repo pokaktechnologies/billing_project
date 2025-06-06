@@ -13,6 +13,7 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.parsers import MultiPartParser, FormParser
 from ..models import *
 from ..serializers.serializers import *
+from accounts.permissions import HasModulePermission
 from rest_framework.authtoken.models import Token 
 from decimal import Decimal
 from django.utils.dateparse import parse_date
@@ -3288,7 +3289,7 @@ class PurchaseOrderAPIView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
         else:
-            purchase_orders = PurchaseOrder.objects.all()
+            purchase_orders = PurchaseOrder.objects.all().order_by('-id')
 
             supplier = request.query_params.get('supplier')
             if supplier:
@@ -3363,7 +3364,7 @@ class MaterialReceiveAPIView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
         else:
-            material_receives = MaterialReceive.objects.all()
+            material_receives = MaterialReceive.objects.all().order_by('-id')
 
             supplier = request.query_params.get('supplier')
             if supplier:
@@ -3426,7 +3427,8 @@ class MaterialReceiveAPIView(APIView):
 
 
 class ContractListCreateAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'contracts'
     def get(self, request, contract_id=None):
         if contract_id:
             contract = get_object_or_404(Contract, id=contract_id, is_template=True)

@@ -1849,6 +1849,51 @@ class DeliveryOrderIsInvoiced(APIView):
 
 
 
+from django.shortcuts import get_list_or_404
+
+class DelivaryOrderItemsList(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        ids = request.query_params.get('ids')
+        
+        if not ids:
+            return Response(
+                {"status": "0", "message": "No delivery IDs provided."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            delivery_ids = [int(id.strip()) for id in ids.split(',')]
+        except ValueError:
+            return Response(
+                {"status": "0", "message": "Invalid delivery ID format."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        deliveries = DeliveryFormModel.objects.filter(id__in=delivery_ids)
+        if not deliveries.exists():
+            return Response(
+                {"status": "0", "message": "No deliveries found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        result = []
+
+        for delivery in deliveries:
+            items = DeliveryItem.objects.filter(delivery_form=delivery)
+            serialized_items = DeliveryItemsSerializer(items, many=True).data
+
+            result.append({
+                "delivery_id": delivery.id,
+                "delivery_number": delivery.delivery_number,
+                "grand_total": float(delivery.grand_total),
+                "items": serialized_items
+            })
+
+        return Response({"status": "1", "data": result}, status=status.HTTP_200_OK)
+
+
 
 class InvoiceOrderAPI(APIView):
     permission_classes = [IsAuthenticated]

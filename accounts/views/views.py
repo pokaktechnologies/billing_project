@@ -2208,6 +2208,34 @@ class PrintInvoiceView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+
+class InvoiceOrderIsReceipted(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, client_id=None):
+        if not client_id:
+            return Response(
+                {"status": "0", "message": "Client ID is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        client = get_object_or_404(Customer, id=client_id)
+        
+        invoices = InvoiceModel.objects.filter(client=client, is_receipted=False).order_by('-created_at')
+
+        if not invoices.exists():
+            return Response(
+                {"status": "0", "message": "No invoices found for this client.", "data": []},
+                status=status.HTTP_200_OK
+            )
+        
+        serialized_data = InvoiceModelSerializer(invoices, many=True).data
+
+        return Response(
+            {"status": "1", "data": serialized_data},
+            status=status.HTTP_200_OK
+        )
+
 class ReceiptView(APIView):
     def get(self, request, rec_id=None):
         if rec_id:

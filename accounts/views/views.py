@@ -933,6 +933,7 @@ class QuotationOrderAPI(APIView):
             
             with transaction.atomic():
                 terms_id = data.get("termsandconditions")
+                print("terms_id", terms_id)
                 if terms_id and not TermsAndConditionsPoint.objects.filter(id=terms_id).exists():
                     return Response({"error": "Invalid terms and conditions ID"}, status=status.HTTP_400_BAD_REQUEST)
                 
@@ -946,10 +947,6 @@ class QuotationOrderAPI(APIView):
                 
             # if not request.user.is_authenticated:
             #     return Response({"error": "User is not authenticated."}, status=401)
-            
-
-
-                
                 
                 quotation = QuotationOrderModel.objects.create(
                     user=CustomUser.objects.get(id=request.user.id),
@@ -965,13 +962,8 @@ class QuotationOrderAPI(APIView):
                     #grand_total=0  ,
                     delivery_location=data.get("delivery_location", ""),  # New Field
                     # bank_account_id= bank_account_id,
-                    termsandconditions_id=terms_id  # Add terms and conditions
-
-
+                    termsandconditions_id=terms_id  # Add terms and condition
                 )
-
-
-
                 contract = Contract.objects.create(title=contract_data['title'])
                 for section_data in contract_data.get('sections', []):
                     section = ContractSection.objects.create(contract=contract, title=section_data.get('title', ''))

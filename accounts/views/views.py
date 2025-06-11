@@ -934,7 +934,7 @@ class QuotationOrderAPI(APIView):
             with transaction.atomic():
                 terms_id = data.get("termsandconditions")
                 print("terms_id", terms_id)
-                if terms_id and not TermsAndConditionsPoint.objects.filter(id=terms_id).exists():
+                if terms_id and not TermsAndConditions.objects.filter(id=terms_id).exists():
                     return Response({"error": "Invalid terms and conditions ID"}, status=status.HTTP_400_BAD_REQUEST)
                 
                 # contract = data.get("contract")

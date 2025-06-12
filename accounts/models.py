@@ -270,7 +270,7 @@ class Supplier(models.Model):
     phone = models.CharField(max_length=20)
     mobile = models.CharField(max_length=20)
     currency = models.CharField(max_length=10)
-    payment_terms = models.ForeignKey('TermsAndConditions', on_delete=models.CASCADE, null=True, blank=True)
+    payment_terms = models.ForeignKey('TermsAndConditions', on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True,null=True,blank=True)
 
     def __str__(self):
@@ -314,7 +314,7 @@ class QuotationOrderModel(models.Model):
     quotation_date = models.DateField()
     delivery_address = models.TextField(max_length=100, blank=True )  
     delivery_location = models.TextField(max_length=100, blank=True)
-    termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.CASCADE, null=True, blank=True)
+    termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.SET_NULL, null=True, blank=True)
     contract = models.ForeignKey('Contract', on_delete=models.SET_NULL, null=True, blank=True)  
     grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
 
@@ -389,7 +389,7 @@ class SalesOrderModel(models.Model):
     remark = models.CharField(max_length=255, blank=True)
     delivery_location = models.CharField(max_length=255, blank=True)
     delivery_address = models.TextField(blank=True)
-    termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.CASCADE,  null=True, blank=True)
+    termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.SET_NULL,  null=True, blank=True)
     bank_account = models.ForeignKey(
         'BankAccount', on_delete=models.SET_NULL, null=True, blank=True, related_name="sales_orders"
     )
@@ -464,7 +464,7 @@ class DeliveryFormModel(models.Model):
     sales_order = models.ForeignKey(SalesOrderModel, on_delete=models.CASCADE, related_name="deliveries")
     delivery_location = models.CharField(max_length=255, blank=True)
     delivery_address = models.TextField(blank=True)
-    termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.CASCADE,  null=True, blank=True)
+    termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.SET_NULL,  null=True, blank=True)
     time = models.TimeField()
     grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
     is_invoiced = models.BooleanField(default=False)
@@ -533,7 +533,7 @@ class InvoiceModel(models.Model):
     # delivery = models.ForeignKey(DeliveryFormModel, on_delete=models.SET_NULL, null=True, blank=True)
     invoice_grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
 
-    termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.CASCADE, null=True, blank=True)
+    termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.SET_NULL, null=True, blank=True)
     remark = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True,null=True,blank=True)
     is_receipted = models.BooleanField(default=False)
@@ -549,7 +549,7 @@ class ReceiptModel(models.Model):
     receipt_date = models.DateField()
     client = models.ForeignKey('Customer', on_delete=models.CASCADE,null=True, blank=True)
     invoice = models.OneToOneField(InvoiceModel, on_delete=models.SET_NULL, null=True, blank=True)
-    termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.CASCADE, null=True, blank=True)
+    termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.SET_NULL, null=True, blank=True)
     remark = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True,null=True,blank=True)
 
@@ -626,7 +626,7 @@ class PurchaseOrder(models.Model):
     quotation_number = models.CharField(max_length=50, blank=True, null=True)
     grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     remark = models.CharField(max_length=255, blank=True)
-    terms_and_conditions = models.ForeignKey('TermsAndConditions', on_delete=models.CASCADE, null=True, blank=True)
+    terms_and_conditions = models.ForeignKey('TermsAndConditions', on_delete=models.SET_NULL, null=True, blank=True)
 
     def __str__(self):
         return self.purchase_order_number

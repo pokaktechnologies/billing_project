@@ -1102,7 +1102,7 @@ class QuotationOrderAPI(APIView):
 
                 quotation.update_grand_total()
 
-                return Response({"message": "Sales Order updated successfully."}, status=status.HTTP_200_OK)
+                return Response({"message": "Quotation updated successfully."}, status=status.HTTP_200_OK)
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)      

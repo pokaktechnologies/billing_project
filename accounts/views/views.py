@@ -805,14 +805,13 @@ class SalesPersonListCreateAPIView(APIView):
             status=status.HTTP_200_OK
         )
 class QuotationOrderAPI(APIView):
-
-    # authentication_classes = []
     permission_classes = [IsAuthenticated]
 
     def get(self, request, qid=None, pid=None):
         if qid:
             quotation = get_object_or_404(QuotationOrderModel, id=qid)
 
+            # Return specific quotation item if product ID is provided
             if pid:
                 quotation_item = get_object_or_404(QuotationItem, quotation=quotation, product_id=pid)
                 serializer = QuotationItemSerializer(quotation_item)
@@ -822,53 +821,49 @@ class QuotationOrderAPI(APIView):
                     "data": [serializer.data]
                 })
 
-            quotation_serializer = NewQuotationOrderSerializer(quotation)
-
             # Terms and Conditions
             terms_data = []
             if quotation.termsandconditions:
-                terms_points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=quotation.termsandconditions)
+                terms_points = TermsAndConditionsPoint.objects.filter(
+                    terms_and_conditions=quotation.termsandconditions
+                )
                 terms_data = TermsAndConditionsPointSerializer(terms_points, many=True).data
 
-            # Contract
+            # Contract and Sections
             contract_data = {}
             if quotation.contract:
-                contract = get_object_or_404(Contract, id=quotation.contract.id)
-                contract_sections = ContractSection.objects.filter(contract=contract)
-                contract_data = ContractSerializer(contract).data
+                contract_data = ContractSerializer(quotation.contract).data
+                sections = ContractSection.objects.filter(contract=quotation.contract)
                 contract_data['sections'] = []
 
-                for section in contract_sections:
-                    section_data = ContractSectionSerializer(section).data
+                for section in sections:
                     points = ContractPoint.objects.filter(section=section)
+                    section_data = ContractSectionSerializer(section).data
                     section_data['points'] = ContractPointSerializer(points, many=True).data
                     contract_data['sections'].append(section_data)
 
             # Quotation Items
-            quotation_items = quotation.items.all()
             item_list = []
-
-            for item in quotation_items:
-                item_data = {
+            for item in quotation.items.all():
+                item_list.append({
                     "id": item.id,
                     "name": item.product.name,
                     "product_id": item.product.pk,
                     "quantity": item.quantity,
-                    "unit_price": item.unit_price if item.unit_price else item.product.unit_price,
+                    "unit_price": item.unit_price or item.product.unit_price,
                     "total": item.total,
                     "sgst": item.sgst,
                     "cgst": item.cgst,
                     "sgst_percentage": item.sgst_percentage,
                     "cgst_percentage": item.cgst_percentage,
                     "sub_total": item.sub_total,
-                }
-                item_list.append(item_data)
+                })
 
-            # Response structure
+            # Full Quotation Response
             return Response({
-                'status': '1',
-                'message': 'success',
-                'quotation': [{
+                "status": "1",
+                "message": "success",
+                "quotation": [{
                     "id": quotation.id,
                     "client_name": f"{quotation.client.first_name} {quotation.client.last_name}" if quotation.client else "",
                     "client_id": quotation.client.id if quotation.client else None,
@@ -890,21 +885,20 @@ class QuotationOrderAPI(APIView):
                 }]
             }, status=status.HTTP_200_OK)
 
-        else:
-            # Logic for listing all quotations with filters (from_date, to_date, and search)
-            from_date = request.query_params.get('from_date')
-            to_date = request.query_params.get('to_date')
-            search = request.query_params.get('search')
-            
-            quotations = QuotationOrderModel.objects.all().order_by('-id')        
-            
-            if from_date and to_date:
-                quotations = quotations.filter(quotation_date__range=[from_date, to_date])
-            if search:
-                quotations = quotations.filter(customer_name__icontains=search)
-            
-            serializer = QuotationOrderSerializer(quotations, many=True)
-            return Response({"status": "1", "data": serializer.data}, status=status.HTTP_200_OK)
+        # Handle list of quotations with optional filters
+        quotations = QuotationOrderModel.objects.all().order_by('-id')
+        from_date = request.query_params.get('from_date')
+        to_date = request.query_params.get('to_date')
+        search = request.query_params.get('search')
+
+        if from_date and to_date:
+            quotations = quotations.filter(quotation_date__range=[from_date, to_date])
+        if search:
+            quotations = quotations.filter(customer_name__icontains=search)
+
+        serializer = QuotationOrderSerializer(quotations, many=True)
+        return Response({"status": "1", "data": serializer.data}, status=status.HTTP_200_OK)
+
 
         
     def post(self, request, qid=None, pid=None):

@@ -204,17 +204,16 @@ class SalesPersonSerializer(serializers.ModelSerializer):
         
         
 class QuotationOrderSerializer(serializers.ModelSerializer):
-    quotation_date = serializers.SerializerMethodField()
+    quotation_date_display = serializers.SerializerMethodField()
     class Meta:
         model = QuotationOrderModel
         # fields = '__all__'
         exclude = ['contract']
     
-    def get_quotation_date(self, obj):
-        # Format: DD-MM-YYYY
-        if obj.quotation_date:
-            return obj.quotation_date.strftime('%d-%m-%Y')
-        return None
+        def get_quotation_date_display(self, obj):
+            if obj.quotation_date:
+                return obj.quotation_date.strftime('%d-%m-%Y')
+            return None
 
 class QuotationItemSerializer(serializers.ModelSerializer):
     unit_price = serializers.SerializerMethodField()

@@ -3,8 +3,9 @@ from .views.views import *
 from accounts.views.user import  (
     ProfileAPIView,
     AssignPermissionView,
-    UserModulesView,
-    CreateStaffWithPermissionsView
+    StaffModulesView,
+    CreateStaffWithPermissionsView,
+    ListStaffView
 )
 
 from rest_framework_simplejwt.views import (
@@ -20,8 +21,11 @@ urlpatterns = [
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('create-staff/', CreateStaffWithPermissionsView.as_view(), name="create-staff"),
-    path('admin/assign-permissions/', AssignPermissionView.as_view()),
-    path('user/modules/', UserModulesView.as_view()),
+    path('create-staff/<int:staff_id>/', CreateStaffWithPermissionsView.as_view(), name="create-staff"),
+    # path('admin/assign-permissions/', AssignPermissionView.as_view()),y
+    # path('admin/staffs/', ListStaffView.as_view()),
+    # path('admin/staffs/<int:staff_id>/', ListStaffView.as_view()),
+    path('user/modules/', StaffModulesView.as_view()),
 
 
     path('getting-started/', GettingStartedView.as_view(), name='getting_started'),

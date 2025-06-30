@@ -18,9 +18,14 @@ class JournalLineSerializer(serializers.ModelSerializer):
         model = JournalLine
         fields = ['id','account', 'debit', 'credit', 'description']
     
+class JournalLineDisplaySerializer(serializers.ModelSerializer):
+    account = AccountSerializer()
+    class Meta:
+        model = JournalLine
+        fields = ['id','account', 'debit', 'credit', 'description']
 
 class JournalEntryDisplaySerializer(serializers.ModelSerializer):
-    lines = JournalLineSerializer(many=True)
+    lines = JournalLineDisplaySerializer(many=True)
 
     class Meta:
         model = JournalEntry

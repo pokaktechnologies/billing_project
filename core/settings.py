@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "corsheaders",
     'leads',
     'project_management',
+    'finance',
 
     
 ]

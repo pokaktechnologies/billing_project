@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from .models import *
-
+from django.utils import timezone
+from django.db import transaction
+from .utils import generate_next_number
 
 class AccountSerializer(serializers.ModelSerializer):
     class Meta:
@@ -39,6 +41,14 @@ class JournalEntryDisplaySerializer(serializers.ModelSerializer):
             'user',
             'lines',
         ]
+
+from rest_framework import serializers
+from .models import JournalEntry, JournalLine
+
+class JournalLineSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = JournalLine
+        fields = ['id', 'account', 'debit', 'credit', 'description']
 
 class JournalEntrySerializer(serializers.ModelSerializer):
     lines = JournalLineSerializer(many=True)
@@ -85,23 +95,128 @@ class JournalEntrySerializer(serializers.ModelSerializer):
             **validated_data
         )
 
-        for line_data in lines_data:
-            JournalLine.objects.create(journal=journal_entry, **line_data)
+        lines = [
+            JournalLine(journal=journal_entry, **line_data)
+            for line_data in lines_data
+        ]
+        JournalLine.objects.bulk_create(lines)
 
         return journal_entry
-    
+
     def update(self, instance, validated_data):
         lines_data = validated_data.pop('lines', None)
 
-        # Update journal entry fields
+        # Update only changed fields
         for attr, value in validated_data.items():
-            setattr(instance, attr, value)
+            if getattr(instance, attr) != value:
+                setattr(instance, attr, value)
         instance.save()
 
-        # If lines provided, delete old and create new
+        # Update lines only if new data is provided
         if lines_data is not None:
             instance.lines.all().delete()
-            for line_data in lines_data:
-                JournalLine.objects.create(journal=instance, **line_data)
+            lines = [
+                JournalLine(journal=instance, **line_data)
+                for line_data in lines_data
+            ]
+            JournalLine.objects.bulk_create(lines)
 
         return instance
+
+
+class PaymentDisplaySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Payment
+        fields = '__all__'
+        read_only_fields = ['created_at', 'journal_entry']
+
+from rest_framework import serializers
+from django.db import transaction
+from .models import Payment, Supplier, Account, JournalEntry, JournalLine
+from .utils import generate_next_number
+
+class PaymentCreateSerializer(serializers.ModelSerializer):
+    paid_to = serializers.PrimaryKeyRelatedField(queryset=Supplier.objects.all())
+    paid_from_account = serializers.PrimaryKeyRelatedField(queryset=Account.objects.all())
+    paid_to_account = serializers.PrimaryKeyRelatedField(queryset=Account.objects.all())
+
+    class Meta:
+        model = Payment
+        fields = '__all__'
+        read_only_fields = ['created_at', 'journal_entry']
+
+    def create(self, validated_data):
+        user = self.context['request'].user
+
+        with transaction.atomic():
+            validated_data['user'] = user
+            if not validated_data.get('payment_number'):
+                validated_data['payment_number'] = generate_next_number(Payment, 'payment_number', 'PAY', 6)
+
+            # Create the Payment instance
+            payment = Payment.objects.create(**validated_data)
+
+            # Create related JournalEntry
+            journal_entry = JournalEntry.objects.create(
+                journal_number=generate_next_number(JournalEntry, 'journal_number', 'JE', 6),
+                user=user,
+                date=payment.date,
+                description=f"Payment to {payment.paid_to.supplier_number if payment.paid_to else 'Unknown'}",
+                reference=payment.payment_number,
+            )
+
+            # Create journal lines
+            self._create_journal_lines(payment, journal_entry)
+
+            # Link journal entry to payment
+            payment.journal_entry = journal_entry
+            payment.save()
+
+            return payment
+
+    def update(self, instance, validated_data):
+        with transaction.atomic():
+            # Update only changed fields
+            for attr, value in validated_data.items():
+                if getattr(instance, attr) != value:
+                    setattr(instance, attr, value)
+            instance.save()
+
+            # Update linked journal entry if exists
+            journal_entry = instance.journal_entry
+            if journal_entry:
+                journal_entry.date = instance.date
+                journal_entry.description = f"Payment to {instance.paid_to.supplier_number if instance.paid_to else 'Unknown'}"
+                journal_entry.reference = instance.payment_number
+                journal_entry.save()
+
+                # Delete old lines only if exist
+                if journal_entry.lines.exists():
+                    journal_entry.lines.all().delete()
+
+                # Recreate journal lines
+                self._create_journal_lines(instance, journal_entry)
+
+            return instance
+
+    def _create_journal_lines(self, payment, journal_entry):
+        lines = [
+            JournalLine(
+                journal=journal_entry,
+                account=payment.paid_to_account,
+                debit=payment.amount,
+                credit=0,
+                description=f"Payment for {payment.remark or payment.paid_to_account.name}"
+            ),
+            JournalLine(
+                journal=journal_entry,
+                account=payment.paid_from_account,
+                debit=0,
+                credit=payment.amount,
+                description=f"Paid via {payment.payment_method.upper()} from {payment.paid_from_account.name}"
+            )
+        ]
+
+        # Optimized batch DB write
+        JournalLine.objects.bulk_create(lines)
+

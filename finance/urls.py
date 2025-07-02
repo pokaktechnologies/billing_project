@@ -8,6 +8,9 @@ urlpatterns = [
     path('journal-entry/', JournalEntryView.as_view(), name='journal-entry'),
     path('journal-entry/<int:pk>/', JournalEntryDetailView.as_view(), name='journal-entry-detail'),
 
+    path('payment/', PaymentAPIView.as_view(), name='payment'),
+    path('payment/<int:pk>/', PaymentDetailView.as_view(), name='payment-detail'),
+
     path('generate-number/',FinaceNumberGeneratorView.as_view(), name='serial_number'),
 ]
 

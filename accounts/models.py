@@ -274,7 +274,8 @@ class Supplier(models.Model):
     created_at = models.DateTimeField(auto_now_add=True,null=True,blank=True)
 
     def __str__(self):
-        return self.company_name + " - " + self.contact_person_name
+        return f"{self.company_name or 'Unnamed'} - {self.contact_person_name or 'Unknown'}"
+
 
 
 class DeliveryChallan(models.Model):

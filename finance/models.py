@@ -1,7 +1,7 @@
 from django.db import models
 from django.utils import timezone
 from django.core.exceptions import ValidationError
-from accounts.models import CustomUser
+from accounts.models import CustomUser,Supplier
 
 # Chart of Accounts
 class Account(models.Model):
@@ -75,3 +75,35 @@ class JournalLine(models.Model):
         elif self.credit > 0:
             return f"Cr ₹{self.credit} from {self.account.name} – {self.description or 'No description'} -- {self.journal.journal_number}"
         return f"{self.account.name} – ₹0"
+
+
+# Payment Model
+class Payment(models.Model):
+    PAYMENT_METHODS = [
+        ('cash', 'Cash'),
+        ('bank', 'Bank Transfer'),
+        ('upi', 'UPI'),
+        ('cheque', 'Cheque'),
+        ('other', 'Other'),
+    ]
+
+    user = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True)
+    payment_number = models.CharField(max_length=100, unique=True, blank=True, null=True)
+    date = models.DateTimeField(default=timezone.now)
+    paid_to = models.ForeignKey(Supplier, on_delete=models.SET_NULL, null=True, related_name='payments')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHODS)
+    paid_from_account = models.ForeignKey(
+        Account, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='payments_from'
+    )  # CREDIT SIDE (bank/cash)
+    paid_to_account = models.ForeignKey(
+        Account, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='payments_to'
+    )  # DEBIT SIDE (expense/supplier/payable)
+    remark = models.TextField(blank=True, null=True)
+    journal_entry = models.OneToOneField(JournalEntry, on_delete=models.CASCADE, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Payment ₹{self.amount} to {self.paid_to.supplier_number if self.paid_to else 'N/A'} on {self.date.date()}"

@@ -159,36 +159,100 @@ class JournalEntryDetailView(APIView):
 
 
 
+class PaymentAPIView(APIView):
+    permission_classes = [IsAuthenticated]  # Optional: adjust as needed
+    def get(self, request):
+        payments = Payment.objects.filter(user=request.user).order_by('-created_at')
+        serializer = PaymentDisplaySerializer(payments, many=True)
+        return Response(serializer.data)
+    def post(self, request):
+        serializer = PaymentCreateSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            try:
+                payment = serializer.save()
+                return Response({
+                    'status': 'success',
+                    'message': 'Payment created successfully.',
+                    'payment_id': payment.id,
+                    'payment_number': payment.payment_number,
+                }, status=status.HTTP_201_CREATED)
+            except Exception as e:
+                return Response({
+                    'status': 'error',
+                    'message': str(e)
+                }, status=status.HTTP_400_BAD_REQUEST)
+        return Response({
+            'status': 'error',
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    
+
+class PaymentDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk):
+        try:
+            payment = Payment.objects.get(pk=pk, user=self.request.user)
+            return payment
+        except Payment.DoesNotExist:
+            return None
+
+    def get(self, request, pk):
+        payment = self.get_object(pk)
+        if payment is None:
+            return Response({"message": "Payment not found."}, status=status.HTTP_404_NOT_FOUND)
+        serializer = PaymentDisplaySerializer(payment)
+        return Response(serializer.data)
+    
+    def patch(self, request, pk):
+        payment = self.get_object(pk)
+        if not payment:
+            return Response({"message": "Payment not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = PaymentCreateSerializer(payment, data=request.data, partial=True, context={'request': request})  # ✅ context added
+        if serializer.is_valid():
+            try:
+                serializer.save()
+                return Response({"message": "Payment updated successfully."}, status=status.HTTP_200_OK)
+            except Exception as e:
+                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def delete(self, request, pk):
+        payment = self.get_object(pk)
+        if payment is None:
+            return Response({"message": "Payment not found."}, status=status.HTTP_404_NOT_FOUND)
+        with transaction.atomic():
+            if payment.journal_entry:
+                payment.journal_entry.delete()
+            payment.delete()
+        return Response({"message": "Payment deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+
+from .utils import generate_next_number
+
 class FinaceNumberGeneratorView(APIView):
-    def generate_next_number(self, model, field_name: str, prefix: str, length: int) -> str:
-        start = 10**(length - 1) + 1  # e.g., for length 6 -> 100001
-
-        # Filter by prefix and order descending to get the latest number
-        latest_order = model.objects.filter(**{f"{field_name}__startswith": f"{prefix}|"}).order_by(f"-{field_name}").first()
-
-        if latest_order:
-            latest_number_str = getattr(latest_order, field_name).split('|')[1]
-            next_number = int(latest_number_str) + 1
-        else:
-            next_number = start  # Start from e.g., 100001
-
-        return f"{prefix}|{next_number:0{length}d}"
-
     def get(self, request):
         model_type = request.query_params.get('type')
 
-        if model_type == 'ACT':
-            model_number = self.generate_next_number(Account, "account_number", "ACT", 6)
-        elif model_type == 'JE':
-            model_number = self.generate_next_number(JournalEntry, "journal_number", "JE", 6)
-        else:
+        model_map = {
+            'ACT': (Account, 'account_number', 'ACT'),
+            'JE': (JournalEntry, 'journal_number', 'JE'),
+            'PAY': (Payment, 'payment_number', 'PAY'),
+        }
+
+        if model_type not in model_map:
             return Response({
                 'status': '0',
                 'message': 'Invalid order type',
             }, status=status.HTTP_400_BAD_REQUEST)
 
+        model, field_name, prefix = model_map[model_type]
+        number = generate_next_number(model, field_name, prefix, 6)
+
         return Response({
             'status': '1',
             'message': 'Success',
-            'number': model_number
+            'number': number
         }, status=status.HTTP_200_OK)

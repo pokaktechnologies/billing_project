@@ -205,6 +205,8 @@ class SalesPersonSerializer(serializers.ModelSerializer):
         
 class QuotationOrderSerializer(serializers.ModelSerializer):
     quotation_date_display = serializers.SerializerMethodField()
+    client_firstname = serializers.CharField(source='client.first_name', read_only=True)
+    client_lastname = serializers.CharField(source='client.last_name', read_only=True)
 
     class Meta:
         model = QuotationOrderModel

@@ -550,6 +550,7 @@ class PrintDeliverySerializer(serializers.ModelSerializer):
     subtotal = serializers.SerializerMethodField()
     total = serializers.SerializerMethodField()
     grand_total = serializers.SerializerMethodField()
+    salesperson = serializers.SerializerMethodField()
 
     class Meta:
         model = DeliveryFormModel
@@ -564,6 +565,12 @@ class PrintDeliverySerializer(serializers.ModelSerializer):
         # But usually sub_total includes taxes, so sum sub_total is enough
         total = sum(item.total for item in obj.items.all())
         return "{:,.2f}".format(total)
+    
+    def get_salesperson(self, obj):
+        # Get salesperson via customer relation
+        if obj.customer and obj.customer.salesperson:
+            return SalesPersonSerializer(obj.customer.salesperson).data
+        return None
     
     def get_grand_total(self, obj):
         return "{:,.2f}".format(obj.grand_total)

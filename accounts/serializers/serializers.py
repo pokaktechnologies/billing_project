@@ -654,7 +654,10 @@ class PrintReceiptSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def get_invoice_grand_total(self, obj):
-        return "{:,.2f}".format(obj.invoice.invoice_grand_total)
+        if obj.invoice and obj.invoice.invoice_grand_total is not None:
+            return "{:,.2f}".format(obj.invoice.invoice_grand_total)
+        return "0.00"  # or return None, depending on your use case
+
         
     def get_termsandconditions(self, obj):
         # Get related TermsAndConditions

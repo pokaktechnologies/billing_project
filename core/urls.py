@@ -23,4 +23,5 @@ urlpatterns = [
     path('leads/', include('leads.urls')),
     path('project_management/', include('project_management.urls')),
     path('finance/', include('finance.urls')),
+    path('hr/', include('hr_section.urls')),
 ]

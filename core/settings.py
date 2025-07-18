@@ -52,8 +52,7 @@ INSTALLED_APPS = [
     'leads',
     'project_management',
     'finance',
-
-    
+    'hr_section',
 ]
 
 REST_FRAMEWORK = {

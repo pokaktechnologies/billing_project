@@ -2,10 +2,21 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
 from django.utils import timezone
+from rest_framework import permissions, status as drf_status
+from django.db.models import Q
+from django.shortcuts import get_object_or_404
+from rest_framework.parsers import MultiPartParser, FormParser
 
-from .models import Enquiry
-from .serializers import EnquirySerializer, EnquiryStatusUpdateSerializer
+from .models import *
+from .serializers import *
 
+
+
+
+
+
+
+# ========== Views for Enquiry ==========
 
 class EnquiryCreateView(APIView):
 
@@ -99,13 +110,7 @@ class EnquiryStatisticsView(APIView):
 
         return Response(statistics, status=status.HTTP_200_OK)
 
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import permissions, status as drf_status
-from django.db.models import Q
 
-from .models import Enquiry
-from .serializers import EnquirySerializer
 
 
 class SearchEnquiryView(APIView):
@@ -135,5 +140,174 @@ class SearchEnquiryView(APIView):
 
         serializer = EnquirySerializer(enquiries, many=True)
         return Response(serializer.data, status=drf_status.HTTP_200_OK)
+
+# ========= end of Views for Enquiry ==========
+
+
+# ========== Views for Designation ==========
+
+class DesignationView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        designations = Designation.objects.all()
+        serializer = DesignationSerializer(designations, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = DesignationSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(user=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+class DesignationDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self, pk):
+        return get_object_or_404(Designation, pk=pk)
+
+    def get(self, request, pk):
+        designation = self.get_object(pk)
+        serializer = DesignationSerializer(designation)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def patch(self, request, pk):
+        designation = self.get_object(pk)
+        serializer = DesignationSerializer(designation, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        designation = self.get_object(pk)
+        designation.delete()
+        return Response(
+            {'message': 'Designation deleted successfully'},
+            status=status.HTTP_200_OK
+        )
+
+
+class JobPostingView(APIView):
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            return [permissions.IsAuthenticated()]
+        elif self.request.method == 'GET':
+            return [permissions.AllowAny()]
+        return super().get_permissions()
+
+    def get(self, request):
+        job_postings = JobPosting.objects.all().order_by('-created_at')
+        serializer = JobPostingListSerializer(job_postings, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = JobPostingCreateSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(user=request.user)
+            return Response({'message': 'Job created successfully'}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class JobPostingDetailView(APIView):
+    def get_permissions(self):
+        if self.request.method == 'POST' or self.request.method == 'PATCH' or self.request.method == 'DELETE':
+            return [permissions.IsAuthenticated()]
+        elif self.request.method == 'GET':
+            return [permissions.AllowAny()]
+        return super().get_permissions()
+
+    def get_object(self, pk):
+        return get_object_or_404(JobPosting, pk=pk)
+
+    def get(self, request, pk):
+        job_posting = self.get_object(pk)
+        serializer = JobPostingSerializer(job_posting)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def patch(self, request, pk):
+        job_posting = self.get_object(pk)
+        serializer = JobPostingCreateSerializer(job_posting, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({'message': 'Job updated successfully'}, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        job_posting = self.get_object(pk)
+        job_posting.delete()
+        return Response({'message': 'Job deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+
+class JobPostingDisplayForUserView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, job_id=None):
+        if job_id is not None:
+            job_posting = get_object_or_404(JobPosting, id=job_id,status='active')
+            serializer = JobPostingSerializer(job_posting)
+        else:
+            job_postings = JobPosting.objects.filter(status='active').order_by('-created_at')
+            serializer = JobPostingListSerializer(job_postings, many=True)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+
+
+
+
+
+
+
+class JobApplicationView(APIView):
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request, job_id):
+        job_posting = get_object_or_404(JobPosting, id=job_id)
+        serializer = JobApplicationSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(job=job_posting)
+            return Response({'message': 'Application submitted successfully'}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class JobApplicationWithoutJob(APIView):
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        serializer = JobApplicationSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({'message': 'Application submitted successfully'}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class JobApplicationListView(APIView):
+    def get(self, request):
+        applications = JobApplication.objects.all().order_by('-applied_at')
+        serializer = JobApplicationListSerializer(applications, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class JobApplicationDetailView(APIView):
+    def get(self, request, application_id):
+        application = get_object_or_404(JobApplication, id=application_id)
+        serializer = JobApplicationDisplaySerializer(application)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+
+class JobApplicationStatusUpdateView(APIView):
+    def patch(self, request, application_id):
+        application = get_object_or_404(JobApplication, id=application_id)
+        serializer = JobApplicationStatusUpdateSerializer(application, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({'message': 'Application status updated successfully'}, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
 
 

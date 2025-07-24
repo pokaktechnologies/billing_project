@@ -3,16 +3,12 @@ from rest_framework.response import Response
 from rest_framework import status, permissions
 from django.utils import timezone
 from rest_framework import permissions, status as drf_status
-from django.db.models import Q
+from django.db.models import Count, Q, F
 from django.shortcuts import get_object_or_404
 from rest_framework.parsers import MultiPartParser, FormParser
 
 from .models import *
 from .serializers import *
-
-
-
-
 
 
 
@@ -258,6 +254,22 @@ class JobPostingDisplayForUserView(APIView):
             serializer = JobPostingListSerializer(job_postings, many=True)
 
         return Response(serializer.data, status=status.HTTP_200_OK)
+    
+class JobPostingStats(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        total_openings = JobPosting.objects.all().count()
+        total_active_jobs = JobPosting.objects.filter(status='active').count()
+        today_posting_count = JobPosting.objects.filter(created_at__date=timezone.now().date()).count()
+
+        stats = {
+            'total_openings': total_openings,
+            'total_active_jobs': total_active_jobs,
+            'today_posting_count': today_posting_count,
+        }
+
+        return Response(stats, status=status.HTTP_200_OK)
 
 
 class JobApplicationView(APIView):
@@ -311,5 +323,129 @@ class JobApplicationStatusUpdateView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class JobApplicationSearchView(APIView):
+    def get(self, request):
+        name = request.query_params.get('name', '')
+        email = request.query_params.get('email', '')
+        phone = request.query_params.get('phone', '')
+        status_filter = request.query_params.get('status', '')
+        designation = request.query_params.get('designation', '')
+        sort = request.query_params.get('sort', '-applied_at')  # default sorting
+        job = request.query_params.get('job', '')
+
+        applications = JobApplication.objects.all()
+
+        # Filter by name (first_name or last_name)
+        if name:
+            applications = applications.filter(
+                Q(first_name__icontains=name) | Q(last_name__icontains=name)
+            )
+
+        # Filter by email
+        if email:
+            applications = applications.filter(email__icontains=email)
+
+        # Filter by phone
+        if phone:
+            applications = applications.filter(phone__icontains=phone)
+
+        # Filter by status
+        if status_filter:
+            applications = applications.filter(status=status_filter)
+
+        # Filter by designation name
+        if designation:
+            applications = applications.filter(designation__name__icontains=designation)
+        
+        # ✅ Proper job filter handling
+        if job == 'null':
+            applications = applications.filter(job__isnull=True)
+        elif job not in ['', 'all', None]:
+            try:
+                job_id = int(job)
+                applications = applications.filter(job__id=job_id)
+            except ValueError:
+                pass  # ignore invalid job value
+
+        # Sorting
+        applications = applications.order_by(sort)
+
+        serializer = JobApplicationListSerializer(applications, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+
+
+class JobApplicationStatsAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        today = timezone.now().date()
+        yesterday = today - timezone.timedelta(days=1)
+        week_start = today - timezone.timedelta(days=today.weekday())  # Monday
+
+        # 1. Combined query: count for today and yesterday
+        counts = JobApplication.objects.filter(
+            applied_at__date__in=[today, yesterday],
+            status='applied'
+        ).values('applied_at__date').annotate(total=Count('id'))
+
+        new_applications_today = 0
+        new_applications_yesterday = 0
+        for c in counts:
+            if c['applied_at__date'] == today:
+                new_applications_today = c['total']
+            elif c['applied_at__date'] == yesterday:
+                new_applications_yesterday = c['total']
+
+        # 2. Percentage change
+        if new_applications_yesterday > 0:
+            percentage_change = ((new_applications_today - new_applications_yesterday) / new_applications_yesterday) * 100
+        else:
+            percentage_change = 0
+
+        # 3. Most applied designation
+        most_designation = JobApplication.objects.filter(
+            designation__isnull=False
+        ).values('designation__name', 'designation').annotate(
+            count=Count('id')
+        ).order_by('-count').first()
+
+        if most_designation:
+            most_designation_name = most_designation.get('designation__name')
+            most_designation_count = most_designation['count']
+            most_designation_id = most_designation['designation']
+
+            # 4. Count for this designation this week
+            applications_this_week = JobApplication.objects.filter(
+                designation_id=most_designation_id,
+                applied_at__date__gte=week_start
+            ).count()
+        else:
+            most_designation_name = None
+            most_designation_count = 0
+            applications_this_week = 0
+
+        # 5. Shortlisted this week
+        total_shortlisted_this_week = JobApplication.objects.filter(
+            status='shortlisted',
+            applied_at__date__gte=week_start
+        ).count()
+
+        # Response
+        stats = {
+            "new_applications_today": {
+                "count": new_applications_today,
+                "percentage_change": round(percentage_change, 2)
+            },
+            "most_applied_designation": {
+                "name": most_designation_name,
+                "count": most_designation_count,
+                "applications_this_week": applications_this_week
+            },
+            "shortlisted_this_week": total_shortlisted_this_week
+        }
+
+        return Response(stats, status=status.HTTP_200_OK)
 
 

@@ -147,7 +147,12 @@ class SearchEnquiryView(APIView):
 # ========== Views for Designation ==========
 
 class DesignationView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [permissions.AllowAny()]
+        elif self.request.method == 'POST':
+            return [permissions.IsAuthenticated()]
+        return super().get_permissions()
 
     def get(self, request):
         designations = Designation.objects.all()
@@ -255,29 +260,26 @@ class JobPostingDisplayForUserView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-
-
-
-
-
-
-
 class JobApplicationView(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request, job_id):
         job_posting = get_object_or_404(JobPosting, id=job_id)
-        serializer = JobApplicationSerializer(data=request.data)
+        serializer = JobApplicationSerializer(
+            data=request.data,
+            context={'job': job_posting}
+        )
         if serializer.is_valid():
-            serializer.save(job=job_posting)
+            serializer.save()
             return Response({'message': 'Application submitted successfully'}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class JobApplicationWithoutJob(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):
-        serializer = JobApplicationSerializer(data=request.data)
+        serializer = JobApplicationWithoutJobSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
             return Response({'message': 'Application submitted successfully'}, status=status.HTTP_201_CREATED)

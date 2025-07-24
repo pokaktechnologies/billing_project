@@ -68,6 +68,7 @@ class JobPosting(models.Model):
     job_title = models.CharField(max_length=200, verbose_name="Job Title")
     job_type = models.CharField(max_length=20, choices=JOB_TYPE, verbose_name="Job Type")
     work_mode = models.CharField(max_length=20, choices=WORK_MODE, verbose_name="Work Mode")
+    designation = models.ForeignKey(Designation, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Designation")
     job_description = models.TextField(verbose_name="Job Description")
     more_details = models.TextField(verbose_name="More Details", blank=True, null=True)
     status = models.CharField(max_length=20, choices=STATUS, default='active', verbose_name="Status")

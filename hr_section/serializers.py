@@ -1,4 +1,4 @@
-from rest_framework.serializers import ModelSerializer, CharField
+from rest_framework.serializers import ModelSerializer, CharField, ValidationError
 from django.db import transaction
 
 from .models import (
@@ -55,8 +55,17 @@ class JobPostingCreateSerializer(ModelSerializer):
         fields = [
             'job_title', 'job_type', 'work_mode', 'job_description',
             'more_details', 'status', 'experience_required', 'salery_range',
-            'responsibilities', 'requirements', 'benefits'
+            'responsibilities', 'requirements', 'benefits','designation',
         ]
+
+    def validate(self, attrs):
+        if not attrs.get('job_title'):
+            raise ValidationError("Job title is required.")
+        if not attrs.get('job_description'):
+            raise ValidationError("Job description is required.")
+        if not attrs.get('designation'):
+            raise ValidationError("Designation is required.")
+        return attrs
 
     def create(self, validated_data):
         responsibilities_data = validated_data.pop('responsibilities', [])
@@ -104,6 +113,7 @@ class JobPostingCreateSerializer(ModelSerializer):
 
 # JobPosting List Serializer
 class JobPostingListSerializer(ModelSerializer):
+    designation = CharField(source='designation.name', read_only=True)
     class Meta:
         model = JobPosting
         fields = '__all__'
@@ -128,10 +138,30 @@ class JobApplicationSerializer(ModelSerializer):
         model = JobApplication
         fields = [
             'id', 'first_name', 'last_name', 'email', 'phone',
-            'designation', 'experience', 'resume', 'job', 'applied_at',
+            'experience', 'resume', 'job', 'applied_at',
         ]
         read_only_fields = ['id', 'applied_at', 'job']
 
+    def create(self, validated_data):
+        job_posting = self.context.get('job')
+        if not job_posting:
+            raise ValidationError("Job posting is required for application.")
+        
+        designation = job_posting.designation
+        return JobApplication.objects.create(
+            job=job_posting,
+            designation=designation,
+            **validated_data
+        )
+
+class JobApplicationWithoutJobSerializer(ModelSerializer):
+    class Meta:
+        model = JobApplication
+        fields = [
+            'id', 'first_name', 'last_name', 'email', 'phone',
+            'designation', 'experience', 'resume', 'job', 'applied_at',
+        ]
+        read_only_fields = ['id', 'applied_at', 'job']
 
 class JobApplicationDisplaySerializer(ModelSerializer):
     designation = CharField(source='designation.name', read_only=True)
@@ -147,6 +177,7 @@ class JobApplicationDisplaySerializer(ModelSerializer):
 
 
 class JobApplicationListSerializer(ModelSerializer):
+    designation = CharField(source='designation.name', read_only=True)
     class Meta:
         model = JobApplication
         fields = [

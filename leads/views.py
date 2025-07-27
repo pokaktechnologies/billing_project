@@ -8,13 +8,16 @@ from django.utils.dateparse import parse_date
 from datetime import datetime, date
 from django.db.models import Q
 
+from accounts.permissions import HasModulePermission
+
 from .models import *
 from .serializers import *
 
 
 
 class LeadsView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'leads'
 
     def get(self, request):
         leads = Lead.objects.filter(CustomUser=request.user).order_by('-created_at')
@@ -41,7 +44,8 @@ class LeadsView(APIView):
 
 
 class LeadDetailView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'leads'
 
     def get_object(self, pk, user):
         try:
@@ -83,7 +87,8 @@ class LeadDetailView(APIView):
 
 class LeadSearchView(APIView):
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'leads'
 
     def get(self, request):
         name = request.query_params.get('name', '').strip()
@@ -156,7 +161,8 @@ class LeadSearchView(APIView):
 
 
 class MeetingsView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'leads'
 
 
     def get(self, request):
@@ -186,7 +192,8 @@ class MeetingsView(APIView):
 
 
 class MeetingDetailView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'leads'
 
 
     def get_object(self, pk, user):
@@ -225,7 +232,8 @@ class MeetingDetailView(APIView):
 
 
 class MeetingSearchView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'leads'
 
     def get(self, request):
         lead_name = request.query_params.get('lead_name', '').strip()
@@ -310,7 +318,8 @@ class MeetingSearchView(APIView):
 
 #display all Todays meetings 
 class MeetingRemiderView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'leads'
 
     def get(self, request):
         today = date.today()

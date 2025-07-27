@@ -8,13 +8,15 @@ from .serializers import *
 from .models import *
 from django.db import transaction
 from datetime import datetime
+from accounts.permissions import HasModulePermission
 
 
 
 #Client contract views
 class ClientContractView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'project_management'
 
     def get(self, request, format=None):
         contracts = ClientContract.objects.filter(user=request.user).order_by('-created_at')
@@ -40,7 +42,8 @@ class ClientContractView(APIView):
     
 class ClientContractDetailView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'project_management'
 
     def get_contract(self, pk, user):
         try:
@@ -100,7 +103,8 @@ class ClientContractDetailView(APIView):
 # Project management views
 class project_management(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'project_management'
 
     def get(self, request, format=None):
         projects = ProjectManagement.objects.filter(user=request.user).order_by('-created_at')
@@ -171,7 +175,8 @@ class project_management(APIView):
 
 class project_management_detail(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'project_management'
 
     def get_project(self, pk, user):
         try:
@@ -285,7 +290,8 @@ class project_management_detail(APIView):
 
 class MembersView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'project_management'
 
     def get(self, request, format=None):
         members = Member.objects.filter(user=request.user).order_by('-created_at')
@@ -311,7 +317,8 @@ class MembersView(APIView):
 
 class MembersViewDetail(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'project_management'
 
     def get_member(self, pk, user):
         try:
@@ -378,7 +385,8 @@ class MembersViewDetail(APIView):
 
 class StackView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'project_management'
 
     def get(self, request, format=None):
         stacks = Stack.objects.filter(user=request.user).order_by('-created_at')
@@ -404,7 +412,8 @@ class StackView(APIView):
 
 class StackViewDetail(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'project_management'
 
     def get_stack(self, pk):
         try:
@@ -468,7 +477,8 @@ class StackViewDetail(APIView):
 
 class ProjectMembersView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'project_management'
 
     def get(self, request, format=None):
         project_members = ProjectMember.objects.filter(project__user=request.user).order_by('-created_at')
@@ -541,7 +551,8 @@ class ProjectMembersView(APIView):
 
 class ProjectMembersDetail(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'project_management'
 
     def get_project_member(self, pk):
         try:
@@ -615,7 +626,8 @@ class ProjectMembersDetail(APIView):
 
 class ProjectMembersListByProjectView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'project_management'
 
     def get(self, request, project_id, format=None):
         project_members = ProjectMember.objects.filter(project__id=project_id, project__user=request.user).order_by('-created_at')
@@ -630,7 +642,8 @@ class ProjectMembersListByProjectView(APIView):
 
 class TaskView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'project_management'
 
     def get(self, request, format=None):
         tasks = Task.objects.filter(project_member__project__user=request.user).order_by('-created_at')
@@ -669,7 +682,8 @@ class TaskView(APIView):
 
 class TaskDetail(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'project_management'
 
     def get_task(self, pk):
         try:
@@ -735,7 +749,8 @@ class TaskDetail(APIView):
 
 class TaskListByMembers(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'project_management'
 
     def get(self, request, member_id, format=None):
         tasks = Task.objects.filter(project_member__member__id=member_id, project_member__project__user=request.user).order_by('-created_at')
@@ -748,7 +763,8 @@ class TaskListByMembers(APIView):
 
 class TaskListByProjectMember(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'project_management'
 
     def get(self, request, project_member_id, format=None):
         tasks = Task.objects.filter(project_member__id=project_member_id, project_member__project__user=request.user).order_by('-created_at')
@@ -761,7 +777,8 @@ class TaskListByProjectMember(APIView):
 # search views
 
 class ProjectSearchView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'project_management'
 
     def get(self, request):
         project_name = request.query_params.get('name', '').strip()
@@ -819,7 +836,8 @@ class ProjectSearchView(APIView):
         )
 
 class ProjectMemebrsSearchView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'project_management'
 
     def get(self, request, project_id,format=None):
         member_name = request.query_params.get('name', '').strip()
@@ -853,7 +871,8 @@ class ProjectMemebrsSearchView(APIView):
 
 
 class MembersSearchView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'project_management'
 
     def get(self, request):
         member_name = request.query_params.get('name', '').strip()
@@ -889,7 +908,8 @@ class MembersSearchView(APIView):
 
 
 class TaskSearchByProjectMembersView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'project_management'
 
     def get(self, request, project_member_id, format=None):
         start_date_str = request.query_params.get('start_date')
@@ -945,7 +965,8 @@ class TaskSearchByProjectMembersView(APIView):
 
 
 class TaskSearchByMembersView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'project_management'
 
     def get(self, request, member_id, format=None):
         start_date_str = request.query_params.get('start_date')

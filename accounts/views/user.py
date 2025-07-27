@@ -6,6 +6,7 @@ from accounts.serializers.user import (
     AssignPermissionSerializer,
     CreateUserWithPermissionsSerializer
 )
+from accounts.permissions import HasModulePermission
 from accounts.models import CustomUser, ModulePermission
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -33,8 +34,8 @@ class AssignPermissionView(APIView):
 
 
 class CreateStaffWithPermissionsView(APIView):
-    permission_classes = [IsAdminUser]
-
+    permission_classes = [IsAdminUser, HasModulePermission]
+    required_module = 'setup'
     def post(self, request):
         serializer = CreateUserWithPermissionsSerializer(data=request.data)
         if serializer.is_valid():

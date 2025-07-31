@@ -6,6 +6,8 @@ from rest_framework import permissions, status as drf_status
 from django.db.models import Count, Q, F
 from django.shortcuts import get_object_or_404
 from rest_framework.parsers import MultiPartParser, FormParser
+from accounts.permissions import HasModulePermission
+from rest_framework.permissions import IsAuthenticated
 
 from .models import *
 from .serializers import *
@@ -15,13 +17,13 @@ from .serializers import *
 # ========== Views for Enquiry ==========
 
 class EnquiryCreateView(APIView):
+    required_module = 'hr_section'
 
     def get_permissions(self):
-        if self.request.method == 'GET':
-            return [permissions.IsAuthenticated()]
-        elif self.request.method == 'POST':
+        if self.request.method == 'POST':
             return [permissions.AllowAny()]
-        return super().get_permissions()
+        return [IsAuthenticated(), HasModulePermission()]
+
 
     def get(self, request):
         enquiries = Enquiry.objects.all()
@@ -38,7 +40,9 @@ class EnquiryCreateView(APIView):
 
 
 class EnquiryDetailView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'hr_section'
+
     def get_object(self, pk):
         try:
             return Enquiry.objects.get(pk=pk)
@@ -54,7 +58,8 @@ class EnquiryDetailView(APIView):
 
 
 class EnquiryStatusUpdateView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'hr_section'
 
     def get_object(self, pk):
         try:
@@ -76,7 +81,8 @@ class EnquiryStatusUpdateView(APIView):
 
 
 class EnquiryStatisticsView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'hr_section'
 
     def get(self, request):
         today = timezone.now().date()
@@ -110,7 +116,8 @@ class EnquiryStatisticsView(APIView):
 
 
 class SearchEnquiryView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'hr_section'
 
     def get(self, request):
         client_name = request.query_params.get('client_name', '')
@@ -143,12 +150,13 @@ class SearchEnquiryView(APIView):
 # ========== Views for Designation ==========
 
 class DesignationView(APIView):
+    required_module = 'hr_section'
+
     def get_permissions(self):
         if self.request.method == 'GET':
             return [permissions.AllowAny()]
-        elif self.request.method == 'POST':
-            return [permissions.IsAuthenticated()]
-        return super().get_permissions()
+        return [IsAuthenticated(), HasModulePermission()]
+
 
     def get(self, request):
         designations = Designation.objects.all()
@@ -165,7 +173,8 @@ class DesignationView(APIView):
 
 
 class DesignationDetailView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'hr_section'
 
     def get_object(self, pk):
         return get_object_or_404(Designation, pk=pk)
@@ -193,12 +202,8 @@ class DesignationDetailView(APIView):
 
 
 class JobPostingView(APIView):
-    def get_permissions(self):
-        if self.request.method == 'POST':
-            return [permissions.IsAuthenticated()]
-        elif self.request.method == 'GET':
-            return [permissions.AllowAny()]
-        return super().get_permissions()
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'hr_section'
 
     def get(self, request):
         job_postings = JobPosting.objects.all().order_by('-created_at')
@@ -214,12 +219,8 @@ class JobPostingView(APIView):
 
 
 class JobPostingDetailView(APIView):
-    def get_permissions(self):
-        if self.request.method == 'POST' or self.request.method == 'PATCH' or self.request.method == 'DELETE':
-            return [permissions.IsAuthenticated()]
-        elif self.request.method == 'GET':
-            return [permissions.AllowAny()]
-        return super().get_permissions()
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'hr_section'
 
     def get_object(self, pk):
         return get_object_or_404(JobPosting, pk=pk)
@@ -243,8 +244,6 @@ class JobPostingDetailView(APIView):
         return Response({'message': 'Job deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
 
 class JobPostingDisplayForUserView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
     def get(self, request, job_id=None):
         if job_id is not None:
             job_posting = get_object_or_404(JobPosting, id=job_id,status='active')
@@ -299,6 +298,8 @@ class JobApplicationWithoutJob(APIView):
 
 
 class JobApplicationListView(APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'hr_section'
     def get(self, request):
         applications = JobApplication.objects.all().order_by('-applied_at')
         serializer = JobApplicationListSerializer(applications, many=True)
@@ -306,6 +307,8 @@ class JobApplicationListView(APIView):
 
 
 class JobApplicationDetailView(APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'hr_section'
     def get(self, request, application_id):
         application = get_object_or_404(JobApplication, id=application_id)
         serializer = JobApplicationDisplaySerializer(application)
@@ -314,6 +317,8 @@ class JobApplicationDetailView(APIView):
 
 
 class JobApplicationStatusUpdateView(APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'hr_section'
     def patch(self, request, application_id):
         application = get_object_or_404(JobApplication, id=application_id)
         serializer = JobApplicationStatusUpdateSerializer(application, data=request.data, partial=True)
@@ -324,6 +329,9 @@ class JobApplicationStatusUpdateView(APIView):
 
 
 class JobApplicationSearchView(APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'hr_section'
+    
     def get(self, request):
         name = request.query_params.get('name', '')
         email = request.query_params.get('email', '')
@@ -377,7 +385,8 @@ class JobApplicationSearchView(APIView):
 
 
 class JobApplicationStatsAPIView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'hr_section'
 
     def get(self, request):
         today = timezone.now().date()

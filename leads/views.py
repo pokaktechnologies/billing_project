@@ -94,17 +94,11 @@ class LeadSearchView(APIView):
         name = request.query_params.get('name', '').strip()
         from_date_str = request.query_params.get('from_date')
         to_date_str = request.query_params.get('to_date')
+        status_filter = request.query_params.get('status', '').strip()
 
-        # Validate missing dates
         if (from_date_str and not to_date_str) or (to_date_str and not from_date_str):
             return Response(
                 {"status": "0", "message": "Both 'from_date' and 'to_date' must be provided"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        if not name and not (from_date_str and to_date_str):
-            return Response(
-                {"status": "0", "message": "Provide at least 'name' or both 'from_date' and 'to_date'."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -118,23 +112,15 @@ class LeadSearchView(APIView):
                 if not from_parsed or not to_parsed:
                     raise ValueError
 
-                # Check if from_date is greater than to_date
                 if from_parsed > to_parsed:
                     return Response(
                         {"status": "0", "message": "'from_date' cannot be greater than 'to_date'."},
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
-                # Convert to aware datetime
-                if from_parsed == to_parsed:
-                    # Same day filter
-                    day_start = make_aware(datetime.combine(from_parsed, datetime.min.time()))
-                    day_end = make_aware(datetime.combine(from_parsed, datetime.max.time()))
-                    leads = leads.filter(created_at__range=(day_start, day_end))
-                else:
-                    from_date = make_aware(datetime.combine(from_parsed, datetime.min.time()))
-                    to_date = make_aware(datetime.combine(to_parsed, datetime.max.time()))
-                    leads = leads.filter(created_at__range=(from_date, to_date))
+                from_date = make_aware(datetime.combine(from_parsed, datetime.min.time()))
+                to_date = make_aware(datetime.combine(to_parsed, datetime.max.time()))
+                leads = leads.filter(created_at__range=(from_date, to_date))
 
             except ValueError:
                 return Response(
@@ -143,12 +129,14 @@ class LeadSearchView(APIView):
                 )
 
         if name:
-            # leads = leads.filter(name__icontains=name)
             search_terms = name.strip().split()
             query = Q()
             for term in search_terms:
-                query &= Q(name__icontains=term)
+                query |= Q(name__icontains=term)
             leads = leads.filter(query)
+
+        if status_filter:
+            leads = leads.filter(lead_status=status_filter)
 
         serializer = LeadSerializer(leads, many=True)
         return Response({
@@ -156,6 +144,8 @@ class LeadSearchView(APIView):
             "message": "success",
             "data": serializer.data
         }, status=status.HTTP_200_OK)
+
+
 
 
 

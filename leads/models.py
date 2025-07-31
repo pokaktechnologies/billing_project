@@ -16,6 +16,7 @@ class Lead(models.Model):
         ('contacted', 'Contacted'),
         ('lost', 'Lost'),
         ('follow_up', 'Follow Up'),
+        ('sent', 'Sent'),
         ('in_progress', 'In Progress'),
         ('converted', 'Converted'),
     ], default='new')

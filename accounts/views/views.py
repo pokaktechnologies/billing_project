@@ -448,6 +448,8 @@ class CreateDeliveryOrderAPI(APIView):
         
         
 class DeliveryOrderListAPI(APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'delivery'
     def get(self, request):
         from_date = request.query_params.get('from_date')
         to_date = request.query_params.get('to_date')
@@ -569,6 +571,8 @@ class DeliveryOrderListAPI(APIView):
     
 
 class SupplierAPIView(APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'supplier'
     def get(self, request,pk=None):
         if pk:
             supplier = get_object_or_404(Supplier, pk=pk)
@@ -658,6 +662,8 @@ class UpdateDeliveryChallanAPI(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)    
 
 class ProductListCreateAPIView(APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'products'
     def get(self, request):
         products = Product.objects.all()
         data = ProductSerializer(products, many=True).data
@@ -684,6 +690,8 @@ class ProductListCreateAPIView(APIView):
 
 # Retrieve, Update, and Delete a Product
 class ProductDetailAPI(APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'products'
     def get_object(self, product_id):
         try:
             return Product.objects.get(id=product_id)
@@ -744,6 +752,8 @@ class ProductDetailAPI(APIView):
 
 
 class SalesPersonListCreateAPIView(APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'sales_person'
     def get(self, request, pk=None):
         if pk:
             salesperson = get_object_or_404(SalesPerson, pk=pk)
@@ -2238,6 +2248,8 @@ class InvoiceOrderIsReceipted(APIView):
         )
 
 class ReceiptView(APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'receipt'
     def get(self, request, rec_id=None):
         if rec_id:
             receipt = get_object_or_404(ReceiptModel, id=rec_id)
@@ -2339,6 +2351,8 @@ class ReceiptView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 class PrintReceiptView(APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'receipt'
     def get(self, request, rec_id=None):
         receipt = get_object_or_404(ReceiptModel, id=rec_id)
         invoice_items = InvoiceItem.objects.filter(invoice=receipt.invoice_id)

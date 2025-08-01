@@ -19,7 +19,7 @@ class ClientContractView(APIView):
     required_module = 'project_management'
 
     def get(self, request, format=None):
-        contracts = ClientContract.objects.filter(user=request.user).order_by('-created_at')
+        contracts = ClientContract.objects.all().order_by('-created_at')
         serializer = ClientContractSerializer(contracts, many=True)
         return Response(
             {"status": "1", "message": "success", "data": serializer.data},
@@ -107,7 +107,7 @@ class project_management(APIView):
     required_module = 'project_management'
 
     def get(self, request, format=None):
-        projects = ProjectManagement.objects.filter(user=request.user).order_by('-created_at')
+        projects = ProjectManagement.objects.all().order_by('-created_at')
         serializer = ProjectManagementSerializer(projects, many=True)
         return Response(
             {"status": "1", "message": "success", "data": serializer.data},
@@ -129,7 +129,7 @@ class project_management(APIView):
 
         if serializer.is_valid():
             # Check if the contract belongs to the user
-            contract = ClientContract.objects.filter(pk=request.data.get('contract'), user=request.user).first()
+            contract = ClientContract.objects.filter(pk=request.data.get('contract')).first()
             if not contract:
                 return Response(
                     {"status": "0", "message": "Contract not found"},
@@ -180,7 +180,7 @@ class project_management_detail(APIView):
 
     def get_project(self, pk, user):
         try:
-            project = ProjectManagement.objects.get(pk=pk, user=user)
+            project = ProjectManagement.objects.get(pk=pk)
             if not project:
                 return None, Response(
                     {"status": "0", "message": "Project not found"},
@@ -294,7 +294,7 @@ class MembersView(APIView):
     required_module = 'project_management'
 
     def get(self, request, format=None):
-        members = Member.objects.filter(user=request.user).order_by('-created_at')
+        members = Member.objects.all().order_by('-created_at')
         serializer = MemberSerializer(members, many=True)
         return Response(
             {"status": "1", "message": "success", "data": serializer.data},
@@ -322,7 +322,7 @@ class MembersViewDetail(APIView):
 
     def get_member(self, pk, user):
         try:
-            member = Member.objects.get(pk=pk, user=user)
+            member = Member.objects.get(pk=pk)
             if member.user != user:
                 return None, Response(
                     {"status": "0", "message": "Member not found"},
@@ -389,7 +389,7 @@ class StackView(APIView):
     required_module = 'project_management'
 
     def get(self, request, format=None):
-        stacks = Stack.objects.filter(user=request.user).order_by('-created_at')
+        stacks = Stack.objects.all().order_by('-created_at')
         serializer = StackSerializer(stacks, many=True)
         return Response(
             {"status": "1", "message": "success", "data": serializer.data},
@@ -481,7 +481,7 @@ class ProjectMembersView(APIView):
     required_module = 'project_management'
 
     def get(self, request, format=None):
-        project_members = ProjectMember.objects.filter(project__user=request.user).order_by('-created_at')
+        project_members = ProjectMember.objects.all().order_by('-created_at')
 
         
 
@@ -556,7 +556,7 @@ class ProjectMembersDetail(APIView):
 
     def get_project_member(self, pk):
         try:
-            project_member = ProjectMember.objects.get(pk=pk, project__user=self.request.user)
+            project_member = ProjectMember.objects.get(pk=pk)
             return project_member
         except ProjectMember.DoesNotExist:
             return None
@@ -630,7 +630,7 @@ class ProjectMembersListByProjectView(APIView):
     required_module = 'project_management'
 
     def get(self, request, project_id, format=None):
-        project_members = ProjectMember.objects.filter(project__id=project_id, project__user=request.user).order_by('-created_at')
+        project_members = ProjectMember.objects.filter(project__id=project_id).order_by('-created_at')
         serializer = ProjectMemberSerializer(project_members, many=True)
         return Response(
             {"status": "1", "message": "success", "data": serializer.data},
@@ -646,7 +646,7 @@ class TaskView(APIView):
     required_module = 'project_management'
 
     def get(self, request, format=None):
-        tasks = Task.objects.filter(project_member__project__user=request.user).order_by('-created_at')
+        tasks = Task.objects.all().order_by('-created_at')
        
         serializer = TaskSerializer(tasks, many=True)
         return Response(
@@ -658,7 +658,7 @@ class TaskView(APIView):
         serializer = TaskSerializer(data=request.data)
 
         # Check if project member belongs to user or not
-        project_member = ProjectMember.objects.filter(pk=request.data.get('project_member'), project__user=request.user).first()
+        project_member = ProjectMember.objects.filter(pk=request.data.get('project_member')).first()
         if not project_member:
             return Response(
                 {"status": "0", "message": "Project member not found"},
@@ -687,7 +687,7 @@ class TaskDetail(APIView):
 
     def get_task(self, pk):
         try:
-            task = Task.objects.get(pk=pk, project_member__project__user=self.request.user)
+            task = Task.objects.get(pk=pk)
             return task
         except Task.DoesNotExist:
             return None
@@ -753,7 +753,7 @@ class TaskListByMembers(APIView):
     required_module = 'project_management'
 
     def get(self, request, member_id, format=None):
-        tasks = Task.objects.filter(project_member__member__id=member_id, project_member__project__user=request.user).order_by('-created_at')
+        tasks = Task.objects.filter(project_member__member__id=member_id).order_by('-created_at')
         serializer = TaskSerializer(tasks, many=True)
         return Response(
             {"status": "1", "message": "success", "data": serializer.data},
@@ -767,7 +767,7 @@ class TaskListByProjectMember(APIView):
     required_module = 'project_management'
 
     def get(self, request, project_member_id, format=None):
-        tasks = Task.objects.filter(project_member__id=project_member_id, project_member__project__user=request.user).order_by('-created_at')
+        tasks = Task.objects.filter(project_member__id=project_member_id).order_by('-created_at')
         serializer = TaskSerializer(tasks, many=True)
         return Response(
             {"status": "1", "message": "success", "data": serializer.data},
@@ -793,7 +793,7 @@ class ProjectSearchView(APIView):
             )
 
         # Base QuerySet: All projects for the logged-in user
-        projects = ProjectManagement.objects.filter(user=request.user).order_by('-created_at')
+        projects = ProjectManagement.objects.all().order_by('-created_at')
 
         # Filter by project name if provided
         if project_name:
@@ -851,7 +851,7 @@ class ProjectMemebrsSearchView(APIView):
             )
         
         # Base QuerySet: All project members for the logged-in user
-        project_members = ProjectMember.objects.filter(project__user=request.user, project__id=project_id).order_by('-created_at')
+        project_members = ProjectMember.objects.filter(project__id=project_id).order_by('-created_at')
 
         # Filter by member name if provided
         if member_name:
@@ -886,7 +886,7 @@ class MembersSearchView(APIView):
             )
 
         # Base QuerySet: All members for the logged-in user
-        members = Member.objects.filter(user=request.user).order_by('-created_at')
+        members = Member.objects.all().order_by('-created_at')
 
         # Filter by member name if provided
         if member_name:
@@ -923,7 +923,6 @@ class TaskSearchByProjectMembersView(APIView):
             )
         
         task = Task.objects.filter(
-            project_member__project__user=request.user,
             project_member__id=project_member_id
         ).order_by('-created_at')
 
@@ -980,7 +979,6 @@ class TaskSearchByMembersView(APIView):
             )
         
         task = Task.objects.filter(
-            project_member__project__user=request.user,
             project_member__member__id=member_id
         ).order_by('-created_at')
 

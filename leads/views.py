@@ -20,7 +20,7 @@ class LeadsView(APIView):
     required_module = 'leads'
 
     def get(self, request):
-        leads = Lead.objects.filter(CustomUser=request.user).order_by('-created_at')
+        leads = Lead.objects.all().order_by('-created_at')
         serializer = LeadSerializer(leads, many=True)
         return Response({
             "status": "1",
@@ -49,7 +49,7 @@ class LeadDetailView(APIView):
 
     def get_object(self, pk, user):
         try:
-            return Lead.objects.get(pk=pk, CustomUser=user)
+            return Lead.objects.get(pk=pk)
         except Lead.DoesNotExist:
             return None
 
@@ -83,6 +83,20 @@ class LeadDetailView(APIView):
 
 
 
+class LeadsFollowUpView(APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'leads'
+
+    def get(self, request):
+        follow_up_statuses = ['lost', 'follow_up', 'sent', 'in_progress', 'converted']
+        leads = Lead.objects.filter(lead_status__in=follow_up_statuses).order_by('-created_at')
+        serializer = LeadSerializer(leads, many=True)
+        return Response({
+            "status": "1",
+            "message": "success",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
 
 
 class LeadSearchView(APIView):
@@ -102,7 +116,7 @@ class LeadSearchView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        leads = Lead.objects.filter(CustomUser=request.user).order_by('-created_at')
+        leads = Lead.objects.all().order_by('-created_at')
 
         if from_date_str and to_date_str:
             try:
@@ -156,7 +170,7 @@ class MeetingsView(APIView):
 
 
     def get(self, request):
-        meetings = Meeting.objects.filter(lead__CustomUser=request.user).order_by('-created_at')
+        meetings = Meeting.objects.all().order_by('-created_at')
         serializer = MeetingSerializerDisplay(meetings, many=True)
         return Response({
             "status": "1",

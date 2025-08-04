@@ -3,6 +3,8 @@ from django.db import models
 from django.utils.timezone import now
 from decimal import Decimal
 from django_countries.fields import CountryField
+from django.core.exceptions import ValidationError
+
 
 
 class CustomUserManager(BaseUserManager):
@@ -493,6 +495,11 @@ class DeliveryItem(models.Model):
     sgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
     cgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
     sub_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
+    returned_quantity = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    @property
+    def net_quantity(self):
+        return self.delivered_quantity - self.returned_quantity
 
     def save(self, *args, **kwargs):
         # Price calculations
@@ -553,6 +560,93 @@ class ReceiptModel(models.Model):
     termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.SET_NULL, null=True, blank=True)
     remark = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True,null=True,blank=True)
+
+class SalesReturnModel(models.Model):
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, null=True, blank=True)
+    client = models.ForeignKey('Customer', on_delete=models.CASCADE)
+    sales_return_number = models.CharField(max_length=50, unique=True)
+    sales_order = models.ForeignKey(SalesOrderModel, on_delete=models.CASCADE)
+    return_date = models.DateField()
+    termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.SET_NULL, null=True, blank=True)
+    reason = models.TextField()
+    grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def update_grand_total(self):
+        total = sum(item.sub_total for item in self.items.all())
+        self.grand_total = total
+        self.save(update_fields=["grand_total"])
+
+    def __str__(self):
+        return f"Sales Return {self.sales_return_number} - {self.client}"
+
+class SalesReturnItem(models.Model):
+    sales_return = models.ForeignKey(SalesReturnModel, on_delete=models.CASCADE, related_name='items')
+    delivery_item = models.ForeignKey(DeliveryItem, on_delete=models.CASCADE) 
+    quantity = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    
+    # Financial fields (auto-populated)
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, editable=False)
+    sgst_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0, editable=False)
+    cgst_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0, editable=False)
+    
+    # Calculated fields
+    total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
+    sgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
+    cgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
+    sub_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
+
+    def clean(self):
+        """Validate return quantity doesn't exceed available quantity"""
+        if self.quantity > self.delivery_item.net_quantity:
+            raise ValidationError(
+                f"Cannot return {self.quantity}. Only {self.delivery_item.net_quantity} available"
+            )
+            
+        if not self.delivery_item.delivery_form.is_invoiced:
+            raise ValidationError("Cannot return from uninvoiced delivery")
+
+    def save(self, *args, **kwargs):
+        # Auto-populate from delivery item
+        if not self.pk:  # Only on creation
+            self.unit_price = self.delivery_item.unit_price
+            self.sgst_percentage = self.delivery_item.sgst_percentage
+            self.cgst_percentage = self.delivery_item.cgst_percentage
+        
+        # Calculate financials
+        self.total = self.unit_price * self.quantity
+        self.sgst = (self.sgst_percentage * self.total) / 100
+        self.cgst = (self.cgst_percentage * self.total) / 100
+        self.sub_total = self.total + self.sgst + self.cgst
+        
+        # Update delivery item's returned quantity
+        if self.pk:
+            old = SalesReturnItem.objects.get(pk=self.pk)
+            delta = self.quantity - old.quantity
+            self.delivery_item.returned_quantity += delta
+        else:
+            self.delivery_item.returned_quantity += self.quantity
+        
+        self.delivery_item.save()
+        
+        # Update inventory based on condition
+        # self.delivery_item.product.quantity_in_stock += self.quantity
+        # self.delivery_item.product.save()
+        
+        super().save(*args, **kwargs)
+        self.sales_return.update_grand_total()
+
+    def delete(self, *args, **kwargs):
+        self.delivery_item.returned_quantity -= self.quantity
+        self.delivery_item.save()
+        print(f"Deleted Sales Return Item: {self.delivery_item.product.name} - {self.quantity}")
+        super().delete(*args, **kwargs)
+        self.sales_return.update_grand_total()
+    
+    def __str__(self):
+        return f"{self.quantity} x {self.delivery_item.product.name}"
+
+
 
 
 class Country(models.Model):
@@ -713,6 +807,7 @@ class ModulePermission(models.Model):
         ("material_receive", "Material Receive"),
         ("invoice", "Invoice"),
         ("receipt", "Receipt"),
+        ("sales_return", "Sales Return"),
         ("stock", "Stock"),
         ("expense", "Expense"),
         ("reports", "Reports"),

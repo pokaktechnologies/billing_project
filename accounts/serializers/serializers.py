@@ -2,6 +2,8 @@ from rest_framework import serializers
 from django.contrib.auth import authenticate
 from ..models import *
 import random
+from django.db import transaction
+
 
 # Serializer for user registration
 class CustomUserCreateSerializer(serializers.ModelSerializer):
@@ -679,8 +681,229 @@ class PrintReceiptSerializer(serializers.ModelSerializer):
 
 
 
+
+class SalesReturnItemSerializer(serializers.ModelSerializer):
+    delivery_item_id = serializers.PrimaryKeyRelatedField(
+        queryset=DeliveryItem.objects.all(),
+        source='delivery_item',
+        write_only=True
+    )
+    product_name = serializers.CharField(source='delivery_item.product.name', read_only=True)
+    delivery_number = serializers.CharField(source='delivery_item.delivery_form.delivery_number', read_only=True)
+
+    class Meta:
+        model = SalesReturnItem
+        fields = [
+            'id', 'delivery_item_id', 'quantity',
+            'unit_price', 'sgst_percentage', 'cgst_percentage',
+            'total', 'sgst', 'cgst', 'sub_total',
+            'product_name', 'delivery_number'
+        ]
+        read_only_fields = [
+            'unit_price', 'sgst_percentage', 'cgst_percentage',
+            'total', 'sgst', 'cgst', 'sub_total'
+        ]
+
+    def validate(self, data):
+        delivery_item = data.get('delivery_item')
+        quantity = data.get('quantity')
+
+        if quantity <= 0:
+            raise serializers.ValidationError("Quantity must be greater than zero")
+
+        if quantity > delivery_item.net_quantity:
+            raise serializers.ValidationError(
+                f"Only {delivery_item.net_quantity} units available for return from this delivery item {delivery_item.id}"
+            )
+
+        if not delivery_item.delivery_form.is_invoiced:
+            raise serializers.ValidationError("Cannot return from non-invoiced delivery")
+
+        return data
+
+
+class SalesReturnSerializer(serializers.ModelSerializer):
+    items = SalesReturnItemSerializer(many=True)
+    client_name = serializers.CharField(source='client.first_name', read_only=True)
+
+    class Meta:
+        model = SalesReturnModel
+        fields = [
+            'id', 'sales_return_number', 'return_date', 'client', 'client_name',
+            'reason', 'grand_total', 'created_at', 'items', 'sales_order','termsandconditions'
+        ]
+        read_only_fields = ['grand_total', 'created_at']
+
+    def validate_items(self, value):
+        if not value:
+            raise serializers.ValidationError("At least one return item is required")
+        return value
+
+    def validate(self, data):
+        """
+        Ensure all delivery_items belong to the same sales_order selected in the parent.
+        """
+        sales_order = data.get('sales_order')
+        items_data = self.initial_data.get('items', [])
+
+        for item in items_data:
+            delivery_item_id = item.get('delivery_item_id')
+            try:
+                delivery_item = DeliveryItem.objects.get(id=delivery_item_id)
+            except DeliveryItem.DoesNotExist:
+                raise serializers.ValidationError(f"Delivery item {delivery_item_id} does not exist.")
+
+            delivery_sales_order = delivery_item.delivery_form.sales_order
+            if delivery_sales_order.id != sales_order.id:
+                raise serializers.ValidationError(
+                    f"Delivery item {delivery_item_id} belongs to a different sales order "
+                    f"({delivery_sales_order.sales_order_number}) than the one selected "
+                    f"({sales_order.sales_order_number})."
+                )
+
+        return data
+
+    def create(self, validated_data):
+        items_data = validated_data.pop('items')
+        with transaction.atomic():
+            sales_return = SalesReturnModel.objects.create(**validated_data)
+            for item_data in items_data:
+                SalesReturnItem.objects.create(
+                    sales_return=sales_return,
+                    **item_data
+                )
+            return sales_return
+
+    def update(self, instance, validated_data):
+        items_data = validated_data.pop('items', None)
+
+        with transaction.atomic():
+            # Update top-level fields
+            for attr, value in validated_data.items():
+                setattr(instance, attr, value)
+            instance.save()
+
+            if items_data is not None:
+                existing_items = {item.id: item for item in instance.items.all()}
+
+                for item_data in items_data:
+                    item_id = item_data.get('id', None)
+                    if item_id and item_id in existing_items:
+                        item = existing_items.pop(item_id)
+                        for field, value in item_data.items():
+                            setattr(item, field, value)
+                        item.save()
+                    else:
+                        SalesReturnItem.objects.create(
+                            sales_return=instance,
+                            **item_data
+                        )
+
+                # Delete removed items
+                for remaining_item in existing_items.values():
+                    remaining_item.delete()
+
+        return instance
+
+
     
 
+class SalesReturnListSerializer(serializers.ModelSerializer):
+    client_name = serializers.CharField(source='client.first_name', read_only=True)
+    total_items = serializers.SerializerMethodField()
+    saleperson = serializers.CharField(source='client.salesperson.first_name', read_only=True)
+    sales_order_number = serializers.CharField(source='sales_order.sales_order_number', read_only=True)
+
+    class Meta:
+        model = SalesReturnModel
+        fields = [
+            'id', 'sales_return_number', 'return_date', 'client_name',
+            'reason', 'grand_total', 'created_at', 'total_items', 'saleperson', 'sales_order_number'
+        ]
+    
+    def get_total_items(self, obj):
+        return obj.items.count() if obj.items else 0
+    
+class SalesReturnItemDisplaySerializer(serializers.ModelSerializer):
+    delivery_item_id = serializers.PrimaryKeyRelatedField(
+        queryset=DeliveryItem.objects.all(),
+        source='delivery_item',
+        write_only=True
+    )
+    product_name = serializers.CharField(source='delivery_item.product.name', read_only=True)
+    delivery_number = serializers.CharField(source='delivery_item.delivery_form.delivery_number', read_only=True)
+    invoice_number = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = SalesReturnItem
+        fields = '__all__'
+    
+    def get_invoice_number(self, obj):
+        # Find the invoice linked to the delivery_form of this delivery_item
+        delivery_form = obj.delivery_item.delivery_form
+        invoice_item = InvoiceItem.objects.filter(delivary=delivery_form).first()
+        if invoice_item:
+            return invoice_item.invoice.invoice_number
+        return None
+
+class SalesReturnDetailDisplaySerializer(serializers.ModelSerializer):
+    items = SalesReturnItemDisplaySerializer(many=True, read_only=True)
+    client_firstname = serializers.CharField(source='client.first_name', read_only=True)
+    client_lastname = serializers.CharField(source='client.last_name', read_only=True)
+    sales_order_number = serializers.CharField(source='sales_order.sales_order_number', read_only=True)
+    termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
+    termsandconditions_points = serializers.SerializerMethodField()
+    class Meta:
+        model = SalesReturnModel
+        fields = '__all__'
+    
+    def get_termsandconditions_points(self, obj):
+        terms = getattr(obj, 'termsandconditions', None)
+        if terms:
+            points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=terms)
+            return PrintTermsAndConditionsSerializer(points, many=True).data
+        return []
+        
+
+class SalesReturnPrintSerializer(serializers.ModelSerializer):
+    items = SalesReturnItemDisplaySerializer(many=True, read_only=True)
+    client = CustomerSerializer(read_only=True)
+    termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
+    termsandconditions_points = serializers.SerializerMethodField()
+    subtotal = serializers.SerializerMethodField()
+    total = serializers.SerializerMethodField()
+    grand_total_display = serializers.SerializerMethodField()
+    salesperson = serializers.SerializerMethodField()
+    sales_order_number = serializers.CharField(source='sales_order.sales_order_number', read_only=True)
+
+    class Meta:
+        model = SalesReturnModel
+        fields = '__all__'
+
+    def get_subtotal(self, obj):
+        subtotal = sum(item.sub_total for item in obj.items.all())
+        return "{:,.2f}".format(subtotal)
+
+    def get_total(self, obj):
+        total = sum(item.total for item in obj.items.all())
+        return "{:,.2f}".format(total)
+
+    def get_grand_total_display(self, obj):
+        return "{:,.2f}".format(obj.grand_total)
+
+    def get_salesperson(self, obj):
+        if obj.client and obj.client.salesperson:
+            return SalesPersonSerializer(obj.client.salesperson).data
+        return None
+
+    def get_termsandconditions_points(self, obj):
+        terms = getattr(obj, 'termsandconditions', None)
+        if terms:
+            points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=terms)
+            return PrintTermsAndConditionsSerializer(points, many=True).data
+        return []
+
+    
         
 class CountrySerializer(serializers.ModelSerializer):
     class Meta:

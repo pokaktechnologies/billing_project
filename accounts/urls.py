@@ -66,6 +66,12 @@ urlpatterns = [
     path('receipts/<int:rec_id>/', ReceiptView.as_view(), name='receipt'),
     path('print-receipts/<int:rec_id>/', PrintReceiptView.as_view(), name='print_receipt'),
 
+    path('sales-returns/',SalesReturnAPI.as_view(), name='sales-returns-list'),
+    path('sales-returns/<int:return_id>/',SalesReturnDetailAPI.as_view(),name='sales-returns-detail'),
+    path('print-sales-returns/<int:return_id>/', SalesReturnPrint.as_view(), name='print_sales_return'),
+    path('sales-returns/client/<int:client_id>/', SalesOrderByClient.as_view(), name='sales_order_by_client'),
+    path('delivery-orders/sales-order/<int:sales_order_id>/', DelivaryOrderBySalesOrder.as_view(), name='delivery_order_by_sales_order'),
+
     path('orders/generate-number/', OrderNumberGeneratorView.as_view(), name='order_number_generator'),
 
     path('reports/sales-by-client/',SalesReportByClientView.as_view(), name='sales_report_by_client'),

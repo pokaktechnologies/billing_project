@@ -1828,8 +1828,6 @@ class PrintDeliveryOrderAPI(APIView):
         }, status=status.HTTP_200_OK)
 
 class DeliveryOrderIsInvoiced(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'delivery'
 
     def get(self, request,sid=None):
         sales_order = get_object_or_404(SalesOrderModel, id=sid)
@@ -1858,8 +1856,6 @@ class DeliveryOrderIsInvoiced(APIView):
 from django.shortcuts import get_list_or_404
 
 class DelivaryOrderItemsList(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'delivery'
 
     def get(self, request):
         ids = request.query_params.get('ids')
@@ -2220,8 +2216,7 @@ class PrintInvoiceView(APIView):
 
 
 class InvoiceOrderIsReceipted(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'invoice'
+
 
     def get(self, request, client_id=None):
         if not client_id:
@@ -2378,6 +2373,193 @@ class PrintReceiptView(APIView):
             }]
         })
 
+from django.utils import timezone
+
+# views.py
+class SalesReturnAPI(APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'sales_returns'
+    
+    def post(self, request):
+        """Create new sales return"""
+        serializer = SalesReturnSerializer(
+            data=request.data,
+            context={'request': request}
+        )
+        if serializer.is_valid():
+            # Auto-generate return number if not provided
+            if not serializer.validated_data.get('sales_return_number'):
+                last_return = SalesReturnModel.objects.order_by('-id').first()
+                new_num = last_return.id + 1 if last_return else 1
+                serializer.validated_data['sales_return_number'] = f"SR-{new_num:06d}"
+            
+            serializer.save(user=request.user)
+            return Response({
+                "status": "1",
+                "message": "Sales return created successfully",
+                "sales_return_number": serializer.data['sales_return_number'],
+                "sales_return_id": serializer.data['id']
+            }, status=status.HTTP_201_CREATED)
+        return Response({
+            "status": "0",
+            "errors": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    def get(self, request):
+        """List all sales returns for the authenticated user"""
+        sales_returns = SalesReturnModel.objects.all().order_by('-created_at')
+        serializer = SalesReturnListSerializer(sales_returns, many=True)
+        return Response({
+            "status": "1",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+class SalesReturnDetailAPI(APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'sales_returns'
+
+    def get(self, request, return_id):
+        sales_return = get_object_or_404(
+            SalesReturnModel, 
+            id=return_id,
+        )
+        serializer = SalesReturnDetailDisplaySerializer(sales_return)
+        return Response({
+            "status": "1",
+            "data": serializer.data
+        })
+    
+    def patch(self, request, return_id):
+        """Update existing sales return"""
+        sales_return = get_object_or_404(
+            SalesReturnModel, 
+            id=return_id,
+            user=request.user
+        )
+        
+        # Prevent updates on returns older than 7 days
+        if (timezone.now() - sales_return.created_at).days > 7:
+            return Response({
+                "status": "0",
+                "error": "Returns older than 7 days cannot be modified"
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        serializer = SalesReturnSerializer(
+            sales_return,
+            data=request.data,
+            partial=True,
+            context={'request': request}
+        )
+        
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "status": "1",
+                "message": "Sales return updated",
+                "data": serializer.data
+            })
+        return Response({
+            "status": "0",
+            "errors": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, return_id):
+        """Delete sales return and revert changes"""
+        sales_return = get_object_or_404(
+            SalesReturnModel, 
+            id=return_id,
+            user=request.user
+        )
+        
+        # Prevent deletion on returns older than 7 days
+        if (timezone.now() - sales_return.created_at).days > 7:
+            return Response({
+                "status": "0",
+                "error": "Returns older than 7 days cannot be deleted"
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            with transaction.atomic():
+                # Explicitly delete each return item to ensure returned_quantity is reverted
+                for item in sales_return.items.all():
+                    item.delete()
+
+                sales_return.delete()
+
+                return Response({
+                    "status": "1",
+                    "message": "Sales return deleted successfully"
+                })
+        except Exception as e:
+            return Response({
+                "status": "0",
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class SalesReturnPrint(APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'sales_returns'
+
+    def get(self, request, return_id):
+        sales_return = get_object_or_404(
+            SalesReturnModel, 
+            id=return_id,
+        )
+        serializer = SalesReturnPrintSerializer(sales_return)
+        return Response({
+            "status": "1",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+
+
+class SalesOrderByClient(APIView):
+
+    def get(self, request,client_id=None):
+        sales_orders = SalesOrderModel.objects.filter(customer=client_id)
+
+        if not sales_orders.exists():
+            return Response({"status": "0", "message": "No sales orders found.", "data": []}, status=status.HTTP_200_OK)
+
+        # Create a list to hold the sales order data
+        data = []
+        for order in sales_orders:
+            data.append({
+                "id": order.id,
+                "sales_order_number": order.sales_order_number,
+                "client_first_name": order.customer.first_name,
+                "client_last_name": order.customer.last_name,
+                
+            })
+
+        # Return the response with the data
+        return Response({"status": "1", "data": data}, status=status.HTTP_200_OK)
+
+class DelivaryOrderBySalesOrder(APIView):
+    def get(self, request, sales_order_id=None):
+        if not sales_order_id:
+            return Response({"status": "0", "message": "Sales order ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        sales_order = get_object_or_404(SalesOrderModel, id=sales_order_id)
+        deliveries = DeliveryFormModel.objects.filter(sales_order=sales_order)
+
+        if not deliveries.exists():
+            return Response({"status": "0", "message": "No deliveries found for this sales order.", "data": []}, status=status.HTTP_200_OK)
+
+        # Create a list to hold the delivery data
+        data = []
+        for delivery in deliveries:
+            data.append({
+                "id": delivery.id,
+                "delivery_number": delivery.delivery_number,
+                "client_first_name": delivery.customer.first_name,
+                "client_last_name": delivery.customer.last_name,
+            })
+
+        return Response({"status": "1", "data": data}, status=status.HTTP_200_OK)
+
+
+
 
 class OrderNumberGeneratorView(APIView):
     def generate_next_number(self, model, field_name: str, prefix: str, length: int) -> str:
@@ -2413,6 +2595,9 @@ class OrderNumberGeneratorView(APIView):
             order_number = self.generate_next_number(PurchaseOrder, "purchase_order_number", "PO", 6)
         elif order_type == "MR":
             order_number = self.generate_next_number(MaterialReceive, "material_receive_number", "MR", 6)
+        elif order_type == "SR":
+            order_number = self.generate_next_number(SalesReturnModel, "sales_return_number", "SR", 6)
+
         else:
             return Response({
                 'status': '0',

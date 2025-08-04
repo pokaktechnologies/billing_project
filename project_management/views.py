@@ -320,14 +320,9 @@ class MembersViewDetail(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'project_management'
 
-    def get_member(self, pk, user):
+    def get_member(self, pk):
         try:
             member = Member.objects.get(pk=pk)
-            if member.user != user:
-                return None, Response(
-                    {"status": "0", "message": "Member not found"},
-                    status=status.HTTP_404_NOT_FOUND
-                )
             return member, None
         except Member.DoesNotExist:
             return None, Response(
@@ -365,7 +360,7 @@ class MembersViewDetail(APIView):
         )
 
     def delete(self, request, pk, format=None):
-        member, error_response = self.get_member(pk, request.user)
+        member, error_response = self.get_member(pk)
         if error_response:
             return error_response
 
@@ -417,7 +412,7 @@ class StackViewDetail(APIView):
 
     def get_stack(self, pk):
         try:
-            stack = Stack.objects.get(pk=pk, user=self.request.user)
+            stack = Stack.objects.get(pk=pk)
             return stack
         except Stack.DoesNotExist:
             return None
@@ -510,9 +505,9 @@ class ProjectMembersView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        project = ProjectManagement.objects.filter(pk=project_id, user=request.user).first()
-        stack = Stack.objects.filter(pk=stack_id, user=request.user).first()
-        member = Member.objects.filter(pk=member_id, user=request.user).first()
+        project = ProjectManagement.objects.filter(pk=project_id).first()
+        stack = Stack.objects.filter(pk=stack_id).first()
+        member = Member.objects.filter(pk=member_id).first()
 
         missing_entities = []
         if not project:

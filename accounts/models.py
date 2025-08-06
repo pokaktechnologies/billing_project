@@ -310,8 +310,8 @@ class SalesPerson(models.Model):
 class QuotationOrderModel(models.Model):
 # Add ForeignKey
     # customer_name = models.CharField(max_length=255)
-    client = models.ForeignKey('Customer', on_delete=models.SET_NULL, null=True, blank=True)
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE,null=True, blank=True)
+    client = models.ForeignKey('Customer', on_delete=models.PROTECT, null=True, blank=True)
+    user = models.ForeignKey(CustomUser, on_delete=models.PROTECT,null=True, blank=True)
     quotation_number = models.CharField(max_length=50, unique=True)
     project_name = models.CharField(max_length=255, blank=True, null=True)
     quotation_date = models.DateField()
@@ -333,7 +333,7 @@ class QuotationOrderModel(models.Model):
 
 class QuotationItem(models.Model):
     quotation = models.ForeignKey(QuotationOrderModel, related_name='items', on_delete=models.CASCADE)
-    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    product = models.ForeignKey(Product, on_delete=models.PROTECT)
     # product_description = models.TextField()
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, null=True, blank=True)
@@ -384,8 +384,8 @@ class QuotationItem(models.Model):
 
 
 class SalesOrderModel(models.Model):
-    customer = models.ForeignKey('Customer', on_delete=models.CASCADE)
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE,null=True, blank=True)
+    customer = models.ForeignKey('Customer', on_delete=models.PROTECT)
+    user = models.ForeignKey(CustomUser, on_delete=models.PROTECT,null=True, blank=True)
     sales_order_number = models.CharField(max_length=50, unique=True)
     sales_date = models.DateField()
     purchase_order_number = models.CharField(max_length=50, blank=True, null=True)
@@ -410,7 +410,7 @@ class SalesOrderModel(models.Model):
 
 class SalesOrderItem(models.Model):
     sales_order = models.ForeignKey(SalesOrderModel, on_delete=models.CASCADE, related_name='items')
-    product = models.ForeignKey('Product', on_delete=models.CASCADE)
+    product = models.ForeignKey('Product',  on_delete=models.PROTECT)
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
     pending_quantity = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -460,11 +460,11 @@ class SalesOrderItem(models.Model):
     
     
 class DeliveryFormModel(models.Model):
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE,null=True, blank=True)
-    customer = models.ForeignKey('Customer', on_delete=models.CASCADE,null=True, blank=True)
+    user = models.ForeignKey(CustomUser, on_delete=models.PROTECT,null=True, blank=True)
+    customer = models.ForeignKey('Customer', on_delete=models.PROTECT,null=True, blank=True)
     delivery_number = models.CharField(max_length=50, unique=True)
     delivery_date = models.DateField()
-    sales_order = models.ForeignKey(SalesOrderModel, on_delete=models.CASCADE, related_name="deliveries")
+    sales_order = models.ForeignKey(SalesOrderModel, on_delete=models.PROTECT, related_name="deliveries")
     delivery_location = models.CharField(max_length=255, blank=True)
     delivery_address = models.TextField(blank=True)
     termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.SET_NULL,  null=True, blank=True)
@@ -483,7 +483,7 @@ class DeliveryFormModel(models.Model):
 
 class DeliveryItem(models.Model):
     delivery_form = models.ForeignKey(DeliveryFormModel, related_name='items', on_delete=models.CASCADE)
-    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    product = models.ForeignKey(Product, on_delete=models.PROTECT)
     # sales_order_quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
     delivered_quantity = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
@@ -533,11 +533,11 @@ class DeliveryItem(models.Model):
 
 
 class InvoiceModel(models.Model):
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE,null=True, blank=True)
+    user = models.ForeignKey(CustomUser, on_delete=models.PROTECT,null=True, blank=True)
     invoice_number = models.CharField(max_length=50, unique=True)
     invoice_date = models.DateField()
-    client = models.ForeignKey('Customer', on_delete=models.CASCADE,null=True, blank=True)
-    sales_order = models.ForeignKey(SalesOrderModel, on_delete=models.CASCADE)
+    client = models.ForeignKey('Customer', on_delete=models.PROTECT,null=True, blank=True)
+    sales_order = models.ForeignKey(SalesOrderModel, on_delete=models.PROTECT)
     # delivery = models.ForeignKey(DeliveryFormModel, on_delete=models.SET_NULL, null=True, blank=True)
     invoice_grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
 
@@ -552,20 +552,20 @@ class InvoiceItem(models.Model):
 
 
 class ReceiptModel(models.Model):
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE,null=True, blank=True)
+    user = models.ForeignKey(CustomUser, on_delete=models.PROTECT,null=True, blank=True)
     receipt_number = models.CharField(max_length=50, unique=True)
     receipt_date = models.DateField()
-    client = models.ForeignKey('Customer', on_delete=models.CASCADE,null=True, blank=True)
-    invoice = models.OneToOneField(InvoiceModel, on_delete=models.SET_NULL, null=True, blank=True)
+    client = models.ForeignKey('Customer', on_delete=models.PROTECT,null=True, blank=True)
+    invoice = models.OneToOneField(InvoiceModel, on_delete=models.PROTECT, null=True, blank=True)
     termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.SET_NULL, null=True, blank=True)
     remark = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True,null=True,blank=True)
 
 class SalesReturnModel(models.Model):
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, null=True, blank=True)
-    client = models.ForeignKey('Customer', on_delete=models.CASCADE)
+    user = models.ForeignKey(CustomUser, on_delete=models.PROTECT, null=True, blank=True)
+    client = models.ForeignKey('Customer', on_delete=models.PROTECT)
     sales_return_number = models.CharField(max_length=50, unique=True)
-    sales_order = models.ForeignKey(SalesOrderModel, on_delete=models.CASCADE)
+    sales_order = models.ForeignKey(SalesOrderModel, on_delete=models.PROTECT)
     return_date = models.DateField()
     termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.SET_NULL, null=True, blank=True)
     reason = models.TextField()
@@ -582,7 +582,7 @@ class SalesReturnModel(models.Model):
 
 class SalesReturnItem(models.Model):
     sales_return = models.ForeignKey(SalesReturnModel, on_delete=models.CASCADE, related_name='items')
-    delivery_item = models.ForeignKey(DeliveryItem, on_delete=models.CASCADE) 
+    delivery_item = models.ForeignKey(DeliveryItem, on_delete=models.PROTECT) 
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     
     # Financial fields (auto-populated)

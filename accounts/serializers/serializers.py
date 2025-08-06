@@ -342,7 +342,8 @@ class PrintQuotationOrderSerializer(serializers.ModelSerializer):
 
         
 class NewsalesOrderSerializer(serializers.ModelSerializer):
-    client_name = serializers.CharField(source='customer.first_name', read_only=True)
+    client_firstname = serializers.CharField(source='customer.first_name', read_only=True)
+    client_lastname = serializers.CharField(source='customer.last_name', read_only=True)
     mobile_number = serializers.CharField(source='customer.mobile', read_only=True)
     bank_name = serializers.CharField(source='bank_account.bank_name', read_only=True)
     bank_account_number = serializers.CharField(source='bank_account.account_number', read_only=True)
@@ -590,7 +591,8 @@ class PrintDeliverySerializer(serializers.ModelSerializer):
         
 
 class InvoiceModelSerializer(serializers.ModelSerializer):
-    client_name = serializers.CharField(source='client.first_name', read_only=True)
+    client_firstname = serializers.CharField(source='client.first_name', read_only=True)
+    client_lastname = serializers.CharField(source='client.last_name', read_only=True)
     # salesperson = serializers.CharField(source='salesperson.first_name', read_only=True)
     sales_order_number = serializers.CharField(source='sales_order.sales_order_number', read_only=True)
     termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
@@ -629,7 +631,8 @@ class PrintInvoiceSerializer(serializers.ModelSerializer):
 
 class ReceiptSerializer(serializers.ModelSerializer):
     termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
-    client_name = serializers.CharField(source='client.first_name', read_only=True)
+    client_firstname = serializers.CharField(source='client.first_name', read_only=True)
+    client_lastname = serializers.CharField(source='client.last_name', read_only=True)
     invoice_number = serializers.CharField(source='invoice.invoice_number', read_only=True)
 
     class Meta:
@@ -809,7 +812,8 @@ class SalesReturnSerializer(serializers.ModelSerializer):
     
 
 class SalesReturnListSerializer(serializers.ModelSerializer):
-    client_name = serializers.CharField(source='client.first_name', read_only=True)
+    client_firstname = serializers.CharField(source='client.first_name', read_only=True)
+    client_lastname = serializers.CharField(source='client.last_name', read_only=True)
     total_items = serializers.SerializerMethodField()
     saleperson = serializers.CharField(source='client.salesperson.first_name', read_only=True)
     sales_order_number = serializers.CharField(source='sales_order.sales_order_number', read_only=True)
@@ -817,7 +821,7 @@ class SalesReturnListSerializer(serializers.ModelSerializer):
     class Meta:
         model = SalesReturnModel
         fields = [
-            'id', 'sales_return_number', 'return_date', 'client_name',
+            'id', 'sales_return_number', 'return_date', 'client_firstname', 'client_lastname',
             'reason', 'grand_total', 'created_at', 'total_items', 'saleperson', 'sales_order_number'
         ]
     

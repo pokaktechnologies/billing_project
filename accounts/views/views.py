@@ -1384,7 +1384,7 @@ class SalesOrderAPI(APIView):
             })
 
         else:
-            sales_orders = SalesOrderModel.objects.filter(user=request.user).order_by('-id')
+            sales_orders = SalesOrderModel.objects.all().order_by('-id')
             serializer = NewsalesOrderSerializer(sales_orders, many=True)
             return Response({"status": "1", "data": serializer.data}, status=status.HTTP_200_OK)
 
@@ -1949,7 +1949,7 @@ class InvoiceOrderAPI(APIView):
 
 
         else:
-            invoices = InvoiceModel.objects.filter(user=request.user).order_by("-created_at")
+            invoices = InvoiceModel.objects.all().order_by("-created_at")
             serializer = InvoiceModelSerializer(invoices, many=True)
             return Response({"status": "1", "data": serializer.data}, status=status.HTTP_200_OK)
 
@@ -2263,7 +2263,7 @@ class ReceiptView(APIView):
                 }]
             })
         else:
-            receipts = ReceiptModel.objects.filter(user=request.user).order_by('-created_at')
+            receipts = ReceiptModel.objects.all().order_by('-created_at')
             serializer = ReceiptSerializer(receipts, many=True)
         return Response({
             'Status': '1',

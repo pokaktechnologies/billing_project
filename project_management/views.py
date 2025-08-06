@@ -47,7 +47,7 @@ class ClientContractDetailView(APIView):
 
     def get_contract(self, pk, user):
         try:
-            return ClientContract.objects.get(pk=pk, user=user)
+            return ClientContract.objects.get(pk=pk)
         except ClientContract.DoesNotExist:
             return None
 

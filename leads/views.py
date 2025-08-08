@@ -89,16 +89,22 @@ class LeadsFollowUpView(APIView):
     required_module = 'leads'
 
     def get(self, request):
-        follow_up_statuses = ['lost', 'follow_up', 'sent', 'in_progress', 'converted']
+        follow_up_statuses = ['lost', 'follow_up', 'created', 'in_progress', 'converted']
         leads = Lead.objects.filter(lead_status__in=follow_up_statuses).order_by('-created_at')
-        serializer = LeadSerializer(leads, many=True)
+        serializer = LeadSerializerListDisplay(leads, many=True)
         return Response({
             "status": "1",
             "message": "success",
             "data": serializer.data
         }, status=status.HTTP_200_OK)
 
+class LeadsWithoutQuotationView(APIView):
+    def get(self, request):
+        # Filter leads without quotation and select only required fields
+        leads = Lead.objects.filter(quotation__isnull=True) \
+            .values('id', 'lead_number', 'name')
 
+        return Response(leads, status=status.HTTP_200_OK)
 
 class LeadSearchView(APIView):
 
@@ -110,6 +116,7 @@ class LeadSearchView(APIView):
         from_date_str = request.query_params.get('from_date')
         to_date_str = request.query_params.get('to_date')
         status_filter = request.query_params.get('status', '').strip()
+        sales_person = request.query_params.get('salesperson', '').strip()
 
         if (from_date_str and not to_date_str) or (to_date_str and not from_date_str):
             return Response(
@@ -152,6 +159,9 @@ class LeadSearchView(APIView):
 
         if status_filter:
             leads = leads.filter(lead_status=status_filter)
+        
+        if sales_person:
+            leads = leads.filter(salesperson=sales_person)
 
         serializer = LeadSerializerListDisplay(leads, many=True)
         return Response({

@@ -15,13 +15,14 @@ from .serializers import *
 
 
 
+
 class LeadsView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'leads'
 
     def get(self, request):
         leads = Lead.objects.all().order_by('-created_at')
-        serializer = LeadSerializer(leads, many=True)
+        serializer = LeadSerializerListDisplay(leads, many=True)
         return Response({
             "status": "1",
             "message": "success",
@@ -57,7 +58,7 @@ class LeadDetailView(APIView):
         lead = self.get_object(pk, request.user)
         if not lead:
             return Response({"status": "0", "message": "Lead not found"}, status=status.HTTP_404_NOT_FOUND)
-        serializer = LeadSerializer(lead)
+        serializer = LeadSerializerDetailDisplay(lead)
         return Response({"status": "1", "message": "success", "data": [serializer.data]})
 
     def patch(self, request, pk):
@@ -152,7 +153,7 @@ class LeadSearchView(APIView):
         if status_filter:
             leads = leads.filter(lead_status=status_filter)
 
-        serializer = LeadSerializer(leads, many=True)
+        serializer = LeadSerializerListDisplay(leads, many=True)
         return Response({
             "status": "1",
             "message": "success",

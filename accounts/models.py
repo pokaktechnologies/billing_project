@@ -312,6 +312,7 @@ class QuotationOrderModel(models.Model):
     # customer_name = models.CharField(max_length=255)
     client = models.ForeignKey('Customer', on_delete=models.PROTECT, null=True, blank=True)
     user = models.ForeignKey(CustomUser, on_delete=models.PROTECT,null=True, blank=True)
+    lead = models.OneToOneField('leads.Lead',on_delete=models.PROTECT,related_name='quotation', null=True,blank=True)
     quotation_number = models.CharField(max_length=50, unique=True)
     project_name = models.CharField(max_length=255, blank=True, null=True)
     quotation_date = models.DateField()

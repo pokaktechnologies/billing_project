@@ -2,7 +2,7 @@ from rest_framework import serializers
 from .models import *
 from datetime import datetime
 from django.utils import timezone
-from .models import Lead
+from accounts.serializers.serializers import SalesPersonSerializer
 
 class LeadSerializer(serializers.ModelSerializer):
     lead_status_display = serializers.SerializerMethodField()
@@ -15,6 +15,31 @@ class LeadSerializer(serializers.ModelSerializer):
     def get_lead_status_display(self, obj):
         return obj.get_lead_status_display()
 
+
+class LeadSerializerListDisplay(serializers.ModelSerializer):
+    lead_status_display = serializers.SerializerMethodField()
+    salesperson_first_name = serializers.CharField(source='salesperson.first_name', read_only=True, default=None)
+    salesperson_last_name = serializers.CharField(source='salesperson.last_name', read_only=True, default=None)
+    quotation_number = serializers.CharField(source='quotation.quotation_number', read_only=True, default=None)
+    qoutation_grand_total = serializers.DecimalField(source='quotation.grand_total', read_only=True, default=None, max_digits=10, decimal_places=2)
+
+    class Meta:
+        model = Lead
+        fields = "__all__"  # or specify the fields you want to include
+
+    def get_lead_status_display(self, obj):
+        return obj.get_lead_status_display()
+
+class LeadSerializerDetailDisplay(serializers.ModelSerializer):
+    lead_status_display = serializers.SerializerMethodField()
+    salesperson_detail = SalesPersonSerializer(source='salesperson', read_only=True, default=None)
+
+    class Meta:
+        model = Lead
+        fields = '__all__' 
+
+    def get_lead_status_display(self, obj):
+        return obj.get_lead_status_display()
 
 class MeetingSerializer(serializers.ModelSerializer):
     date = serializers.DateField(write_only=True)

@@ -203,12 +203,18 @@ class SalesPersonSerializer(serializers.ModelSerializer):
         model = SalesPerson
         fields = '__all__'
         read_only_fields = []        
-        
+
+      
         
 class QuotationOrderSerializer(serializers.ModelSerializer):
     quotation_date_display = serializers.SerializerMethodField()
     client_firstname = serializers.CharField(source='client.first_name', read_only=True)
     client_lastname = serializers.CharField(source='client.last_name', read_only=True)
+    lead_number = serializers.CharField(source='lead.lead_number', read_only=True)
+    lead_date = serializers.DateTimeField(source='lead.created_at', read_only=True)
+    salesperson_first_name = serializers.CharField(source='client.first_name', read_only=True, default=None)
+    salesperson_last_name = serializers.CharField(source='client.last_name', read_only=True, default=None)
+    
 
     class Meta:
         model = QuotationOrderModel
@@ -269,7 +275,7 @@ class NewQuotationItemSerializer(serializers.ModelSerializer):
         model = QuotationItem
         fields = ['quotation', 'product', 'quantity'] 
 
-
+ 
 
 class PrintQuotationOrderSerializer(serializers.ModelSerializer):
     items = QuotationItemSerializer(many=True)
@@ -281,6 +287,8 @@ class PrintQuotationOrderSerializer(serializers.ModelSerializer):
     total = serializers.SerializerMethodField()
     contract_title = serializers.CharField(source='contract.title', read_only=True)
     contract = serializers.SerializerMethodField()
+    lead_number = serializers.CharField(source='lead.lead_number', read_only=True)
+    lead_date = serializers.DateTimeField(source='lead.created_at', read_only=True)
     grand_total = serializers.SerializerMethodField()
 
     class Meta:

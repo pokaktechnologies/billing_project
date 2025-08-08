@@ -17,10 +17,12 @@ from accounts.permissions import HasModulePermission
 from rest_framework.authtoken.models import Token 
 from decimal import Decimal
 from django.utils.dateparse import parse_date
+from leads.models import Lead
 
 # from .serializers import CustomUserCreateSerializer, OTPSerializer, GettingStartedSerializer,HelpLinkSerializer,NotificationSerializer, UserSettingSerializer, FeedbackSerializer,QuotationOrderSerializer,InvoiceOrderSerializer,DeliveryOrderSerializer,SupplierPurchaseSerializer,SupplierSerializer,DeliveryChallanSerializer
 from django.core.mail import send_mail
 import random
+
 
 
 class SignupView(APIView):
@@ -814,6 +816,8 @@ class SalesPersonListCreateAPIView(APIView):
             },
             status=status.HTTP_200_OK
         )
+
+from leads.models import Lead
 class QuotationOrderAPI(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'quotation'
@@ -879,6 +883,9 @@ class QuotationOrderAPI(APIView):
                     "client_name": f"{quotation.client.first_name} {quotation.client.last_name}" if quotation.client else "",
                     "client_id": quotation.client.id if quotation.client else None,
                     "address": quotation.delivery_address,
+                    "lead": quotation.lead.id if quotation.lead else None,
+                    "lead_number": quotation.lead.lead_number if quotation.lead else "",
+                    "lead_date": str(quotation.lead.created_at) if quotation.lead else "",
                     "delivery_location": quotation.delivery_location,
                     "quotation_number": quotation.quotation_number,
                     "project_name": quotation.project_name,
@@ -949,9 +956,16 @@ class QuotationOrderAPI(APIView):
                 contract_data = data.get("contract", [])
                 if not contract_data:
                     return Response({"error": "Quotation must have a contract."}, status=status.HTTP_400_BAD_REQUEST)
+                lead_id = data.get("lead")
+
+                if lead_id:
+                    lead = Lead.objects.filter(id=lead_id).first()
+                    if not lead:
+                        return Response({"error": "Invalid lead ID"}, status=status.HTTP_400_BAD_REQUEST)
                 
             # if not request.user.is_authenticated:
             #     return Response({"error": "User is not authenticated."}, status=401)
+            
                 
                 quotation = QuotationOrderModel.objects.create(
                     user=CustomUser.objects.get(id=request.user.id),
@@ -960,12 +974,13 @@ class QuotationOrderAPI(APIView):
                     delivery_address=data.get("delivery_address"),
                     quotation_number=data.get('quotation_number'),
                     quotation_date=data.get("quotation_date"),
+                    lead=lead,
                     # contract=Contract.objects.get(id=contract) if contract else None,
                     # remark=data.get("remark", ""),
                     
                     # attachments=data.get("attachments", None),
                     #grand_total=0  ,
-                    delivery_location=data.get("delivery_location", ""),  # New Field
+                    delivery_location=data.get("delivery_location", ""),
                     # bank_account_id= bank_account_id,
                     termsandconditions_id=terms_id  # Add terms and condition
                 )
@@ -2597,6 +2612,9 @@ class OrderNumberGeneratorView(APIView):
             order_number = self.generate_next_number(MaterialReceive, "material_receive_number", "MR", 6)
         elif order_type == "SR":
             order_number = self.generate_next_number(SalesReturnModel, "sales_return_number", "SR", 6)
+        elif order_type == "LD":
+            order_number = self.generate_next_number(Lead, "lead_number", "LD", 6)
+            
 
         else:
             return Response({

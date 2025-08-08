@@ -102,7 +102,7 @@ class LeadsWithoutQuotationView(APIView):
     def get(self, request):
         # Filter leads without quotation and select only required fields
         leads = Lead.objects.filter(quotation__isnull=True) \
-            .values('id', 'lead_number', 'name')
+            .values('id', 'lead_number', 'name','company')
 
         return Response(leads, status=status.HTTP_200_OK)
 

@@ -885,6 +885,7 @@ class QuotationOrderAPI(APIView):
                     "address": quotation.delivery_address,
                     "lead": quotation.lead.id if quotation.lead else None,
                     "lead_number": quotation.lead.lead_number if quotation.lead else "",
+                    "lead_name": quotation.lead.name if quotation.lead else "",
                     "lead_date": str(quotation.lead.created_at) if quotation.lead else "",
                     "delivery_location": quotation.delivery_location,
                     "quotation_number": quotation.quotation_number,

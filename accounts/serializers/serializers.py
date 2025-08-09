@@ -289,6 +289,7 @@ class PrintQuotationOrderSerializer(serializers.ModelSerializer):
     contract = serializers.SerializerMethodField()
     lead_number = serializers.CharField(source='lead.lead_number', read_only=True)
     lead_date = serializers.DateTimeField(source='lead.created_at', read_only=True)
+    lead_name = serializers.CharField(source='lead.name', read_only=True)
     grand_total = serializers.SerializerMethodField()
 
     class Meta:

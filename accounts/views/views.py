@@ -956,12 +956,12 @@ class QuotationOrderAPI(APIView):
                 contract_data = data.get("contract", [])
                 if not contract_data:
                     return Response({"error": "Quotation must have a contract."}, status=status.HTTP_400_BAD_REQUEST)
-                lead_id = data.get("lead")
+                # lead_id = data.get("lead")
 
-                if lead_id:
-                    lead = Lead.objects.filter(id=lead_id).first()
-                    if not lead:
-                        return Response({"error": "Invalid lead ID"}, status=status.HTTP_400_BAD_REQUEST)
+                # if lead_id:
+                #     lead = Lead.objects.filter(id=lead_id).first()
+                #     if not lead:
+                #         return Response({"error": "Invalid lead ID"}, status=status.HTTP_400_BAD_REQUEST)
                 
             # if not request.user.is_authenticated:
             #     return Response({"error": "User is not authenticated."}, status=401)
@@ -974,7 +974,7 @@ class QuotationOrderAPI(APIView):
                     delivery_address=data.get("delivery_address"),
                     quotation_number=data.get('quotation_number'),
                     quotation_date=data.get("quotation_date"),
-                    lead=lead,
+                    lead=Lead.objects.filter(id=data.get("lead")).first(),
                     # contract=Contract.objects.get(id=contract) if contract else None,
                     # remark=data.get("remark", ""),
                     

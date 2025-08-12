@@ -19,6 +19,7 @@ class QuatationSearchView(APIView):
         end_date = request.query_params.get('end_date')
         client = request.query_params.get('client')
         search = request.query_params.get('search')  # Optional keyword search
+        salesperson = request.query_params.get('salesperson')
 
         quotations = QuotationOrderModel.objects.all().order_by('-id')
 
@@ -29,6 +30,9 @@ class QuatationSearchView(APIView):
         # Filter by client ID
         if client:
             quotations = quotations.filter(client__id=client)
+        
+        if salesperson:
+            quotations = quotations.filter(client__salesperson=salesperson)
 
         # Optional search in client name or project name
         if search:

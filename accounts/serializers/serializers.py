@@ -212,8 +212,8 @@ class QuotationOrderSerializer(serializers.ModelSerializer):
     client_lastname = serializers.CharField(source='client.last_name', read_only=True)
     lead_number = serializers.CharField(source='lead.lead_number', read_only=True)
     lead_date = serializers.DateTimeField(source='lead.created_at', read_only=True)
-    salesperson_first_name = serializers.CharField(source='client.first_name', read_only=True, default=None)
-    salesperson_last_name = serializers.CharField(source='client.last_name', read_only=True, default=None)
+    salesperson_first_name = serializers.CharField(source='client.salesperson.first_name', read_only=True, default=None)
+    salesperson_last_name = serializers.CharField(source='client.salesperson.last_name', read_only=True, default=None)
     
 
     class Meta:

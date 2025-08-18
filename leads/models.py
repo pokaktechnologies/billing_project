@@ -63,3 +63,48 @@ class Meeting(models.Model):
     def __str__(self):
         return f"Meeting with {self.lead.name} on {self.date}"  
 
+
+# marketing section
+class Location(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    created_at = models.DateTimeField(default=timezone.now)  # Date
+
+    def __str__(self):
+        return self.name
+
+class Source(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    created_at = models.DateTimeField(default=timezone.now)  # Date
+
+    def __str__(self):
+        return self.name
+
+class Category(models.Model):
+    name = models.CharField(max_length=100)
+    source = models.ForeignKey(Source, on_delete=models.PROTECT, related_name="categories")
+    created_at = models.DateTimeField(default=timezone.now)  # Date
+
+    class Meta:
+        unique_together = ('name', 'source')
+
+    def __str__(self):
+        return f"{self.name} ({self.source.name})"
+
+
+# -------------------
+# Daily Report (Main Entry)
+# -------------------
+class MarketingReport(models.Model):
+    date = models.DateField()
+    user = models.ForeignKey(CustomUser, on_delete=models.PROTECT, related_name="daily_reports")
+    salesperson = models.ForeignKey(SalesPerson, on_delete=models.PROTECT, related_name="reports")
+    source = models.ForeignKey(Source, on_delete=models.PROTECT)
+    location = models.ForeignKey(Location, on_delete=models.PROTECT)
+    category = models.ForeignKey(Category, on_delete=models.PROTECT)
+    calls = models.PositiveIntegerField(default=0)
+    leads = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(default=timezone.now)  # Date
+    
+
+    def __str__(self):
+        return f"{self.salesperson.first_name} | {self.source.name} | {self.location.name} | {self.category.name}"

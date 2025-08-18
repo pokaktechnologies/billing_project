@@ -10,8 +10,8 @@ from django.db.models import Q
 
 from accounts.permissions import HasModulePermission
 
-from .models import *
-from .serializers import *
+from ..models import *
+from ..serializers.LeadsSerializers import *
 
 
 

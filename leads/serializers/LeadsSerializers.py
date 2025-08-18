@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import *
+from ..models import *
 from datetime import datetime
 from django.utils import timezone
 from accounts.serializers.serializers import SalesPersonSerializer

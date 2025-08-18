@@ -808,15 +808,17 @@ class ModulePermission(models.Model):
         ("material_receive", "Material Receive"),
         ("invoice", "Invoice"),
         ("receipt", "Receipt"),
-        ("sales_return", "Sales Return"),
-        ("stock", "Stock"),
-        ("expense", "Expense"),
+        # ("sales_return", "Sales Return"),
+        # ("stock", "Stock"),
+        # ("expense", "Expense"),
         ("reports", "Reports"),
         ("sales_returns", "Sales Returns"),
         ("accounts", "Accounts"),
-        ("payments", "Payments"),
+        # ("payments", "Payments"),
         ("products", "Products"),
         ('hr_section', "HR Section"),
+        ('marketing', "Marketing"),
+        
     ]
 
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="module_permissions")

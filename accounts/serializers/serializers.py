@@ -642,7 +642,7 @@ class ReceiptSerializer(serializers.ModelSerializer):
     termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
     client_firstname = serializers.CharField(source='client.first_name', read_only=True)
     client_lastname = serializers.CharField(source='client.last_name', read_only=True)
-    invoice_number = serializers.CharField(source='invoice.invoice_number', read_only=True)
+    invoice_number = serializers.SerializerMethodField()
 
     class Meta:
         model = ReceiptModel
@@ -650,6 +650,8 @@ class ReceiptSerializer(serializers.ModelSerializer):
         # extra_kwargs = {
         #     'receipt_number': {'read_only': True}
         # }
+    def get_invoice_number(self, obj):
+        return obj.invoice.invoice_number if obj.invoice else None
     
     # def create(self, validated_data):
     #     # Generate a receipt number like "RP1234"
@@ -667,7 +669,7 @@ class PrintReceiptSerializer(serializers.ModelSerializer):
     termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
     salesperson = serializers.SerializerMethodField()
     client = CustomerSerializer(read_only=True)
-    invoice_number = serializers.CharField(source='invoice.invoice_number', read_only=True)
+    invoice_number = serializers.SerializerMethodField()
     invoice_grand_total = serializers.SerializerMethodField()
 
     class Meta:
@@ -677,8 +679,9 @@ class PrintReceiptSerializer(serializers.ModelSerializer):
     def get_invoice_grand_total(self, obj):
         if obj.invoice and obj.invoice.invoice_grand_total is not None:
             return "{:,.2f}".format(obj.invoice.invoice_grand_total)
-        return "0.00"  # or return None, depending on your use case
-
+        return None  # or return None, depending on your use case
+    def get_invoice_number(self, obj):
+        return obj.invoice.invoice_number if obj.invoice else None
         
     def get_termsandconditions(self, obj):
         # Get related TermsAndConditions

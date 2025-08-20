@@ -2265,9 +2265,14 @@ class ReceiptView(APIView):
         if rec_id:
             receipt = get_object_or_404(ReceiptModel, id=rec_id)
             termsandconditions_points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=receipt.termsandconditions_id)
-            invoice_items = InvoiceItem.objects.filter(invoice=receipt.invoice_id)
-            items = DeliveryItem.objects.filter(delivery_form__in=invoice_items.values_list('delivary__id', flat=True)).distinct()
+            invoice_items = []
+            items = []
 
+            if receipt.invoice:
+                invoice_items = InvoiceItem.objects.filter(invoice=receipt.invoice_id)
+                items = DeliveryItem.objects.filter(
+                    delivery_form__in=invoice_items.values_list('delivary__id', flat=True)
+                ).distinct()
             serializer = ReceiptSerializer(receipt)
             return Response({
                 'Status': '1',
@@ -2290,9 +2295,11 @@ class ReceiptView(APIView):
     def post(self, request):
         serializer = ReceiptSerializer(data=request.data)
         if serializer.is_valid():
-            invoice = get_object_or_404(InvoiceModel, id=request.data['invoice'])
-            invoice.is_receipted = True
-            invoice.save(update_fields=['is_receipted'])
+            invoice_id = request.data.get('invoice')
+            if invoice_id:
+                invoice = get_object_or_404(InvoiceModel, id=invoice_id)
+                invoice.is_receipted = True
+                invoice.save(update_fields=['is_receipted'])
             serializer.save(user=request.user)
             return Response(
                 {
@@ -2308,34 +2315,43 @@ class ReceiptView(APIView):
     
     def patch(self, request, rec_id=None):
         receipt = get_object_or_404(ReceiptModel, id=rec_id)
-        old_invoice = receipt.invoice
+        old_invoice = receipt.invoice  # may be None
 
         serializer = ReceiptSerializer(receipt, data=request.data, partial=True)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        new_invoice_id = request.data.get('invoice')
-        if new_invoice_id and new_invoice_id != old_invoice.id:
-            # 3) If user is reassigning the receipt to a different invoice:
-            #    a) Un-mark the old invoice
-            old_invoice.is_receipted = False
-            old_invoice.save(update_fields=['is_receipted'])
-            #    b) Mark the new invoice
+        new_invoice_id = request.data.get("invoice")
+
+        # Case 1: New invoice is provided
+        if new_invoice_id:
             new_invoice = get_object_or_404(InvoiceModel, id=new_invoice_id)
+
+            # If old invoice exists and is different, unmark it
+            if old_invoice and new_invoice_id != old_invoice.id:
+                old_invoice.is_receipted = False
+                old_invoice.save(update_fields=["is_receipted"])
+
+            # Mark new invoice as receipted
             new_invoice.is_receipted = True
-            new_invoice.save(update_fields=['is_receipted'])
+            new_invoice.save(update_fields=["is_receipted"])
 
+        # Case 2: No new invoice provided
         else:
-            # 4) If invoice stayed the same (or wasn't provided), ensure it's marked
-            old_invoice.is_receipted = True
-            old_invoice.save(update_fields=['is_receipted'])
+            if old_invoice:
+                # If user removes invoice link → unmark old invoice
+                old_invoice.is_receipted = False
+                old_invoice.save(update_fields=["is_receipted"])
+            # else: receipt remains without invoice
 
-        # 5) Save the updated receipt
+        # Save receipt with updated data
         serializer.save()
-        return Response({
-            "status": "1",
-            "message": "Receipt updated successfully."
-        }, status=status.HTTP_200_OK)
+
+        return Response(
+            {"status": "1", "message": "Receipt updated successfully."},
+            status=status.HTTP_200_OK,
+        )
+
 
     def delete(self, request, rec_id=None):
         if not rec_id:
@@ -2344,33 +2360,43 @@ class ReceiptView(APIView):
         try:
             with transaction.atomic():
                 receipt = get_object_or_404(ReceiptModel, id=rec_id)
-                invoice = receipt.invoice
+                invoice = receipt.invoice  # may be None
 
                 # 1) Delete the receipt
                 receipt.delete()
 
-                # 2) Mark the invoice as not receipted
-                invoice.is_receipted = False
-                invoice.save(update_fields=["is_receipted"])
+                # 2) If linked to invoice → unmark it
+                if invoice:
+                    invoice.is_receipted = False
+                    invoice.save(update_fields=["is_receipted"])
 
                 return Response({
                     "status": "1",
-                    "message": "Receipt deleted and invoice marked un-receipted."
+                    "message": "Receipt deleted successfully." if not invoice else "Receipt deleted and invoice marked un-receipted."
                 }, status=status.HTTP_200_OK)
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     
 class PrintReceiptView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'receipt'
+
     def get(self, request, rec_id=None):
         receipt = get_object_or_404(ReceiptModel, id=rec_id)
-        invoice_items = InvoiceItem.objects.filter(invoice=receipt.invoice_id)
-        items = DeliveryItem.objects.filter(delivery_form__in=invoice_items.values_list('delivary__id', flat=True)).distinct()
+
+        invoice_items = []
+        items = []
+
+        if receipt.invoice:
+            invoice_items = InvoiceItem.objects.filter(invoice=receipt.invoice_id)
+            items = DeliveryItem.objects.filter(
+                delivery_form__in=invoice_items.values_list('delivary__id', flat=True)
+            ).distinct()
+
         # Initialize total
         items_data = []        
-
         for item in items:
             item_data = PrintDeliveryItemsSerializer(item).data
             item_data.update({
@@ -2388,6 +2414,7 @@ class PrintReceiptView(APIView):
                 'items': items_data,
             }]
         })
+
 
 from django.utils import timezone
 

@@ -560,7 +560,12 @@ class ReceiptModel(models.Model):
     invoice = models.OneToOneField(InvoiceModel, on_delete=models.PROTECT, null=True, blank=True)
     termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.SET_NULL, null=True, blank=True)
     remark = models.CharField(max_length=255, blank=True)
+    description = models.TextField(blank=True, null=True)
+    cheque_number = models.CharField(max_length=50, blank=True, null=True)
+    cheque_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     created_at = models.DateTimeField(auto_now_add=True,null=True,blank=True)
+
 
 class SalesReturnModel(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.PROTECT, null=True, blank=True)

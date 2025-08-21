@@ -157,12 +157,25 @@ class MarketingReportUpdateSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
+
+    
 class MarketingReportDisplaySerializer(serializers.ModelSerializer):
     salesperson = serializers.CharField(source='salesperson.first_name')
+    salesperson_id = serializers.IntegerField(source='salesperson.id')
     source = serializers.CharField(source='source.name')
+    source_id = serializers.IntegerField(source='source.id')
     location = serializers.CharField(source='location.name')
+    location_id = serializers.IntegerField(source='location.id')
     category = serializers.CharField(source='category.name')
+    category_id = serializers.IntegerField(source='category.id')
 
     class Meta:
         model = MarketingReport
-        fields = ['id', 'date', 'salesperson', 'source', 'location', 'category', 'calls', 'leads']
+        fields = [
+            'id', 'date',
+            'salesperson_id', 'salesperson',
+            'source_id', 'source',
+            'location_id', 'location',
+            'category_id', 'category',
+            'calls', 'leads',
+        ]

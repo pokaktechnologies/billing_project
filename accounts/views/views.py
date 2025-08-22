@@ -2264,7 +2264,7 @@ class ReceiptView(APIView):
     def get(self, request, rec_id=None):
         if rec_id:
             receipt = get_object_or_404(ReceiptModel, id=rec_id)
-            termsandconditions_points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=receipt.termsandconditions_id)
+            # termsandconditions_points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=receipt.termsandconditions_id)
             invoice_items = []
             items = []
 
@@ -2279,7 +2279,7 @@ class ReceiptView(APIView):
                 'Message': 'Success',
                 'Data': [{
                     **serializer.data,
-                    'termsandconditions_points': TermsAndConditionsPointSerializer(termsandconditions_points, many=True).data,
+                    # 'termsandconditions_points': TermsAndConditionsPointSerializer(termsandconditions_points, many=True).data,
                     'items': DeliveryItemsSerializer(items, many=True).data
                 }]
             })

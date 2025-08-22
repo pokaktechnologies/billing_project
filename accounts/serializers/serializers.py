@@ -639,7 +639,7 @@ class PrintInvoiceSerializer(serializers.ModelSerializer):
 
 
 class ReceiptSerializer(serializers.ModelSerializer):
-    termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
+    # termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
     client_firstname = serializers.CharField(source='client.first_name', read_only=True)
     client_lastname = serializers.CharField(source='client.last_name', read_only=True)
     invoice_number = serializers.SerializerMethodField()
@@ -647,26 +647,13 @@ class ReceiptSerializer(serializers.ModelSerializer):
     class Meta:
         model = ReceiptModel
         fields = '__all__'
-        # extra_kwargs = {
-        #     'receipt_number': {'read_only': True}
-        # }
+
     def get_invoice_number(self, obj):
         return obj.invoice.invoice_number if obj.invoice else None
-    
-    # def create(self, validated_data):
-    #     # Generate a receipt number like "RP1234"
-    #     receipt_number = f"REC-{random.randint(10000, 99999)}"
-
-    #     # Ensure uniqueness (since receipt_number is unique=True)
-    #     while ReceiptModel.objects.filter(receipt_number=receipt_number).exists():
-    #         receipt_number = f"REC-{random.randint(10000, 99999)}"
-
-    #     validated_data['receipt_number'] = receipt_number
-    #     return super().create(validated_data)
 
 class PrintReceiptSerializer(serializers.ModelSerializer):
-    termsandconditions = serializers.SerializerMethodField()
-    termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
+    # termsandconditions = serializers.SerializerMethodField()
+    # termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
     salesperson = serializers.SerializerMethodField()
     client = CustomerSerializer(read_only=True)
     invoice_number = serializers.SerializerMethodField()
@@ -683,12 +670,12 @@ class PrintReceiptSerializer(serializers.ModelSerializer):
     def get_invoice_number(self, obj):
         return obj.invoice.invoice_number if obj.invoice else None
         
-    def get_termsandconditions(self, obj):
-        # Get related TermsAndConditions
-        terms = obj.termsandconditions
-        # Get points related to this TermsAndConditions
-        points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=terms)
-        return PrintTermsAndConditionsSerializer(points, many=True).data
+    # def get_termsandconditions(self, obj):
+    #     # Get related TermsAndConditions
+    #     terms = obj.termsandconditions
+    #     # Get points related to this TermsAndConditions
+    #     points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=terms)
+    #     return PrintTermsAndConditionsSerializer(points, many=True).data
     
     def get_salesperson(self, obj):
         salesperson = obj.client.salesperson

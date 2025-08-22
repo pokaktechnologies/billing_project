@@ -558,12 +558,15 @@ class ReceiptModel(models.Model):
     receipt_date = models.DateField()
     client = models.ForeignKey('Customer', on_delete=models.PROTECT,null=True, blank=True)
     invoice = models.OneToOneField(InvoiceModel, on_delete=models.PROTECT, null=True, blank=True)
-    termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.SET_NULL, null=True, blank=True)
+    # termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.SET_NULL, null=True, blank=True)
     remark = models.CharField(max_length=255, blank=True)
     description = models.TextField(blank=True, null=True)
     cheque_number = models.CharField(max_length=50, blank=True, null=True)
     cheque_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    bank_name = models.CharField(max_length=255, blank=True, null=True)
+    prepared_by = models.CharField(max_length=255, blank=True, null=True)
+    recived_by = models.CharField(max_length=255, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True,null=True,blank=True)
 
 

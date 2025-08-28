@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework.parsers import MultiPartParser, FormParser
 from accounts.permissions import HasModulePermission
 from rest_framework.permissions import IsAuthenticated
+from datetime import timedelta
 
 from .models import *
 from .serializers import *
@@ -384,77 +385,120 @@ class JobApplicationSearchView(APIView):
 
 
 
+
+
+
 class JobApplicationStatsAPIView(APIView):
+    """
+    API endpoint that returns job application statistics.
+
+    Permissions:
+    - Requires authentication
+    - Requires 'hr_section' module access
+
+    Returns:
+        - new_applications_today: counts ALL applications created today (any status)
+        - percentage_change: vs yesterday
+        - most_applied_designation: all-time top designation (any status) 
+        - applications_this_week: count for that designation from Monday 00:00 through now
+        - shortlisted_this_week: count shortlisted from Monday 00:00 through now
+    """
+
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'hr_section'
 
     def get(self, request):
-        today = timezone.now().date()
-        yesterday = today - timezone.timedelta(days=1)
-        week_start = today - timezone.timedelta(days=today.weekday())  # Monday
+        try:
+            # Current local time (timezone-aware)
+            local_now = timezone.localtime()
 
-        # 1. Combined query: count for today and yesterday
-        counts = JobApplication.objects.filter(
-            applied_at__date__in=[today, yesterday],
-            status='applied'
-        ).values('applied_at__date').annotate(total=Count('id'))
+            # Date ranges
+            start_of_today = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+            start_of_yesterday = start_of_today - timedelta(days=1)
+            start_of_week = start_of_today - timedelta(days=start_of_today.weekday())
 
-        new_applications_today = 0
-        new_applications_yesterday = 0
-        for c in counts:
-            if c['applied_at__date'] == today:
-                new_applications_today = c['total']
-            elif c['applied_at__date'] == yesterday:
-                new_applications_yesterday = c['total']
+            # Base queryset
+            base_queryset = JobApplication.objects.select_related('designation')
 
-        # 2. Percentage change
-        if new_applications_yesterday > 0:
-            percentage_change = ((new_applications_today - new_applications_yesterday) / new_applications_yesterday) * 100
-        else:
-            percentage_change = 0
-
-        # 3. Most applied designation
-        most_designation = JobApplication.objects.filter(
-            designation__isnull=False
-        ).values('designation__name', 'designation').annotate(
-            count=Count('id')
-        ).order_by('-count').first()
-
-        if most_designation:
-            most_designation_name = most_designation.get('designation__name')
-            most_designation_count = most_designation['count']
-            most_designation_id = most_designation['designation']
-
-            # 4. Count for this designation this week
-            applications_this_week = JobApplication.objects.filter(
-                designation_id=most_designation_id,
-                applied_at__date__gte=week_start
+            # Applications today
+            today_count = base_queryset.filter(
+                applied_at__gte=start_of_today,
+                applied_at__lt=start_of_today + timedelta(days=1)
             ).count()
-        else:
-            most_designation_name = None
-            most_designation_count = 0
-            applications_this_week = 0
 
-        # 5. Shortlisted this week
-        total_shortlisted_this_week = JobApplication.objects.filter(
-            status='shortlisted',
-            applied_at__date__gte=week_start
-        ).count()
+            # Applications yesterday
+            yesterday_count = base_queryset.filter(
+                applied_at__gte=start_of_yesterday,
+                applied_at__lt=start_of_today
+            ).count()
 
-        # Response
-        stats = {
-            "new_applications_today": {
-                "count": new_applications_today,
-                "percentage_change": round(percentage_change, 2)
-            },
-            "most_applied_designation": {
-                "name": most_designation_name,
-                "count": most_designation_count,
-                "applications_this_week": applications_this_week
-            },
-            "shortlisted_this_week": total_shortlisted_this_week
-        }
+            # Percentage change
+            if yesterday_count > 0:
+                percentage_change = round(
+                    ((today_count - yesterday_count) / yesterday_count) * 100, 2
+                )
+            else:
+                percentage_change = 100.0 if today_count > 0 else 0.0
 
-        return Response(stats, status=status.HTTP_200_OK)
+            # Most applied designation
+            most_designation = (
+                base_queryset
+                .exclude(
+                    Q(designation__isnull=True) |
+                    Q(designation__name__isnull=True) |
+                    Q(designation__name__exact='') |
+                    Q(designation__name__exact=' ')
+                )
+                .values('designation_id', 'designation__name')
+                .annotate(total_count=Count('id'))
+                .order_by('-total_count')
+                .first()
+            )
 
+            if most_designation:
+                designation_id = most_designation['designation_id']
+                designation_name = most_designation['designation__name'].strip()
+                total_designation_count = most_designation['total_count']
 
+                # Applications this week for that designation
+                this_week_for_designation = base_queryset.filter(
+                    designation_id=designation_id,
+                    applied_at__gte=start_of_week,
+                    applied_at__lte=local_now
+                ).count()
+            else:
+                designation_name = "No designation data"
+                total_designation_count = 0
+                this_week_for_designation = 0
+
+            # Shortlisted this week
+            shortlisted_this_week = base_queryset.filter(
+                status='shortlisted',
+                applied_at__gte=start_of_week,
+                applied_at__lte=local_now
+            ).count()
+
+            # Final response
+            stats = {
+                "new_applications_today": {
+                    "count": today_count,
+                    "percentage_change": percentage_change
+                },
+                "most_applied_designation": {
+                    "name": designation_name,
+                    "count": total_designation_count,
+                    "applications_this_week": this_week_for_designation
+                },
+                "shortlisted_this_week": shortlisted_this_week
+            }
+
+            return Response(stats, status=status.HTTP_200_OK)
+
+        except Exception:
+            # Safe fallback in case of errors
+            return Response({
+                "error": "Unable to calculate statistics",
+                "new_applications_today": {"count": 0, "percentage_change": 0},
+                "most_applied_designation": {"name": "Error", "count": 0, "applications_this_week": 0},
+                "shortlisted_this_week": 0
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

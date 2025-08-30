@@ -331,7 +331,7 @@ class MembersViewDetail(APIView):
             )
 
     def get(self, request, pk, format=None):
-        member, error_response = self.get_member(pk, request.user)
+        member, error_response = self.get_member(pk)
         if error_response:
             return error_response
 
@@ -342,7 +342,7 @@ class MembersViewDetail(APIView):
         )
 
     def patch(self, request, pk, format=None):
-        member, error_response = self.get_member(pk, request.user)
+        member, error_response = self.get_member(pk)
         if error_response:
             return error_response
 

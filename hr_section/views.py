@@ -364,7 +364,7 @@ class JobApplicationSearchView(APIView):
 
         # Filter by designation name
         if designation:
-            applications = applications.filter(designation__name__icontains=designation)
+            applications = applications.filter(designation_id=designation)
         
         # ✅ Proper job filter handling
         if job == 'null':

@@ -2642,6 +2642,8 @@ class OrderNumberGeneratorView(APIView):
             order_number = self.generate_next_number(SalesReturnModel, "sales_return_number", "SR", 6)
         elif order_type == "LD":
             order_number = self.generate_next_number(Lead, "lead_number", "LD", 6)
+        elif order_type == "EMP":
+            order_number = self.generate_next_number(JobDetail, "employee_id", "EMP", 6)
             
 
         else:

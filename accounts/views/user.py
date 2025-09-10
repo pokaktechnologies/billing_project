@@ -85,7 +85,7 @@ class AssignPermissionView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 from django.db import transaction, IntegrityError
-
+import traceback
 class CreateStaffWithPermissionsView(APIView):
     permission_classes = [IsAdminUser, HasModulePermission]
     required_module = 'hr_section'
@@ -94,22 +94,36 @@ class CreateStaffWithPermissionsView(APIView):
     def post(self, request):
         """Create a new staff with user, profile, job, documents, and permissions"""
 
+        # --- 1. Validate user serializer first ---
+        user_serializer = CreateUserWithPermissionsSerializer(data=request.data)
+        if not user_serializer.is_valid():
+            return Response(user_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        # --- 2. Pre-validate employee_id ---
+        employee_id = request.data.get("employee_id")
+        if employee_id and JobDetail.objects.filter(employee_id=employee_id).exists():
+            return Response(
+                {"status": "0", "message": f"Employee ID '{employee_id}' already exists. Please use a unique ID."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # --- 3. Pre-validate department ---
+        department_id = request.data.get("department")
+        department = None
+        if department_id:
+            try:
+                department = Department.objects.get(id=department_id)
+            except Department.DoesNotExist:
+                return Response(
+                    {"status": "0", "message": "Invalid department ID. Please select a valid department."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        # --- 4. Create objects inside a transaction ---
         try:
             with transaction.atomic():
-                # Create user + permissions
-                user_serializer = CreateUserWithPermissionsSerializer(data=request.data)
-                if not user_serializer.is_valid():
-                    return Response(user_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+                # Create user
                 user = user_serializer.save()
-
-                # Validate unique employee_id ---
-                employee_id = request.data.get("employee_id")
-                if employee_id and JobDetail.objects.filter(employee_id=employee_id).exists():
-                    return Response(
-                        {"status": "0", "message": f"Employee ID '{employee_id}' already exists. Please use a unique ID."},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
 
                 # Create staff profile
                 staff_profile = StaffProfile.objects.create(
@@ -119,21 +133,12 @@ class CreateStaffWithPermissionsView(APIView):
                     date_of_birth=request.data.get("date_of_birth"),
                     address=request.data.get("address")
                 )
-                
 
-                # Optional: create job detail
-                if request.data.get("employee_id"):
-                    department_id = request.data.get("department")
-                    department = None
-                    if department_id:
-                        # ✅ Friendly validation instead of DB error
-                        if not Department.objects.filter(id=department_id).exists():
-                            raise ValueError("Invalid department ID. Please select a valid department.")
-                        department = Department.objects.get(id=department_id)
-
+                # Create job detail if provided
+                if employee_id:
                     JobDetail.objects.create(
                         staff=staff_profile,
-                        employee_id=request.data["employee_id"],
+                        employee_id=employee_id,
                         department=department,
                         role=request.data.get("role"),
                         salary=request.data.get("salary"),
@@ -156,14 +161,8 @@ class CreateStaffWithPermissionsView(APIView):
                         )
                     i += 1
 
-        except ValueError as ve:
-            return Response(
-                {"status": "0", "message": str(ve)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
         except IntegrityError as ie:
-            # Handle database-level unique constraints (extra safety)
+            # Handle database-level unique constraints safely
             return Response(
                 {"status": "0", "message": f"Database error: {str(ie)}"},
                 status=status.HTTP_400_BAD_REQUEST
@@ -171,13 +170,13 @@ class CreateStaffWithPermissionsView(APIView):
 
         except Exception as e:
             # Log full traceback for debugging
-            import traceback
             traceback.print_exc()
             return Response(
                 {"status": "0", "message": "Unexpected error occurred while creating staff."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+        # --- 5. Success response ---
         return Response(
             {
                 "status": "1",

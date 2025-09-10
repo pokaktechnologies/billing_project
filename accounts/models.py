@@ -826,7 +826,7 @@ class ModulePermission(models.Model):
         ("products", "Products"),
         ('hr_section', "HR Section"),
         ('marketing', "Marketing"),
-        
+        ('certificate', "Certificate"),
     ]
 
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="module_permissions")

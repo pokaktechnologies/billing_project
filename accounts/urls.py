@@ -1,12 +1,6 @@
 from django.urls import path
 from .views.views import *
-from accounts.views.user import  (
-    ProfileAPIView,
-    AssignPermissionView,
-    StaffModulesView,
-    CreateStaffWithPermissionsView,
-    ListStaffView
-)
+from accounts.views.user import  *
 
 from .views.SearchViews import *
 
@@ -27,7 +21,20 @@ urlpatterns = [
     # path('admin/assign-permissions/', AssignPermissionView.as_view()),y
     # path('admin/staffs/', ListStaffView.as_view()),
     # path('admin/staffs/<int:staff_id>/', ListStaffView.as_view()),
+    path("staff/<int:id>/update/", UpdateStaffUserView.as_view(), name="update_staff_user"),
+    path("job-detail/<int:id>/update/", UpdateJobDetailView.as_view(), name="update_job_detail"),
+
+    path("staff-documents/create/", StaffDocumentCreateView.as_view(), name="staff-document-create"),
+    path("staff-documents/<int:id>/update/", StaffDocumentUpdateView.as_view(), name="staffdocument-update"),
+    path("staff-documents/<int:id>/delete/", StaffDocumentDeleteView.as_view(), name="staff-document-delete"),
+    path("user/change-password/", ChangePasswordView.as_view(), name="change-password"),
+    path("users/<int:user_id>/module-permissions/update/", UserModulePermissionUpdateView.as_view(), name="user-module-permissions-update"),
+
+
     path('user/modules/', StaffModulesView.as_view()),
+
+    path('departments/', DepartmentView.as_view()),
+    path('departments/<int:department_id>/', DepartmentView.as_view()),
 
 
     path('getting-started/', GettingStartedView.as_view(), name='getting_started'),

@@ -84,7 +84,7 @@ class AssignPermissionView(APIView):
             return Response({"message": "Permissions assigned successfully."})
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-
+from django.db import transaction, IntegrityError
 
 class CreateStaffWithPermissionsView(APIView):
     permission_classes = [IsAdminUser, HasModulePermission]
@@ -103,6 +103,14 @@ class CreateStaffWithPermissionsView(APIView):
 
                 user = user_serializer.save()
 
+                # Validate unique employee_id ---
+                employee_id = request.data.get("employee_id")
+                if employee_id and JobDetail.objects.filter(employee_id=employee_id).exists():
+                    return Response(
+                        {"status": "0", "message": f"Employee ID '{employee_id}' already exists. Please use a unique ID."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
                 # Create staff profile
                 staff_profile = StaffProfile.objects.create(
                     user=user,
@@ -111,6 +119,7 @@ class CreateStaffWithPermissionsView(APIView):
                     date_of_birth=request.data.get("date_of_birth"),
                     address=request.data.get("address")
                 )
+                
 
                 # Optional: create job detail
                 if request.data.get("employee_id"):
@@ -152,11 +161,21 @@ class CreateStaffWithPermissionsView(APIView):
                 {"status": "0", "message": str(ve)},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        
+        except IntegrityError as ie:
+            # Handle database-level unique constraints (extra safety)
+            return Response(
+                {"status": "0", "message": f"Database error: {str(ie)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         except Exception as e:
+            # Log full traceback for debugging
+            import traceback
+            traceback.print_exc()
             return Response(
-                {"status": "0", "message": "Something went wrong while creating staff."},
-                status=status.HTTP_400_BAD_REQUEST
+                {"status": "0", "message": "Unexpected error occurred while creating staff."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
         return Response(

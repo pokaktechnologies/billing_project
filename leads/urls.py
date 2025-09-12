@@ -1,6 +1,7 @@
-from django.urls import path
 from .views.LeadsViews import *
 from .views.MarketingViews import *
+from .views.ChartViews import *
+from django.urls import path
 
 urlpatterns = [
     path('', LeadsView.as_view(), name='leads_view'),
@@ -22,4 +23,5 @@ urlpatterns = [
     path('category/<int:pk>/', CategoryDetailAPIView.as_view(), name='category_detail'),
     path('marketing-report/', MarketingReportAPIView.as_view(), name='marketing_report_view'),
     path('marketing-report/<int:pk>/', MarketingReportDetailAPIView.as_view(), name='marketing_report_detail'),
+    path('leadschart/', LeadsChartView.as_view(), name='leads_chart'),
 ]

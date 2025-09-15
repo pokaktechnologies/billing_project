@@ -18,7 +18,7 @@ from ..serializers.LeadsSerializers import *
 
 class LeadsView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'leads'
+    required_module = 'marketing'
 
     def get(self, request):
         leads = Lead.objects.all().order_by('-created_at')
@@ -46,7 +46,7 @@ class LeadsView(APIView):
 
 class LeadDetailView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'leads'
+    required_module = 'marketing'
 
     def get_object(self, pk, user):
         try:
@@ -86,7 +86,7 @@ class LeadDetailView(APIView):
 
 class LeadsFollowUpView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'leads'
+    required_module = 'marketing'
 
     def get(self, request):
         follow_up_statuses = ['lost', 'follow_up', 'created', 'in_progress', 'converted']
@@ -109,7 +109,7 @@ class LeadsWithoutQuotationView(APIView):
 class LeadSearchView(APIView):
 
     permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'leads'
+    required_module = 'marketing'
 
     def get(self, request):
         name = request.query_params.get('name', '').strip()
@@ -177,7 +177,7 @@ class LeadSearchView(APIView):
 
 class MeetingsView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'leads'
+    required_module = 'marketing'
 
 
     def get(self, request):
@@ -208,7 +208,7 @@ class MeetingsView(APIView):
 
 class MeetingDetailView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'leads'
+    required_module = 'marketing'
 
 
     def get_object(self, pk, user):
@@ -248,7 +248,7 @@ class MeetingDetailView(APIView):
 
 class MeetingSearchView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'leads'
+    required_module = 'marketing'
 
     def get(self, request):
         lead_name = request.query_params.get('lead_name', '').strip()
@@ -334,7 +334,7 @@ class MeetingSearchView(APIView):
 #display all Todays meetings 
 class MeetingRemiderView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'leads'
+    required_module = 'marketing'
 
     def get(self, request):
         today = date.today()

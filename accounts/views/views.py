@@ -753,9 +753,17 @@ class ProductDetailAPI(APIView):
         }, status=status.HTTP_200_OK)
 
 
+
 class SalesPersonListCreateAPIView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'sales_person'
+
+    def get_permissions(self):
+        if self.request.method in ['POST', 'PATCH', 'DELETE']:
+            permission_classes = [IsAuthenticated, HasModulePermission]
+        else:  # GET request
+            permission_classes = [IsAuthenticated]
+        return [permission() for permission in permission_classes]
+    
     def get(self, request, pk=None):
         if pk:
             salesperson = get_object_or_404(SalesPerson, pk=pk)

@@ -1,6 +1,6 @@
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated
 from accounts.serializers.user import *
 from accounts.permissions import HasModulePermission
 from accounts.models import CustomUser, ModulePermission , Department ,StaffProfile, JobDetail, StaffDocument
@@ -14,7 +14,7 @@ from rest_framework import generics
 
 
 class DepartmentView(APIView):
-    permission_classes = [IsAdminUser, HasModulePermission]
+    permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'hr_section'
     def get(self, request):
         """List all departments"""
@@ -75,7 +75,7 @@ class ProfileAPIView(APIView):
 
 
 class AssignPermissionView(APIView):
-    permission_classes = [IsAdminUser]  # Only admin can assign
+    permission_classes = [IsAuthenticated]  # Only admin can assign
 
     def post(self, request):
         serializer = AssignPermissionSerializer(data=request.data)
@@ -87,7 +87,7 @@ class AssignPermissionView(APIView):
 from django.db import transaction, IntegrityError
 import traceback
 class CreateStaffWithPermissionsView(APIView):
-    permission_classes = [IsAdminUser, HasModulePermission]
+    permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'hr_section'
     parser_classes = [MultiPartParser, FormParser]
 
@@ -231,7 +231,7 @@ class CreateStaffWithPermissionsView(APIView):
 
 #  update
 class UpdateStaffUserView(generics.UpdateAPIView):
-    permission_classes = [IsAdminUser, HasModulePermission]
+    permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'hr_section'
     queryset = CustomUser.objects.filter(is_staff=True, is_superuser=False)
     serializer_class = StaffUserUpdateSerializer
@@ -240,7 +240,7 @@ class UpdateStaffUserView(generics.UpdateAPIView):
 
 
 class UpdateJobDetailView(generics.UpdateAPIView):
-    permission_classes = [IsAdminUser, HasModulePermission]
+    permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'hr_section'
     queryset = JobDetail.objects.all()
     serializer_class = JobDetailUpdateSerializer
@@ -249,20 +249,20 @@ class UpdateJobDetailView(generics.UpdateAPIView):
 
 # Add a new document
 class StaffDocumentCreateView(generics.CreateAPIView):
-    permission_classes = [IsAdminUser, HasModulePermission]
+    permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'hr_section'    
     serializer_class = StaffDocumentSerializer
     # permission_classes = [permissions.IsAuthenticated]
 
 class StaffDocumentUpdateView(generics.UpdateAPIView):
-    permission_classes = [IsAdminUser, HasModulePermission]
+    permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'hr_section'
     queryset = StaffDocument.objects.all()
     serializer_class = StaffDocumentSerializer
     lookup_field = "id"   
 
 class StaffDocumentDeleteView(generics.DestroyAPIView):
-    permission_classes = [IsAdminUser, HasModulePermission]
+    permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'hr_section'
     serializer_class = StaffDocumentSerializer
     queryset = StaffDocument.objects.all()
@@ -317,7 +317,7 @@ class StaffModulesView(APIView):
 
 
 class ListStaffView(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, staff_id=None):
         if staff_id:

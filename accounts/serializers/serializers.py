@@ -3,6 +3,64 @@ from django.contrib.auth import authenticate
 from ..models import *
 import random
 from django.db import transaction
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework import serializers
+from django.utils import timezone
+from attendance.models import DailyAttendance, AttendanceSession
+from accounts.models import CustomUser
+from datetime import datetime
+from django.utils import timezone
+
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from django.utils import timezone
+from datetime import datetime
+from attendance.models import DailyAttendance, AttendanceSession
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+
+        user = self.user
+        now = timezone.localtime()
+        current_time = now.time()
+
+        # Define session times
+        session_times = {
+            "session1": ("09:00", "12:00"),
+            "session2": ("12:00", "15:30"),
+            "session3": ("16:00", "18:00"),
+        }
+
+        session_name = None
+        session_status = "present"
+
+        # Detect current session
+        for name, (start_str, end_str) in session_times.items():
+            start = datetime.strptime(start_str, "%H:%M").time()
+            end = datetime.strptime(end_str, "%H:%M").time()
+            if start <= current_time < end:
+                session_name = name
+                # If more than 15 minutes late, mark late
+                minutes_diff = (datetime.combine(now.date(), current_time) - datetime.combine(now.date(), start)).total_seconds() / 60
+                session_status = "present" if minutes_diff <= 15 else "late"
+                break
+
+        # Update attendance session for the logged-in user
+        if session_name:
+            try:
+                daily_attendance = DailyAttendance.objects.get(staff=user.staff_profile, date=now.date())
+                attendance_session = AttendanceSession.objects.get(daily_attendance=daily_attendance, session=session_name)
+                if not attendance_session.login_time:
+                    attendance_session.login_time = now
+                    attendance_session.status = session_status
+                    attendance_session.save()
+            except DailyAttendance.DoesNotExist:
+                print(f"No daily attendance for {user.email} today")
+            except AttendanceSession.DoesNotExist:
+                print(f"No {session_name} session for {user.email} today")
+
+        return data
 
 
 # Serializer for user registration

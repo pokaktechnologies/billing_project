@@ -4,7 +4,7 @@ from django.utils.timezone import now
 from decimal import Decimal
 from django_countries.fields import CountryField
 from django.core.exceptions import ValidationError
-
+from django.utils import timezone
 
 
 class CustomUserManager(BaseUserManager):
@@ -46,11 +46,16 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     country = CountryField(blank=True, null=True)
     state = models.CharField(max_length=255, blank=True, null=True)
     pin_code = models.CharField(max_length=10, blank=True, null=True)
+    force_logout_time = models.DateTimeField(null=True, blank=True, default=None)
     objects = CustomUserManager()
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['first_name', 'last_name']
 
+    def logout(self):
+        """Force logout this user by updating last_logout."""
+        self.last_logout = timezone.now()
+        self.save(update_fields=['last_logout'])
     def __str__(self):
         return self.email
 
@@ -98,7 +103,6 @@ class StaffDocument(models.Model):
 
     def __str__(self):
         return f"{self.staff.user.email} - {self.doc_type}"
-
 
 
 class Quotation(models.Model):

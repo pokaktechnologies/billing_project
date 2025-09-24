@@ -18,12 +18,16 @@ from rest_framework.authtoken.models import Token
 from decimal import Decimal
 from django.utils.dateparse import parse_date
 from leads.models import Lead
-
+from rest_framework_simplejwt.tokens import RefreshToken
 # from .serializers import CustomUserCreateSerializer, OTPSerializer, GettingStartedSerializer,HelpLinkSerializer,NotificationSerializer, UserSettingSerializer, FeedbackSerializer,QuotationOrderSerializer,InvoiceOrderSerializer,DeliveryOrderSerializer,SupplierPurchaseSerializer,SupplierSerializer,DeliveryChallanSerializer
 from django.core.mail import send_mail
 import random
 
 
+from rest_framework_simplejwt.views import TokenObtainPairView
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer
 
 class SignupView(APIView):
     """
@@ -123,9 +127,77 @@ class GettingStartedView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # If serializer is invalid, return error responses
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
 
+    def post(self, request):
+        user = request.user
+        now = timezone.localtime()
+        current_time = now.time()
+
+        try:
+            # 1️⃣ Blacklist JWT
+            refresh_token = request.data.get("refresh")
+            if refresh_token:
+                token = RefreshToken(refresh_token)
+                token.blacklist()
+
+            # 2️⃣ Determine which session is active for this user
+            session_times = {
+                "session1": ("09:00", "12:00"),
+                "session2": ("12:00", "15:30"),
+                "session3": ("16:00", "18:00"),
+            }
+
+            session_name = None
+            for name, (start_str, end_str) in session_times.items():
+                start = datetime.strptime(start_str, "%H:%M").time()
+                end = datetime.strptime(end_str, "%H:%M").time()
+                if start <= current_time < end:
+                    session_name = name
+                    break
+
+            # 3️⃣ Update session for this user
+            if session_name:
+                try:
+                    daily_attendance = DailyAttendance.objects.get(staff=user.staff_profile, date=now.date())
+                    attendance_session = AttendanceSession.objects.get(
+                        daily_attendance=daily_attendance,
+                        session=session_name
+                    )
+                    if not attendance_session.logout_time:
+                        attendance_session.logout_time = now
+                        attendance_session.save()
+                except DailyAttendance.DoesNotExist:
+                    print(f"No DailyAttendance for {user.email} today")
+                except AttendanceSession.DoesNotExist:
+                    print(f"No {session_name} session for {user.email} today")
+
+            # 4️⃣ Update total working hours & status for this user only
+            try:
+                daily_attendance = DailyAttendance.objects.get(staff=user.staff_profile, date=now.date())
+                sessions = daily_attendance.sessions.all()
+                total_hours = sum(s.session_duration() for s in sessions)
+                daily_attendance.total_working_hours = total_hours
+
+                # Determine status based on total hours
+                if total_hours >= 7:
+                    daily_attendance.status = "full_day"
+                elif total_hours >= 4:
+                    daily_attendance.status = "half_day"
+                else:
+                    daily_attendance.status = "leave"
+
+                daily_attendance.save()
+                print(f"{user.email} | Total Hours: {total_hours:.2f} | Status: {daily_attendance.status}")
+
+            except DailyAttendance.DoesNotExist:
+                pass
+
+            return Response({"message": "Logout successful"})
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)
 
     
 class HomePageView(APIView):

@@ -220,7 +220,7 @@ class MarketingReportAPIView(APIView):
         to_date = request.query_params.get('to_date', None)
 
         # Start with all reports
-        reports = MarketingReport.objects.all().order_by('-id')
+        reports = MarketingReport.objects.all().order_by('-date', '-id')
 
         # Filter by source
         if source_id:

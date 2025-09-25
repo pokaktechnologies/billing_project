@@ -16,7 +16,7 @@ def create_daily_attendance_records():
     # Define session times (customize as needed)
     session_times = {
         "session1": ("09:00:00", "12:00:00"),
-        "session2": ("12:30:00", "15:30:00"),
+        "session2": ("12:00:00", "15:00:00"),
         "session3": ("16:00:00", "18:00:00"),
     }
 
@@ -47,8 +47,40 @@ def create_daily_attendance_records():
         print("ℹ️ Daily attendance records already exist for all staff today.")
 
 
-def auto_logout_job(session_name):
-    """Logs out all users, updates session attendance, and final daily attendance status."""
+def send_group_notification(message: str):
+    """Send a notification message to all connected staff via Channels."""
+    channel_layer = get_channel_layer()
+    async_to_sync(channel_layer.group_send)(
+        "attendance_notifications",
+        {
+            "type": "send_notification",
+            "message": message
+        }
+    )
+
+
+def pre_session_notification(session_name: str):
+    """Notify all users 10 minutes before session ends."""
+    from django.utils import timezone
+    from attendance.models import DailyAttendance, AttendanceSession
+
+    now = timezone.localtime()
+    today = now.date()
+    session_labels = {
+        "session1": "Morning (9:00 AM - 12:00 PM)",
+        "session2": "Afternoon (12:00 PM - 3:00 PM)",
+        "session3": "Evening (4:00 PM - 6:00 PM)",
+    }
+    friendly_session = session_labels.get(session_name, session_name)
+    message = f"⏳ Reminder: {friendly_session} will end in 10 minutes."
+
+    # Send notification to all staff
+    send_group_notification(message)
+    print(f"📢 Pre-session notification sent for {session_name} at {now}")
+
+
+def auto_logout_job(session_name: str):
+    """Logs out all users, updates session attendance, and notifies session end."""
     from django.utils import timezone
     from rest_framework_simplejwt.token_blacklist.models import OutstandingToken, BlacklistedToken
     from django.db.utils import OperationalError
@@ -84,11 +116,11 @@ def auto_logout_job(session_name):
         else:
             if session.logout_time is None:
                 session.logout_time = now
-            session.status = "present"  # mark present if logged in
+            session.status = "present"
         session.save()
         print(f"{session.daily_attendance.staff.user.email} | login: {session.login_time} | logout: {session.logout_time}")
 
-    # 3️⃣ Update main daily attendance after all sessions
+    # 3️⃣ Update main daily attendance
     daily_records = DailyAttendance.objects.filter(date=today)
     for daily_attendance in daily_records:
         sessions = daily_attendance.sessions.all()
@@ -107,31 +139,34 @@ def auto_logout_job(session_name):
             daily_attendance.save()
             print(f"{daily_attendance.staff.user.email} | Total Hours: {total_hours:.2f} | Status: {daily_attendance.status}")
 
-    # 4️⃣ Send notification via Django Channels
-    channel_layer = get_channel_layer()
-    async_to_sync(channel_layer.group_send)(
-        "attendance_notifications",
-        {
-            "type": "send_notification",
-            "message": f"Auto logout completed for {session_name}.",
-        }
-    )
+    # 4️⃣ Send session-end notification
+    session_labels = {
+        "session1": "Morning (9:00 AM - 12:00 PM)",
+        "session2": "Afternoon (12:00 PM - 3:00 PM)",
+        "session3": "Evening (4:00 PM - 6:00 PM)",
+    }
+    friendly_session = session_labels.get(session_name, session_name)
+    message = f"✅ {friendly_session} has ended. Your session attendance is recorded."
+    send_group_notification(message)
 
 
 def start():
     """Start the scheduler with fixed cron jobs."""
     scheduler = BackgroundScheduler(timezone="Asia/Kolkata")
 
-    # Schedule auto-logout jobs for each session
-    scheduler.add_job(auto_logout_job, "cron", hour=12, minute=17, args=["session1"])
-    scheduler.add_job(auto_logout_job, "cron", hour=12, minute=19, args=["session2"])
-    scheduler.add_job(auto_logout_job, "cron", hour=12, minute=21, args=["session3"])
-
     # Schedule daily attendance creation
-    scheduler.add_job(create_daily_attendance_records, "cron", hour=12, minute=28)
+    scheduler.add_job(create_daily_attendance_records, "cron", hour=7, minute=0)  # before first session
 
-    # for debuging every second run
-    # scheduler.add_job(create_daily_attendance_records, "interval", seconds=1)
+    # Schedule auto-logout jobs for each session
+    scheduler.add_job(auto_logout_job, "cron", hour=12, minute=0, args=["session1"])
+    scheduler.add_job(auto_logout_job, "cron", hour=15, minute=0, args=["session2"])
+    scheduler.add_job(auto_logout_job, "cron", hour=18, minute=0, args=["session3"])
+
+    # Schedule pre-session 10-min notifications
+    scheduler.add_job(pre_session_notification, "cron", hour=11, minute=50, args=["session1"])
+    scheduler.add_job(pre_session_notification, "cron", hour=14, minute=50, args=["session2"])
+    scheduler.add_job(pre_session_notification, "cron", hour=17, minute=50, args=["session3"])
+
 
     scheduler.start()
     print("⏱ Scheduler started successfully.")

@@ -150,7 +150,7 @@ def start():
     scheduler = BackgroundScheduler(timezone="Asia/Kolkata")
 
     # Daily attendance creation
-    scheduler.add_job(create_daily_attendance_records, "cron", hour=7, minute=0)
+    scheduler.add_job(create_daily_attendance_records, "cron", hour=10, minute=20)
 
     # Auto-logout jobs for sessions
     scheduler.add_job(auto_logout_job, "cron", hour=12, minute=0, args=["session1"])

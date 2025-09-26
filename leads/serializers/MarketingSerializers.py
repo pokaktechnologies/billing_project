@@ -160,7 +160,7 @@ class MarketingReportUpdateSerializer(serializers.ModelSerializer):
 
     
 class MarketingReportDisplaySerializer(serializers.ModelSerializer):
-    salesperson = serializers.CharField(source='salesperson.first_name')
+    salesperson = serializers.SerializerMethodField()
     salesperson_id = serializers.IntegerField(source='salesperson.id')
     source = serializers.CharField(source='source.name')
     source_id = serializers.IntegerField(source='source.id')
@@ -179,3 +179,6 @@ class MarketingReportDisplaySerializer(serializers.ModelSerializer):
             'category_id', 'category',
             'calls', 'leads',
         ]
+    
+    def get_salesperson(self, obj):
+        return f"{obj.salesperson.first_name} {obj.salesperson.last_name}"

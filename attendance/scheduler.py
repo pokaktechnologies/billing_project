@@ -124,9 +124,9 @@ def auto_logout_job(session_name: str):
             total_hours = sum(s.session_duration() for s in sessions)
             daily_attendance.total_working_hours = total_hours
 
-            if 7 <= total_hours <= 9:
+            if 6 <= total_hours <= 9:
                 daily_attendance.status = "full_day"
-            elif 4 <= total_hours < 7:
+            elif 3 <= total_hours < 6:
                 daily_attendance.status = "half_day"
             else:
                 daily_attendance.status = "leave"

@@ -112,7 +112,6 @@ def auto_logout_job(session_name: str):
         else:
             if session.logout_time is None:
                 session.logout_time = now
-            session.status = "present"
         session.save()
         print(f"{session.daily_attendance.staff.user.email} | login: {session.login_time} | logout: {session.logout_time}")
 

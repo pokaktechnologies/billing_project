@@ -17,7 +17,6 @@ from datetime import datetime
 from attendance.models import DailyAttendance, AttendanceSession
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
-
     def validate(self, attrs):
         data = super().validate(attrs)
 
@@ -41,16 +40,24 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             end = datetime.strptime(end_str, "%H:%M").time()
             if start <= current_time < end:
                 session_name = name
-                # If more than 15 minutes late, mark late
-                minutes_diff = (datetime.combine(now.date(), current_time) - datetime.combine(now.date(), start)).total_seconds() / 60
+                minutes_diff = (
+                    datetime.combine(now.date(), current_time)
+                    - datetime.combine(now.date(), start)
+                ).total_seconds() / 60
                 session_status = "present" if minutes_diff <= 15 else "late"
                 break
 
-        # Update attendance session for the logged-in user
-        if session_name:
+        # ✅ Update attendance only if user has staff_profile
+        if session_name and hasattr(user, "staff_profile"):
             try:
-                daily_attendance = DailyAttendance.objects.get(staff=user.staff_profile, date=now.date())
-                attendance_session = AttendanceSession.objects.get(daily_attendance=daily_attendance, session=session_name)
+                daily_attendance = DailyAttendance.objects.get(
+                    staff=user.staff_profile,
+                    date=now.date()
+                )
+                attendance_session = AttendanceSession.objects.get(
+                    daily_attendance=daily_attendance,
+                    session=session_name
+                )
                 if not attendance_session.login_time:
                     attendance_session.login_time = now
                     attendance_session.status = session_status
@@ -59,8 +66,11 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 print(f"No daily attendance for {user.email} today")
             except AttendanceSession.DoesNotExist:
                 print(f"No {session_name} session for {user.email} today")
+        else:
+            print(f"Skipping attendance update for {user.email} (not staff)")
 
         return data
+
 
 
 # Serializer for user registration

@@ -28,8 +28,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         # Define session times
         session_times = {
             "session1": ("09:00", "12:00"),
-            "session2": ("12:00", "15:30"),
-            "session3": ("16:00", "18:00"),
+            "session2": ("12:00", "15:00"),
+            "session3": ("15:00", "18:00"),
         }
 
         session_name = None

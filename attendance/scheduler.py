@@ -18,7 +18,7 @@ def create_daily_attendance_records():
     session_times = {
         "session1": ("09:00:00", "12:00:00"),
         "session2": ("12:00:00", "15:00:00"),
-        "session3": ("16:00:00", "18:00:00"),
+        "session3": ("15:00:00", "18:00:00"),
     }
 
     staffs = StaffProfile.objects.all()
@@ -66,7 +66,7 @@ def pre_session_notification(session_name: str):
     session_labels = {
         "session1": "Morning (9:00 AM - 12:00 PM)",
         "session2": "Afternoon (12:00 PM - 3:00 PM)",
-        "session3": "Evening (4:00 PM - 6:00 PM)",
+        "session3": "Evening (3:00 PM - 6:00 PM)",
     }
     friendly_session = session_labels.get(session_name, session_name)
     message = f"⏳ Reminder: {friendly_session} will end in 10 minutes."
@@ -138,7 +138,7 @@ def auto_logout_job(session_name: str):
     session_labels = {
         "session1": "Morning (9:00 AM - 12:00 PM)",
         "session2": "Afternoon (12:00 PM - 3:00 PM)",
-        "session3": "Evening (4:00 PM - 6:00 PM)",
+        "session3": "Evening (3:00 PM - 6:00 PM)",
     }
     friendly_session = session_labels.get(session_name, session_name)
     message = f"✅ {friendly_session} has ended. Your session attendance is recorded."

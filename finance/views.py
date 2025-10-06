@@ -10,227 +10,28 @@ from rest_framework.permissions import IsAuthenticated
 from .models import *
 from .serializers import *
 
-
-
-class AccountView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        accounts = Account.objects.filter(user=request.user).order_by('-created_at')
-        serializer = AccountSerializer(accounts, many=True)
-        return Response({
-            "status": True,
-            "message": "Accounts retrieved successfully.",
-            "data": serializer.data
-        }, status=status.HTTP_200_OK)
-
-    def post(self, request):
-        serializer = AccountSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save(user=request.user)
-            return Response({
-                "status": True,
-                "message": "Account created successfully.",
-                "data": serializer.data
-            }, status=status.HTTP_201_CREATED)
-        return Response({
-            "status": False,
-            "message": "Account creation failed.",
-            "errors": serializer.errors
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-
-class AccountDetailView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get_object(self, pk):
-        try:
-            account = Account.objects.get(pk=pk, user=self.request.user)
-            return account
-        except Account.DoesNotExist:
-            return None
-
-    def get(self, request, pk):
-        account = self.get_object(pk)
-        if account is None:
-            return Response({
-                "status": False,
-                "message": "Account not found."
-            }, status=status.HTTP_404_NOT_FOUND)
-        serializer = AccountSerializer(account)
-        return Response({
-            "status": True,
-            "message": "Account details retrieved successfully.",
-            "data": serializer.data
-        }, status=status.HTTP_200_OK)
-
-    def patch(self, request, pk):
-        account = self.get_object(pk)
-        if account is None:
-            return Response({
-                "status": False,
-                "message": "Account not found."
-            }, status=status.HTTP_404_NOT_FOUND)
-
-        serializer = AccountSerializer(account, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response({
-                "status": True,
-                "message": "Account updated successfully.",
-                "data": serializer.data
-            }, status=status.HTTP_200_OK)
-        return Response({
-            "status": False,
-            "message": "Failed to update account.",
-            "errors": serializer.errors
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    def delete(self, request, pk):
-        account = self.get_object(pk)
-        if account is None:
-            return Response({
-                "status": False,
-                "message": "Account not found."
-            }, status=status.HTTP_404_NOT_FOUND)
-        account.delete()
-        return Response({
-            "status": True,
-            "message": "Account deleted successfully."
-        }, status=status.HTTP_204_NO_CONTENT)
-
-
-
-
-class JournalEntryView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        journal_entries = JournalEntry.objects.filter(user=request.user).order_by('-created_at')
-        serializer = JournalEntryListSerializer(journal_entries, many=True)
-        return Response(serializer.data)
-
-    @transaction.atomic
-    def post(self, request):
-        serializer = JournalEntrySerializer(data=request.data, context={'request': request})
-        if serializer.is_valid():
-            serializer.save()  # Handles creation and user setting inside serializer
-            return Response({"message": "Journal entry created successfully."}, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-class JournalEntryDetailView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get_object(self, pk):
-        try:
-            journal_entry = JournalEntry.objects.get(pk=pk, user=self.request.user)
-            return journal_entry
-        except JournalEntry.DoesNotExist:
-            return None
-
-    def get(self, request, pk):
-        journal_entry = self.get_object(pk)
-        if journal_entry is None:
-            return Response({"message": "Journal entry not found."}, status=status.HTTP_404_NOT_FOUND)
-        serializer = JournalEntryDisplaySerializer(journal_entry)
-        return Response(serializer.data)
-    
-    def patch(self, request, pk):
-        journal_entry = self.get_object(pk)
-        serializer = JournalEntrySerializer(
-            journal_entry,
-            data=request.data,
-            partial=True,
-            context={"request": request}
-        )
-        if serializer.is_valid():
-            serializer.save()
-            return Response({"message": "Journal entry updated successfully."}, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    def delete(self, request, pk):
-        journal_entry = self.get_object(pk)
-        if journal_entry is None:
-            return Response({"message": "Journal entry not found."}, status=status.HTTP_404_NOT_FOUND)
-        journal_entry.delete()
-        return Response({"message": "Journal entry deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
-
-
-
-
-class PaymentAPIView(APIView):
-    permission_classes = [IsAuthenticated]  # Optional: adjust as needed
-    def get(self, request):
-        payments = Payment.objects.filter(user=request.user).order_by('-created_at')
-        serializer = PaymentDisplaySerializer(payments, many=True)
-        return Response(serializer.data)
-    def post(self, request):
-        serializer = PaymentCreateSerializer(data=request.data, context={'request': request})
-        if serializer.is_valid():
-            try:
-                payment = serializer.save()
-                return Response({
-                    'status': 'success',
-                    'message': 'Payment created successfully.',
-                    'payment_id': payment.id,
-                    'payment_number': payment.payment_number,
-                }, status=status.HTTP_201_CREATED)
-            except Exception as e:
-                return Response({
-                    'status': 'error',
-                    'message': str(e)
-                }, status=status.HTTP_400_BAD_REQUEST)
-        return Response({
-            'status': 'error',
-            'errors': serializer.errors
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    
-
-class PaymentDetailView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get_object(self, pk):
-        try:
-            payment = Payment.objects.get(pk=pk, user=self.request.user)
-            return payment
-        except Payment.DoesNotExist:
-            return None
-
-    def get(self, request, pk):
-        payment = self.get_object(pk)
-        if payment is None:
-            return Response({"message": "Payment not found."}, status=status.HTTP_404_NOT_FOUND)
-        serializer = PaymentDisplaySerializer(payment)
-        return Response(serializer.data)
-    
-    def patch(self, request, pk):
-        payment = self.get_object(pk)
-        if not payment:
-            return Response({"message": "Payment not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        serializer = PaymentCreateSerializer(payment, data=request.data, partial=True, context={'request': request})  # ✅ context added
-        if serializer.is_valid():
-            try:
-                serializer.save()
-                return Response({"message": "Payment updated successfully."}, status=status.HTTP_200_OK)
-            except Exception as e:
-                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    def delete(self, request, pk):
-        payment = self.get_object(pk)
-        if payment is None:
-            return Response({"message": "Payment not found."}, status=status.HTTP_404_NOT_FOUND)
-        with transaction.atomic():
-            if payment.journal_entry:
-                payment.journal_entry.delete()
-            payment.delete()
-        return Response({"message": "Payment deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
-
 from .utils import generate_next_number
+
+
+from rest_framework import generics
+from .models import Account
+from .serializers import AccountSerializer
+
+class AccountListCreateAPIView(generics.ListCreateAPIView):
+    queryset = Account.objects.all().order_by('-created_at')
+    serializer_class = AccountSerializer
+
+class AccountRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Account.objects.all()
+    serializer_class = AccountSerializer
+
+class JournalEntryListCreateView(generics.ListCreateAPIView):
+    queryset = JournalEntry.objects.all().order_by('-created_at')
+    serializer_class = JournalEntrySerializer
+
+class JournalEntryDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = JournalEntry.objects.all()
+    serializer_class = JournalEntrySerializer
 
 class FinaceNumberGeneratorView(APIView):
     def get(self, request):
@@ -238,8 +39,7 @@ class FinaceNumberGeneratorView(APIView):
 
         model_map = {
             'ACT': (Account, 'account_number', 'ACT'),
-            'JE': (JournalEntry, 'journal_number', 'JE'),
-            'PAY': (Payment, 'payment_number', 'PAY'),
+            'JE': (JournalEntry, 'type_number', 'JE'),
         }
 
         if model_type not in model_map:

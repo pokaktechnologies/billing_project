@@ -11,7 +11,7 @@ class BlacklistCheckMiddleware(MiddlewareMixin):
         if not auth_header or not auth_header.startswith("Bearer "):
             return None
         
-        print(f"Auth Header: {auth_header}")
+        # print(f"Auth Header: {auth_header}")
 
         token = auth_header.split(" ")[1]
         try:

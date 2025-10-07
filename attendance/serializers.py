@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import DailyAttendance, AttendanceSession
+from accounts.models import JobDetail
 
 class AttendanceSessionSerializer(serializers.ModelSerializer):
     session_duration = serializers.SerializerMethodField()
@@ -28,14 +29,11 @@ class DailyAttendanceSessionDetailSerializer(serializers.ModelSerializer):
     sessions = AttendanceSessionSerializer(many=True, read_only=True)
     class Meta:
         model = DailyAttendance
-        fields = ['id', 'staff', 'date', 'total_working_hours', 'status', 'sessions']
+        fields = ['staff', 'id', 'date', 'total_working_hours', 'status', 'sessions']
 
 class DailyAttendanceEmployeeViewSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(source='staff.user.first_name', read_only=True)
     last_name = serializers.CharField(source='staff.user.last_name', read_only=True)
-    employee_id = serializers.CharField(source='staff.job_detail.employee_id', read_only=True)
-    department = serializers.CharField(source='staff.job_detail.department.name', read_only=True)
-    role = serializers.CharField(source='staff.job_detail.role', read_only=True)
     class Meta:
-        model = DailyAttendance
+        model = JobDetail
         fields = ['id', 'staff','first_name', 'last_name','employee_id', 'department', 'role']

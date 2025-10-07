@@ -2,15 +2,17 @@ from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from .models import DailyAttendance
+from accounts.models import JobDetail
 from .serializers import DailyAttendanceSerializer
 from rest_framework import generics, filters
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import DailyAttendance
 from .serializers import DailyAttendanceSerializer, DailyAttendanceEmployeeViewSerializer,DailyAttendanceSessionDetailSerializer
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.db.models import Avg
+from django.utils.dateparse import parse_date
+from rest_framework.exceptions import ValidationError
 
 class DailyAttendanceListView(generics.ListAPIView):
     queryset = DailyAttendance.objects.all()
@@ -31,8 +33,6 @@ class DailyAttendanceListView(generics.ListAPIView):
     ordering_fields = ['date', 'status', 'staff']
     ordering = ['-date']  # default ordering
 
-
-
 # 2. Get today's attendance records
 class DailyAttendanceTodayView(generics.ListAPIView):
     serializer_class = DailyAttendanceSerializer
@@ -52,16 +52,12 @@ class DailyAttendanceDetailView(generics.RetrieveAPIView):
 
 
 class DailyAttendanceEmployeeView(generics.ListAPIView):
-    serializer_class = DailyAttendanceSerializer
     permission_classes = [IsAuthenticated]
     lookup_field = 'id'
 
     def get(self, request, id):
-        # Filter records by employee_id
-        queryset = DailyAttendance.objects.filter(staff__id=id)
-        print(queryset.prefetch_related('sessions').query) 
-        # serializer_session = DailyAttendanceSessionDetailSerializer(queryset, many=True)
-        serializer = DailyAttendanceEmployeeViewSerializer(queryset, many=True)
+        staff_detail = JobDetail.objects.get(id=id)
+        serializer = DailyAttendanceEmployeeViewSerializer(staff_detail)
         return Response(serializer.data, status=200)
 
 class DailyAttendanceDaysCountView(generics.ListAPIView):
@@ -76,25 +72,45 @@ class DailyAttendanceDaysCountView(generics.ListAPIView):
 
         data = {
             "id": id,
-                "employee_id": serializer.data[0]['employee_id'] if serializer.data else "",
                 "present_days": present_days,
                 "half_days": half_days,
                 "absent_days": absent_days,
         }
 
         return Response(data, status=200)
+
 class DailyAttendanceSessionView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request, id):
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        
+        # validation check start_date <= end_date
+        if start_date and end_date:
+            start = parse_date(start_date)
+            end = parse_date(end_date)  
+            if start > end:
+                raise ValidationError("Start date cannot be after end date.")
+
         queryset = DailyAttendance.objects.filter(staff__id=id)
+
+        if start_date:
+            queryset = queryset.filter(date__gte=start)
+        if end_date:
+            queryset = queryset.filter(date__lte=end)
+
+
         serializer = DailyAttendanceSessionDetailSerializer(queryset, many=True)
         return Response(serializer.data, status=200)
+
 
 class StaffAttendanceTodayView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         today_view = DailyAttendanceTodayView()
-        queryset = today_view.get_queryset()  # 🔁 Reuse directly
+        queryset = today_view.get_queryset()
 
         total_logged_in = queryset.filter(sessions__login_time__isnull=False).distinct().count()
         present_count = queryset.filter(status='full_day').count()

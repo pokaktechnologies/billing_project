@@ -43,10 +43,17 @@ class Account(models.Model):
 # Journal Entry (Header)
 # ----------------------
 class JournalEntry(models.Model):
+    TYPE_CHOICES = [
+        ('invoice', 'Invoice'),
+        ('receipt', 'Receipt'),
+        ('credit_note', 'Credit Note'),
+        ('debit_note', 'Debit Note'),
+        ('journal_voucher', 'Journal Voucher'),
+    ]
     user = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True)
     salesperson = models.ForeignKey(SalesPerson, on_delete=models.SET_NULL, null=True, blank=True)
     type_number = models.CharField(max_length=100, blank=True, null=True)  # e.g., invoice/payment number
-    type = models.CharField(max_length=50, blank=True, null=True)  # e.g., 'payment', 'receipt', 'adjustment'
+    type = models.CharField(max_length=50, blank=True, null=True , choices=TYPE_CHOICES) 
     date = models.DateTimeField(default=timezone.now)
     narration = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)    

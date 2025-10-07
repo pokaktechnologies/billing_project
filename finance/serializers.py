@@ -73,6 +73,8 @@ class JournalEntrySerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         lines_data = validated_data.pop('lines', [])
+        user = self.context['request'].user
+        validated_data['user'] = user
         journal_entry = JournalEntry.objects.create(**validated_data)
         for line in lines_data:
             JournalLine.objects.create(journal=journal_entry, **line)
@@ -97,3 +99,47 @@ class JournalEntrySerializer(serializers.ModelSerializer):
                 JournalLine.objects.create(journal=instance, **line_data)
 
         return instance
+
+class JournalLineListSerializer(serializers.ModelSerializer):
+    voucher_type = serializers.CharField(source='journal.type', read_only=True)
+    date = serializers.CharField(source='journal.date', read_only=True)
+    voucher_number = serializers.CharField(source='journal.type_number', read_only=True)
+    narration = serializers.CharField(source='journal.narration', read_only=True)
+    account = serializers.CharField(source='account.name', read_only=True)
+    account_type = serializers.CharField(source='account.type', read_only=True)
+    account_number = serializers.CharField(source='account.account_number', read_only=True)
+    salesperson_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = JournalLine
+        fields = '__all__'
+
+    def get_salesperson_name(self, obj):
+        sp = obj.journal.salesperson
+        if sp:
+            return f"{sp.first_name} {sp.last_name or ''}".strip()
+        return None
+
+
+
+
+from rest_framework import serializers
+from .models import JournalLine
+
+class JournalLineDetailSerializer(serializers.ModelSerializer):
+    voucher_type = serializers.CharField(source='journal.type', read_only=True)
+    date = serializers.CharField(source='journal.date', read_only=True)
+    voucher_number = serializers.CharField(source='journal.type_number', read_only=True)
+    narration = serializers.CharField(source='journal.narration', read_only=True)
+    account = serializers.CharField(source='account.name', read_only=True)
+    account_type = serializers.CharField(source='account.type', read_only=True)
+    account_number = serializers.CharField(source='account.account_number', read_only=True)
+    salesperson_name = serializers.SerializerMethodField()
+    class Meta:
+        model = JournalLine
+        fields = "__all__"
+    def get_salesperson_name(self, obj):
+        sp = obj.journal.salesperson
+        if sp:
+            return f"{sp.first_name} {sp.last_name or ''}".strip()
+        return None

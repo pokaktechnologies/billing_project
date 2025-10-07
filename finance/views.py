@@ -6,6 +6,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+from django_filters.rest_framework import DjangoFilterBackend
 
 from .models import *
 from .serializers import *
@@ -16,6 +17,7 @@ from .utils import generate_next_number
 from rest_framework import generics
 from .models import Account
 from .serializers import AccountSerializer
+from .filters import JournalLineFlatFilter
 
 class AccountListCreateAPIView(generics.ListCreateAPIView):
     queryset = Account.objects.all().order_by('-created_at')
@@ -56,3 +58,24 @@ class FinaceNumberGeneratorView(APIView):
             'message': 'Success',
             'number': number
         }, status=status.HTTP_200_OK)
+
+
+class JournalLineListView(generics.ListAPIView):
+    serializer_class = JournalLineListSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = JournalLineFlatFilter
+    def get_queryset(self):
+        # Optimized: fetch related objects in one query
+        return (
+            JournalLine.objects
+            .select_related('journal', 'journal__user', 'journal__salesperson', 'account')
+            .order_by('-created_at')
+        )
+
+
+class JournalLineDetailView(generics.RetrieveAPIView):
+    queryset = JournalLine.objects.select_related(
+        'journal', 'account', 'journal__user'
+    )
+    serializer_class = JournalLineDetailSerializer
+    lookup_field = 'id'

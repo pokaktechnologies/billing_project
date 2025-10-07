@@ -1,7 +1,6 @@
 from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
-from sqlalchemy import null
 from .models import DailyAttendance
 from .serializers import DailyAttendanceSerializer
 from rest_framework import generics, filters

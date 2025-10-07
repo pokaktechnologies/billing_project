@@ -56,7 +56,7 @@ class DailyAttendanceEmployeeView(generics.ListAPIView):
     lookup_field = 'id'
 
     def get(self, request, id):
-        staff_detail = JobDetail.objects.get(id=id)
+        staff_detail = JobDetail.objects.get(staff__id=id)
         serializer = DailyAttendanceEmployeeViewSerializer(staff_detail)
         return Response(serializer.data, status=200)
 

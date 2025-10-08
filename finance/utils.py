@@ -13,3 +13,11 @@ def generate_next_number(model, field_name: str, prefix: str, length: int) -> st
         next_number = start
 
     return f"{prefix}|{next_number:0{length}d}"
+
+JOURNAL_ACCOUNT_MAPPING = {
+    'invoice': {'debit': 'Accounts Receivable', 'credit': 'Sales'},
+    'receipt': {'debit': 'Cash', 'credit': 'Accounts Receivable'},
+    'credit_note': {'debit': 'Sales Returns', 'credit': 'Accounts Receivable'},
+    'debit_note': {'debit': 'Accounts Payable', 'credit': 'Purchase Returns'},
+    'journal_voucher': {'debit': None, 'credit': None},  # manual
+}

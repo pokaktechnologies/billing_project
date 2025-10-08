@@ -23,6 +23,9 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.core.mail import send_mail
 import random
 
+from finance.utils import JOURNAL_ACCOUNT_MAPPING
+from finance.models import *
+
 
 from rest_framework_simplejwt.views import TokenObtainPairView
 
@@ -2032,7 +2035,6 @@ class InvoiceOrderAPI(APIView):
                     "grand_total": float(grand_total),
                     "items": item_serializer.data
                 })
-
             return Response({
                 "status": "1",
                 "data": [{
@@ -2055,8 +2057,6 @@ class InvoiceOrderAPI(APIView):
         data = request.data
         try:
             # Generate a random invoice ID
-            # invoice_id = f"INV-{random.randint(111111, 999999)}"
-
             with transaction.atomic():
                 # Required field extraction
                 customer_id = data.get("client")
@@ -2125,8 +2125,22 @@ class InvoiceOrderAPI(APIView):
                 for delivery in deliveries:
                     delivery.is_invoiced = True
                     delivery.save()
+                    
+                accounts = JOURNAL_ACCOUNT_MAPPING['invoice']
+                debit_account = Account.objects.get(name=accounts['debit'])
+                credit_account = Account.objects.get(name=accounts['credit'])
+                print("debit_account, credit_account",debit_account, credit_account)
+                with transaction.atomic():
+                    journal = JournalEntry.objects.create(
+                        type='invoice',
+                        type_number=invoice_form.invoice_number,
+                        salesperson=invoice_form.sales_order.customer.salesperson,
+                        narration=f'Invoice {invoice_form.invoice_number} for {customer.first_name} {customer.last_name}',
+                        user=request.user
+                    )
 
-
+                    JournalLine.objects.create(journal=journal, account=debit_account, debit=invoice_grand_total_amount)
+                    JournalLine.objects.create(journal=journal, account=credit_account, credit=invoice_grand_total_amount)
                 return Response({
                     "message": "Invoice created successfully",
                     "invoice_number": invoice_form.invoice_number,
@@ -2232,6 +2246,30 @@ class InvoiceOrderAPI(APIView):
 
         # 7) Return updated invoice
         updated = InvoiceModelSerializer(invoice)
+        # After updating invoice grand total
+        invoice_grand_total_amount = invoice.invoice_grand_total
+
+        # Fetch the journal linked to this invoice via type_number
+        journal = JournalEntry.objects.filter(type='invoice', type_number=invoice.invoice_number).first()
+
+        if journal:
+            # Update narration and date if needed
+            customer_display = f"{invoice.client.first_name} {invoice.client.last_name}"  # or company_name
+            journal.narration = f"Invoice {invoice.invoice_number} for {customer_display}"
+            journal.date = invoice.invoice_date
+            journal.save(update_fields=['narration', 'date'])
+
+            # Remove old journal lines
+            journal.lines.all().delete()
+
+            # Recreate journal lines with updated amounts
+            accounts = JOURNAL_ACCOUNT_MAPPING['invoice']
+            debit_account = Account.objects.get(name=accounts['debit'])
+            credit_account = Account.objects.get(name=accounts['credit'])
+
+            JournalLine.objects.create(journal=journal, account=debit_account, debit=invoice_grand_total_amount)
+            JournalLine.objects.create(journal=journal, account=credit_account, credit=invoice_grand_total_amount)
+
         return Response({"status": "1", "message": "Invoice updated successfully.",}, status=status.HTTP_200_OK)
 
     def delete(self, request, ioid=None):
@@ -2257,6 +2295,11 @@ class InvoiceOrderAPI(APIView):
                 # 4) Finally delete the invoice itself
                 invoice.delete()
 
+                # Fetch the journal linked to this invoice
+                journal = JournalEntry.objects.filter(type='invoice', type_number=invoice.invoice_number).first()
+
+                if journal:
+                    journal.delete()
                 return Response({
                     "status": "1",
                     "message": "Invoice deleted and linked deliveries marked uninvoiced."

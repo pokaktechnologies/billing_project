@@ -1,5 +1,4 @@
 from rest_framework.response import Response
-from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from accounts.serializers.user import *
 from accounts.permissions import HasModulePermission
@@ -11,6 +10,12 @@ from django.shortcuts import get_object_or_404
 from rest_framework.parsers import MultiPartParser, FormParser ,JSONParser
 from django.db import transaction
 from rest_framework import generics
+
+from attendance.models import DailyAttendance
+from attendance.serializers import DailyAttendanceSessionDetailSerializer
+from django.utils.dateparse import parse_date
+from datetime import datetime
+
 
 
 class DepartmentView(APIView):
@@ -345,4 +350,68 @@ class ListStaffView(APIView):
         staff_users = CustomUser.objects.filter(is_staff=True, is_superuser=False).values('id', 'email', 'first_name', 'last_name')
         return Response({"status": "1", "message": "success", "data": list(staff_users)})
     
-    
+class StaffPersonalInfoView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        if user.is_staff:
+            serializer = StaffPersonalInfoSerializer(user)
+            return Response({"status": "1", "message": "success", "data": serializer.data})
+        return Response({"status": "0", "message": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+
+class StaffPersonalAttendanceView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+
+        user = request.user
+        if user.is_staff:
+            # validation check start_date <= end_date
+            if start_date and end_date:
+                start = parse_date(start_date)
+                end = parse_date(end_date)  
+                if start > end:
+                    raise ValidationError("Start date cannot be after end date.")
+                
+            queryset = DailyAttendance.objects.filter(staff__id=user.staff_profile.id)
+
+            if start_date:
+                queryset = queryset.filter(date__gte=start)
+            if end_date:
+                queryset = queryset.filter(date__lte=end)
+
+
+            start_date_str = StaffPersonalInfoSerializer(user).data.get('profile', {}).get('job_detail', {}).get('start_date')
+            
+            # Convert string to datetime object
+            start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+            today = datetime.today().date()
+
+            # Calculate difference in days
+            total_days = (today - start_date).days
+            print(" total_days:", total_days)  # Debugging line
+
+
+            print("Start Date:", start_date)  # Debugging line
+
+
+            queryset = DailyAttendance.objects.filter(staff__id=user.staff_profile.id)
+
+            # 👇 status field in model is `leave`, `half_day`, `full_day`
+            present_days = queryset.filter(status='full_day').count()
+            absent_days = queryset.filter(status='leave').count()
+            half_days = queryset.filter(status='half_day').count()
+
+            days_count = {
+                    "total_days": total_days,
+                    "present_days": present_days,
+                    "half_days": half_days,
+                    "absent_days": absent_days,
+            }
+                
+            serializer = DailyAttendanceSessionDetailSerializer(queryset, many=True)
+            return Response({"days_count":days_count,"session_data": serializer.data}, status=200)
+

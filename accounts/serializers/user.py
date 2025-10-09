@@ -197,3 +197,10 @@ class ChangePasswordSerializer(serializers.Serializer):
             raise serializers.ValidationError("User with this email does not exist.")
         self.context['target_user'] = user
         return value
+    
+class StaffPersonalInfoSerializer(serializers.ModelSerializer):
+    profile = StaffProfileSerializer(source='staff_profile', read_only=True)
+    class Meta:
+        model = CustomUser
+        fields = ['id', 'email', 'first_name', 'last_name', 'profile']
+

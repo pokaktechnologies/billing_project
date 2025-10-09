@@ -305,10 +305,14 @@ class StaffModulesView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # Return all possible modules if user is admin
-        all_modules = [choice[0] for choice in ModulePermission.MODULE_CHOICES]
+        if request.user.is_superuser:
+            # Return all possible modules if user is admin
+            all_modules = [choice[0] for choice in ModulePermission.MODULE_CHOICES]
             # all_modules.append("users")
-        return Response({"modules": all_modules})
+            return Response({"modules": all_modules})
+        else:
+            modules = ModulePermission.objects.filter(user=request.user).values_list('module_name', flat=True)
+            return Response({"modules": list(modules)})
         
 
 

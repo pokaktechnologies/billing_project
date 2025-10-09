@@ -11,7 +11,11 @@ def create_daily_attendance_records():
     from django.utils import timezone
     from accounts.models import StaffProfile
     from attendance.models import DailyAttendance, AttendanceSession
-
+    from django.utils import timezone
+    from rest_framework_simplejwt.token_blacklist.models import OutstandingToken, BlacklistedToken
+    from django.db.utils import OperationalError
+    from accounts.models import CustomUser
+    now = timezone.localtime()
     today = timezone.localdate()
     print(f"⏰ Creating daily attendance for {today}")
 
@@ -20,6 +24,18 @@ def create_daily_attendance_records():
         "session2": ("12:00:00", "15:00:00"),
         "session3": ("15:00:00", "18:00:00"),
     }
+
+    # 1️⃣ Blacklist all outstanding tokens
+    try:
+        tokens = OutstandingToken.objects.all()
+        for t in tokens:
+            BlacklistedToken.objects.get_or_create(token=t)
+        print(f"✅ Blacklisted {len(tokens)} outstanding tokens, logged out all users.")
+
+        CustomUser.objects.filter(is_active=True).update(force_logout_time=now)
+    except OperationalError:
+        print("⚠️ Database not ready yet, skipping this run.")
+        return
 
     staffs = StaffProfile.objects.all()
     created_count = 0

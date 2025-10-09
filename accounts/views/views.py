@@ -130,6 +130,14 @@ class GettingStartedView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.utils import timezone
+from datetime import datetime, time as dt_time
+from attendance.models import DailyAttendance, AttendanceSession
+
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -160,10 +168,38 @@ class LogoutView(APIView):
                     session_name = name
                     break
 
-            # 3️⃣ Update session for this user
-            if session_name:
+            # 3️⃣ Special rule: early morning logout (before 9:00 AM)
+            if current_time < dt_time(9, 0) and hasattr(user, "staff_profile"):
+                print("Early logout before 9:00 AM detected")
+                print(user.staff_profile)
+                print(user)
                 try:
-                    daily_attendance = DailyAttendance.objects.get(staff=user.staff_profile, date=now.date())
+                    daily_attendance = DailyAttendance.objects.get(
+                        staff=user.staff_profile,
+                        date=now.date()
+                    )
+                    session1 = AttendanceSession.objects.get(
+                        daily_attendance=daily_attendance,
+                        session="session1"
+                    )
+                    # Reset session1 if logout before 9:00 AM
+                    session1.login_time = None
+                    session1.logout_time = None
+                    session1.status = "leave"
+                    session1.save()
+                    print(f"{user.email} logged out before 9:00 AM, session1 reset")
+                except DailyAttendance.DoesNotExist:
+                    print(f"No DailyAttendance for {user.email} today")
+                except AttendanceSession.DoesNotExist:
+                    print(f"No session1 for {user.email} today")
+
+            # 4️⃣ Update session normally if not early logout
+            elif session_name:
+                try:
+                    daily_attendance = DailyAttendance.objects.get(
+                        staff=user.staff_profile,
+                        date=now.date()
+                    )
                     attendance_session = AttendanceSession.objects.get(
                         daily_attendance=daily_attendance,
                         session=session_name
@@ -176,14 +212,16 @@ class LogoutView(APIView):
                 except AttendanceSession.DoesNotExist:
                     print(f"No {session_name} session for {user.email} today")
 
-            # 4️⃣ Update total working hours & status for this user only
+            # 5️⃣ Update total working hours & status
             try:
-                daily_attendance = DailyAttendance.objects.get(staff=user.staff_profile, date=now.date())
+                daily_attendance = DailyAttendance.objects.get(
+                    staff=user.staff_profile,
+                    date=now.date()
+                )
                 sessions = daily_attendance.sessions.all()
                 total_hours = sum(s.session_duration() for s in sessions)
                 daily_attendance.total_working_hours = total_hours
 
-                # Determine status based on total hours
                 if total_hours >= 7:
                     daily_attendance.status = "full_day"
                 elif total_hours >= 4:
@@ -193,7 +231,8 @@ class LogoutView(APIView):
 
                 daily_attendance.save()
                 print(f"{user.email} | Total Hours: {total_hours:.2f} | Status: {daily_attendance.status}")
-
+                user.force_logout_time = now
+                user.save()
             except DailyAttendance.DoesNotExist:
                 pass
 
@@ -201,6 +240,7 @@ class LogoutView(APIView):
 
         except Exception as e:
             return Response({"error": str(e)}, status=400)
+
 
     
 class HomePageView(APIView):

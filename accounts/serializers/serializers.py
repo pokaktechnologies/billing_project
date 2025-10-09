@@ -16,56 +16,74 @@ from django.utils import timezone
 from datetime import datetime
 from attendance.models import DailyAttendance, AttendanceSession
 
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from django.utils import timezone
+from datetime import datetime, time as dt_time
+from attendance.models import DailyAttendance, AttendanceSession
+
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         data = super().validate(attrs)
-
         user = self.user
         now = timezone.localtime()
         current_time = now.time()
 
-        # Define session times
-        session_times = {
-            "session1": ("09:00", "12:00"),
-            "session2": ("12:00", "15:00"),
-            "session3": ("15:00", "18:00"),
+        # Define sessions with thresholds
+        sessions = {
+            "session1": {"start": dt_time(9, 0), "end": dt_time(12, 0), "late_threshold": dt_time(9, 15)},
+            "session2": {"start": dt_time(12, 0), "end": dt_time(15, 0), "late_threshold": dt_time(12, 15)},
+            "session3": {"start": dt_time(15, 0), "end": dt_time(18, 0), "late_threshold": dt_time(15, 15)},
         }
 
         session_name = None
-        session_status = "present"
+        login_time = None
+        session_status = None
 
-        # Detect current session
-        for name, (start_str, end_str) in session_times.items():
-            start = datetime.strptime(start_str, "%H:%M").time()
-            end = datetime.strptime(end_str, "%H:%M").time()
-            if start <= current_time < end:
-                session_name = name
-                minutes_diff = (
-                    datetime.combine(now.date(), current_time)
-                    - datetime.combine(now.date(), start)
-                ).total_seconds() / 60
-                session_status = "present" if minutes_diff <= 15 else "late"
-                break
+        if hasattr(user, "staff_profile"):
+            # --- Morning session special rules ---
+            if current_time < dt_time(8, 0):
+                # Before 8:00 AM → just allow login, no attendance recorded
+                print(f"{user.email} logged in before 8:00 AM. No attendance recorded yet.")
+                return data
+            elif dt_time(8, 0) <= current_time < dt_time(9, 0):
+                # Clamp to 9:00 AM
+                session_name = "session1"
+                login_time = timezone.make_aware(datetime.combine(now.date(), dt_time(9, 0)))
+                session_status = "present"
+            elif dt_time(9, 0) <= current_time < dt_time(12, 0):
+                # After 9:00 AM → normal late calculation
+                session_name = "session1"
+                login_time = timezone.make_aware(datetime.combine(now.date(), current_time))
+                session_status = "present" if current_time <= sessions["session1"]["late_threshold"] else "late"
+            # --- Afternoon & Evening sessions ---
+            elif dt_time(12, 0) <= current_time < dt_time(15, 0):
+                session_name = "session2"
+                login_time = timezone.make_aware(datetime.combine(now.date(), current_time))
+                session_status = "present" if current_time <= sessions["session2"]["late_threshold"] else "late"
+            elif dt_time(15, 0) <= current_time < dt_time(18, 0):
+                session_name = "session3"
+                login_time = timezone.make_aware(datetime.combine(now.date(), current_time))
+                session_status = "present" if current_time <= sessions["session3"]["late_threshold"] else "late"
 
-        # ✅ Update attendance only if user has staff_profile
-        if session_name and hasattr(user, "staff_profile"):
-            try:
-                daily_attendance = DailyAttendance.objects.get(
-                    staff=user.staff_profile,
-                    date=now.date()
-                )
-                attendance_session = AttendanceSession.objects.get(
-                    daily_attendance=daily_attendance,
-                    session=session_name
-                )
-                if not attendance_session.login_time:
-                    attendance_session.login_time = now
-                    attendance_session.status = session_status
-                    attendance_session.save()
-            except DailyAttendance.DoesNotExist:
-                print(f"No daily attendance for {user.email} today")
-            except AttendanceSession.DoesNotExist:
-                print(f"No {session_name} session for {user.email} today")
+            # Update attendance
+            if session_name:
+                try:
+                    daily_attendance = DailyAttendance.objects.get(
+                        staff=user.staff_profile,
+                        date=now.date()
+                    )
+                    attendance_session, created = AttendanceSession.objects.get_or_create(
+                        daily_attendance=daily_attendance,
+                        session=session_name,
+                        defaults={"login_time": login_time, "status": session_status}
+                    )
+                    if not created and not attendance_session.login_time:
+                        attendance_session.login_time = login_time
+                        attendance_session.status = session_status
+                        attendance_session.save()
+                    print(f"{user.email} | {session_name} login at {login_time}, status: {session_status}")
+                except DailyAttendance.DoesNotExist:
+                    print(f"No daily attendance for {user.email} today")
         else:
             print(f"Skipping attendance update for {user.email} (not staff)")
 

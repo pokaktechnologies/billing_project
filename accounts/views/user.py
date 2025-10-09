@@ -313,7 +313,15 @@ class StaffModulesView(APIView):
         else:
             modules = ModulePermission.objects.filter(user=request.user).values_list('module_name', flat=True)
             return Response({"modules": list(modules)})
-        
+
+
+class StaffModulesListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        all_modules = [choice[0] for choice in ModulePermission.MODULE_CHOICES]
+        # all_modules.append("users")
+        return Response({"modules": all_modules})
 
 
 class ListStaffView(APIView):

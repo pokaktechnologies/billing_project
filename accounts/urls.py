@@ -33,6 +33,7 @@ urlpatterns = [
 
 
     path('user/modules/', StaffModulesView.as_view()),
+    path('user/modules/all/', StaffModulesListView.as_view()),
 
     path('departments/', DepartmentView.as_view()),
     path('departments/<int:department_id>/', DepartmentView.as_view()),

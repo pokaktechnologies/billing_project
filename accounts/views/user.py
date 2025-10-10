@@ -376,14 +376,13 @@ class StaffPersonalAttendanceView(APIView):
                 if start > end:
                     raise ValidationError("Start date cannot be after end date.")
                 
-            queryset = DailyAttendance.objects.filter(staff__id=user.staff_profile.id)
+            queryset = DailyAttendance.objects.filter(staff__id=user.staff_profile.id).order_by('-date')
 
             if start_date:
                 queryset = queryset.filter(date__gte=start)
             if end_date:
                 queryset = queryset.filter(date__lte=end)
-
-
+            # Get staff start date from JobDetail
             start_date_str = StaffPersonalInfoSerializer(user).data.get('profile', {}).get('job_detail', {}).get('start_date')
             
             # Convert string to datetime object
@@ -392,13 +391,6 @@ class StaffPersonalAttendanceView(APIView):
 
             # Calculate difference in days
             total_days = (today - start_date).days
-            print(" total_days:", total_days)  # Debugging line
-
-
-            print("Start Date:", start_date)  # Debugging line
-
-
-            queryset = DailyAttendance.objects.filter(staff__id=user.staff_profile.id)
 
             # 👇 status field in model is `leave`, `half_day`, `full_day`
             present_days = queryset.filter(status='full_day').count()
@@ -414,4 +406,4 @@ class StaffPersonalAttendanceView(APIView):
                 
             serializer = DailyAttendanceSessionDetailSerializer(queryset, many=True)
             return Response({"days_count":days_count,"session_data": serializer.data}, status=200)
-
+        return Response({"status": "0", "message": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)

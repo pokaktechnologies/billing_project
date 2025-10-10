@@ -93,7 +93,7 @@ class DailyAttendanceSessionView(generics.ListAPIView):
             if start > end:
                 raise ValidationError("Start date cannot be after end date.")
 
-        queryset = DailyAttendance.objects.filter(staff__id=id)
+        queryset = DailyAttendance.objects.filter(staff__id=id).order_by('-date')
 
         if start_date:
             queryset = queryset.filter(date__gte=start)

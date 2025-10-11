@@ -2459,22 +2459,40 @@ class ReceiptView(APIView):
         serializer = ReceiptSerializer(data=request.data)
         if serializer.is_valid():
             invoice_id = request.data.get('invoice')
+            receipt = serializer.save(user=request.user)
+
+            # Mark invoice as receipted if linked
             if invoice_id:
                 invoice = get_object_or_404(InvoiceModel, id=invoice_id)
                 invoice.is_receipted = True
                 invoice.save(update_fields=['is_receipted'])
-            serializer.save(user=request.user)
-            return Response(
-                {
-                    "status": "1",
-                    "message": "Receipt created successfully.",
-                    "receipt_number": serializer.data['receipt_number'],
-                    "receipt_id": serializer.data['id'],
 
-                },
-                status=status.HTTP_201_CREATED
-            )
+            # --- JOURNAL ENTRY CREATION ---
+            accounts = JOURNAL_ACCOUNT_MAPPING['receipt']
+            debit_account = Account.objects.get(name=accounts['debit'])
+            credit_account = Account.objects.get(name=accounts['credit'])
+            amount = receipt.cheque_amount
+
+            with transaction.atomic():
+                journal = JournalEntry.objects.create(
+                    type='receipt',
+                    type_number=receipt.receipt_number,
+                    salesperson=receipt.client.salesperson,
+                    narration=f'Receipt {receipt.receipt_number} from {receipt.client.first_name} {receipt.client.last_name}',
+                    user=request.user,
+                )
+
+                JournalLine.objects.create(journal=journal, account=debit_account, debit=amount)
+                JournalLine.objects.create(journal=journal, account=credit_account, credit=amount)
+
+            return Response({
+                "status": "1",
+                "message": "Receipt created successfully.",
+                "receipt_number": receipt.receipt_number,
+                "receipt_id": receipt.id,
+            }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
     
     def patch(self, request, rec_id=None):
         receipt = get_object_or_404(ReceiptModel, id=rec_id)
@@ -2509,7 +2527,43 @@ class ReceiptView(APIView):
 
         # Save receipt with updated data
         serializer.save()
+        # --- JOURNAL ENTRY UPDATE ---
+        amount = receipt.cheque_amount
+        journal = JournalEntry.objects.filter(type='receipt', type_number=receipt.receipt_number).first()
 
+        if journal:
+            # Update journal metadata
+            customer_display = f"{receipt.client.first_name} {receipt.client.last_name}"
+            journal.narration = f"Receipt {receipt.receipt_number} from {customer_display}"
+            journal.date = receipt.receipt_date
+            journal.salesperson = receipt.client.salesperson
+            journal.save(update_fields=['narration', 'date', 'salesperson'])
+
+            # Remove old lines and recreate them
+            journal.lines.all().delete()
+
+            accounts = JOURNAL_ACCOUNT_MAPPING['receipt']
+            debit_account = Account.objects.get(name=accounts['debit'])
+            credit_account = Account.objects.get(name=accounts['credit'])
+
+            JournalLine.objects.create(journal=journal, account=debit_account, debit=amount)
+            JournalLine.objects.create(journal=journal, account=credit_account, credit=amount)
+        else:
+            # If journal doesn't exist (rare), recreate it
+            accounts = JOURNAL_ACCOUNT_MAPPING['receipt']
+            debit_account = Account.objects.get(name=accounts['debit'])
+            credit_account = Account.objects.get(name=accounts['credit'])
+
+            with transaction.atomic():
+                journal = JournalEntry.objects.create(
+                    type='receipt',
+                    type_number=receipt.receipt_number,
+                    salesperson=receipt.client.salesperson,
+                    narration=f'Receipt {receipt.receipt_number} from {receipt.client.first_name} {receipt.client.last_name}',
+                    user=request.user,
+                )
+                JournalLine.objects.create(journal=journal, account=debit_account, debit=amount)
+                JournalLine.objects.create(journal=journal, account=credit_account, credit=amount)
         return Response(
             {"status": "1", "message": "Receipt updated successfully."},
             status=status.HTTP_200_OK,
@@ -2524,7 +2578,10 @@ class ReceiptView(APIView):
             with transaction.atomic():
                 receipt = get_object_or_404(ReceiptModel, id=rec_id)
                 invoice = receipt.invoice  # may be None
-
+                # --- JOURNAL ENTRY DELETE ---
+                journal = JournalEntry.objects.filter(type='receipt', type_number=receipt.receipt_number).first()
+                if journal:
+                    journal.delete()
                 # 1) Delete the receipt
                 receipt.delete()
 

@@ -96,7 +96,7 @@ class JobDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = JobDetail
-        fields = ['id','employee_id', 'department', 'role', 'salary', 'start_date', 'status']
+        fields = ['id','employee_id', 'department', 'job_type','signature_image', 'role', 'salary', 'start_date', 'status']
 
 class StaffProfileSerializer(serializers.ModelSerializer):
     job_detail = JobDetailSerializer(read_only=True)
@@ -104,7 +104,7 @@ class StaffProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = StaffProfile
-        fields = ['id','phone_number', 'profile_image', 'date_of_birth', 'address', 'job_detail', 'documents']
+        fields = ['id','phone_number', 'staff_email', 'profile_image', 'date_of_birth', 'address', 'job_detail', 'documents']
 
 class StaffUserSerializer(serializers.ModelSerializer):
     profile = StaffProfileSerializer(source='staff_profile', read_only=True)
@@ -126,7 +126,7 @@ class StaffProfileUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = StaffProfile
-        fields = ["phone_number", "profile_image", "date_of_birth", "address"]
+        fields = ["phone_number", "staff_email", "profile_image", "date_of_birth", "address"]
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -170,7 +170,7 @@ class StaffUserUpdateSerializer(serializers.ModelSerializer):
 class JobDetailUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = JobDetail
-        fields = ["employee_id", "department", "role", "salary", "start_date", "status"]
+        fields = ["employee_id", "department", "job_type", "signature_image", "role", "salary", "start_date", "status"]
 
 class StaffDocumentSerializer(serializers.ModelSerializer):
     class Meta:

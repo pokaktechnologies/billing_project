@@ -70,6 +70,7 @@ class Department(models.Model):
 class StaffProfile(models.Model):
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name="staff_profile")
     phone_number = models.CharField(max_length=15, blank=True, null=True)
+    staff_email = models.EmailField(blank=True, null=True)
     profile_image = models.ImageField(upload_to="staff/profile_images/", blank=True, null=True)
     date_of_birth = models.DateField(blank=True, null=True)
     address = models.TextField(blank=True, null=True)
@@ -81,6 +82,13 @@ class JobDetail(models.Model):
     staff = models.OneToOneField(StaffProfile, on_delete=models.CASCADE, related_name="job_detail")
     employee_id = models.CharField(max_length=50, unique=True)
     department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True)
+    job_type = models.CharField(max_length=50, choices=[
+        ("full day", "Full Day"),
+        ("part time", "Part Time"),
+        ("internship", "Internship"),
+        ("contract", "Contract")
+    ] , null=True, blank=True)
+    signature_image = models.ImageField(upload_to="staff/signatures/", blank=True, null=True)
     role = models.CharField(max_length=100)
     salary = models.DecimalField(max_digits=10, decimal_places=2)
     start_date = models.DateField()

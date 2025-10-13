@@ -134,6 +134,7 @@ class CreateStaffWithPermissionsView(APIView):
                 staff_profile = StaffProfile.objects.create(
                     user=user,
                     phone_number=request.data.get("phone_number"),
+                    staff_email=request.data.get("staff_email"),
                     profile_image=request.FILES.get("profile_image"),
                     date_of_birth=request.data.get("date_of_birth"),
                     address=request.data.get("address")
@@ -145,6 +146,8 @@ class CreateStaffWithPermissionsView(APIView):
                         staff=staff_profile,
                         employee_id=employee_id,
                         department=department,
+                        job_type=request.data.get("job_type"),
+                        signature_image=request.FILES.get("signature_image"),
                         role=request.data.get("role"),
                         salary=request.data.get("salary"),
                         start_date=request.data.get("start_date"),

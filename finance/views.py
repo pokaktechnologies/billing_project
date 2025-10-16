@@ -35,6 +35,13 @@ class JournalEntryDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = JournalEntry.objects.all()
     serializer_class = JournalEntrySerializer
 
+class ListJournalVoucherView(generics.ListAPIView):
+    serializer_class = JournalEntrySerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return JournalEntry.objects.filter(type='journal_voucher').order_by('-created_at')
+
 class FinaceNumberGeneratorView(APIView):
     def get(self, request):
         model_type = request.query_params.get('type')
@@ -42,6 +49,7 @@ class FinaceNumberGeneratorView(APIView):
         model_map = {
             'ACT': (Account, 'account_number', 'ACT'),
             'JE': (JournalEntry, 'type_number', 'JE'),
+            'CN': (CreditNote, 'credit_note_number', 'CN'),
         }
 
         if model_type not in model_map:
@@ -79,3 +87,30 @@ class JournalLineDetailView(generics.RetrieveAPIView):
     )
     serializer_class = JournalLineDetailSerializer
     lookup_field = 'id'
+
+
+# Credit Note Views
+class CreditNoteListCreateAPIView(generics.ListCreateAPIView):
+    queryset = CreditNote.objects.all().order_by('-created_at')
+    serializer_class = CreditNoteSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class CreditNoteRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = CreditNote.objects.all()
+    serializer_class = CreditNoteSerializer
+    permission_classes = [IsAuthenticated]
+
+
+
+
+class DebitNoteListCreateAPIView(generics.ListCreateAPIView):
+    queryset = DebitNote.objects.all().order_by('-created_at')
+    serializer_class = DebitNoteSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class DebitNoteRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = DebitNote.objects.all()
+    serializer_class = DebitNoteSerializer
+    permission_classes = [IsAuthenticated]

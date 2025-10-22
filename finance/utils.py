@@ -19,5 +19,4 @@ JOURNAL_ACCOUNT_MAPPING = {
     'receipt': {'debit': 'Cash', 'credit': 'Accounts Receivable'},
     'credit_note': {'debit': 'Sales Returns', 'credit': 'Accounts Receivable'},
     'debit_note': {'debit': 'Accounts Payable', 'credit': 'Purchase Returns'},
-    'journal_voucher': {'debit': None, 'credit': None},  # manual
 }

@@ -21,5 +21,6 @@ urlpatterns = [
     path('debit-notes/', DebitNoteListCreateAPIView.as_view(), name='debitnote-list'),
     path('debit-notes/<int:pk>/', DebitNoteRetrieveUpdateDestroyAPIView.as_view(), name='debitnote-detail'),
 
+    path('profit-and-loss/',ProfitAndLossView.as_view(), name='profit-and-loss')
 ]
 

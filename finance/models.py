@@ -12,13 +12,19 @@ from .utils import JOURNAL_ACCOUNT_MAPPING
 # ----------------------
 class Account(models.Model):
     ACCOUNT_TYPES = [
-        ('asset', 'Asset'),
-        ('liability', 'Liability'),
-        ('income', 'Income'),
-        ('expense', 'Expense'),
-        ('equity', 'Equity'),
+        ('asset', 'Asset'), #1
+        ('liability', 'Liability'), #2
+        ('equity', 'Equity'), #3
+        ('sales', 'Sales'), #4
+        ('cost_of_sales', 'Cost of Sales'), #5
+        ('revenue', 'Revenue'), #6
+        ('general_expenses', 'General Expenses'), #7
     ]
-
+# 1,2,3 are for Balance Sheet accounts 
+# 4,5,6,7 are for P&L accounts
+# 4-5 = amount,
+#  revenue + general expense = profile,
+#  4-5+6-7 =  net profit/net loss
     STATUS_CHOICES = [
         ('active', 'Active'),
         ('inactive', 'Inactive'),
@@ -237,7 +243,7 @@ class CreditNoteItem(models.Model):
         self.credit_note.update_grand_total()
 
     def __str__(self):
-        return f"{self.product.name} ({self.quantity})"
+        return f"{self.product} ({self.quantity})"
 
 
 from decimal import Decimal
@@ -367,7 +373,7 @@ class DebitNoteItem(models.Model):
         self.debit_note.update_grand_total()
 
     def __str__(self):
-        return f"{self.product.name} ({self.quantity})"
+        return f"{self.product} ({self.quantity})"
 
 
 # Payment Model

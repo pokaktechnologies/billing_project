@@ -1,23 +1,25 @@
-from django.views import View
-from django.http import HttpResponse
-from django.db import transaction
+# Standard library imports
+from collections import defaultdict
+from decimal import Decimal
 
+# Django imports
+from django.db.models import Sum, F, DecimalField
+from django.db.models.functions import Coalesce
+from django.utils.dateparse import parse_date
+
+# Third-party imports
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, generics
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 
+# Local app imports
 from .models import *
 from .serializers import *
+from .filters import *
+from .utils import *
 
-from .utils import generate_next_number
-
-
-from rest_framework import generics
-from .models import Account
-from .serializers import AccountSerializer
-from .filters import JournalLineFlatFilter
 
 class AccountListCreateAPIView(generics.ListCreateAPIView):
     queryset = Account.objects.all().order_by('-created_at')
@@ -116,33 +118,6 @@ class DebitNoteRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIVie
     permission_classes = [IsAuthenticated]
 
 
-# finance/views.py
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from django.db.models import Sum, Q
-from django.utils.dateparse import parse_date
-from decimal import Decimal
-from .models import Account, JournalLine
-
-from decimal import Decimal
-from django.db.models import Sum, F
-from django.utils.dateparse import parse_date
-from rest_framework.views import APIView
-from rest_framework.response import Response
-
-from decimal import Decimal
-from django.db.models import Sum, F
-from django.utils.dateparse import parse_date
-from rest_framework.views import APIView
-from rest_framework.response import Response
-
-from decimal import Decimal
-from django.db.models import Sum, F, DecimalField
-from django.db.models.functions import Coalesce
-from django.utils.dateparse import parse_date
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from .models import JournalLine  # adjust import based on your project
 
 class ProfitAndLossView(APIView):
     def get(self, request):
@@ -272,6 +247,85 @@ class ProfitAndLossView(APIView):
                 "type": profit_type,
                 "profit_margin": round(profit_margin, 2),
             },
+        }
+
+        return Response(data)
+
+
+class TrialBalanceView(APIView):
+    ACCOUNT_TYPES = [
+        ('asset', 'Asset'),
+        ('liability', 'Liability'),
+        ('equity', 'Equity'),
+        ('sales', 'Sales'),
+        ('cost_of_sales', 'Cost of Sales'),
+        ('revenue', 'Revenue'),
+        ('general_expenses', 'General Expenses'),
+    ]
+
+    def get(self, request):
+        from_date = parse_date(request.GET.get("from_date", "2024-01-01"))
+        to_date = parse_date(request.GET.get("to_date", "2025-12-31"))
+
+        # Fetch posted journal lines
+        lines = JournalLine.objects.filter(
+            journal__date__range=(from_date, to_date),
+            account__status='active'
+        )
+
+        # Group balances by account
+        balances = (
+            lines
+            .values('account__id', 'account__name', 'account__type')
+            .annotate(
+                debit_sum=Coalesce(Sum('debit'), Decimal(0)),
+                credit_sum=Coalesce(Sum('credit'), Decimal(0))
+            )
+        )
+
+        # Organize by account type
+        grouped = defaultdict(list)
+        total_debit = Decimal(0)
+        total_credit = Decimal(0)
+
+        for item in balances:
+            debit = item['debit_sum']
+            credit = item['credit_sum']
+
+            # Calculate net position
+            if debit > credit:
+                net_debit = debit - credit
+                net_credit = Decimal(0)
+            else:
+                net_debit = Decimal(0)
+                net_credit = credit - debit
+
+            total_debit += net_debit
+            total_credit += net_credit
+
+            grouped[item['account__type']].append({
+                "account": item['account__name'],
+                "debit": float(net_debit),
+                "credit": float(net_credit),
+            })
+
+        # Build final structured data
+        accounts_grouped = []
+        for code, label in self.ACCOUNT_TYPES:
+            accounts_grouped.append({
+                "type": label,
+                "accounts": grouped.get(code, [])
+            })
+
+        data = {
+            "title": "Trial Balance",
+            "period": f"{from_date} to {to_date}",
+            "accounts_by_type": accounts_grouped,
+            "totals": {
+                "total_debit": float(total_debit),
+                "total_credit": float(total_credit),
+                "balanced": round(total_debit, 2) == round(total_credit, 2)
+            }
         }
 
         return Response(data)

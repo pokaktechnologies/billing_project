@@ -121,135 +121,102 @@ class DebitNoteRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIVie
 
 class ProfitAndLossView(APIView):
     def get(self, request):
-        # --------------------------
-        # Date Range
-        # --------------------------
         from_date = parse_date(request.GET.get("from_date", "2024-01-01"))
         to_date = parse_date(request.GET.get("to_date", "2025-12-31"))
 
-        # --------------------------
-        # Base Query
-        # --------------------------
         lines = JournalLine.objects.filter(
             journal__date__range=(from_date, to_date),
             account__status='active'
         )
 
-        # --------------------------
-        # Helper function for totals
-        # --------------------------
-        def calc_total(account_type, is_credit_positive=True):
+        def get_balances(account_type, is_credit_positive=True):
             """
-            Calculate total for an account type.
-            
-            Args:
-                account_type: Type of account to filter
-                is_credit_positive: True if credit increases the account (Revenue/Sales)
-                                   False if debit increases the account (Expenses/Cost)
-            
-            Returns:
-                tuple: (total, breakdown_list)
+            Returns parent-child structured balances for an account type
             """
             qs = lines.filter(account__type=account_type)
-            # For revenue accounts: credit - debit (credit increases balance)
-            # For expense accounts: debit - credit (debit increases balance)
-            expr = F('credit') - F('debit') if is_credit_positive else F('debit') - F('credit')
-            
-            total = qs.aggregate(
-                total=Coalesce(Sum(expr, output_field=DecimalField()), Decimal(0))
-            )['total']
-            
-            breakdown = list(
-                qs.values('account__name')
-                .annotate(amount=Coalesce(Sum(expr, output_field=DecimalField()), Decimal(0)))
-                .order_by('-amount')
+
+            # Annotate net balance
+            annotated = qs.values(
+                'account__id',
+                'account__name',
+                'account__parent_account__id',
+                'account__parent_account__name'
+            ).annotate(
+                debit_sum=Coalesce(Sum('debit'), Decimal(0)),
+                credit_sum=Coalesce(Sum('credit'), Decimal(0))
             )
-            
-            return total, breakdown
 
-        # --------------------------
-        # P&L Account Sections
-        # --------------------------
-        # Account Type 4: Sales (Credit increases)
-        sales_total, sales_breakdown = calc_total('sales', is_credit_positive=True)
-        
-        # Account Type 5: Cost of Sales (Debit increases)
-        cost_total, cost_breakdown = calc_total('cost_of_sales', is_credit_positive=False)
-        
-        # Account Type 6: Other Revenue (Credit increases)
-        revenue_total, revenue_breakdown = calc_total('revenue', is_credit_positive=True)
-        
-        # Account Type 7: General Expenses (Debit increases)
-        expense_total, expense_breakdown = calc_total('general_expenses', is_credit_positive=False)
+            temp_accounts = defaultdict(lambda: {})
+            total = Decimal(0)
 
-        # --------------------------
-        # Profit Calculations
-        # --------------------------
-        # P&L Formula:
-        # Gross Profit = Sales - Cost of Sales (4 - 5)
-        # Operating Profit = Gross Profit - General Expenses (GP - 7)
-        # Net Profit/Loss = Operating Profit + Other Revenue (OP + 6)
-        # Simplified: (4 - 5) + (6 - 7) = Net Profit/Loss
-        
+            for item in annotated:
+                debit = item['debit_sum']
+                credit = item['credit_sum']
+                net_debit = max(debit - credit, Decimal(0))
+                net_credit = max(credit - debit, Decimal(0))
+                net_amount = net_credit - net_debit if is_credit_positive else net_debit - net_credit
+
+                total += net_amount
+
+                account_data = {
+                    "account": item['account__name'],
+                    "amount": float(net_amount)
+                }
+
+                parent_name = item['account__parent_account__name']
+                if parent_name:
+                    if 'children' not in temp_accounts[parent_name]:
+                        temp_accounts[parent_name]['children'] = []
+                    temp_accounts[parent_name]['children'].append(account_data)
+                else:
+                    temp_accounts[item['account__name']] = {
+                        "balance": account_data,
+                        "children": temp_accounts.get(item['account__name'], {}).get('children', [])
+                    }
+
+            structured = []
+            for parent_name, data in temp_accounts.items():
+                structured.append({
+                    "parent": parent_name,
+                    "balance": data.get('balance', {"account": parent_name, "amount": 0}),
+                    "children": data.get('children', [])
+                })
+
+            return float(total), structured
+
+        # P&L Sections
+        sales_total, sales_accounts = get_balances('sales', is_credit_positive=True)
+        cost_total, cost_accounts = get_balances('cost_of_sales', is_credit_positive=False)
+        revenue_total, revenue_accounts = get_balances('revenue', is_credit_positive=True)
+        expense_total, expense_accounts = get_balances('general_expenses', is_credit_positive=False)
+
         gross_profit = sales_total - cost_total
         operating_profit = gross_profit - expense_total
         net_profit = operating_profit + revenue_total
-        
-        # Alternatively (same result):
-        # net_profit = gross_profit + (revenue_total - expense_total)
-        
         profit_type = "Net Profit" if net_profit >= 0 else "Net Loss"
-        
-        # Calculate profit margin
         total_income = sales_total + revenue_total
         profit_margin = (net_profit / total_income * 100) if total_income != 0 else 0
 
-        # --------------------------
-        # Response
-        # --------------------------
         data = {
             "title": "Profit & Loss Statement",
             "period": f"{from_date} to {to_date}",
-            "sales": {
-                "total": float(sales_total),
-                "accounts": [
-                    {"name": item["account__name"], "amount": float(item["amount"])}
-                    for item in sales_breakdown
-                ],
-            },
-            "cost_of_sales": {
-                "total": float(cost_total),
-                "accounts": [
-                    {"name": item["account__name"], "amount": float(item["amount"])}
-                    for item in cost_breakdown
-                ],
-            },
-            "gross_profit": float(gross_profit),
-            "revenue": {
-                "total": float(revenue_total),
-                "accounts": [
-                    {"name": item["account__name"], "amount": float(item["amount"])}
-                    for item in revenue_breakdown
-                ],
-            },
-            "general_expenses": {
-                "total": float(expense_total),
-                "accounts": [
-                    {"name": item["account__name"], "amount": float(item["amount"])}
-                    for item in expense_breakdown
-                ],
-            },
-            "operating_profit": float(operating_profit),
+            "sales": {"total": sales_total, "accounts": sales_accounts},
+            "cost_of_sales": {"total": cost_total, "accounts": cost_accounts},
+            "gross_profit": gross_profit,
+            "revenue": {"total": revenue_total, "accounts": revenue_accounts},
+            "general_expenses": {"total": expense_total, "accounts": expense_accounts},
+            "operating_profit": operating_profit,
             "summary": {
-                "gross_profit": float(gross_profit),
-                "operating_profit": float(operating_profit),
-                "net_profit": float(net_profit),
+                "gross_profit": gross_profit,
+                "operating_profit": operating_profit,
+                "net_profit": net_profit,
                 "type": profit_type,
                 "profit_margin": round(profit_margin, 2),
-            },
+            }
         }
 
         return Response(data)
+
 
 
 class TrialBalanceView(APIView):
@@ -276,51 +243,72 @@ class TrialBalanceView(APIView):
         # Group balances by account
         balances = (
             lines
-            .values('account__id', 'account__name', 'account__type')
+            .values(
+                'account__id',
+                'account__name',
+                'account__type',
+                'account__parent_account__id',
+                'account__parent_account__name'
+            )
             .annotate(
                 debit_sum=Coalesce(Sum('debit'), Decimal(0)),
                 credit_sum=Coalesce(Sum('credit'), Decimal(0))
             )
         )
 
-        # Organize by account type
+        # Organize by account type with parent-child logic
         grouped = defaultdict(list)
         total_debit = Decimal(0)
         total_credit = Decimal(0)
+
+        # Temporary structure to store parent balances and children
+        temp_accounts = defaultdict(lambda: {})
 
         for item in balances:
             debit = item['debit_sum']
             credit = item['credit_sum']
 
-            # Calculate net position
-            if debit > credit:
-                net_debit = debit - credit
-                net_credit = Decimal(0)
-            else:
-                net_debit = Decimal(0)
-                net_credit = credit - debit
+            # Calculate net balance
+            net_debit = max(debit - credit, Decimal(0))
+            net_credit = max(credit - debit, Decimal(0))
 
             total_debit += net_debit
             total_credit += net_credit
 
-            grouped[item['account__type']].append({
+            account_data = {
                 "account": item['account__name'],
                 "debit": float(net_debit),
-                "credit": float(net_credit),
-            })
+                "credit": float(net_credit)
+            }
 
-        # Build final structured data
-        accounts_grouped = []
+            parent_name = item['account__parent_account__name']
+            if parent_name:
+                # Child account
+                if 'children' not in temp_accounts[parent_name]:
+                    temp_accounts[parent_name]['children'] = []
+                temp_accounts[parent_name]['children'].append(account_data)
+            else:
+                # Parent account itself
+                temp_accounts[item['account__name']] = {
+                    "balance": account_data,
+                    "children": temp_accounts.get(item['account__name'], {}).get('children', [])
+                }
+
+        # Convert temp_accounts to final grouped format
         for code, label in self.ACCOUNT_TYPES:
-            accounts_grouped.append({
-                "type": label,
-                "accounts": grouped.get(code, [])
-            })
+            accounts_list = []
+            for parent_name, data in temp_accounts.items():
+                accounts_list.append({
+                    "parent": parent_name,
+                    "balance": data.get('balance', {"account": parent_name, "debit": 0, "credit": 0}),
+                    "children": data.get('children', [])
+                })
+            grouped[label] = accounts_list
 
         data = {
             "title": "Trial Balance",
             "period": f"{from_date} to {to_date}",
-            "accounts_by_type": accounts_grouped,
+            "accounts_by_type": [{"type": k, "accounts": v} for k, v in grouped.items()],
             "totals": {
                 "total_debit": float(total_debit),
                 "total_credit": float(total_credit),
@@ -331,3 +319,81 @@ class TrialBalanceView(APIView):
         return Response(data)
 
 
+class BalanceSheetView(APIView):
+    def get(self, request):
+        from_date = parse_date(request.GET.get("from_date", "2025-01-01"))
+        to_date = parse_date(request.GET.get("to_date", "2025-12-31"))
+        net_profit = Decimal(request.GET.get("net_profit", 0))
+
+        lines = JournalLine.objects.filter(
+            journal__date__range=(from_date, to_date),
+            account__status='active'
+        )
+
+        def get_balances(account_type):
+            qs = lines.filter(account__type=account_type)
+            annotated = qs.values(
+                'account__id',
+                'account__name',
+                'account__parent_account__id',
+                'account__parent_account__name'
+            ).annotate(
+                debit_sum=Coalesce(Sum('debit'), Decimal(0)),
+                credit_sum=Coalesce(Sum('credit'), Decimal(0))
+            )
+
+            accounts_map = defaultdict(lambda: {"children": []})
+            total = Decimal(0)
+
+            for item in annotated:
+                debit = item['debit_sum']
+                credit = item['credit_sum']
+                net_amount = credit - debit if account_type in ['liability', 'equity'] else debit - credit
+                total += net_amount
+
+                acc_id = item['account__id']
+                acc_name = item['account__name']
+                parent_id = item['account__parent_account__id']
+                parent_name = item['account__parent_account__name']
+
+                acc_data = {"account": acc_name, "amount": float(net_amount)}
+
+                if parent_id:
+                    accounts_map[parent_id]["children"].append(acc_data)
+                    if "balance" not in accounts_map[parent_id]:
+                        accounts_map[parent_id]["balance"] = {"account": parent_name, "amount": 0}
+                else:
+                    accounts_map[acc_id]["balance"] = acc_data
+
+            structured = []
+            for acc_id, data in accounts_map.items():
+                structured.append({
+                    "parent": data["balance"]["account"],
+                    "balance": data["balance"],
+                    "children": data.get("children", [])
+                })
+
+            return float(total), structured
+
+        # Get totals and account structures
+        assets_total, assets_accounts = get_balances('asset')
+        liabilities_total, liabilities_accounts = get_balances('liability')
+        equity_total, equity_accounts = get_balances('equity')
+
+        # Add net profit into equity
+        equity_total += float(net_profit)
+
+        # Proper balance sheet check
+        check = assets_total - (liabilities_total + equity_total)
+
+        data = {
+            "title": "Balance Sheet",
+            "period": f"{from_date} to {to_date}",
+            "assets": {"total": assets_total, "accounts": assets_accounts},
+            "liabilities": {"total": liabilities_total, "accounts": liabilities_accounts},
+            "equity": {"total": equity_total, "accounts": equity_accounts},
+            "net_profit_used": float(net_profit),
+            "check": check
+        }
+
+        return Response([data])

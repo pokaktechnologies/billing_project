@@ -23,6 +23,7 @@ urlpatterns = [
 
 
     path('trial-balance/',TrialBalanceView.as_view(), name='trial-balance'),
-    path('profit-and-loss/',ProfitAndLossView.as_view(), name='profit-and-loss')
+    path('profit-and-loss/',ProfitAndLossView.as_view(), name='profit-and-loss'),
+    path('balance-sheet/',BalanceSheetView.as_view(), name='balance-sheet'),
 ]
 

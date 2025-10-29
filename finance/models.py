@@ -6,7 +6,9 @@ from django.db import models
 from django.utils import timezone
 from decimal import Decimal
 from .utils import JOURNAL_ACCOUNT_MAPPING
-
+from django.db.models import Sum, Value, DecimalField
+from django.db.models.functions import Coalesce
+from decimal import Decimal
 # ----------------------
 # Account Model
 # ----------------------
@@ -44,6 +46,17 @@ class Account(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
     created_at = models.DateTimeField(auto_now_add=True)
 
+    @property
+    def closing_balance(self):
+        debit_total = self.journalline_set.aggregate(
+            total=Coalesce(Sum('debit'), Value(0), output_field=DecimalField())
+        )['total'] or Decimal(0)
+
+        credit_total = self.journalline_set.aggregate(
+            total=Coalesce(Sum('credit'), Value(0), output_field=DecimalField())
+        )['total'] or Decimal(0)
+
+        return self.opening_balance + (credit_total - debit_total)
 
     def __str__(self):
         return f"{self.name} ({self.type}) - {self.account_number or 'No Number'}"
@@ -376,35 +389,20 @@ class DebitNoteItem(models.Model):
         return f"{self.product} ({self.quantity})"
 
 
-# Payment Model
-# class Payment(models.Model):
-#     PAYMENT_METHODS = [
-#         ('cash', 'Cash'),
-#         ('bank', 'Bank Transfer'),
-#         ('upi', 'UPI'),
-#         ('cheque', 'Cheque'),
-#         ('other', 'Other'),
-#     ]
+class CashflowCategoryMapping(models.Model):
+    CATEGORY_CHOICES = [
+        ('operating', 'Operating'),
+        ('investing', 'Investing'),
+        ('financing', 'Financing'),
+    ]
 
-#     user = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True)
-#     payment_number = models.CharField(max_length=100, unique=True, blank=True, null=True)
-#     date = models.DateTimeField(default=timezone.now)
-#     paid_to = models.ForeignKey(Supplier, on_delete=models.SET_NULL, null=True, related_name='payments')
-#     amount = models.DecimalField(max_digits=12, decimal_places=2)
-#     payment_method = models.CharField(max_length=20, choices=PAYMENT_METHODS)
-#     paid_from_account = models.ForeignKey(
-#         Account, on_delete=models.SET_NULL, null=True, blank=True,
-#         related_name='payments_from'
-#     )  # CREDIT SIDE (bank/cash)
-#     paid_to_account = models.ForeignKey(
-#         Account, on_delete=models.SET_NULL, null=True, blank=True,
-#         related_name='payments_to'
-#     )  # DEBIT SIDE (expense/supplier/payable)
-#     remark = models.TextField(blank=True, null=True)
-#     journal_entry = models.OneToOneField(JournalEntry, on_delete=models.CASCADE, null=True, blank=True)
-#     created_at = models.DateTimeField(auto_now_add=True)
+    category = models.CharField(max_length=100, choices=CATEGORY_CHOICES)
+    sub_category = models.CharField(max_length=100)
+    accounts = models.ManyToManyField(Account, related_name='cashflow_categories')
 
-#     def __str__(self):
-#         return f"Payment ₹{self.amount} to {self.paid_to.supplier_number if self.paid_to else 'N/A'} on {self.date.date()}"
+    class Meta:
+        unique_together = ('category', 'sub_category')
 
 
+    def __str__(self):
+        return f"{self.category.title()} - {self.sub_category}"

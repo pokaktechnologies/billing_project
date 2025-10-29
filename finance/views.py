@@ -397,3 +397,159 @@ class BalanceSheetView(APIView):
         }
 
         return Response([data])
+
+
+
+# -------------------------------
+# List & Create (GET, POST)
+# -------------------------------
+
+
+
+class CashflowCategoryMappingListCreateView(generics.ListCreateAPIView):
+    serializer_class = CashflowCategoryMappingSerializer
+
+    def get_queryset(self):
+        queryset = CashflowCategoryMapping.objects.all()
+
+        # Get query params
+        category = self.request.query_params.get('category')
+        sub_category = self.request.query_params.get('sub_category')
+
+        # Filter by category (exact match)
+        if category:
+            queryset = queryset.filter(category__iexact=category)
+
+        # Filter by sub_category (partial match, case-insensitive)
+        if sub_category:
+            queryset = queryset.filter(sub_category__icontains=sub_category)
+
+        return queryset
+
+
+# -------------------------------
+# Retrieve, Update, Delete (GET, PUT/PATCH, DELETE)
+# -------------------------------
+class CashflowCategoryMappingDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = CashflowCategoryMapping.objects.all()
+    serializer_class = CashflowCategoryMappingSerializer
+
+
+from decimal import Decimal
+from django.db.models import Sum, Value, Q, DecimalField
+from django.db.models.functions import Coalesce
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+
+from .models import Account, JournalLine, CashflowCategoryMapping
+
+
+from decimal import Decimal
+from datetime import datetime
+from django.db.models import Q, Sum, Value, DecimalField
+from django.db.models.functions import Coalesce
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+
+from datetime import datetime, timedelta
+from .models import JournalLine, CashflowCategoryMapping
+
+
+class CashflowStatementView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from_date = request.query_params.get("from_date")
+        to_date = request.query_params.get("to_date")
+
+        # ✅ Initialize empty filter
+        filters = Q()
+
+        # --- Build date filter safely ---
+        if from_date and to_date:
+            from_date = datetime.strptime(from_date, "%Y-%m-%d")
+            to_date = datetime.strptime(to_date, "%Y-%m-%d") + timedelta(days=1)
+            filters &= Q(journal__date__range=[from_date, to_date])
+        elif from_date:
+            from_date = datetime.strptime(from_date, "%Y-%m-%d")
+            filters &= Q(journal__date__gte=from_date)
+        elif to_date:
+            to_date = datetime.strptime(to_date, "%Y-%m-%d") + timedelta(days=1)
+            filters &= Q(journal__date__lte=to_date)
+
+        # --- Initialize totals ---
+        report_sections = []
+        totals = {"operating": Decimal(0), "investing": Decimal(0), "financing": Decimal(0)}
+
+        # --- Build each category section ---
+        for category, category_label in CashflowCategoryMapping.CATEGORY_CHOICES:
+            mappings = CashflowCategoryMapping.objects.filter(category=category)
+            category_items = []
+            category_total = Decimal(0)
+
+            for mapping in mappings:
+                account_ids = mapping.accounts.values_list("id", flat=True)
+                lines = JournalLine.objects.filter(filters, account_id__in=account_ids)
+
+                debit_total = lines.aggregate(
+                    total=Coalesce(Sum("debit"), Value(0), output_field=DecimalField())
+                )["total"]
+                credit_total = lines.aggregate(
+                    total=Coalesce(Sum("credit"), Value(0), output_field=DecimalField())
+                )["total"]
+
+                net = credit_total - debit_total
+                category_total += net
+
+                sign = "+" if net >= 0 else "-"
+                category_items.append({
+                    "label": mapping.sub_category,
+                    "amount": f"{sign}₹{abs(net):,.0f}"
+                })
+
+            totals[category] = category_total
+
+            report_sections.append({
+                "heading": category_label,
+                "items": category_items,
+                "net_amount": f"₹{category_total:,.0f}"
+            })
+
+        # --- Compute summary based on actual Cash & Bank balances ---
+        cash_accounts = CashflowCategoryMapping.objects.filter(
+            sub_category__iregex=r"(cash|bank)"
+        ).values_list("accounts", flat=True)
+        # list the accounts each of the name
+        cash_accounts_opening_balances = Account.objects.filter(id__in=cash_accounts).values_list('opening_balance', flat=True)
+        opening_cash_balance = sum(cash_accounts_opening_balances)
+
+
+        # Net Cash Change=Operating Cash Flow+Investing Cash Flow+Financing cash flow.
+        net_cash_change = totals["operating"] + totals["investing"] + totals["financing"]
+
+        # Ending Cash Balance=Beginning Cash Balance+Net Cash Change
+        ending_cash_balance = opening_cash_balance + net_cash_change
+
+        summary = {
+            "Operating Cash Flow": f"₹{totals['operating']:,.0f}",
+            "Cash and Cash Equivalents at Beginning of Period": f"₹{opening_cash_balance:,.0f}",
+            "Ending Cash Balance": f"₹{ending_cash_balance:,.0f}",
+            "Net Cash Change": f"₹{net_cash_change:,.0f}"
+        }
+
+        # --- Final report payload ---
+        report = {
+            "report_period": {
+                "from_date": from_date or "ALL",
+                "to_date": to_date or "ALL",
+            },
+            "title": "Cash Flow Statement",
+            "subtitle": f"For the period from {from_date or 'beginning'} to {to_date or 'today'}",
+            "sections": report_sections,
+            "summary": summary,
+        }
+
+        return Response(report)
+

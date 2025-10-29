@@ -25,5 +25,10 @@ urlpatterns = [
     path('trial-balance/',TrialBalanceView.as_view(), name='trial-balance'),
     path('profit-and-loss/',ProfitAndLossView.as_view(), name='profit-and-loss'),
     path('balance-sheet/',BalanceSheetView.as_view(), name='balance-sheet'),
+
+
+    path('cashflow-mappings/', CashflowCategoryMappingListCreateView.as_view(), name='cashflow-mapping-list'),
+    path('cashflow-mappings/<int:pk>/', CashflowCategoryMappingDetailView.as_view(), name='cashflow-mapping-detail'),
+    path('cashflow-statement/', CashflowStatementView.as_view(), name='cashflow-statement'),
 ]
 

@@ -28,6 +28,7 @@ urlpatterns = [
     path('hr/', include('hr_section.urls')),
     path('certificate/', include('certificates.urls')),
     path('attendance/', include('attendance.urls')),
+    path('chat/', include('chat.urls')),
 ]
 
 if settings.DEBUG:

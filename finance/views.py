@@ -52,6 +52,7 @@ class FinaceNumberGeneratorView(APIView):
             'ACT': (Account, 'account_number', 'ACT'),
             'JE': (JournalEntry, 'type_number', 'JE'),
             'CN': (CreditNote, 'credit_note_number', 'CN'),
+            'DN': (DebitNote,'debit_note_number','DN')
         }
 
         if model_type not in model_map:

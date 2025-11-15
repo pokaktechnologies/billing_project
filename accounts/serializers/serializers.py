@@ -285,6 +285,7 @@ class CustomerSerializer(serializers.ModelSerializer):
  
 
 class SalesPersonSerializer(serializers.ModelSerializer):
+    assigned_staff_email = serializers.CharField(source='assigned_staff.staff_email', read_only=True)
     class Meta:
         model = SalesPerson
         fields = '__all__'

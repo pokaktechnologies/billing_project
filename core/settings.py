@@ -59,6 +59,7 @@ INSTALLED_APPS = [
 
     
     "channels",
+    'import_export',
 ]
 
 REST_FRAMEWORK = {

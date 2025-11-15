@@ -348,6 +348,13 @@ class DeliveryChallan(models.Model):
         return f"Delivery Challan {self.delivery_challan_number} - {self.customer_name}"  
     
 class SalesPerson(models.Model):
+    assigned_staff = models.OneToOneField(
+        StaffProfile,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='salespersons'
+    )
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100, blank=True, null=True)
     designation = models.CharField(max_length=100, blank=True, null=True)

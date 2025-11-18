@@ -3,17 +3,23 @@ from ..models import *
 from datetime import datetime
 from django.utils import timezone
 from accounts.serializers.serializers import SalesPersonSerializer
+from accounts.models import SalesPerson, StaffProfile
+
 
 class LeadSerializer(serializers.ModelSerializer):
     lead_status_display = serializers.SerializerMethodField()
 
     class Meta:
         model = Lead
-        fields = '__all__'  # or specify the fields you want to include
-        read_only_fields = ['CustomUser']  # optional
+        fields = '__all__'
+        read_only_fields = [
+            'CustomUser', 
+            'lead_type', 
+        ]
 
     def get_lead_status_display(self, obj):
         return obj.get_lead_status_display()
+
 
 
 class LeadSerializerListDisplay(serializers.ModelSerializer):

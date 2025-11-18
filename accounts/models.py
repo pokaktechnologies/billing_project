@@ -876,6 +876,7 @@ class ModulePermission(models.Model):
         ("sales_person", "Sales Person"),
         ("setup", "Setup"),
         ("leads", "Leads"),
+        ("leads_management", "Leads Management"),
         ("project_management", "Project Management"),
         ("supplier", "Supplier"),
         ("purchase", "Purchase"),

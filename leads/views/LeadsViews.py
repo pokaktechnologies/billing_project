@@ -14,73 +14,119 @@ from ..models import *
 from ..serializers.LeadsSerializers import *
 
 
-
-
-class LeadsView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
+class StaffLeadView(APIView):
+    permission_classes = [IsAuthenticated,HasModulePermission]
     required_module = 'marketing'
 
     def get(self, request):
-        leads = Lead.objects.all().order_by('-created_at')
+        user = request.user
+        try:
+            staff_profile = StaffProfile.objects.get(user=user)
+            salesperson = SalesPerson.objects.get(assigned_staff=staff_profile)
+        except (StaffProfile.DoesNotExist, SalesPerson.DoesNotExist):
+            return Response(
+                {"status": "0", "message": "No salesperson assigned to this staff"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Base queryset
+        leads = Lead.objects.filter(salesperson=salesperson)
+
+        # --- Filters ---
+        lead_source = request.query_params.get('lead_source')
+        location = request.query_params.get('location')
+        lead_type = request.query_params.get('lead_type')  # my_lead / assigned_lead
+        start_date = request.query_params.get('start_date')  # yyyy-mm-dd
+        end_date = request.query_params.get('end_date')      # yyyy-mm-dd
+
+        if lead_source:
+            leads = leads.filter(lead_source=lead_source)
+
+        if location:
+            leads = leads.filter(location=location)
+
+        if lead_type:
+            leads = leads.filter(lead_type=lead_type)
+
+        if start_date:
+            leads = leads.filter(created_at__date__gte=start_date)
+
+        if end_date:
+            leads = leads.filter(created_at__date__lte=end_date)
+
+        leads = leads.order_by('-created_at')
+
         serializer = LeadSerializerListDisplay(leads, many=True)
+        
         return Response({
             "status": "1",
             "message": "success",
             "data": serializer.data
         }, status=status.HTTP_200_OK)
 
+
     def post(self, request):
+        user = request.user
+        
+        # Lookup staff -> salesperson mapping
+        try:
+            staff_profile = StaffProfile.objects.get(user=user)
+            salesperson = SalesPerson.objects.get(assigned_staff=staff_profile)
+        except (StaffProfile.DoesNotExist, SalesPerson.DoesNotExist):
+            return Response(
+                {"status": "0", "message": "No salesperson assigned to this staff"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+
         serializer = LeadSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(CustomUser=request.user)
-            return Response({
-                "status": "1",
-                "message": "Lead created successfully"
-            }, status=status.HTTP_201_CREATED)
-        return Response({
-            "status": "0",
-            "message": "Lead creation failed",
-            "errors": serializer.errors
-        }, status=status.HTTP_400_BAD_REQUEST)
+            serializer.save(CustomUser=user, salesperson=salesperson , lead_type="my_lead")
+            return Response({"status": "1", "message": "Lead created successfully"}, status=201)
+
+        return Response(
+            {"status": "0", "message": "Lead creation failed", "errors": serializer.errors},
+            status=400
+        )
 
 
-class LeadDetailView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
+
+
+class StaffLeadDetailView(APIView):
+    permission_classes = [IsAuthenticated,HasModulePermission]
     required_module = 'marketing'
 
     def get_object(self, pk, user):
         try:
-            return Lead.objects.get(pk=pk)
-        except Lead.DoesNotExist:
+            staff_profile = StaffProfile.objects.get(user=user)
+            salesperson = SalesPerson.objects.get(assigned_staff=staff_profile)
+            return Lead.objects.get(pk=pk, salesperson=salesperson)
+        except (StaffProfile.DoesNotExist, SalesPerson.DoesNotExist, Lead.DoesNotExist):
             return None
 
     def get(self, request, pk):
         lead = self.get_object(pk, request.user)
         if not lead:
-            return Response({"status": "0", "message": "Lead not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"status": "0", "message": "Lead not found or unauthorized"}, status=404)
         serializer = LeadSerializerDetailDisplay(lead)
-        return Response({"status": "1", "message": "success", "data": [serializer.data]})
+        return Response({"status": "1", "message": "success", "data": serializer.data})
 
     def patch(self, request, pk):
         lead = self.get_object(pk, request.user)
         if not lead:
-            return Response({"status": "0", "message": "Lead not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"status": "0", "message": "Lead not found or unauthorized"}, status=404)
         serializer = LeadSerializer(lead, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response({"status": "1", "message": "Lead updated successfully"})
-        return Response({"status": "0", "message": "Update failed", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"status": "0", "message": "Update failed", "errors": serializer.errors}, status=400)
 
     def delete(self, request, pk):
         lead = self.get_object(pk, request.user)
         if not lead:
-            return Response({"status": "0", "message": "Lead not found"}, status=status.HTTP_404_NOT_FOUND)
-        try:
-            lead.delete()
-        except Exception as e:
-            return Response({"status": "0", "message": "Lead deletion failed", "errors": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        # If deletion is successful, return a success message
-        return Response({"status": "1", "message": "Lead deleted successfully"}, status=status.HTTP_200_OK)
+            return Response({"status": "0", "message": "Lead not found or unauthorized"}, status=404)
+        lead.delete()
+        return Response({"status": "1", "message": "Lead deleted successfully"}, status=200)
 
 
 
@@ -97,6 +143,7 @@ class LeadsFollowUpView(APIView):
             "message": "success",
             "data": serializer.data
         }, status=status.HTTP_200_OK)
+    
 
 class LeadsWithoutQuotationView(APIView):
     def get(self, request):

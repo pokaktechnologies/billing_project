@@ -1,11 +1,11 @@
 from .views.LeadsViews import *
 from .views.MarketingViews import *
 from .views.ChartViews import *
+from .views.LeadsManagement import *
 from django.urls import path
 
 urlpatterns = [
-    path('', LeadsView.as_view(), name='leads_view'),
-    path('<int:pk>/', LeadDetailView.as_view(), name='lead_detail'),
+
     path('followup/', LeadsFollowUpView.as_view(), name='lead_followup'),
     path('search/', LeadSearchView.as_view(), name='lead_search'),
     path('no-quotation/', LeadsWithoutQuotationView.as_view(), name='leads-without-quotation'),
@@ -24,4 +24,14 @@ urlpatterns = [
     path('marketing-report/', MarketingReportAPIView.as_view(), name='marketing_report_view'),
     path('marketing-report/<int:pk>/', MarketingReportDetailAPIView.as_view(), name='marketing_report_detail'),
     path('leadschart/', LeadsChartView.as_view(), name='leads_chart'),
+
+
+    # staff leads management
+    path('staff/', StaffLeadView.as_view(), name='staff_create_lead'),
+    path('staff/<int:pk>/', StaffLeadDetailView.as_view(), name='lead_detail'),
+
+    # admin leads management
+    path('admin/', AdminLeadsView.as_view(), name='leads_view'),
+    path('admin/<int:pk>/', AdminLeadDetailView.as_view(), name='admin_lead_detail'),
+
 ]

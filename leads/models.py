@@ -5,6 +5,14 @@ from django.utils import timezone
 
 class Lead(models.Model):
     CustomUser = models.ForeignKey(CustomUser, on_delete=models.PROTECT, related_name='leads')
+    lead_type = models.CharField(
+        max_length=50,
+        choices=[
+            ('my_lead', 'My Lead'),
+            ('assigned_lead', 'Assigned Lead'),
+        ],
+        default='my_lead'
+    )
     # -------------------
     # CUSTOMER DETAILS
     # -------------------
@@ -18,16 +26,15 @@ class Lead(models.Model):
     # COMPANY DETAILS
     # -------------------
     company = models.CharField(max_length=100, blank=True, null=True)  # Company Name
-    company_address = models.CharField(max_length=255, blank=True, null=True)  # Company Address
-    company_location = models.CharField(max_length=100, blank=True, null=True)  # Company Location
+    address = models.CharField(max_length=255, blank=True, null=True)  # Company Address
+    location = models.ForeignKey('Location', on_delete=models.PROTECT, blank=True, null=True)  # Location
     
 
     # -------------------
     # LEAD DETAILS
     # -------------------
     lead_number = models.CharField(max_length=50, unique=True,null=True, blank=True)  # Lead Number
-    lead_source = models.CharField(max_length=50)  # Lead Source
-    lead_city = models.CharField(max_length=100, blank=True, null=True)  # Lead City
+    lead_source = models.ForeignKey('Source', on_delete=models.PROTECT, blank=True, null=True)  # Lead Source
     salesperson = models.ForeignKey(SalesPerson, on_delete=models.PROTECT, blank=True, null=True)
     lead_status = models.CharField(
         max_length=50,
@@ -47,7 +54,6 @@ class Lead(models.Model):
 
     def __str__(self):
         return self.name
-
 
 class Meeting(models.Model):
     lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name='meetings')

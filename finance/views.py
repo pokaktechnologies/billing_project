@@ -203,10 +203,8 @@ class ProfitAndLossView(APIView):
             "period": f"{from_date} to {to_date}",
             "sales": {"total": sales_total, "accounts": sales_accounts},
             "cost_of_sales": {"total": cost_total, "accounts": cost_accounts},
-            "gross_profit": gross_profit,
             "revenue": {"total": revenue_total, "accounts": revenue_accounts},
             "general_expenses": {"total": expense_total, "accounts": expense_accounts},
-            "operating_profit": operating_profit,
             "summary": {
                 "gross_profit": gross_profit,
                 "operating_profit": operating_profit,
@@ -235,13 +233,12 @@ class TrialBalanceView(APIView):
         from_date = parse_date(request.GET.get("from_date", "2024-01-01"))
         to_date = parse_date(request.GET.get("to_date", "2025-12-31"))
 
-        # Fetch posted journal lines
+        # Query posted journal lines
         lines = JournalLine.objects.filter(
             journal__date__range=(from_date, to_date),
             account__status='active'
         )
 
-        # Group balances by account
         balances = (
             lines
             .values(
@@ -257,19 +254,33 @@ class TrialBalanceView(APIView):
             )
         )
 
-        # Organize by account type with parent-child logic
-        grouped = defaultdict(list)
+        # -----------------------------
+        # FIX 1: Proper grouping by TYPE
+        # -----------------------------
+        grouped = {
+            label: {}     # will store parent accounts only
+            for code, label in self.ACCOUNT_TYPES
+        }
+
         total_debit = Decimal(0)
         total_credit = Decimal(0)
 
-        # Temporary structure to store parent balances and children
-        temp_accounts = defaultdict(lambda: {})
+        # Temporary: store children under parents
+        parent_children = defaultdict(list)
 
+        # First pass: calculate balances and group children
         for item in balances:
+
+            acc_type = item['account__type']  # ex: "asset"
+            acc_type_label = dict(self.ACCOUNT_TYPES).get(acc_type)
+
+            if not acc_type_label:
+                # Skip ANY account with invalid type
+                continue
+
             debit = item['debit_sum']
             credit = item['credit_sum']
 
-            # Calculate net balance
             net_debit = max(debit - credit, Decimal(0))
             net_credit = max(credit - debit, Decimal(0))
 
@@ -283,33 +294,47 @@ class TrialBalanceView(APIView):
             }
 
             parent_name = item['account__parent_account__name']
+
             if parent_name:
-                # Child account
-                if 'children' not in temp_accounts[parent_name]:
-                    temp_accounts[parent_name]['children'] = []
-                temp_accounts[parent_name]['children'].append(account_data)
+                # Child → temporarily grouped under parent
+                parent_children[parent_name].append(account_data)
             else:
-                # Parent account itself
-                temp_accounts[item['account__name']] = {
+                # Parent → store in the category directly
+                grouped[acc_type_label][item['account__name']] = {
                     "balance": account_data,
-                    "children": temp_accounts.get(item['account__name'], {}).get('children', [])
+                    "children": []
                 }
 
-        # Convert temp_accounts to final grouped format
-        for code, label in self.ACCOUNT_TYPES:
-            accounts_list = []
-            for parent_name, data in temp_accounts.items():
-                accounts_list.append({
-                    "parent": parent_name,
-                    "balance": data.get('balance', {"account": parent_name, "debit": 0, "credit": 0}),
-                    "children": data.get('children', [])
-                })
-            grouped[label] = accounts_list
+        # Second pass: attach children to parents
+        for category in grouped.values():
+            for parent_name, children in parent_children.items():
+                if parent_name in category:
+                    category[parent_name]["children"] = children
 
+        # -----------------------------
+        # Prepare final output structure
+        # -----------------------------
+        accounts_by_type = []
+        for code, label in self.ACCOUNT_TYPES:
+            category_accounts = []
+
+            for parent_name, data in grouped[label].items():
+                category_accounts.append({
+                    "parent": parent_name,
+                    "balance": data["balance"],
+                    "children": data["children"],
+                })
+
+            accounts_by_type.append({
+                "type": label,
+                "accounts": category_accounts
+            })
+
+        # Final response
         data = {
             "title": "Trial Balance",
             "period": f"{from_date} to {to_date}",
-            "accounts_by_type": [{"type": k, "accounts": v} for k, v in grouped.items()],
+            "accounts_by_type": accounts_by_type,
             "totals": {
                 "total_debit": float(total_debit),
                 "total_credit": float(total_credit),
@@ -318,6 +343,7 @@ class TrialBalanceView(APIView):
         }
 
         return Response(data)
+
 
 
 class BalanceSheetView(APIView):

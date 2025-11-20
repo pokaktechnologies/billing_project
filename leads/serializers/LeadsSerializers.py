@@ -47,6 +47,13 @@ class LeadSerializerDetailDisplay(serializers.ModelSerializer):
     def get_lead_status_display(self, obj):
         return obj.get_lead_status_display()
 
+
+class FollowUpSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FollowUp
+        fields = '__all__'
+        read_only_fields = ['id', 'created_at']
+
 class MeetingSerializer(serializers.ModelSerializer):
     date = serializers.DateField(write_only=True)
     time = serializers.TimeField(write_only=True)

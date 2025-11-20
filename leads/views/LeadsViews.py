@@ -2,6 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+from rest_framework import generics
 
 from django.utils.timezone import make_aware
 from django.utils.dateparse import parse_date
@@ -130,22 +131,192 @@ class StaffLeadDetailView(APIView):
 
 
 
-class LeadsFollowUpView(APIView):
+# -----------------------
+# FOLLOW-UPS
+# -----------------------
+
+class StaffFollowUpView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'marketing'
 
+    def get_salesperson(self, user):
+        """Return salesperson or None"""
+        try:
+            staff = StaffProfile.objects.get(user=user)
+            return SalesPerson.objects.get(assigned_staff=staff)
+        except (StaffProfile.DoesNotExist, SalesPerson.DoesNotExist):
+            return None
+
+    # -----------------------
+    # LIST FOLLOW-UPS
+    # -----------------------
     def get(self, request):
-        follow_up_statuses = ['lost', 'follow_up', 'created', 'in_progress', 'converted']
-        leads = Lead.objects.filter(lead_status__in=follow_up_statuses).order_by('-created_at')
-        serializer = LeadSerializerListDisplay(leads, many=True)
+        salesperson = self.get_salesperson(request.user)
+        if not salesperson:
+            return Response(
+                {"status": "0", "message": "No salesperson assigned"},
+                status=400
+            )
+
+        # Base queryset
+        followups = FollowUp.objects.filter(
+            lead__salesperson=salesperson
+        )
+
+        # -----------------------
+        # FILTERS
+        # -----------------------
+        title = request.query_params.get("title")
+        followup_type = request.query_params.get("type")
+        status_param = request.query_params.get("status")
+
+        if title:
+            followups = followups.filter(title__icontains=title)
+
+        if followup_type:
+            followups = followups.filter(type=followup_type)
+
+        if status_param:
+            followups = followups.filter(status=status_param)
+
+        followups = followups.order_by('-created_at')
+
+        serializer = FollowUpSerializer(followups, many=True)
+
         return Response({
             "status": "1",
             "message": "success",
             "data": serializer.data
-        }, status=status.HTTP_200_OK)
+        })
+
+
+    # -----------------------
+    # CREATE FOLLOW-UP
+    # -----------------------
+    def post(self, request):
+        user = request.user
+        salesperson = self.get_salesperson(user)
+
+        if not salesperson:
+            return Response(
+                {"status": "0", "message": "No salesperson assigned"},
+                status=400
+            )
+
+        lead_id = request.data.get("lead")
+        if not lead_id:
+            return Response(
+                {"status": "0", "message": "Lead ID is required"},
+                status=400
+            )
+
+        # ensure lead belongs to this salesperson
+        try:
+            lead = Lead.objects.get(id=lead_id, salesperson=salesperson)
+        except Lead.DoesNotExist:
+            return Response(
+                {"status": "0", "message": "Lead not found or unauthorized"},
+                status=404
+            )
+
+        serializer = FollowUpSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                {"status": "1", "message": "Follow-up created successfully"},
+                status=201
+            )
+
+        return Response(
+            {"status": "0", "message": "Creation failed", "errors": serializer.errors},
+            status=400
+        )
+
+
+
+class StaffFollowUpDetailView(APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'marketing'
+
+    def get_salesperson(self, user):
+        try:
+            staff = StaffProfile.objects.get(user=user)
+            return SalesPerson.objects.get(assigned_staff=staff)
+        except (StaffProfile.DoesNotExist, SalesPerson.DoesNotExist):
+            return None
+
+    def get_object(self, pk, salesperson):
+        try:
+            return FollowUp.objects.get(pk=pk, lead__salesperson=salesperson)
+        except FollowUp.DoesNotExist:
+            return None
+
+    # -----------------------
+    # GET ONE FOLLOW-UP
+    # -----------------------
+    def get(self, request, pk):
+        salesperson = self.get_salesperson(request.user)
+        if not salesperson:
+            return Response({"status": "0", "message": "Unauthorized"}, status=400)
+
+        followup = self.get_object(pk, salesperson)
+        if not followup:
+            return Response({"status": "0", "message": "Follow-up not found"}, status=404)
+
+        serializer = FollowUpSerializer(followup)
+        return Response({"status": "1", "message": "success", "data": serializer.data})
+
+    # -----------------------
+    # UPDATE FOLLOW-UP
+    # -----------------------
+    def patch(self, request, pk):
+        salesperson = self.get_salesperson(request.user)
+        if not salesperson:
+            return Response({"status": "0", "message": "Unauthorized"}, status=400)
+
+        followup = self.get_object(pk, salesperson)
+        if not followup:
+            return Response({"status": "0", "message": "Follow-up not found"}, status=404)
+
+        serializer = FollowUpSerializer(followup, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"status": "1", "message": "Follow-up updated"})
+
+        return Response({"status": "0", "message": "Update failed", "errors": serializer.errors}, status=400)
+
+    # -----------------------
+    # DELETE FOLLOW-UP
+    # -----------------------
+    def delete(self, request, pk):
+        salesperson = self.get_salesperson(request.user)
+        if not salesperson:
+            return Response({"status": "0", "message": "Unauthorized"}, status=400)
+
+        followup = self.get_object(pk, salesperson)
+        if not followup:
+            return Response({"status": "0", "message": "Follow-up not found"}, status=404)
+
+        followup.delete()
+        return Response({"status": "1", "message": "Follow-up deleted"})
+
+# list all followups for a lead
+class LeadFollowUpView(APIView):
+    def get_salesperson(self, user):
+        try:
+            staff = StaffProfile.objects.get(user=user)
+            return SalesPerson.objects.get(assigned_staff=staff)
+        except (StaffProfile.DoesNotExist, SalesPerson.DoesNotExist):
+            return None
+    def get(self, request, lead_id):
+        followups = FollowUp.objects.filter(lead__id=lead_id, lead__salesperson=self.get_salesperson(request.user)).order_by('-created_at')
+        serializer = FollowUpSerializer(followups, many=True)
+        return Response(serializer.data)
     
 
 class LeadsWithoutQuotationView(APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'marketing'
     def get(self, request):
         # Filter leads without quotation and select only required fields
         leads = Lead.objects.filter(quotation__isnull=True) \
@@ -154,7 +325,6 @@ class LeadsWithoutQuotationView(APIView):
         return Response(leads, status=status.HTTP_200_OK)
 
 class LeadSearchView(APIView):
-
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'marketing'
 
@@ -218,9 +388,49 @@ class LeadSearchView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+class StaffFollowUpSummaryView(APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'marketing'
+
+    def get_salesperson(self, user):
+        try:
+            staff = StaffProfile.objects.get(user=user)
+            return SalesPerson.objects.get(assigned_staff=staff)
+        except (StaffProfile.DoesNotExist, SalesPerson.DoesNotExist):
+            return None
+
+    def get(self, request):
+        salesperson = self.get_salesperson(request.user)
+        if not salesperson:
+            return Response({"status": "0", "message": "No salesperson assigned"}, status=400)
+
+        today = date.today()
+
+        qs = FollowUp.objects.filter(lead__salesperson=salesperson)
+
+        # Counts
+        total = qs.count()
+        today_count = qs.filter(date=today).count()
+        upcoming = qs.filter(date__gt=today).count()
+        completed = qs.filter(status="completed").count()
+        overdue = qs.filter(status="new", date__lt=today).count()
+
+        return Response({
+            "status": "1",
+            "message": "success",
+            "data": {
+                "total": total,
+                "today": today_count,
+                "upcoming": upcoming,
+                "completed": completed,
+                "overdue": overdue
+            }
+        })
 
 
-
+# -----------------------
+# MEETINGS VIEWS
+# -----------------------
 
 class MeetingsView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]

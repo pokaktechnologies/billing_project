@@ -55,6 +55,34 @@ class Lead(models.Model):
     def __str__(self):
         return self.name
 
+class FollowUp(models.Model):
+    lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name='follow_ups')
+    title = models.CharField(max_length=100)
+    date = models.DateField()  # correct field
+    time = models.TimeField()  # correct field
+    status = models.CharField(
+        max_length=50,
+        choices=[
+            ('new', 'New'),
+            ('completed', 'Completed'),
+        ],
+        default='new'
+    )
+    type = models.CharField(
+        max_length=50,
+        choices=[
+            ('call', 'Call'),
+            ('meeting', 'Meeting'),
+            ('email', 'Email'),
+            ('whatsapp', 'WhatsApp'),
+        ]
+    , default='call')
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Follow-up for {self.lead.name} on {self.date} at {self.time}"
+
 
 class Meeting(models.Model):
     lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name='meetings')

@@ -6,7 +6,7 @@ from django.urls import path
 
 urlpatterns = [
 
-    path('followup/', LeadsFollowUpView.as_view(), name='lead_followup'),
+    # path('followup/', LeadsFollowUpView.as_view(), name='lead_followup'),
     path('search/', LeadSearchView.as_view(), name='lead_search'),
     path('no-quotation/', LeadsWithoutQuotationView.as_view(), name='leads-without-quotation'),
     path('meeting/', MeetingsView.as_view(), name='meeting_view'),
@@ -29,6 +29,11 @@ urlpatterns = [
     # staff leads management
     path('staff/', StaffLeadView.as_view(), name='staff_create_lead'),
     path('staff/<int:pk>/', StaffLeadDetailView.as_view(), name='lead_detail'),
+    path('staff/followups/', StaffFollowUpView.as_view(), name='followup-list-create'),
+    path('staff/followups/<int:pk>/', StaffFollowUpDetailView.as_view(), name='followup-detail'),
+    path('staff/<int:lead_id>/followup/', LeadFollowUpView.as_view(), name='lead_followup'),
+    path('staff/followups/summary/', StaffFollowUpSummaryView.as_view(), name='staff-followup-summary'),
+
 
     # admin leads management
     path('admin/', AdminLeadsView.as_view(), name='leads_view'),

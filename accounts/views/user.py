@@ -10,6 +10,9 @@ from django.shortcuts import get_object_or_404
 from rest_framework.parsers import MultiPartParser, FormParser ,JSONParser
 from django.db import transaction
 from rest_framework import generics
+from django.core.mail import send_mail
+import random
+from django.conf import settings
 
 from attendance.models import DailyAttendance
 from attendance.serializers import DailyAttendanceSessionDetailSerializer
@@ -307,6 +310,78 @@ class ChangePasswordView(APIView):
         user.save()
 
         return Response({"detail": f"Password updated successfully for {user.email}."}, status=200)
+
+
+
+class AdminForgotPasswordRequestView(APIView):
+    """Generate OTP and send to admin user's email"""
+
+    def post(self, request):
+        from accounts.serializers.user import AdminForgotPasswordRequestSerializer
+
+        serializer = AdminForgotPasswordRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user = serializer.context['target_user']
+
+        # generate otp
+        otp = str(random.randint(100000, 999999))
+
+        print(otp)
+
+        user.otp = otp
+        user.is_otp_verified = False
+        user.save(update_fields=['otp', 'is_otp_verified'])
+
+        # send email
+        subject = "Password Reset OTP"
+        message = f"Your OTP for admin password reset is {otp}."
+        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None)
+        try:
+            send_mail(subject, message, from_email, [user.email], fail_silently=False)
+        except Exception:
+            # If email sending fails, still return success with a message advising to check email backend
+            return Response({"detail": "OTP generated and stored. Failed to send email; check email backend."}, status=status.HTTP_200_OK)
+
+        return Response({"detail": "OTP sent to admin email."}, status=status.HTTP_200_OK)
+
+
+class AdminForgotPasswordVerifyView(APIView):
+    """Verify OTP for admin user"""
+
+    def post(self, request):
+        from accounts.serializers.user import AdminForgotPasswordVerifySerializer
+
+        serializer = AdminForgotPasswordVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user = serializer.context['target_user']
+        # Mark as verified
+        user.is_otp_verified = True
+        user.save(update_fields=['is_otp_verified'])
+
+        return Response({"detail": "OTP verified. You can now reset the password."}, status=status.HTTP_200_OK)
+
+
+class AdminForgotPasswordResetView(APIView):
+    """Reset password for admin after OTP verification"""
+
+    def post(self, request):
+        from accounts.serializers.user import AdminForgotPasswordResetSerializer
+
+        serializer = AdminForgotPasswordResetSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user = serializer.context['target_user']
+
+        new_password = serializer.validated_data['new_password']
+        user.set_password(new_password)
+        # clear otp flags
+        user.otp = None
+        user.is_otp_verified = False
+        user.save(update_fields=['password', 'otp', 'is_otp_verified'])
+
+        return Response({"detail": "Password reset successful."}, status=status.HTTP_200_OK)
 
 
 class StaffModulesView(APIView):

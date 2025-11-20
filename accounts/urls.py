@@ -13,6 +13,9 @@ urlpatterns = [
     
     path('signup/', SignupView.as_view(), name='signup'),
     path('verify-otp/', OTPVerificationView.as_view(), name='verify_otp'),
+    path('admin/forgot-password/request-otp/', AdminForgotPasswordRequestView.as_view(), name='admin-forgot-password-request'),
+    path('admin/forgot-password/verify-otp/', AdminForgotPasswordVerifyView.as_view(), name='admin-forgot-password-verify'),
+    path('admin/forgot-password/reset-password/', AdminForgotPasswordResetView.as_view(), name='admin-forgot-password-reset'),
     path('profile/', ProfileAPIView.as_view()),
     path('logout/', LogoutView.as_view()),
     path('token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),

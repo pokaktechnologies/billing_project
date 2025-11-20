@@ -197,6 +197,63 @@ class ChangePasswordSerializer(serializers.Serializer):
             raise serializers.ValidationError("User with this email does not exist.")
         self.context['target_user'] = user
         return value
+
+
+class AdminForgotPasswordRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+
+    def validate_email(self, value):
+        try:
+            user = CustomUser.objects.get(email=value)
+        except CustomUser.DoesNotExist:
+            raise serializers.ValidationError("User with this email does not exist.")
+        # Ensure this is an admin/staff user
+        if not user.is_staff:
+            raise serializers.ValidationError("Password reset via this endpoint is allowed for admin users only.")
+        self.context['target_user'] = user
+        return value
+
+
+class AdminForgotPasswordVerifySerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    otp = serializers.CharField(max_length=6, required=True)
+
+    def validate(self, attrs):
+        email = attrs.get('email')
+        otp = attrs.get('otp')
+        try:
+            user = CustomUser.objects.get(email=email)
+        except CustomUser.DoesNotExist:
+            raise serializers.ValidationError({"email": "User with this email does not exist."})
+        if not user.is_staff:
+            raise serializers.ValidationError({"email": "This action is allowed for admin users only."})
+        # Basic OTP match (no expiry enforcement here to match existing project patterns)
+        if not user.otp or user.otp != otp:
+            raise serializers.ValidationError({"otp": "Invalid OTP."})
+        self.context['target_user'] = user
+        return attrs
+
+
+class AdminForgotPasswordResetSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    otp = serializers.CharField(max_length=6, required=True)
+    new_password = serializers.CharField(required=True, write_only=True, min_length=8)
+
+    def validate(self, attrs):
+        email = attrs.get('email')
+        otp = attrs.get('otp')
+        try:
+            user = CustomUser.objects.get(email=email)
+        except CustomUser.DoesNotExist:
+            raise serializers.ValidationError({"email": "User with this email does not exist."})
+        if not user.is_staff:
+            raise serializers.ValidationError({"email": "This action is allowed for admin users only."})
+        if not user.otp or user.otp != otp:
+            raise serializers.ValidationError({"otp": "Invalid OTP."})
+        if not user.is_otp_verified:
+            raise serializers.ValidationError({"otp": "OTP not verified. Please verify OTP before resetting password."})
+        self.context['target_user'] = user
+        return attrs
     
 class StaffPersonalInfoSerializer(serializers.ModelSerializer):
     profile = StaffProfileSerializer(source='staff_profile', read_only=True)

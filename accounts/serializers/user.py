@@ -207,9 +207,9 @@ class AdminForgotPasswordRequestSerializer(serializers.Serializer):
             user = CustomUser.objects.get(email=value)
         except CustomUser.DoesNotExist:
             raise serializers.ValidationError("User with this email does not exist.")
-        # Ensure this is an admin/staff user
-        if not user.is_staff:
-            raise serializers.ValidationError("Password reset via this endpoint is allowed for admin users only.")
+        # Ensure this is an admin/is_superuser 
+        if not user.is_superuser:
+            raise serializers.ValidationError("Password reset via this endpoint is allowed for admin/is_superuser users only.")
         self.context['target_user'] = user
         return value
 
@@ -225,8 +225,8 @@ class AdminForgotPasswordVerifySerializer(serializers.Serializer):
             user = CustomUser.objects.get(email=email)
         except CustomUser.DoesNotExist:
             raise serializers.ValidationError({"email": "User with this email does not exist."})
-        if not user.is_staff:
-            raise serializers.ValidationError({"email": "This action is allowed for admin users only."})
+        if not user.is_superuser:
+            raise serializers.ValidationError({"email": "This action is allowed for admin/is_superuser users only."})
         # Basic OTP match (no expiry enforcement here to match existing project patterns)
         if not user.otp or user.otp != otp:
             raise serializers.ValidationError({"otp": "Invalid OTP."})
@@ -246,8 +246,8 @@ class AdminForgotPasswordResetSerializer(serializers.Serializer):
             user = CustomUser.objects.get(email=email)
         except CustomUser.DoesNotExist:
             raise serializers.ValidationError({"email": "User with this email does not exist."})
-        if not user.is_staff:
-            raise serializers.ValidationError({"email": "This action is allowed for admin users only."})
+        if not user.is_superuser:
+            raise serializers.ValidationError({"email": "This action is allowed for admin/is_superuser users only."})
         if not user.otp or user.otp != otp:
             raise serializers.ValidationError({"otp": "Invalid OTP."})
         if not user.is_otp_verified:

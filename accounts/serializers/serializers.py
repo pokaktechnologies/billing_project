@@ -25,6 +25,12 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         data = super().validate(attrs)
         user = self.user
+
+        # Prevent superusers from obtaining tokens via this endpoint
+        if getattr(user, 'is_superuser', False):
+            raise serializers.ValidationError({
+                "detail": "Superuser login via this token endpoint is not allowed."
+            })
         now = timezone.localtime()
         current_time = now.time()
 
@@ -89,7 +95,17 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
         return data
 
-
+# Custom serializer for superuser token obtain (allows only superusers)
+class CustomSuperuserTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        user = self.user
+        # Allow only superusers to obtain tokens via this endpoint
+        if not getattr(user, 'is_superuser', False):
+            raise serializers.ValidationError({
+                "detail": "Only superuser may obtain token from this endpoint."
+            })
+        return data
 
 # Serializer for user registration
 class CustomUserCreateSerializer(serializers.ModelSerializer):

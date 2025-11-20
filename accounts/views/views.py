@@ -32,6 +32,11 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
+
+class SuperuserTokenObtainPairView(TokenObtainPairView):
+    """Token view that only issues tokens for superusers."""
+    serializer_class = CustomSuperuserTokenObtainPairSerializer
+
 class SignupView(APIView):
     """
     API view for user signup with first_name, last_name, and email. An OTP will be sent to the email.

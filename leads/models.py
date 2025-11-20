@@ -55,6 +55,7 @@ class Lead(models.Model):
     def __str__(self):
         return self.name
 
+
 class Meeting(models.Model):
     lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name='meetings')
     date = models.DateTimeField()

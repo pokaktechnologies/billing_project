@@ -102,3 +102,59 @@ class AdminLeadDetailView(APIView):
             return Response({"status": "0", "message": "Lead not found"}, status=404)
         lead.delete()
         return Response({"status": "1", "message": "Lead deleted"}, status=200)
+
+
+
+# multiple assign leads to a salesperson
+class AssignLeadsToSalespersonView(APIView):
+    permission_classes = [IsAuthenticated,HasModulePermission]
+    required_module = 'leads_management'
+
+    def post(self, request):
+        lead_ids = request.data.get("lead_ids", [])
+        salesperson_id = request.data.get("salesperson_id")
+
+        if not lead_ids or not salesperson_id:
+            return Response({
+                "status": "0",
+                "message": "lead_ids and salesperson_id are required"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            salesperson = SalesPerson.objects.get(id=salesperson_id)
+        except SalesPerson.DoesNotExist:
+            return Response({
+                "status": "0",
+                "message": "SalesPerson not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        leads = Lead.objects.filter(id__in=lead_ids, lead_type="assigned_lead")
+        updated_count = leads.update(salesperson=salesperson)
+
+        return Response({
+            "status": "1",
+            "message": f"{updated_count} leads assigned to {salesperson.first_name} {salesperson.last_name}"
+        }, status=status.HTTP_200_OK)
+
+
+# multiple delete leads
+class DeleteMultipleLeadsView(APIView):
+    permission_classes = [IsAuthenticated,HasModulePermission]
+    required_module = 'leads_management'
+
+    def post(self, request):
+        lead_ids = request.data.get("lead_ids", [])
+
+        if not lead_ids:
+            return Response({
+                "status": "0",
+                "message": "lead_ids are required"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        leads = Lead.objects.filter(id__in=lead_ids, lead_type="assigned_lead")
+        deleted_count, _ = leads.delete()
+
+        return Response({
+            "status": "1",
+            "message": f"{deleted_count} leads deleted successfully"
+        }, status=status.HTTP_200_OK)

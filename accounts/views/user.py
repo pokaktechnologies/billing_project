@@ -325,7 +325,7 @@ class AdminForgotPasswordRequestView(APIView):
         user = serializer.context['target_user']
 
         # generate otp
-        otp = str(random.randint(100000, 999999))
+        otp = str(random.randint(10000, 99999))
 
         print(otp)
 

@@ -2,6 +2,7 @@ from django.db import models
 # Create your models here.
 from accounts.models import  CustomUser,SalesPerson
 from django.utils import timezone
+from django.db.models import JSONField
 
 class Lead(models.Model):
     CustomUser = models.ForeignKey(CustomUser, on_delete=models.PROTECT, related_name='leads')
@@ -56,6 +57,7 @@ class Lead(models.Model):
         return self.name
 
 class FollowUp(models.Model):
+    FOLLOWUP_TYPES = ["call", "meeting", "email", "whatsapp"]
     lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name='follow_ups')
     title = models.CharField(max_length=100)
     date = models.DateField()  # correct field
@@ -68,15 +70,7 @@ class FollowUp(models.Model):
         ],
         default='new'
     )
-    type = models.CharField(
-        max_length=50,
-        choices=[
-            ('call', 'Call'),
-            ('meeting', 'Meeting'),
-            ('email', 'Email'),
-            ('whatsapp', 'WhatsApp'),
-        ]
-    , default='call')
+    types = JSONField(default=list)  
     notes = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

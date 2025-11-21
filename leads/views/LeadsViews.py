@@ -158,14 +158,10 @@ class StaffFollowUpView(APIView):
                 status=400
             )
 
-        # Base queryset
         followups = FollowUp.objects.filter(
             lead__salesperson=salesperson
         )
 
-        # -----------------------
-        # FILTERS
-        # -----------------------
         title = request.query_params.get("title")
         followup_type = request.query_params.get("type")
         status_param = request.query_params.get("status")
@@ -174,7 +170,7 @@ class StaffFollowUpView(APIView):
             followups = followups.filter(title__icontains=title)
 
         if followup_type:
-            followups = followups.filter(type=followup_type)
+            followups = followups.filter(types__contains=[followup_type])
 
         if status_param:
             followups = followups.filter(status=status_param)
@@ -461,12 +457,9 @@ class MeetingsView(APIView):
         }, status=status.HTTP_400_BAD_REQUEST)
 
 
-
-
 class MeetingDetailView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'marketing'
-
 
     def get_object(self, pk, user):
         try:

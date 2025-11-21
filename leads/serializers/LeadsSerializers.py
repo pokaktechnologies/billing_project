@@ -53,7 +53,17 @@ class FollowUpSerializer(serializers.ModelSerializer):
         model = FollowUp
         fields = '__all__'
         read_only_fields = ['id', 'created_at']
+    def validate_types(self, value):
+        allowed = ["call", "meeting", "email", "whatsapp"]
 
+        if not isinstance(value, list):
+            raise serializers.ValidationError("types must be a list")
+
+        for v in value:
+            if v not in allowed:
+                raise serializers.ValidationError(f"Invalid type value: {v}")
+
+        return value
 class MeetingSerializer(serializers.ModelSerializer):
     date = serializers.DateField(write_only=True)
     time = serializers.TimeField(write_only=True)

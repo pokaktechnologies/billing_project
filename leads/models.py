@@ -79,18 +79,49 @@ class FollowUp(models.Model):
 
 
 class Meeting(models.Model):
-    lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name='meetings')
-    date = models.DateTimeField()
-    subject = models.CharField(max_length=100, blank=True, null=True)
-    status = models.CharField(max_length=50, choices=[
-        ('scheduled', 'Scheduled'),
-        ('completed', 'Completed'),
-        ('canceled', 'Canceled'),
-    ], default='scheduled')
-    created_at = models.DateTimeField(default=timezone.now)
+    lead = models.ForeignKey(
+        Lead,
+        on_delete=models.CASCADE,
+        related_name='meetings'
+    )
+
+    date = models.DateField(default=timezone.now)  
+    time = models.TimeField(default=timezone.now) 
+
+    title = models.CharField(max_length=100, blank=True, null=True)
+
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('scheduled', 'Scheduled'),
+            ('completed', 'Completed'),
+            ('cancelled', 'Cancelled'),
+        ],
+        default='scheduled'
+    )
+
+    meeting_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('in_person', 'In Person'),
+            ('video_call', 'Video Call'),
+            ('phone_call', 'Phone Call'),
+        ],
+        default='in_person'
+    )
+
+    meeting_place = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Address for in-person or URL for online meetings"
+    )
+
+    description = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Meeting with {self.lead.name} on {self.date}"  
+        lead_display = getattr(self.lead, "name", str(self.lead))
+        return f"Meeting with {lead_display} at {self.time} on {self.date}"
 
 
 # marketing section

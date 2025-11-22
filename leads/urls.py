@@ -11,7 +11,6 @@ urlpatterns = [
     path('no-quotation/', LeadsWithoutQuotationView.as_view(), name='leads-without-quotation'),
     path('meeting/', MeetingsView.as_view(), name='meeting_view'),
     path('meeting/<int:pk>/', MeetingDetailView.as_view(), name='meeting_detail'),
-    path('meeting/search/', MeetingSearchView.as_view(), name='meeting_search'),
     path('meeting/reminder/', MeetingRemiderView.as_view(), name='meeting_reminder'),
 
     # marketing leads
@@ -33,6 +32,10 @@ urlpatterns = [
     path('staff/followups/<int:pk>/', StaffFollowUpDetailView.as_view(), name='followup-detail'),
     path('staff/<int:lead_id>/followup/', LeadFollowUpView.as_view(), name='lead_followup'),
     path('staff/followups/summary/', StaffFollowUpSummaryView.as_view(), name='staff-followup-summary'),
+    path('staff/meeting/', MeetingsView.as_view(), name='meeting_view'),
+    path('staff/meeting/<int:pk>/', MeetingDetailView.as_view(), name='meeting_detail'),
+    path('staff/meeting/summary/', MeetingSummaryView.as_view(), name=''),
+
 
 
     # admin leads management

@@ -137,3 +137,23 @@ class MarketingReport(models.Model):
 
     def __str__(self):
         return f"{self.salesperson.first_name} | {self.source.name} | {self.location.name} | {self.category.name}"
+    
+class Reminders(models.Model):
+    lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name='reminders')
+    title = models.CharField(max_length=100)
+    type = models.CharField(max_length=50, choices=[
+        ('call', 'Call'),
+        ('email', 'Email'),
+        ('whatsapp', 'WhatsApp'),
+        ('meeting', 'Meeting')
+    ], default='call')
+    date = models.DateField()
+    time = models.TimeField()
+    description = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=50, choices=[
+        ('scheduled', 'Scheduled'),
+        ('completed', 'Completed'),
+    ], default='scheduled')
+
+    def __str__(self):
+        return f"Reminder for {self.lead.name} on {self.date} at {self.time}"

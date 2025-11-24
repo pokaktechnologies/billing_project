@@ -97,6 +97,7 @@ class JobDetail(models.Model):
         ("probation", "Probation"),
         ("resigned", "Resigned"),
         ("terminated", "Terminated"),
+        ('inactive', 'Inactive'),
     ], default="active")
 
     def __str__(self):

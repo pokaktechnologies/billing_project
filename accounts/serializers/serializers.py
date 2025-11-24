@@ -31,6 +31,16 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             raise serializers.ValidationError({
                 "detail": "Superuser login via this token endpoint is not allowed."
             })
+        
+        # ---------------------------
+        # 2. Block staff with invalid job status
+        # ---------------------------
+        if hasattr(user, "staff_profile"):
+            job = getattr(user.staff_profile, "job_detail", None)
+            if job and job.status in ["terminated", "inactive", "resigned"]:
+                raise serializers.ValidationError({
+                    "detail": f"Login denied. Staff status is '{job.status}'."
+                })
         now = timezone.localtime()
         current_time = now.time()
 

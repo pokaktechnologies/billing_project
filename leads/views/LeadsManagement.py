@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from accounts.permissions import HasModulePermission
 from ..serializers.LeadsSerializers import *
 from accounts.models import SalesPerson, StaffProfile
+from datetime import datetime, time
 
 
 class AdminLeadsView(APIView):
@@ -12,8 +13,10 @@ class AdminLeadsView(APIView):
     required_module = 'leads_management'
 
     def get(self, request):
+
         # Base queryset
         leads = Lead.objects.filter(lead_type="assigned_lead")
+        print("Initial count:", leads.count())
 
         # --- Filters ---
         salesperson_filter = request.query_params.get("salesperson")  # "null", "not_null"
@@ -39,13 +42,27 @@ class AdminLeadsView(APIView):
 
         # Filter by date range
         if start_date:
-            leads = leads.filter(created_at__date__gte=start_date)
+            try:
+                start_date_parsed = datetime.strptime(start_date, "%Y-%m-%d").date()
+                # Full datetime at start of the day
+                start_dt = datetime.combine(start_date_parsed, time.min)
+                leads = leads.filter(created_at__gte=start_dt)
+            except Exception as e:
+                print("Start date parse error:", e)
 
         if end_date:
-            leads = leads.filter(created_at__date__lte=end_date)
+            try:
+                end_date_parsed = datetime.strptime(end_date, "%Y-%m-%d").date()
+                # Full datetime at end of the day
+                end_dt = datetime.combine(end_date_parsed, time.max)
+                leads = leads.filter(created_at__lte=end_dt)
+            except Exception as e:
+                print("End date parse error:", e)
 
+        # Order
         leads = leads.order_by('-created_at')
 
+        # Serialize
         serializer = LeadSerializerListDisplay(leads, many=True)
 
         return Response({
@@ -158,3 +175,36 @@ class DeleteMultipleLeadsView(APIView):
             "status": "1",
             "message": f"{deleted_count} leads deleted successfully"
         }, status=status.HTTP_200_OK)
+
+
+
+
+
+class LeadProgressView(APIView):
+    permission_classes = [IsAuthenticated]
+    LEAD_PROGRESS_MAP = {
+        "new": 0,
+        "contacted": 20,
+        "follow_up": 40,
+        "created": 50,
+        "in_progress": 70,
+        "converted": 100,
+        "lost": 0,
+    }
+    def get(self, request, lead_id):
+        try:
+            lead = Lead.objects.get(id=lead_id)
+        except Lead.DoesNotExist:
+            return Response({"status": "0", "message": "Lead not found"}, status=404)
+
+        progress = self.LEAD_PROGRESS_MAP.get(lead.lead_status, 0)
+
+        return Response({
+            "status": "1",
+            "message": "success",
+            "data": {
+                "lead_id": lead.id,
+                "lead_status": lead.lead_status,
+                "progress": progress,
+            }
+        }, status=200)

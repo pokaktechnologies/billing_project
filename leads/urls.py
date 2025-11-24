@@ -43,5 +43,6 @@ urlpatterns = [
     path('admin/<int:pk>/', AdminLeadDetailView.as_view(), name='admin_lead_detail'),
     path('admin/assign/', AssignLeadsToSalespersonView.as_view(), name='assign_leads_to_salesperson'),
     path('admin/delete-multiple/', DeleteMultipleLeadsView.as_view(), name='delete_multiple_leads'),
+    path('admin/lead-progress/<int:lead_id>/', LeadProgressView.as_view(), name='lead_progress_view'),
 
 ]

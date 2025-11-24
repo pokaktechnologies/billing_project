@@ -45,4 +45,11 @@ urlpatterns = [
     path('admin/delete-multiple/', DeleteMultipleLeadsView.as_view(), name='delete_multiple_leads'),
     path('admin/lead-progress/<int:lead_id>/', LeadProgressView.as_view(), name='lead_progress_view'),
 
+        
+    # reminders 
+    path('staff/reminders/', RemindersView.as_view(), name='staff-reminders-list-create'),
+    path('staff/reminders/<int:pk>/', RemindersDetailView.as_view(), name='staff-reminders-detail'),
+    path('staff/<int:lead_id>/reminders/', LeadRemindersView.as_view(), name='staff-lead-reminders'),
+    path('staff/reminders/summary/', RemindersSummaryView.as_view(), name='staff-reminders-summary'),
+    
 ]

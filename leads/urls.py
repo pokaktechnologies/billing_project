@@ -36,6 +36,9 @@ urlpatterns = [
     path('staff/meeting/<int:pk>/', MeetingDetailView.as_view(), name='meeting_detail'),
     path('staff/meeting/summary/', MeetingSummaryView.as_view(), name=''),
 
+    path("activity/manual/", ManualActivityLogView.as_view()),
+    path("activity/manual/<int:pk>/", ManualActivityLogDetailView.as_view()),
+
 
 
     # admin leads management
@@ -44,5 +47,6 @@ urlpatterns = [
     path('admin/assign/', AssignLeadsToSalespersonView.as_view(), name='assign_leads_to_salesperson'),
     path('admin/delete-multiple/', DeleteMultipleLeadsView.as_view(), name='delete_multiple_leads'),
     path('admin/lead-progress/<int:lead_id>/', LeadProgressView.as_view(), name='lead_progress_view'),
+    path('admin/lead-activity-log/<int:lead_id>/', LeadActivityLogView.as_view(), name='lead_activity_log_view'),
 
 ]

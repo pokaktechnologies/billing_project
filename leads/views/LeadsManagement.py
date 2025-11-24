@@ -6,6 +6,7 @@ from accounts.permissions import HasModulePermission
 from ..serializers.LeadsSerializers import *
 from accounts.models import SalesPerson, StaffProfile
 from datetime import datetime, time
+from ..utils import log_activity
 
 
 class AdminLeadsView(APIView):
@@ -75,7 +76,14 @@ class AdminLeadsView(APIView):
     def post(self, request):
         serializer = LeadSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(CustomUser=request.user,lead_type="assigned_lead" )
+            lead = serializer.save(CustomUser=request.user,lead_type="assigned_lead" )
+            log_activity(
+                lead,
+                "created",
+                f"Lead created : {lead.name}",
+                model="Lead",
+                obj_id=lead.id
+            )
             return Response({
                 "status": "1",
                 "message": "Lead created successfully"
@@ -105,11 +113,24 @@ class AdminLeadDetailView(APIView):
 
     def patch(self, request, pk):
         lead = self.get_object(pk)
+        old_status = lead.lead_status
+        old_label = lead.get_lead_status_display()
         if not lead:
             return Response({"status": "0", "message": "Lead not found"}, status=404)
         serializer = LeadSerializer(lead, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
+            # if admin changed status
+            if "lead_status" in request.data and old_status != lead.lead_status:
+                new_label = lead.get_lead_status_display()
+                log_activity(
+                    lead,
+                    "status_change",
+                    f"Lead status changed {old_label} → {new_label} by admin",
+                    model="Lead",
+                    obj_id=lead.id
+                )
+
             return Response({"status": "1", "message": "Lead updated successfully"})
         return Response({"status": "0", "message": "Update failed", "errors": serializer.errors}, status=400)
 
@@ -207,4 +228,23 @@ class LeadProgressView(APIView):
                 "lead_status": lead.lead_status,
                 "progress": progress,
             }
+        }, status=200)
+
+
+class LeadActivityLogView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, lead_id):
+        try:
+            lead = Lead.objects.get(id=lead_id)
+        except Lead.DoesNotExist:
+            return Response({"status": "0", "message": "Lead not found"}, status=404)
+
+        logs = ActivityLog.objects.filter(lead=lead).order_by("-timestamp")
+        serializer = ActivityLogManualSerializer(logs, many=True)
+
+        return Response({
+            "status": "1",
+            "message": "success",
+            "data": serializer.data
         }, status=200)

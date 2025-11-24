@@ -13,6 +13,7 @@ from accounts.permissions import HasModulePermission
 
 from ..models import *
 from ..serializers.LeadsSerializers import *
+from ..utils import log_activity
 
 
 class SalesPersonBaseView(APIView):
@@ -90,7 +91,14 @@ class StaffLeadView(APIView):
 
         serializer = LeadSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(CustomUser=user, salesperson=salesperson , lead_type="my_lead")
+            lead = serializer.save(CustomUser=user, salesperson=salesperson , lead_type="my_lead")
+            log_activity(
+                lead,
+                "created",
+                f"Lead created: {lead.name}",
+                model="Lead",
+                obj_id=lead.id
+            )
             return Response({"status": "1", "message": "Lead created successfully"}, status=201)
 
         return Response(
@@ -101,33 +109,85 @@ class StaffLeadView(APIView):
 
 
 
-class StaffLeadDetailView(SalesPersonBaseView,APIView):
-    permission_classes = [IsAuthenticated,HasModulePermission]
+class StaffLeadDetailView(SalesPersonBaseView, APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'marketing'
 
+    # -----------------------
+    # OBJECT FETCHER
+    # -----------------------
+    def get_object(self, pk, salesperson):
+        try:
+            return Lead.objects.get(pk=pk, salesperson=salesperson)
+        except Lead.DoesNotExist:
+            return None
+
+    # -----------------------
+    # GET ONE LEAD
+    # -----------------------
     def get(self, request, pk):
-        lead = self.get_object(pk, request.user)
+        salesperson = self.get_salesperson(request.user)
+        if not salesperson:
+            return Response({"status": "0", "message": "Unauthorized"}, status=400)
+
+        lead = self.get_object(pk, salesperson)
         if not lead:
-            return Response({"status": "0", "message": "Lead not found or unauthorized"}, status=404)
+            return Response({"status": "0", "message": "Lead not found"}, status=404)
+
         serializer = LeadSerializerDetailDisplay(lead)
         return Response({"status": "1", "message": "success", "data": serializer.data})
 
+    # -----------------------
+    # UPDATE LEAD
+    # -----------------------
     def patch(self, request, pk):
-        lead = self.get_object(pk, request.user)
+        salesperson = self.get_salesperson(request.user)
+        if not salesperson:
+            return Response({"status": "0", "message": "Unauthorized"}, status=400)
+
+        lead = self.get_object(pk, salesperson)
         if not lead:
-            return Response({"status": "0", "message": "Lead not found or unauthorized"}, status=404)
+            return Response({"status": "0", "message": "Lead not found"}, status=404)
+
+        old_status = lead.lead_status
+        old_status_display = lead.get_lead_status_display()
         serializer = LeadSerializer(lead, data=request.data, partial=True)
+
         if serializer.is_valid():
             serializer.save()
-            return Response({"status": "1", "message": "Lead updated successfully"})
-        return Response({"status": "0", "message": "Update failed", "errors": serializer.errors}, status=400)
+            # Optional logging
+            if 'lead_status' in request.data and old_status != lead.lead_status:
+                lead_status_display = lead.get_lead_status_display()
+                log_activity(
+                    lead,
+                    "status_change",
+                    f"Lead status changed from '{old_status_display}' to '{lead_status_display}'",
+                    model="Lead",
+                    obj_id=lead.id
+                )
 
+            return Response({"status": "1", "message": "Lead updated"})
+        
+        return Response(
+            {"status": "0", "message": "Update failed", "errors": serializer.errors},
+            status=400
+        )
+
+    # -----------------------
+    # DELETE LEAD
+    # -----------------------
     def delete(self, request, pk):
-        lead = self.get_object(pk, request.user)
+        salesperson = self.get_salesperson(request.user)
+        if not salesperson:
+            return Response({"status": "0", "message": "Unauthorized"}, status=400)
+
+        lead = self.get_object(pk, salesperson)
         if not lead:
-            return Response({"status": "0", "message": "Lead not found or unauthorized"}, status=404)
+            return Response({"status": "0", "message": "Lead not found"}, status=404)
+
         lead.delete()
-        return Response({"status": "1", "message": "Lead deleted successfully"}, status=200)
+        return Response({"status": "1", "message": "Lead deleted"})
+
 
 
 
@@ -236,7 +296,14 @@ class StaffFollowUpView(SalesPersonBaseView,APIView):
 
         serializer = FollowUpSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            followup = serializer.save()
+            log_activity(
+                lead,
+                "created",
+                f"Follow-up created: {followup.title}",
+                model="FollowUp",
+                obj_id=followup.id
+            )
             return Response(
                 {"status": "1", "message": "Follow-up created successfully"},
                 status=201
@@ -276,36 +343,43 @@ class StaffFollowUpDetailView(SalesPersonBaseView,APIView):
         serializer = FollowUpSerializer(followup)
         return Response({"status": "1", "message": "success", "data": serializer.data})
 
-    # -----------------------
-    # UPDATE FOLLOW-UP
-    # -----------------------
     def patch(self, request, pk):
         salesperson = self.get_salesperson(request.user)
-        if not salesperson:
-            return Response({"status": "0", "message": "Unauthorized"}, status=400)
-
         followup = self.get_object(pk, salesperson)
         if not followup:
             return Response({"status": "0", "message": "Follow-up not found"}, status=404)
+
+        old_status = followup.status
+        old_label = followup.get_status_display()
 
         serializer = FollowUpSerializer(followup, data=request.data, partial=True)
         if serializer.is_valid():
-            serializer.save()
+            followup = serializer.save()
+
+            if "status" in request.data and old_status != followup.status:
+                new_label = followup.get_status_display()
+
+                log_activity(
+                    followup.lead, "status_change",
+                    f"Follow-up status changed {old_label} → {new_label}",
+                    model="FollowUp", obj_id=followup.id
+                )
+
             return Response({"status": "1", "message": "Follow-up updated"})
 
-        return Response({"status": "0", "message": "Update failed", "errors": serializer.errors}, status=400)
+        return Response({"status": "0", "message": "Update error", "errors": serializer.errors}, status=400)
 
-    # -----------------------
-    # DELETE FOLLOW-UP
-    # -----------------------
     def delete(self, request, pk):
         salesperson = self.get_salesperson(request.user)
-        if not salesperson:
-            return Response({"status": "0", "message": "Unauthorized"}, status=400)
-
         followup = self.get_object(pk, salesperson)
         if not followup:
             return Response({"status": "0", "message": "Follow-up not found"}, status=404)
+
+        log_activity(
+            followup.lead, "deleted",
+            f"Follow-up deleted: {followup.title}",
+            model="FollowUp", obj_id=followup.id
+        )
 
         followup.delete()
         return Response({"status": "1", "message": "Follow-up deleted"})
@@ -493,7 +567,13 @@ class MeetingsView(SalesPersonBaseView, APIView):
 
         serializer = MeetingSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
-            serializer.save()
+            meeting = serializer.save()
+
+            log_activity(
+                lead, "created",
+                f"Meeting created: {meeting.title}",
+                model="Meeting", obj_id=meeting.id
+            )
             return Response({"status": "1", "message": "Meeting created successfully"}, status=201)
 
         return Response({
@@ -531,10 +611,20 @@ class MeetingDetailView(SalesPersonBaseView, APIView):
         meeting = self.get_object(pk, request.user)
         if not meeting:
             return Response({"status": "0", "message": "Meeting not found"}, status=404)
-
+        old_status = meeting.status
+        old_label = meeting.get_status_display()
         serializer = MeetingSerializer(meeting, data=request.data, partial=True, context={'request': request})
         if serializer.is_valid():
-            serializer.save()
+            meeting = serializer.save()
+
+            if "status" in request.data and old_status != meeting.status:
+                new_label = meeting.get_status_display()
+
+                log_activity(
+                    meeting.lead, "status_change",
+                    f"Meeting status changed {old_label} → {new_label}",
+                    model="Meeting", obj_id=meeting.id
+                )
             return Response({"status": "1", "message": "Meeting updated successfully"})
 
         return Response({"status": "0", "message": "Update failed", "errors": serializer.errors}, status=400)
@@ -544,7 +634,11 @@ class MeetingDetailView(SalesPersonBaseView, APIView):
         meeting = self.get_object(pk, request.user)
         if not meeting:
             return Response({"status": "0", "message": "Meeting not found"}, status=404)
-
+        log_activity(
+            meeting.lead, "deleted",
+            f"Meeting deleted: {meeting.title}",
+            model="Meeting", obj_id=meeting.id
+        )
         meeting.delete()
         return Response({"status": "1", "message": "Meeting deleted successfully"}, status=200)
 
@@ -596,5 +690,72 @@ class MeetingRemiderView(APIView):
             "message": "success",
             "data": serializer.data
         }, status=status.HTTP_200_OK)
+
+
+class ManualActivityLogView(SalesPersonBaseView, APIView):
+    permission_classes = [IsAuthenticated]
+
+    # CREATE MANUAL LOG
+    def post(self, request):
+        salesperson = self.get_salesperson(request.user)
+        if not salesperson:
+            return Response({"status": "0", "message": "Unauthorized"}, status=400)
+
+        lead_id = request.data.get("lead")
+        if not lead_id:
+            return Response({"status": "0", "message": "Lead ID required"}, status=400)
+
+        try:
+            lead = Lead.objects.get(id=lead_id, salesperson=salesperson)
+        except Lead.DoesNotExist:
+            return Response({"status": "0", "message": "Lead not found"}, status=404)
+
+        serializer = ActivityLogManualSerializer(data=request.data)
+        if serializer.is_valid():
+            log = serializer.save(related_model="Lead", related_id=lead.id)
+            return Response({"status": "1", "message": "Activity added", "data": serializer.data}, status=201)
+
+        return Response({"status": "0", "message": "Error", "errors": serializer.errors}, status=400)
+
+
+class ManualActivityLogDetailView(SalesPersonBaseView, APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk, salesperson):
+        try:
+            return ActivityLog.objects.get(
+                id=pk,
+                lead__salesperson=salesperson,
+                activity_type__in=["call", "email", "whatsapp", "quotation"]
+            )
+        except ActivityLog.DoesNotExist:
+            return None
+
+    # UPDATE LOG
+    def patch(self, request, pk):
+        salesperson = self.get_salesperson(request.user)
+        log = self.get_object(pk, salesperson)
+
+        if not log:
+            return Response({"status": "0", "message": "Activity not found"}, status=404)
+
+        serializer = ActivityLogManualSerializer(log, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"status": "1", "message": "Activity updated"})
+
+        return Response({"status": "0", "errors": serializer.errors}, status=400)
+
+
+    # DELETE LOG
+    def delete(self, request, pk):
+        salesperson = self.get_salesperson(request.user)
+        log = self.get_object(pk, salesperson)
+
+        if not log:
+            return Response({"status": "0", "message": "Activity not found"}, status=404)
+
+        log.delete()
+        return Response({"status": "1", "message": "Activity deleted"})
 
 

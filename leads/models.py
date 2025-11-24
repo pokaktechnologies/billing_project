@@ -188,3 +188,36 @@ class Reminders(models.Model):
 
     def __str__(self):
         return f"Reminder for {self.lead.name} on {self.date} at {self.time}"
+
+
+class ActivityLog(models.Model):
+    ACTIVITY_TYPES = [
+        ('created', 'Created'),
+        ('status_change', 'Status Changed'),
+        ('deleted', 'Deleted'),
+
+        # manual
+        ('call', 'Call'),
+        ('email', 'Email'),
+        ('whatsapp', 'WhatsApp'),
+        ('quotation', 'Quotation'),
+    ]
+
+    lead = models.ForeignKey(
+        Lead,
+        on_delete=models.CASCADE,
+        related_name='activity_logs'
+    )
+
+    activity_type = models.CharField(max_length=50, choices=ACTIVITY_TYPES)
+
+    action = models.CharField(max_length=255)
+
+    # THESE TWO MAKE IT REAL CRM-QUALITY
+    related_model = models.CharField(max_length=100, blank=True, null=True)
+    related_id = models.PositiveIntegerField(blank=True, null=True)
+
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.lead.name} - {self.activity_type} @ {self.timestamp}"

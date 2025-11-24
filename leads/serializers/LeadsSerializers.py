@@ -96,3 +96,27 @@ class MeetingSerializerDisplay(serializers.ModelSerializer):
     def get_status(self, obj):
         return obj.get_status_display()
 
+class ActivityLogManualSerializer(serializers.ModelSerializer):
+    activity_type_display = serializers.SerializerMethodField(read_only=True)
+    class Meta:
+        model = ActivityLog
+        fields = [
+            "id",
+            "lead",
+            "activity_type",
+            "action",
+            "related_model",
+            "related_id",
+            "timestamp",
+            "activity_type_display"
+        ]
+
+    def validate(self, data):
+        # Only allow manual types
+        manual_types = ["call", "email", "whatsapp", "quotation"]
+        if data["activity_type"] not in manual_types:
+            raise serializers.ValidationError("Only manual types allowed here.")
+        return data
+
+    def get_activity_type_display(self, obj):
+        return obj.get_activity_type_display()

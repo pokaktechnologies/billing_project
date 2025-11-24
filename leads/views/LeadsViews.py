@@ -759,3 +759,159 @@ class ManualActivityLogDetailView(SalesPersonBaseView, APIView):
         return Response({"status": "1", "message": "Activity deleted"})
 
 
+class RemindersView(SalesPersonBaseView, APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'marketing'
+
+    def get(self, request):
+        salesperson = self.get_salesperson(request.user)
+        if not salesperson:
+            return Response({"status": "0", "message": "No salesperson assigned"}, status=400)
+
+        reminders = Reminders.objects.filter(lead__salesperson=salesperson)
+
+        # Filters
+        title = request.query_params.get('title')
+        reminder_type = request.query_params.get('type')
+        status_param = request.query_params.get('status')
+        filter_by = request.query_params.get('filter_by')  # today, upcoming, overdue, completed
+
+        if title:
+            reminders = reminders.filter(title__icontains=title)
+
+        if reminder_type:
+            reminders = reminders.filter(type=reminder_type)
+
+        if status_param:
+            reminders = reminders.filter(status=status_param)
+
+        today = date.today()
+        if filter_by:
+            if filter_by == 'today':
+                reminders = reminders.filter(date=today)
+            elif filter_by == 'upcoming':
+                reminders = reminders.filter(date__gt=today)
+            elif filter_by == 'overdue':
+                reminders = reminders.filter(status='scheduled', date__lt=today)
+            elif filter_by == 'completed':
+                reminders = reminders.filter(status='completed')
+            else:
+                return Response({"status": "0", "message": "Invalid filter_by value"}, status=400)
+
+        reminders = reminders.order_by('-date')
+        serializer = RemindersGetSerializer(reminders, many=True)
+        return Response({"status": "1", "message": "success", "data": serializer.data}, status=200)
+
+    def post(self, request):
+        salesperson = self.get_salesperson(request.user)
+        if not salesperson:
+            return Response({"status": "0", "message": "No salesperson assigned"}, status=400)
+
+        lead_id = request.data.get('lead')
+        if not lead_id:
+            return Response({"status": "0", "message": "Lead ID is required"}, status=400)
+
+        try:
+            lead = Lead.objects.get(id=lead_id)
+            if lead.CustomUser != request.user and lead.salesperson != salesperson:
+                return Response({"status": "0", "message": "You do not have permission to create a reminder for this lead"}, status=403)
+        except Lead.DoesNotExist:
+            return Response({"status": "0", "message": "Lead not found"}, status=404)
+
+        serializer = RemindersSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"status": "1", "message": "Reminder created successfully", "data": serializer.data}, status=201)
+        return Response({"status": "0", "message": "Reminder creation failed", "errors": serializer.errors}, status=400)
+
+
+class RemindersDetailView(SalesPersonBaseView, APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'marketing'
+
+    def get_object(self, pk, salesperson):
+        try:
+            return Reminders.objects.get(pk=pk, lead__salesperson=salesperson)
+        except Reminders.DoesNotExist:
+            return None
+
+    def get(self, request, pk):
+        salesperson = self.get_salesperson(request.user)
+        if not salesperson:
+            return Response({"status": "0", "message": "Unauthorized"}, status=400)
+
+        reminder = self.get_object(pk, salesperson)
+        if not reminder:
+            return Response({"status": "0", "message": "Reminder not found"}, status=404)
+
+        serializer = RemindersGetSerializer(reminder)
+        return Response({"status": "1", "message": "success", "data": serializer.data})
+
+    def patch(self, request, pk):
+        salesperson = self.get_salesperson(request.user)
+        if not salesperson:
+            return Response({"status": "0", "message": "Unauthorized"}, status=400)
+
+        reminder = self.get_object(pk, salesperson)
+        if not reminder:
+            return Response({"status": "0", "message": "Reminder not found"}, status=404)
+
+        serializer = RemindersSerializer(reminder, data=request.data, partial=True, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"status": "1", "message": "Reminder updated", "data": serializer.data})
+        return Response({"status": "0", "message": "Update failed", "errors": serializer.errors}, status=400)
+
+    def delete(self, request, pk):
+        salesperson = self.get_salesperson(request.user)
+        if not salesperson:
+            return Response({"status": "0", "message": "Unauthorized"}, status=400)
+
+        reminder = self.get_object(pk, salesperson)
+        if not reminder:
+            return Response({"status": "0", "message": "Reminder not found"}, status=404)
+
+        reminder.delete()
+        return Response({"status": "1", "message": "Reminder deleted"}, status=200)
+
+
+# list all reminders for a lead
+class LeadRemindersView(SalesPersonBaseView, APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'marketing'
+
+    def get(self, request, lead_id):
+        reminders = Reminders.objects.filter(lead__id=lead_id, lead__salesperson=self.get_salesperson(request.user)).order_by('-date')
+        serializer = RemindersSerializer(reminders, many=True)
+        return Response({"status": "1", "message": "success", "data": serializer.data})
+
+
+class RemindersSummaryView(SalesPersonBaseView, APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'marketing'
+
+    def get(self, request):
+        salesperson = self.get_salesperson(request.user)
+        if not salesperson:
+            return Response({"status": "0", "message": "No salesperson assigned"}, status=400)
+
+        today = date.today()
+        qs = Reminders.objects.filter(lead__salesperson=salesperson)
+
+        total = qs.count()
+        today_count = qs.filter(date=today).count()
+        upcoming = qs.filter(date__gt=today).count()
+        completed = qs.filter(status='completed').count()
+        overdue = qs.filter(status='scheduled', date__lt=today).count()
+
+        return Response({
+            "status": "1",
+            "message": "success",
+            "data": {
+                "total": total,
+                "today": today_count,
+                "upcoming": upcoming,
+                "completed": completed,
+                "overdue": overdue
+            }
+        })

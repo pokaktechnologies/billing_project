@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from ..models import *
-from datetime import datetime
+from datetime import datetime, date
 from django.utils import timezone
 from accounts.serializers.serializers import SalesPersonSerializer
 from accounts.models import SalesPerson, StaffProfile
@@ -120,3 +120,54 @@ class ActivityLogManualSerializer(serializers.ModelSerializer):
 
     def get_activity_type_display(self, obj):
         return obj.get_activity_type_display()
+class RemindersSerializer(serializers.ModelSerializer):
+    lead = serializers.PrimaryKeyRelatedField(queryset=Lead.objects.all())
+    class Meta:
+        model = Reminders
+        fields = ['id', 'lead', 'title', 'type', 'date', 'time', 'description', 'status']
+
+
+    def validate_type(self, value):
+        valid_types = ['call', 'email', 'meeting', 'whatsapp']
+        if value and value not in valid_types:
+            raise serializers.ValidationError(f"Type must be one of: {', '.join(valid_types)}")
+        return value
+
+    def validate(self, data):
+        lead = data.get('lead')
+        date_val = data.get('date')
+        time_val = data.get('time')
+
+        # Required fields
+        if not data.get('title'):
+            raise serializers.ValidationError({"title": "Title is required."})
+        if not data.get('type'):
+            raise serializers.ValidationError({"type": "Type is required."})
+        if date_val is None:
+            raise serializers.ValidationError({"date": "Date is required."})
+        if time_val is None:
+            raise serializers.ValidationError({"time": "Time is required."})
+
+        # Ownership check: ensure the requester can create/update reminders for this lead
+        request = self.context.get('request')
+        if request and lead:
+            user = request.user
+            if not (lead.CustomUser == user or lead.salesperson and lead.salesperson.assigned_staff and lead.salesperson.assigned_staff.user == user):
+                raise serializers.ValidationError({"lead": "You do not have permission for this lead."})
+
+        return data
+    
+class RemindersGetSerializer(serializers.ModelSerializer):
+    lead = serializers.StringRelatedField()
+    salesperson_name = serializers.CharField(source='lead.name', read_only=True, default=None)
+    salesperson_phone = serializers.CharField(source='lead.phone', read_only=True, default=None)
+    salesperson_email = serializers.CharField(source='lead.email', read_only=True, default=None)
+    salesperson_lead_status = serializers.CharField(source='lead.lead_status', read_only=True, default=None)
+    salesperson_company = serializers.CharField(source='lead.company', read_only=True, default=None)
+
+
+    class Meta:
+        model = Reminders
+        fields = ['id', 'lead', 'title', 'type', 'date', 'time', 'description', 'status', 'salesperson_name', 'salesperson_phone',
+                  'salesperson_email', 'salesperson_lead_status', 'salesperson_company']
+    

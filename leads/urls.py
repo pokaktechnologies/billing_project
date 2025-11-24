@@ -35,6 +35,11 @@ urlpatterns = [
     path('staff/meeting/', MeetingsView.as_view(), name='meeting_view'),
     path('staff/meeting/<int:pk>/', MeetingDetailView.as_view(), name='meeting_detail'),
     path('staff/meeting/summary/', MeetingSummaryView.as_view(), name=''),
+    # reminders 
+    path('staff/reminders/', RemindersView.as_view(), name='staff-reminders-list-create'),
+    path('staff/reminders/<int:pk>/', RemindersDetailView.as_view(), name='staff-reminders-detail'),
+    path('staff/<int:lead_id>/reminders/', LeadRemindersView.as_view(), name='staff-lead-reminders'),
+    path('staff/reminders/summary/', RemindersSummaryView.as_view(), name='staff-reminders-summary'),
 
     path("activity/manual/", ManualActivityLogView.as_view()),
     path("activity/manual/<int:pk>/", ManualActivityLogDetailView.as_view()),
@@ -49,4 +54,7 @@ urlpatterns = [
     path('admin/lead-progress/<int:lead_id>/', LeadProgressView.as_view(), name='lead_progress_view'),
     path('admin/lead-activity-log/<int:lead_id>/', LeadActivityLogView.as_view(), name='lead_activity_log_view'),
 
+        
+
+    
 ]

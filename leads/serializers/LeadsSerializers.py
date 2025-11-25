@@ -39,6 +39,9 @@ class LeadSerializerListDisplay(serializers.ModelSerializer):
 class LeadSerializerDetailDisplay(serializers.ModelSerializer):
     lead_status_display = serializers.SerializerMethodField()
     salesperson_detail = SalesPersonSerializer(source='salesperson', read_only=True, default=None)
+    location_name = serializers.CharField(source='location.name', read_only=True, default=None)
+    quotation = serializers.CharField(source='quotation.quotation_number', read_only=True, default=None)
+    lead_source_name = serializers.CharField(source='lead_source.name', read_only=True, default=None)
 
     class Meta:
         model = Lead
@@ -49,6 +52,10 @@ class LeadSerializerDetailDisplay(serializers.ModelSerializer):
 
 
 class FollowUpSerializer(serializers.ModelSerializer):
+    lead_name = serializers.CharField(source='lead.name', read_only=True)
+    lead_phone = serializers.CharField(source='lead.phone', read_only=True)
+    lead_email = serializers.CharField(source='lead.email', read_only=True)
+    lead_company = serializers.CharField(source='lead.company', read_only=True)
     class Meta:
         model = FollowUp
         fields = '__all__'
@@ -73,7 +80,7 @@ class MeetingSerializer(serializers.ModelSerializer):
         model = Meeting
         fields = [
             'id', 'lead', 'title', 'meeting_type', 'meeting_place',
-            'description', 'status', 'date', 'time'
+            'description', 'status', 'date', 'time',
         ]
 
 
@@ -83,13 +90,15 @@ class MeetingSerializerDisplay(serializers.ModelSerializer):
     lead_id = serializers.IntegerField(source='lead.id', read_only=True)
     phone = serializers.CharField(source='lead.phone', read_only=True)
     status = serializers.SerializerMethodField()
+    lead_email = serializers.CharField(source='lead.email', read_only=True)
+    lead_company = serializers.CharField(source='lead.company', read_only=True)
 
     class Meta:
         model = Meeting
         fields = [
             'id', 'lead_name', 'lead_id', 'title', 'meeting_type',
             'meeting_place', 'description', 'date', 'time',
-            'status', 'phone'
+            'status', 'phone', 'lead_email', 'lead_company'
         ]
 
 

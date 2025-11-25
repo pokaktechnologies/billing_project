@@ -3,7 +3,11 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from django.db import close_old_connections
+from django.utils import timezone
 
+
+def is_sunday():
+    return timezone.localdate().weekday() == 6
 
 def create_daily_attendance_records():
     """Create daily attendance and 3 sessions for all staff with default leave status."""
@@ -11,12 +15,14 @@ def create_daily_attendance_records():
     from django.utils import timezone
     from accounts.models import StaffProfile
     from attendance.models import DailyAttendance, AttendanceSession
-    from django.utils import timezone
     from rest_framework_simplejwt.token_blacklist.models import OutstandingToken, BlacklistedToken
     from django.db.utils import OperationalError
     from accounts.models import CustomUser
     now = timezone.localtime()
     today = timezone.localdate()
+    if is_sunday():
+        print("🛑 Sunday detected — skipping attendance creation.")
+        return
     print(f"⏰ Creating daily attendance for {today}")
 
     session_times = {
@@ -84,6 +90,9 @@ def pre_session_notification(session_name: str):
         "session2": "Afternoon (12:00 PM - 3:00 PM)",
         "session3": "Evening (3:00 PM - 6:00 PM)",
     }
+    if is_sunday():
+        print(f"🛑 Sunday detected — skipping pre-session notification for {session_name}.")
+        return
     friendly_session = session_labels.get(session_name, session_name)
     message = f"⏳ Reminder: {friendly_session} will end in 10 minutes."
 
@@ -102,6 +111,9 @@ def auto_logout_job(session_name: str):
 
     now = timezone.localtime()
     today = now.date()
+    if is_sunday():
+        print(f"🛑 Sunday detected — skipping auto logout for {session_name}.")
+        return
     print(f"⏰ Auto logout job running at {now} for {session_name}")
 
     # 1️⃣ Blacklist all outstanding tokens

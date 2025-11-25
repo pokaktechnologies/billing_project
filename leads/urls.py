@@ -53,6 +53,7 @@ urlpatterns = [
     path('admin/delete-multiple/', DeleteMultipleLeadsView.as_view(), name='delete_multiple_leads'),
     path('admin/lead-progress/<int:lead_id>/', LeadProgressView.as_view(), name='lead_progress_view'),
     path('admin/lead-activity-log/<int:lead_id>/', LeadActivityLogView.as_view(), name='lead_activity_log_view'),
+    path('admin/lead-activity-counts/<int:lead_id>/', LeadActivityCountsView.as_view(), name='lead_activity_counts_view'),
 
         
 

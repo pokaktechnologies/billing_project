@@ -235,30 +235,19 @@ class LeadActivityLogView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, lead_id):
+        # 1. Validate lead exists
         try:
             lead = Lead.objects.get(id=lead_id)
         except Lead.DoesNotExist:
-            try:
-                start_date_parsed = datetime.strptime(start_date, "%Y-%m-%d").date()
-                # Full datetime at start of the day
-                start_dt = datetime.combine(start_date_parsed, time.min)
-                leads = leads.filter(created_at__gte=start_dt)
-            except Exception as e:
-                print("Start date parse error:", e)
+            return Response({
+                "status": "0",
+                "message": "Lead not found"
+            }, status=status.HTTP_404_NOT_FOUND)
 
-        if end_date:
-            try:
-                end_date_parsed = datetime.strptime(end_date, "%Y-%m-%d").date()
-                # Full datetime at end of the day
-                end_dt = datetime.combine(end_date_parsed, time.max)
-                leads = leads.filter(created_at__lte=end_dt)
-            except Exception as e:
-                print("End date parse error:", e)
+        # 2. Get all activities related to this lead
+        leads = Lead.objects.filter(id=lead_id).order_by('-timestamp')
 
-        # Order
-        leads = leads.order_by('-created_at')
-
-        # Serialize
+        # 3. Serialize
         serializer = LeadSerializerListDisplay(leads, many=True)
 
         return Response({
@@ -266,6 +255,7 @@ class LeadActivityLogView(APIView):
             "message": "success",
             "data": serializer.data
         }, status=status.HTTP_200_OK)
+
 
 
     def post(self, request):

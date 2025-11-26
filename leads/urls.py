@@ -45,8 +45,6 @@ urlpatterns = [
     path("activity/manual/", ManualActivityLogView.as_view()),
     path("activity/manual/<int:pk>/", ManualActivityLogDetailView.as_view()),
 
-
-
     # admin leads management
     path('admin/', AdminLeadsView.as_view(), name='leads_view'),
     path('admin/<int:pk>/', AdminLeadDetailView.as_view(), name='admin_lead_detail'),

@@ -34,6 +34,7 @@ urlpatterns = [
     path('staff/followups/summary/', StaffFollowUpSummaryView.as_view(), name='staff-followup-summary'),
     path('staff/meeting/', MeetingsView.as_view(), name='meeting_view'),
     path('staff/meeting/<int:pk>/', MeetingDetailView.as_view(), name='meeting_detail'),
+    path('staff/<int:lead_id>/meeting/', LeadMeetingView.as_view(), name='lead_meeting'),
     path('staff/meeting/summary/', MeetingSummaryView.as_view(), name=''),
     # reminders 
     path('staff/reminders/', RemindersView.as_view(), name='staff-reminders-list-create'),

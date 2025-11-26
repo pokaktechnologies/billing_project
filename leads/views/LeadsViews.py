@@ -672,6 +672,20 @@ class MeetingSummaryView(SalesPersonBaseView, APIView):
                 "overdue": overdue
             }
         })
+    
+
+class LeadMeetingView(SalesPersonBaseView, APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'marketing'
+
+    def get(self, request, lead_id):
+        meetings = Meeting.objects.filter(lead__id=lead_id, lead__salesperson=self.get_salesperson(request.user)).order_by('-created_at')
+        serializer = MeetingSerializerDisplay(meetings, many=True)
+        return Response({
+            "status": "1",
+            "message": "success",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
 
 
 

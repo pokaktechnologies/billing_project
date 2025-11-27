@@ -43,7 +43,7 @@ def create_daily_attendance_records():
         print("⚠️ Database not ready yet, skipping this run.")
         return
 
-    staffs = StaffProfile.objects.all()
+    staffs = StaffProfile.objects.filter(job_detail__status__in=["active", "probation"])
     created_count = 0
 
     for staff in staffs:

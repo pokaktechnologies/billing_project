@@ -152,5 +152,7 @@ urlpatterns = [
     path('contracts/<int:contract_id>/sections/<int:section_id>/points/<int:point_id>/', ContractPointListCreateAPIView.as_view()),
 
     path('staff/info/', StaffPersonalInfoView.as_view(), name='staff-personal-info'),
-    path('staff/attendance/',StaffPersonalAttendanceView.as_view(), name='staff-attendance-info')
+    path('staff/attendance/',StaffPersonalAttendanceView.as_view(), name='staff-attendance-info'),
+
+    path('unassigned-staff/', UnassignedStaffListView.as_view(), name='unassigned-staff-list'),
 ]

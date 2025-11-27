@@ -2,7 +2,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from accounts.serializers.user import *
 from accounts.permissions import HasModulePermission
-from accounts.models import CustomUser, ModulePermission , Department ,StaffProfile, JobDetail, StaffDocument
+from accounts.models import CustomUser, ModulePermission , Department ,StaffProfile, JobDetail, StaffDocument , SalesPerson
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -485,3 +485,33 @@ class StaffPersonalAttendanceView(APIView):
             serializer = DailyAttendanceSessionDetailSerializer(queryset, many=True)
             return Response({"days_count":days_count,"session_data": serializer.data}, status=200)
         return Response({"status": "0", "message": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+
+
+# list all staff users that not assigned to salesperson
+class UnassignedStaffListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+
+    def get(self, request):
+
+        # 1️⃣ Get all staff IDs already assigned to a SalesPerson
+        assigned_staff_ids = SalesPerson.objects.filter(
+            assigned_staff__isnull=False
+        ).values_list('assigned_staff_id', flat=True)
+
+        # 2️⃣ Get all staff that are NOT assigned
+        unassigned_staff = StaffProfile.objects.exclude(
+            id__in=assigned_staff_ids
+        )
+
+        # 3️⃣ Convert staff → CustomUser for serializer (your serializer expects user)
+        users = CustomUser.objects.filter(
+            staff_profile__in=unassigned_staff
+        )
+
+        serializer = StaffUserSerializer(users, many=True)
+        return Response({
+            "status": "1",
+            "message": "success",
+            "data": serializer.data
+        })

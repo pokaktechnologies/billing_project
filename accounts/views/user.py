@@ -13,6 +13,7 @@ from rest_framework import generics
 from django.core.mail import send_mail
 import random
 from django.conf import settings
+from django.db.models import Q
 
 from attendance.models import DailyAttendance
 from attendance.serializers import DailyAttendanceSessionDetailSerializer
@@ -198,32 +199,69 @@ class CreateStaffWithPermissionsView(APIView):
             status=status.HTTP_201_CREATED
         )
 
-
     def get(self, request, staff_id=None):
-            if staff_id:
-                # Single staff user
-                try:
-                    staff_user = CustomUser.objects.select_related('staff_profile').get(
-                        id=staff_id,
-                        is_staff=True,
-                        is_superuser=False
-                    )
-                    serializer = StaffUserSerializer(staff_user)
-                    return Response({"status": "1", "message": "success", "data": serializer.data})
-                except CustomUser.DoesNotExist:
-                    return Response({"status": "0", "message": "Staff user not found"}, status=status.HTTP_404_NOT_FOUND)
+        department = request.query_params.get('department')
+        status = request.query_params.get('status')
+        search = request.query_params.get('search')  # name/email/employee_id
 
-            # All staff users
-            staff_users = CustomUser.objects.filter(
-                is_staff=True,
-                is_superuser=False
-            ).select_related('staff_profile').prefetch_related(
-                'module_permissions'
-            ).order_by('-id')
+        # ===========================
+        #  SINGLE STAFF
+        # ===========================
+        if staff_id:
+            try:
+                staff_user = CustomUser.objects.select_related(
+                    'staff_profile',
+                    'staff_profile__job_detail'
+                ).get(
+                    id=staff_id,
+                    is_staff=True,
+                    is_superuser=False
+                )
+                serializer = StaffUserSerializer(staff_user)
+                return Response({"status": "1", "message": "success", "data": serializer.data})
+            except CustomUser.DoesNotExist:
+                return Response({"status": "0", "message": "Staff user not found"},
+                                status=status.HTTP_404_NOT_FOUND)
 
-            serializer = StaffUserSerializer(staff_users, many=True)
-            
-            return Response({"status": "1", "message": "success", "data": serializer.data})
+        # ===========================
+        #  STAFF LIST + FILTERS
+        # ===========================
+        staff_users = CustomUser.objects.filter(
+            is_staff=True,
+            is_superuser=False
+        ).select_related(
+            'staff_profile',
+            'staff_profile__job_detail',
+            'staff_profile__job_detail__department'
+        ).prefetch_related(
+            'module_permissions'
+        ).order_by('-id')
+
+        # Filter: department
+        if department:
+            staff_users = staff_users.filter(
+                staff_profile__job_detail__department__id=department
+            )
+
+        # Filter: status
+        if status:
+            staff_users = staff_users.filter(
+                staff_profile__job_detail__status=status
+            )
+
+        # Filter: name/email/employee_id
+        if search:
+            staff_users = staff_users.filter(
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search) |
+                Q(email__icontains=search) |
+                Q(staff_profile__job_detail__employee_id__icontains=search)
+            )
+
+        serializer = StaffUserSerializer(staff_users, many=True)
+
+        return Response({"status": "1", "message": "success", "data": serializer.data})
+
                    
 
 

@@ -459,3 +459,32 @@ class LeadActivityCountsView(APIView):
             "message": "success",
             "data": data
         }, status=200)
+
+
+# list all salespersons with their assigned lead counts,converted lead counts,rate 
+class SalespersonLeadStatsView(APIView):
+    permission_classes = [IsAuthenticated,HasModulePermission]
+    required_module = 'leads_management'
+
+    def get(self, request):
+        salespersons = SalesPerson.objects.all()
+        data = []
+
+        for sp in salespersons:
+            assigned_leads_count = Lead.objects.filter(salesperson=sp, lead_type="assigned_lead").count()
+            converted_leads_count = Lead.objects.filter(salesperson=sp, lead_type="assigned_lead", lead_status="converted").count()
+            conversion_rate = (converted_leads_count / assigned_leads_count * 100) if assigned_leads_count > 0 else 0.0
+
+            data.append({
+                "salesperson_id": sp.id,
+                "salesperson_name": f"{sp.first_name} {sp.last_name}",
+                "assigned_leads_count": assigned_leads_count,
+                "converted_leads_count": converted_leads_count,
+                "conversion_rate": round(conversion_rate, 2)
+            })
+
+        return Response({
+            "status": "1",
+            "message": "success",
+            "data": data
+        }, status=200)

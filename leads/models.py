@@ -54,7 +54,8 @@ class Lead(models.Model):
     created_at = models.DateTimeField(default=timezone.now)  # Date
 
     def __str__(self):
-        return self.name
+        return f"{self.name} - {self.lead_number}"
+
 
 class FollowUp(models.Model):
     FOLLOWUP_TYPES = ["call", "meeting", "email", "whatsapp"]

@@ -478,7 +478,6 @@ class SalespersonLeadStatsView(APIView):
             data.append({
                 "salesperson_id": sp.id,
                 "salesperson_email": sp.email,
-                "salesperson_staff_email": sp.assigned_staff.staff_email,
                 "salesperson_name": f"{sp.first_name} {sp.last_name}",
                 "assigned_leads_count": assigned_leads_count,
                 "converted_leads_count": converted_leads_count,

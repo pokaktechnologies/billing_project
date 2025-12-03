@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     'certificates',
     'attendance',
     'chat',
+    'internship',
 
     
     "channels",

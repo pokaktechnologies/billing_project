@@ -56,6 +56,8 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         """Force logout this user by updating last_logout."""
         self.last_logout = timezone.now()
         self.save(update_fields=['last_logout'])
+
+
     def __str__(self):
         return self.email
 
@@ -83,8 +85,8 @@ class JobDetail(models.Model):
     employee_id = models.CharField(max_length=50, unique=True)
     department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True)
     job_type = models.CharField(max_length=50, choices=[
-        ("full day", "Full Day"),
-        ("part time", "Part Time"),
+        ("full_day", "Full Day"),
+        ("part_time", "Part Time"),
         ("internship", "Internship"),
         ("contract", "Contract")
     ] , null=True, blank=True)

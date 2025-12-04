@@ -203,6 +203,7 @@ class CreateStaffWithPermissionsView(APIView):
         department = request.query_params.get('department')
         status = request.query_params.get('status')
         search = request.query_params.get('search')  # name/email/employee_id
+        job_type = request.query_params.get('job_type')
 
         # ===========================
         #  SINGLE STAFF
@@ -256,6 +257,12 @@ class CreateStaffWithPermissionsView(APIView):
                 Q(last_name__icontains=search) |
                 Q(email__icontains=search) |
                 Q(staff_profile__job_detail__employee_id__icontains=search)
+            )
+
+        # Filter: job_type
+        if job_type:
+            staff_users = staff_users.filter(
+                staff_profile__job_detail__job_type__iexact=job_type
             )
 
         serializer = StaffUserSerializer(staff_users, many=True)

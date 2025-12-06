@@ -6,7 +6,8 @@ from rest_framework import generics
 
 from django.utils.timezone import make_aware
 from django.utils.dateparse import parse_date
-from datetime import datetime, date
+from datetime import datetime, date,time
+from django.utils.timezone import make_aware
 from django.db.models import Q
 
 from accounts.permissions import HasModulePermission
@@ -58,12 +59,29 @@ class StaffLeadView(APIView):
         if lead_type:
             leads = leads.filter(lead_type=lead_type)
 
+
+
         if start_date:
-            leads = leads.filter(created_at__date__gte=start_date)
+            try:
+                start_datetime = make_aware(datetime.combine(
+                    datetime.strptime(start_date, "%Y-%m-%d").date(),
+                    time.min
+                ))
+                leads = leads.filter(created_at__gte=start_datetime)
+            except ValueError:
+                return Response({"status": "0", "message": "Invalid start_date format"}, status=400)
 
         if end_date:
-            leads = leads.filter(created_at__date__lte=end_date)
+            try:
+                end_datetime = make_aware(datetime.combine(
+                    datetime.strptime(end_date, "%Y-%m-%d").date(),
+                    time.max
+                ))
+                leads = leads.filter(created_at__lte=end_datetime)
+            except ValueError:
+                return Response({"status": "0", "message": "Invalid end_date format"}, status=400)
 
+            
         leads = leads.order_by('-created_at')
 
         serializer = LeadSerializerListDisplay(leads, many=True)

@@ -1,6 +1,7 @@
 from rest_framework import serializers
-from internship.models import Course
-
+from internship.models import *
+from accounts.models import StaffProfile
+from accounts.serializers.user import *
 
 class CourseSerializer(serializers.ModelSerializer):
     department_name = serializers.CharField(source="department.name", read_only=True)
@@ -8,13 +9,6 @@ class CourseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Course
         fields = ["id", "title", "description", "department", "department_name"]
-
-
-
-# Assigned staff-course serializers
-from internship.models import AssignedStaffCourse
-from accounts.models import StaffProfile
-from accounts.serializers.user import StaffProfileSerializer
 
 
 class AssignedStaffCourseSerializer(serializers.ModelSerializer):
@@ -136,6 +130,18 @@ class AssignedStaffCourseDetailSerializer(serializers.ModelSerializer):
             )
         return attrs
 
+# ====== Study Material Serializer ======
     
+class StudyMaterialSerializer(serializers.ModelSerializer):
 
+    class Meta:
+        model = StudyMaterial
+        fields = "__all__"
 
+    def validate(self, attrs):
+        file = attrs.get("file")
+        url = attrs.get("url")
+
+        if not file and not url:
+            raise serializers.ValidationError("Either file or url is required.")
+        return attrs

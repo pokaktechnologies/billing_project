@@ -2,6 +2,7 @@ from rest_framework import serializers
 from .models import Certificate
 from django.utils import timezone
 import logging
+from accounts.models import JobDetail
 
 logger = logging.getLogger(__name__)
 
@@ -28,3 +29,16 @@ class CertificateSerializer(serializers.ModelSerializer):
         except Exception as e:
             logger.error(f"Error updating certificate {instance.id}: {str(e)}")
             raise  # Re-raise to propagate the error for debugging
+
+class ManagementStaffSignatureSerializer(serializers.ModelSerializer):
+    staff_name = serializers.CharField(source="staff.user.first_name", read_only=True)
+    staff_last_name = serializers.CharField(source="staff.user.last_name", read_only=True)
+    signature_image = serializers.ImageField(read_only=True)
+
+    class Meta:
+        model = JobDetail
+        fields = [
+            "staff_name",
+            "staff_last_name",
+            "signature_image",
+        ]

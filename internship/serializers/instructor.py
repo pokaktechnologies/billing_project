@@ -3,6 +3,18 @@ from internship.models import *
 from accounts.models import StaffProfile
 from accounts.serializers.user import *
 
+
+class SimpleStaffProfileSerializer(serializers.ModelSerializer):
+    user_email = serializers.CharField(source="user.email", read_only=True)
+    full_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StaffProfile
+        fields = ["id", "user_email", "full_name"]
+
+    def get_full_name(self, obj):
+        return f"{obj.user.first_name} {obj.user.last_name}"
+
 class CourseSerializer(serializers.ModelSerializer):
     department_name = serializers.CharField(source="department.name", read_only=True)
 
@@ -145,3 +157,197 @@ class StudyMaterialSerializer(serializers.ModelSerializer):
         if not file and not url:
             raise serializers.ValidationError("Either file or url is required.")
         return attrs
+
+
+class TaskAttachmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TaskAttachment
+        fields = ['id', 'file']
+
+
+class TaskAssignmentSerializer(serializers.ModelSerializer):
+    staff = SimpleStaffProfileSerializer(read_only=True)
+
+    class Meta:
+        model = TaskAssignment
+        fields = "__all__"
+
+class TaskSerializer(serializers.ModelSerializer):
+    assigned_to = serializers.ListField(
+        child=serializers.IntegerField(),
+        write_only=True
+    )
+
+    total_staff_count = serializers.SerializerMethodField()
+    attachments = TaskAttachmentSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Task
+        fields = [
+            'id', 'title', 'description',
+            'start_date', 'due_date', 'course',
+            'assigned_to', 'attachments',
+            'total_staff_count'
+        ]
+
+    def get_total_staff_count(self, obj):
+        return obj.assigned_to.count()
+
+
+    # ===== CREATE =====
+    def create(self, validated_data):
+        staff_ids = validated_data.pop('assigned_to', [])
+        request = self.context['request']
+        files = request.FILES.getlist('files')
+        course = validated_data.get("course")
+
+        if not course:
+            raise serializers.ValidationError({"course": "Course is required."})
+
+        valid_staff_ids = AssignedStaffCourse.objects.filter(
+            course=course,
+            staff_id__in=staff_ids
+        ).values_list("staff_id", flat=True)
+
+        invalid_staff = set(staff_ids) - set(valid_staff_ids)
+
+        # friendly message
+        if invalid_staff:
+            staff_info = StaffProfile.objects.filter(id__in=invalid_staff).values(
+                "user__email",
+                "user__first_name",
+                "user__last_name"
+            )
+            readable = [
+                f"{s['user__first_name']} {s['user__last_name']} ({s['user__email']})"
+                for s in staff_info
+            ]
+            raise serializers.ValidationError({
+                "assigned_to": "These staff are not assigned to this course: " + ", ".join(readable)
+            })
+
+        task = Task.objects.create(**validated_data)
+
+        for staff_id in valid_staff_ids:
+            TaskAssignment.objects.create(task=task, staff_id=staff_id)
+
+        for file in files:
+            TaskAttachment.objects.create(task=task, file=file)
+
+        return task
+
+
+    # ===== UPDATE =====
+    def update(self, instance, validated_data):
+        staff_ids = validated_data.pop('assigned_to', None)
+        request = self.context['request']
+        files = request.FILES.getlist('files')
+
+        # update fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        if staff_ids is not None:
+            course = instance.course
+
+            valid_staff_ids = AssignedStaffCourse.objects.filter(
+                course=course,
+                staff_id__in=staff_ids
+            ).values_list("staff_id", flat=True)
+
+            invalid_staff = set(staff_ids) - set(valid_staff_ids)
+
+            if invalid_staff:
+                staff_info = StaffProfile.objects.filter(id__in=invalid_staff).values(
+                    "user__email",
+                    "user__first_name",
+                    "user__last_name"
+                )
+                readable = [
+                    f"{s['user__first_name']} {s['user__last_name']} ({s['user__email']})"
+                    for s in staff_info
+                ]
+                raise serializers.ValidationError({
+                    "assigned_to": "These staff are not assigned to this course: " + ", ".join(readable)
+                })
+
+            TaskAssignment.objects.filter(task=instance).delete()
+
+            for staff_id in valid_staff_ids:
+                TaskAssignment.objects.create(task=instance, staff_id=staff_id)
+
+        # new attachments
+        for file in files:
+            TaskAttachment.objects.create(task=instance, file=file)
+
+        return instance
+
+
+class InstructorTaskDetailSerializer(serializers.ModelSerializer):
+    staff_assignments = TaskAssignmentSerializer(
+        many=True,
+        read_only=True,
+        source='assignments'   # <-- this is the fix
+    )
+    attachments = TaskAttachmentSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Task
+        fields = [
+            'id', 'title', 'description', 'start_date', 'due_date',
+            'course', 'attachments', 'staff_assignments'
+        ]
+
+
+
+from rest_framework import serializers
+from django.utils import timezone
+
+class InstructorSubmissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TaskSubmission
+        fields = "__all__"
+
+class InstructorSubmissionReviewSerializer(serializers.ModelSerializer):
+    # Map status and revision_due_date to the related assignment fields
+    status = serializers.ChoiceField(
+        choices=[("revision_required", "revision_required"), ("completed", "completed")],
+        required=True,
+        source="assignment.status",
+    )
+    revision_due_date = serializers.DateField(required=False, allow_null=True, source="assignment.revision_due_date")
+
+    class Meta:
+        model = TaskSubmission
+        fields = [
+            "id",
+            "instructor_feedback",
+            "reviewed_at",
+            "status",
+            "revision_due_date",
+        ]
+
+    def update(self, instance, validated_data):
+        # Pop nested assignment data (if present)
+        assignment_data = validated_data.pop("assignment", {})
+
+        # update task submission fields
+        instance.instructor_feedback = validated_data.get("instructor_feedback", instance.instructor_feedback)
+        # ensure reviewed_at is a timezone-aware datetime (DateTimeField expects datetime)
+        instance.reviewed_at = validated_data.get("reviewed_at", timezone.now())
+        instance.save()
+
+        # now update assignment if assignment data provided
+        assignment = instance.assignment
+        if assignment_data:
+            new_status = assignment_data.get("status")
+            if new_status is not None:
+                assignment.status = new_status
+                if new_status == "revision_required":
+                    assignment.revision_due_date = assignment_data.get("revision_due_date", None)
+                else:
+                    assignment.revision_due_date = None
+                assignment.save()
+
+        return instance

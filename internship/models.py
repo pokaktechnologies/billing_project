@@ -1,7 +1,7 @@
 from django.db import models
-from accounts.models import Department,StaffProfile
+from accounts.models import Department, StaffProfile
 
-# Create your models here.
+
 class Course(models.Model):
     title = models.CharField(max_length=200)
     description = models.TextField()
@@ -12,8 +12,8 @@ class Course(models.Model):
 
 
 class AssignedStaffCourse(models.Model):
-    staff = models.ForeignKey(StaffProfile, on_delete=models.CASCADE)
-    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    staff = models.ForeignKey(StaffProfile, on_delete=models.CASCADE, db_index=True)
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, db_index=True)
     assigned_date = models.DateField(auto_now_add=True)
 
     class Meta:
@@ -44,9 +44,94 @@ class StudyMaterial(models.Model):
     is_public = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    # def clean(self):
-    #     if not self.file and not self.url:
-    #         raise ValidationError("Either file or url must be provided")
-
     def __str__(self):
         return f"{self.title} ({self.course.title})"
+
+
+class Task(models.Model):
+    title = models.CharField(max_length=200)
+    description = models.TextField()
+    start_date = models.DateField()
+    due_date = models.DateField()
+    course = models.ForeignKey(Course,on_delete=models.CASCADE,related_name='tasks',)
+    assigned_to = models.ManyToManyField(
+        StaffProfile,
+        through='TaskAssignment',
+        related_name='tasks'
+    )
+
+    def __str__(self):
+        return self.title
+
+
+class TaskAssignment(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('submitted', 'Submitted'),
+        ('revision_required', 'Revision Required'),
+        ('completed', 'Completed'),
+    ]
+
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, db_index=True,related_name="assignments")
+    staff = models.ForeignKey(StaffProfile, on_delete=models.CASCADE, db_index=True)
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    revision_due_date = models.DateField(null=True, blank=True)
+    assigned_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('task', 'staff')
+
+    def __str__(self):
+        return f"{self.staff} - {self.task} [{self.status}]"
+
+
+class TaskAttachment(models.Model):
+    task = models.ForeignKey(
+        Task,
+        related_name="attachments",
+        on_delete=models.CASCADE
+    )
+    file = models.FileField(upload_to="task_attachments/")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.file.name
+
+
+class TaskSubmission(models.Model):
+    assignment = models.ForeignKey(
+        TaskAssignment,
+        related_name='submissions',
+        on_delete=models.CASCADE
+    )
+
+    submitted_at = models.DateTimeField(auto_now_add=True)
+
+    link = models.URLField(null=True, blank=True)
+    response = models.TextField(null=True, blank=True)
+
+    instructor_feedback = models.TextField(null=True, blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-submitted_at']  # latest first
+
+    def __str__(self):
+        return f"Submission by {self.assignment.staff} on {self.submitted_at}"
+
+
+class TaskSubmissionAttachment(models.Model):
+    submission = models.ForeignKey(
+        TaskSubmission,
+        related_name='attachments',
+        on_delete=models.CASCADE
+    )
+    file = models.FileField(upload_to='task_submission_files/')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-uploaded_at']  # latest first
+
+    def __str__(self):
+        return self.file.name

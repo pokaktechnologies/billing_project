@@ -117,3 +117,54 @@ class CourseStudyMaterialListAPIView(generics.ListAPIView):
             "count": queryset.count(),
             "results": serializer.data
         })
+
+
+
+
+class TaskListCreateAPIView(generics.ListCreateAPIView):
+    serializer_class = TaskSerializer
+    permission_classes = [IsAuthenticated]
+    queryset = Task.objects.all().order_by('-id')
+
+    def perform_create(self, serializer):
+        return serializer.save()
+
+class TaskRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Task.objects.all()
+    serializer_class = TaskSerializer
+    permission_classes = [IsAuthenticated]
+
+class TaskDetailAPIView(generics.RetrieveAPIView):
+    queryset = Task.objects.all()
+    serializer_class = InstructorTaskDetailSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class TaskAttachmentDeleteAPIView(generics.DestroyAPIView):
+    queryset = TaskAttachment.objects.all()
+    permission_classes = [IsAuthenticated]
+
+
+# list of submissions for instructor to review
+class InstructorSubmissionListAPIView(generics.ListAPIView):
+    serializer_class = InstructorSubmissionSerializer
+    permission_classes = [IsAuthenticated]   # add your instructor permission
+
+    def get_queryset(self):
+        return TaskSubmission.objects.all()
+
+
+# detail view to review a submission
+class InstructorSubmissionDetailAPIView(generics.RetrieveAPIView):
+    serializer_class = InstructorSubmissionSerializer
+    permission_classes = [IsAuthenticated]   # add your instructor permission
+
+    def get_queryset(self):
+        return TaskSubmission.objects.all()
+
+class InstructorSubmissionReviewAPI(generics.UpdateAPIView):
+    serializer_class = InstructorSubmissionReviewSerializer
+    permission_classes = [IsAuthenticated]   # add your instructor permission
+
+    def get_queryset(self):
+        return TaskSubmission.objects.all()

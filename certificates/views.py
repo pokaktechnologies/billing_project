@@ -5,7 +5,7 @@ from django.utils import timezone
 from django.core.mail import EmailMessage
 from django.http import HttpResponse
 from .models import Certificate
-from .serializers import CertificateSerializer
+from .serializers import CertificateSerializer, ManagementStaffSignatureSerializer
 from accounts.permissions import HasModulePermission
 from accounts.models import JobDetail, StaffProfile, CustomUser  # Import here to avoid circular imports
 import base64
@@ -228,3 +228,16 @@ class EmployeeCertificateCreateView(views.APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except (CustomUser.DoesNotExist, StaffProfile.DoesNotExist, JobDetail.DoesNotExist):
             return Response({"error": "Invalid user or staff details"}, status=status.HTTP_400_BAD_REQUEST)
+        
+class ManagementSignatureListView(views.APIView):
+    permission_classes = [ HasModulePermission]
+    required_module = 'certificate'
+
+    def get(self, request):
+        staffs = JobDetail.objects.filter(
+            department__name__iexact="Management",
+            signature_image__isnull=False
+        ).select_related("staff__user")
+
+        serializer = ManagementStaffSignatureSerializer(staffs, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

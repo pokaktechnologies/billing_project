@@ -12,4 +12,8 @@ urlpatterns = [
     path('staff/', views.StaffListView.as_view(), name='staff-list'),
     path('staff/<int:id>/', views.StaffDetailView.as_view(), name='staff-detail'),
     path('employee-certificates/', views.EmployeeCertificateCreateView.as_view(), name='employee-certificate-create'),
+
+    # Management Staff Signature 
+    path("management-signatures/", views.ManagementSignatureListView.as_view()),
+
 ]

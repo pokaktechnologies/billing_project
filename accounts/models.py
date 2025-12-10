@@ -8,13 +8,14 @@ from django.utils import timezone
 
 
 class CustomUserManager(BaseUserManager):
-    def create_user(self, first_name, last_name, email, password=None):
+    def create_user(self, first_name, last_name, email, password=None, **extra_fields):
         if not email:
             raise ValueError("The Email field is required")
         user = self.model(
             first_name=first_name,
             last_name=last_name,
             email=self.normalize_email(email),
+            **extra_fields
         )
         user.set_password(password)
         user.save(using=self._db)
@@ -33,6 +34,9 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     first_name = models.CharField(max_length=30)
     last_name = models.CharField(max_length=30)
     email = models.EmailField(unique=True)
+    gender = models.CharField(max_length=10, choices=[('male', 'Male'), ('female', 'Female'), ('other', 'Other')],blank=True, null=True)
+    emergency_contact = models.CharField(max_length=15, blank=True, null=True)
+
     otp = models.CharField(max_length=6, blank=True, null=True)
     is_otp_verified = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
@@ -72,6 +76,7 @@ class Department(models.Model):
 class StaffProfile(models.Model):
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name="staff_profile")
     phone_number = models.CharField(max_length=15, blank=True, null=True)
+    qulification = models.CharField(max_length=255, blank=True, null=True)
     staff_email = models.EmailField(blank=True, null=True)
     profile_image = models.ImageField(upload_to="staff/profile_images/", blank=True, null=True)
     date_of_birth = models.DateField(blank=True, null=True)

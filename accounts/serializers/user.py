@@ -48,11 +48,17 @@ class CreateUserWithPermissionsSerializer(serializers.Serializer):
         child=serializers.ChoiceField(choices=ModulePermission.MODULE_CHOICES),
         allow_empty=False
     )
+    gender = serializers.ChoiceField(choices=[('male', 'Male'), ('female', 'Female'), ('other', 'Other')])
+    emergency_contact = serializers.CharField(max_length=15, required=False, allow_blank=True)
+    country = serializers.CharField(max_length=100, required=False, allow_blank=True)
 
     def create(self, validated_data):
         email = validated_data["email"]
         first_name = validated_data.get("first_name")
         last_name = validated_data.get("last_name")
+        gender = validated_data.get("gender")
+        emergency_contact = validated_data.get("emergency_contact")
+        country = validated_data.get("country")
         password = validated_data["password"]
         modules = validated_data["modules"]
 
@@ -61,7 +67,10 @@ class CreateUserWithPermissionsSerializer(serializers.Serializer):
             email=email,
             password=password,
             first_name=first_name,
-            last_name=last_name
+            last_name=last_name,
+            gender=gender,
+            emergency_contact=emergency_contact,
+            country=country
         )
         user.is_staff = True  # Mark as staff if needed
         user.save()
@@ -104,15 +113,16 @@ class StaffProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = StaffProfile
-        fields = ['id','phone_number', 'staff_email', 'profile_image', 'date_of_birth', 'address', 'job_detail', 'documents']
+        fields = ['id','phone_number', 'qulification', 'staff_email', 'profile_image', 'date_of_birth', 'address', 'job_detail', 'documents']
 
 class StaffUserSerializer(serializers.ModelSerializer):
     profile = StaffProfileSerializer(source='staff_profile', read_only=True)
     modules = serializers.SerializerMethodField()
+    country = serializers.CharField(source='country.name', read_only=True)
 
     class Meta:
         model = CustomUser
-        fields = ['id', 'email', 'first_name', 'last_name', 'modules', 'profile']
+        fields = ['id', 'email', 'first_name', 'last_name', 'gender', 'emergency_contact', 'country', 'modules', 'profile']
 
     def get_modules(self, obj):
         return list(obj.module_permissions.values_list('module_name', flat=True))

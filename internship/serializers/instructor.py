@@ -177,6 +177,7 @@ class TaskSerializer(serializers.ModelSerializer):
         child=serializers.IntegerField(),
         write_only=True
     )
+    assigned_to_ids = serializers.SerializerMethodField()
 
     total_staff_count = serializers.SerializerMethodField()
     attachments = TaskAttachmentSerializer(many=True, read_only=True)
@@ -187,12 +188,14 @@ class TaskSerializer(serializers.ModelSerializer):
             'id', 'title', 'description',
             'start_date', 'due_date', 'course',
             'assigned_to', 'attachments',
-            'total_staff_count'
+            'total_staff_count', 'assigned_to_ids'
         ]
 
     def get_total_staff_count(self, obj):
         return obj.assigned_to.count()
-
+    
+    def get_assigned_to_ids(self, obj):
+        return list(obj.assigned_to.values_list('id', flat=True))
 
     # ===== CREATE =====
     def create(self, validated_data):

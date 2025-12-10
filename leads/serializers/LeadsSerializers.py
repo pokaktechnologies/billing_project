@@ -168,6 +168,7 @@ class RemindersSerializer(serializers.ModelSerializer):
     
 class RemindersGetSerializer(serializers.ModelSerializer):
     lead = serializers.StringRelatedField()
+    lead_id = serializers.IntegerField(source='lead.id', read_only=True)
     salesperson_name = serializers.CharField(source='lead.name', read_only=True, default=None)
     salesperson_phone = serializers.CharField(source='lead.phone', read_only=True, default=None)
     salesperson_email = serializers.CharField(source='lead.email', read_only=True, default=None)
@@ -177,6 +178,6 @@ class RemindersGetSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Reminders
-        fields = ['id', 'lead', 'title', 'type', 'date', 'time', 'description', 'status', 'salesperson_name', 'salesperson_phone',
+        fields = ['id', 'lead', 'lead_id', 'title', 'type', 'date', 'time', 'description', 'status', 'salesperson_name', 'salesperson_phone',
                   'salesperson_email', 'salesperson_lead_status', 'salesperson_company']
     

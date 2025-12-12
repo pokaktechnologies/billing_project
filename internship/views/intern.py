@@ -12,7 +12,13 @@ from rest_framework import viewsets
 from ..serializers.instructor import TaskSerializer, StudyMaterialSerializer, CourseSerializer
 from rest_framework.decorators import action
 from django.shortcuts import get_object_or_404
+from django.db.models import OuterRef, Subquery
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from django.utils.timezone import now
 
+# === Course Views ===
 
 class MyCourseView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
@@ -63,14 +69,28 @@ class MyCourseStudyMaterialListAPIView(generics.ListAPIView):
         if not staff_profile:
             return StudyMaterial.objects.none()
 
-        assigned_course_ids = AssignedStaffCourse.objects.filter(
-            staff=staff_profile
-        ).values_list("course_id", flat=True)
+        assigned_course_ids = (
+            AssignedStaffCourse.objects
+            .filter(staff=staff_profile)
+            .values_list("course_id", flat=True)
+        )
 
-        return StudyMaterial.objects.filter(
+        queryset = StudyMaterial.objects.filter(
             course_id__in=assigned_course_ids,
             is_public=True,
         )
+
+        # search by title
+        title = self.request.query_params.get("title")
+        if title:
+            queryset = queryset.filter(title__icontains=title)
+
+        # filter by type
+        material_type = self.request.query_params.get("type")
+        if material_type:
+            queryset = queryset.filter(material_type=material_type)
+
+        return queryset.order_by("-created_at")
 
     
 # path('study-material/<int:pk>/', intern.MyStudyMaterialDetailView.as_view(), name='intern-study-material-detail'),
@@ -82,8 +102,7 @@ class MyStudyMaterialDetailView(generics.RetrieveAPIView):
 
 
     
-
-
+# === Task Views ===
 
 class MyTaskViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
@@ -92,18 +111,90 @@ class MyTaskViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         user = self.request.user
         staff_profile = getattr(user, "staff_profile", None)
+        
         if not staff_profile:
             return Task.objects.none()
 
-        return Task.objects.filter(assignments__staff=staff_profile)
+        # Subquery → latest assignment per task
+        latest_assignment_sub = (
+            TaskAssignment.objects
+            .filter(task=OuterRef("pk"), staff=staff_profile)
+            .order_by("-assigned_at")
+        )
+
+        queryset = (
+            Task.objects
+            .filter(assignments__staff=staff_profile)
+            .distinct()
+            .annotate(
+                latest_status=Subquery(
+                    latest_assignment_sub.values("status")[:1]
+                )
+            )
+        )
+
+        # GET query params
+        title = self.request.query_params.get("title")
+        status_filter = self.request.query_params.get("status")
+
+        # Search by task title
+        if title:
+            queryset = queryset.filter(title__icontains=title)
+
+        # Filter by latest assignment status
+        if status_filter:
+            queryset = queryset.filter(latest_status=status_filter)
+
+        return queryset
 
 
 
-# views.py
-# from rest_framework import generics, permissions, status
-# from rest_framework.response import Response
-# from ..models import TaskSubmission, TaskAssignment
 
+class MyTaskStatsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        staff_profile = getattr(user, "staff_profile", None)
+
+        if not staff_profile:
+            return Response({"detail": "Staff profile not found."}, status=400)
+
+        # Subquery: get latest assignment for each task
+        latest_assignment_subquery = (
+            TaskAssignment.objects
+            .filter(staff=staff_profile, task=OuterRef("pk"))
+            .order_by("-assigned_at")
+        )
+
+        # Annotate each task with its latest status
+        tasks = (
+            Task.objects
+            .filter(assignments__staff=staff_profile)
+            .distinct()
+            .annotate(
+                latest_status=Subquery(
+                    latest_assignment_subquery.values("status")[:1]
+                )
+            )
+        )
+
+        # Database-level counts (clean, fast, correct)
+        data = {
+            "all_tasks": tasks.count(),
+            "pending": tasks.filter(latest_status="pending").count(),
+            "submitted": tasks.filter(latest_status="submitted").count(),
+            "approved": tasks.filter(latest_status="completed").count(),
+            "revision": tasks.filter(latest_status="revision_required").count(),
+        }
+
+        return Response(data)
+
+
+
+
+
+# === Task Submission Views ===
 
 class TaskSubmissionListCreateAPI(generics.ListCreateAPIView):
     serializer_class = TaskSubmissionSerializer

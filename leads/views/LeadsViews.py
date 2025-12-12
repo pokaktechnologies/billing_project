@@ -49,7 +49,15 @@ class StaffLeadView(APIView):
         lead_type = request.query_params.get('lead_type')  # my_lead / assigned_lead
         start_date = request.query_params.get('start_date')  # yyyy-mm-dd
         end_date = request.query_params.get('end_date')      # yyyy-mm-dd
+        name = request.query_params.get('name')
+        lead_status = request.query_params.get('lead_status')
 
+        if name:
+            leads = leads.filter(name__icontains=name)
+
+        if lead_status:
+            leads = leads.filter(lead_status=lead_status)
+            
         if lead_source:
             leads = leads.filter(lead_source=lead_source)
 

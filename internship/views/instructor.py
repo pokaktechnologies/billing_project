@@ -379,3 +379,29 @@ class InstructorSubmissionReviewAPI(generics.UpdateAPIView):
 
     def get_queryset(self):
         return TaskSubmission.objects.all()
+
+
+class SubmissionStatsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, format=None):
+        # Get all task assignments (each assignment represents one staff-task pair)
+        assignments = TaskAssignment.objects.all()
+
+        stats = {
+            "total_assignments": assignments.count(),
+            "pending": 0,
+            "submitted": 0,
+            "revision_required": 0,
+            "completed": 0,
+        }
+
+        for assignment in assignments:
+            # Use assignment.status, because the status lives here — not in submissions
+            status = assignment.status
+
+            # Validate status exists in stats (just safety)
+            if status in stats:
+                stats[status] += 1
+
+        return Response(stats)

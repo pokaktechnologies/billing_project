@@ -30,6 +30,7 @@ instructor_patterns = [
     path('submissions/', instructor.InstructorSubmissionListAPIView.as_view()),
     path('submissions/<int:pk>/', instructor.InstructorSubmissionDetailAPIView.as_view()),
     path('submissions/<int:pk>/review/', instructor.InstructorSubmissionReviewAPI.as_view()),
+    path('submissions/stats/', instructor.SubmissionStatsAPIView.as_view()),
 ]
 
 
@@ -41,6 +42,7 @@ intern_patterns = [
 
     path("tasks/", intern.MyTaskViewSet.as_view({'get': 'list'})),
     path("tasks/<int:pk>/", intern.MyTaskViewSet.as_view({'get': 'retrieve'})),
+    path('tasks/stats/', intern.MyTaskStatsAPIView.as_view()),
 
     path('submissions/', intern.TaskSubmissionListCreateAPI.as_view()),
     path('submissions/<int:pk>/', intern.TaskSubmissionDetailAPI.as_view()),

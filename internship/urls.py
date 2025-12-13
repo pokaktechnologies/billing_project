@@ -31,6 +31,10 @@ instructor_patterns = [
     path('submissions/<int:pk>/', instructor.InstructorSubmissionDetailAPIView.as_view()),
     path('submissions/<int:pk>/review/', instructor.InstructorSubmissionReviewAPI.as_view()),
     path('submissions/stats/', instructor.SubmissionStatsAPIView.as_view()),
+
+    path("payments/", instructor.CoursePaymentListCreateAPIView.as_view()),
+    path("payments/<int:pk>/", instructor.CoursePaymentRetrieveAPIView.as_view()),
+    path("payments/<int:pk>/delete/", instructor.CoursePaymentDestroyAPIView.as_view()),
 ]
 
 

@@ -4,11 +4,93 @@ from accounts.models import Department, StaffProfile
 
 class Course(models.Model):
     title = models.CharField(max_length=200)
-    description = models.TextField()
-    department = models.ForeignKey(Department, on_delete=models.CASCADE)
+    description = models.TextField(blank=True)
+    department = models.ForeignKey(
+        Department,
+        on_delete=models.CASCADE,
+        related_name="courses"
+    )
+    total_fee = models.DecimalField(max_digits=10, decimal_places=2)
+    number_of_installments = models.PositiveIntegerField(default=1)
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        null=True,
+        blank=True   
+    )
 
     def __str__(self):
         return self.title
+
+
+
+class CourseInstallment(models.Model):
+    course = models.ForeignKey(
+        Course,
+        on_delete=models.CASCADE,
+        related_name="installments"
+    )
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    due_days_after_enrollment = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True,null=True,blank=True)
+
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"{self.course.title} - Installment {self.id}"
+
+
+class CoursePayment(models.Model):
+    PAYMENT_METHODS = [
+        ('card', 'Card'),
+        ('bank_transfer', 'Bank Transfer'),
+        ('cash', 'Cash'),
+        ('upi', 'UPI'),
+    ]
+
+    staff = models.ForeignKey(
+        StaffProfile,
+        on_delete=models.CASCADE,
+        related_name="course_payments"
+    )
+
+    installment = models.ForeignKey(
+        CourseInstallment,
+        on_delete=models.CASCADE,
+        related_name="payments"
+    )
+
+    amount_paid = models.DecimalField(
+        max_digits=10,
+        decimal_places=2
+    )
+
+    payment_method = models.CharField(
+        max_length=20,
+        choices=PAYMENT_METHODS
+    )
+
+    transaction_id = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True
+    )
+
+    payment_date = models.DateField(
+        auto_now_add=True
+    )
+
+    class Meta:
+        ordering = ["-payment_date"]
+
+    def __str__(self):
+        return (
+            f"{self.staff.user.email} | "
+            f"{self.installment.course.title} | "
+            f"{self.amount_paid}"
+        )
 
 
 class AssignedStaffCourse(models.Model):

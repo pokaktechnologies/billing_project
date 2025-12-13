@@ -15,12 +15,180 @@ class SimpleStaffProfileSerializer(serializers.ModelSerializer):
     def get_full_name(self, obj):
         return f"{obj.user.first_name} {obj.user.last_name}"
 
+
+class CourseInstallmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CourseInstallment
+        fields = [
+            "id",
+            "amount",
+            "due_days_after_enrollment",
+        ]
+
+
 class CourseSerializer(serializers.ModelSerializer):
-    department_name = serializers.CharField(source="department.name", read_only=True)
+    department_name = serializers.CharField(
+        source="department.name",
+        read_only=True
+    )
+    installments = CourseInstallmentSerializer(
+        many=True,
+        required=False
+    )
 
     class Meta:
         model = Course
-        fields = ["id", "title", "description", "department", "department_name"]
+        fields = [
+            "id",
+            "title",
+            "description",
+            "department",
+            "department_name",
+            "total_fee",
+            "number_of_installments",
+            "installments",
+            "created_at",
+        ]
+        read_only_fields = ["created_at"]
+
+    def validate(self, data):
+        installments = data.get("installments", [])
+        total_fee = data.get("total_fee", getattr(self.instance, "total_fee", None))
+
+        if installments:
+            total = sum(i["amount"] for i in installments)
+
+            if total != total_fee:
+                raise serializers.ValidationError(
+                    "Sum of installment amounts must equal total_fee."
+                )
+
+            if self.instance is None:
+                expected_count = data.get("number_of_installments")
+            else:
+                expected_count = data.get(
+                    "number_of_installments",
+                    self.instance.number_of_installments
+                )
+
+            if len(installments) != expected_count:
+                raise serializers.ValidationError(
+                    "Installment count must match number_of_installments."
+                )
+
+        return data
+
+    def create(self, validated_data):
+        installments_data = validated_data.pop("installments", [])
+        course = Course.objects.create(**validated_data)
+
+        for inst in installments_data:
+            CourseInstallment.objects.create(
+                course=course,
+                **inst
+            )
+
+        return course
+
+    def update(self, instance, validated_data):
+        installments_data = validated_data.pop("installments", None)
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        if installments_data is not None:
+            # Hard reset installments (simple & predictable)
+            instance.installments.all().delete()
+
+            for inst in installments_data:
+                CourseInstallment.objects.create(
+                    course=instance,
+                    **inst
+                )
+
+        return instance
+
+class CoursePaymentSerializer(serializers.ModelSerializer):
+    course_title = serializers.CharField(
+        source="installment.course.title",
+        read_only=True
+    )
+
+    installment_amount = serializers.DecimalField(
+        source="installment.amount",
+        max_digits=10,
+        decimal_places=2,
+        read_only=True
+    )
+
+    class Meta:
+        model = CoursePayment
+        fields = [
+            "id",
+            "staff",
+            "installment",
+            "course_title",
+            "installment_amount",
+            "amount_paid",
+            "payment_method",
+            "transaction_id",
+            "payment_date",
+        ]
+        read_only_fields = ["payment_date"]
+
+    def validate(self, data):
+        staff = data["staff"]
+        installment = data["installment"]
+        amount_paid = data["amount_paid"]
+        payment_method = data["payment_method"]
+        transaction_id = data.get("transaction_id")
+
+        course = installment.course
+
+        # --------------------------------------------------
+        # Rule 1: Staff must be assigned to this course
+        # --------------------------------------------------
+        if not AssignedStaffCourse.objects.filter(
+            staff=staff,
+            course=course
+        ).exists():
+            raise serializers.ValidationError(
+                "Staff is not assigned to this course."
+            )
+
+        # --------------------------------------------------
+        # Rule 2: Transaction ID required for non-cash
+        # --------------------------------------------------
+        if payment_method != "cash" and not transaction_id:
+            raise serializers.ValidationError(
+                "Transaction ID is required for non-cash payments."
+            )
+
+        # --------------------------------------------------
+        # Rule 3: Installment must be paid in FULL (no partials)
+        # --------------------------------------------------
+        if amount_paid != installment.amount:
+            raise serializers.ValidationError(
+                "Installment must be paid in full."
+            )
+
+        # --------------------------------------------------
+        # Rule 4: Prevent duplicate payment of same installment
+        # --------------------------------------------------
+        if installment.payments.exists():
+            raise serializers.ValidationError(
+                "This installment has already been paid."
+            )
+
+        return data
+
+    def update(self, instance, validated_data):
+        # Immutable financial records
+        raise serializers.ValidationError(
+            "Payments cannot be updated once created."
+        )
+
 
 
 class AssignedStaffCourseSerializer(serializers.ModelSerializer):

@@ -12,16 +12,49 @@ from attendance.models import DailyAttendance
 
 # ===== Course Views ======
 class InstructorCourseListCreateAPIView(generics.ListCreateAPIView):
-    queryset = Course.objects.all()
+    queryset = Course.objects.prefetch_related("installments", "department").order_by('-created_at')
     serializer_class = CourseSerializer
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = "instructor"
 
-class InstructorCourseRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Course.objects.all()
+
+class InstructorCourseRetrieveUpdateDestroyAPIView(
+    generics.RetrieveUpdateDestroyAPIView
+):
+    queryset = Course.objects.prefetch_related("installments", "department")
     serializer_class = CourseSerializer
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = "instructor"
+
+
+class CoursePaymentListCreateAPIView(generics.ListCreateAPIView):
+    queryset = CoursePayment.objects.select_related(
+        "staff",
+        "installment",
+        "installment__course"
+    )
+    serializer_class = CoursePaymentSerializer
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = "instructor"
+
+
+class CoursePaymentRetrieveAPIView(generics.RetrieveAPIView):
+    queryset = CoursePayment.objects.select_related(
+        "staff",
+        "installment",
+        "installment__course"
+    )
+    serializer_class = CoursePaymentSerializer
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = "instructor"
+
+
+class CoursePaymentDestroyAPIView(generics.DestroyAPIView):
+    queryset = CoursePayment.objects.all()
+    serializer_class = CoursePaymentSerializer
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = "instructor"
+
 
 
 class InstructorAssignedStaffCourseListCreateAPIView(generics.ListCreateAPIView):

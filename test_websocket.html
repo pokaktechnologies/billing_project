@@ -11,9 +11,9 @@
     <button id="send-button">Send</button>
     <script>
         // Configuration
-        const roomId = 2; // Replace with a valid ChatRoom ID from your database
-        const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzYzOTU5OTIxLCJpYXQiOjE3NjE2MjcxMjEsImp0aSI6IjkxZjkzYjNlNThhYTQxNjZiODFmY2Y0NzIxMDFkZTIwIiwidXNlcl9pZCI6NX0.FwQT0lzaEMRufAOM76756K_scOWJSugfIeS6sWrQSg0'; // Replace with a valid JWT token from your authentication
-        const chatSocket = new WebSocket(`ws://127.0.0.1:9000/ws/chat/2/?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzYzOTU5OTIxLCJpYXQiOjE3NjE2MjcxMjEsImp0aSI6IjkxZjkzYjNlNThhYTQxNjZiODFmY2Y0NzIxMDFkZTIwIiwidXNlcl9pZCI6NX0.FwQT0lzaEMRufAOM76756K_scOWJSugfIeS6sWrQSg0`);
+        const roomId = 1; // Replace with a valid ChatRoom ID from your database
+        const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzY0MzIyMzUyLCJpYXQiOjE3NjE5ODk1NTIsImp0aSI6IjBlNjMxMmFhNTNiODRkOTI5ZmM5OTczNjYxMDJlYTU5IiwidXNlcl9pZCI6MTQ1fQ.ghDGwfNGxkuWezJlK1pSKw9C4VZ-k8JAJ4DRU_4iKmg'; // Replace with a valid JWT token from your authentication
+        const chatSocket = new WebSocket(`wss://billingbackend.bricksnmix.com/ws/chat/1/?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzY0MzIyMzUyLCJpYXQiOjE3NjE5ODk1NTIsImp0aSI6IjBlNjMxMmFhNTNiODRkOTI5ZmM5OTczNjYxMDJlYTU5IiwidXNlcl9pZCI6MTQ1fQ.ghDGwfNGxkuWezJlK1pSKw9C4VZ-k8JAJ4DRU_4iKmg`);
 
         // Event Handlers
         chatSocket.onopen = function(e) {

@@ -23,7 +23,7 @@ class ChatRoom(models.Model):
 
     def get_unread_count(self, user):
         """Count unread messages for a specific user in this room."""
-        return self.messages.filter(is_read=False, sender_id=user.id).count()
+        return self.messages.filter(is_read=False).exclude(sender=user).count()
 
     def get_last_message(self):
         """Get the most recent message."""

@@ -93,5 +93,12 @@ class MessageViewSet(viewsets.ViewSet):
 
     def list(self, request, room_id=None):
         queryset = self.get_queryset()
+    
+    # Auto mark as read when user views the chat
+        Message.objects.filter(
+        room__id=room_id,
+        is_read=False
+        ).exclude(sender=request.user).update(is_read=True)
+
         serializer = self.serializer_class(queryset, many=True)
         return Response(serializer.data)

@@ -16,7 +16,8 @@ from rest_framework.exceptions import ValidationError
 from django.utils import timezone
 from datetime import datetime
 from django.db.models import Avg
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Sum
+
 
 class DailyAttendanceListView(generics.ListAPIView):
     queryset = DailyAttendance.objects.all()
@@ -89,25 +90,34 @@ class DailyAttendanceSessionView(generics.ListAPIView):
     def get(self, request, id):
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date')
-        
-        # validation check start_date <= end_date
+
+        queryset = DailyAttendance.objects.filter(staff__id=id)
+
         if start_date and end_date:
             start = parse_date(start_date)
-            end = parse_date(end_date)  
+            end = parse_date(end_date)
             if start > end:
                 raise ValidationError("Start date cannot be after end date.")
-
-        queryset = DailyAttendance.objects.filter(staff__id=id).order_by('-date')
 
         if start_date:
             queryset = queryset.filter(date__gte=start)
         if end_date:
             queryset = queryset.filter(date__lte=end)
 
+        # ✅ total hours with date filter
+        hurs = queryset.aggregate(
+            total_hours=Sum('total_working_hours')
+        )['total_hours'] or 0
 
+        print(hurs)
+
+        queryset = queryset.order_by('-date')
         serializer = DailyAttendanceSessionDetailSerializer(queryset, many=True)
-        return Response(serializer.data, status=200)
 
+        return Response({
+            "total_working_hours": hurs,
+            "data": serializer.data
+        }, status=200)
 
 class StaffAttendanceTodayView(APIView):
     permission_classes = [IsAuthenticated]

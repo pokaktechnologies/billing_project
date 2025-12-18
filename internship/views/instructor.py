@@ -1,4 +1,4 @@
-from rest_framework import generics
+from rest_framework import generics,filters
 from rest_framework.response import Response
 from internship.models import Course
 from internship.serializers.instructor import CourseSerializer
@@ -9,6 +9,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from django.db.models import Q
 from attendance.models import DailyAttendance
+from django_filters.rest_framework import DjangoFilterBackend
+
 
 # ===== Course Views ======
 class InstructorCourseListCreateAPIView(generics.ListCreateAPIView):
@@ -47,6 +49,22 @@ class CoursePaymentRetrieveAPIView(generics.RetrieveAPIView):
     serializer_class = CoursePaymentSerializer
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = "instructor"
+
+class CoursePaymentListAPIView(generics.ListAPIView):
+    queryset = CoursePayment.objects.select_related(
+        "staff",
+        "installment",
+        "installment__course"
+    )
+    serializer_class = CoursePaymentListSerializer
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = "instructor"
+
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = {
+        'installment__course__title': ['icontains']
+    }
+    search_fields = ['staff__user__first_name', 'staff__user__last_name']
 
 
 class CoursePaymentDestroyAPIView(generics.DestroyAPIView):

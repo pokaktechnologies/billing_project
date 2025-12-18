@@ -191,6 +191,7 @@ class CoursePaymentSerializer(serializers.ModelSerializer):
 
 class CoursePaymentListSerializer(serializers.ModelSerializer):
     staff_full_name = serializers.SerializerMethodField()
+    employee_id = serializers.CharField(source="staff.job_detail.employee_id", read_only=True)
     course_title = serializers.CharField(source="installment.course.title", read_only=True)
     course_total_fee = serializers.CharField(source="installment.course.total_fee", read_only=True)
     installment_amount = serializers.DecimalField(source="installment.amount",max_digits=10,decimal_places=2,read_only=True)
@@ -203,6 +204,7 @@ class CoursePaymentListSerializer(serializers.ModelSerializer):
             "id",
             "staff",
             "staff_full_name",
+            "employee_id",
             "course_title",
             "course_total_fee",
             "installment",

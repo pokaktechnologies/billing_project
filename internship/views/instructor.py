@@ -29,6 +29,15 @@ class InstructorCourseRetrieveUpdateDestroyAPIView(
     required_module = "instructor"
 
 
+class InstallmentListAPIView(generics.ListAPIView):
+    serializer_class = CourseInstallmentSerializer
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = "instructor"
+
+    def get_queryset(self):
+        course_id = self.kwargs.get("course_id")
+        return CourseInstallment.objects.filter(course_id=course_id).order_by("due_days_after_enrollment")
+
 class CoursePaymentListCreateAPIView(generics.ListCreateAPIView):
     queryset = CoursePayment.objects.select_related(
         "staff",
@@ -65,6 +74,16 @@ class CoursePaymentListAPIView(generics.ListAPIView):
         'installment__course__title': ['icontains']
     }
     search_fields = ['staff__user__first_name', 'staff__user__last_name']
+
+class CoursePaymentDetailAPIView(generics.RetrieveAPIView):
+    queryset = CoursePayment.objects.select_related(
+        "staff",
+        "installment",
+        "installment__course"
+    )
+    serializer_class = CoursePaymentDetailSerializer
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = "instructor"
 
 
 class CoursePaymentDestroyAPIView(generics.DestroyAPIView):

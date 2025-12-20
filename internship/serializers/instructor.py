@@ -176,7 +176,7 @@ class CoursePaymentSerializer(serializers.ModelSerializer):
         # --------------------------------------------------
         # Rule 4: Prevent duplicate payment of same installment
         # --------------------------------------------------
-        if installment.payments.exists():
+        if installment.payments.filter(staff=staff).exists():
             raise serializers.ValidationError(
                 "This installment has already been paid."
             )

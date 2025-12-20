@@ -246,7 +246,73 @@ class CoursePaymentListSerializer(serializers.ModelSerializer):
                 due_date = enrollment_date + timezone.timedelta(days=next_installment.due_days_after_enrollment)
                 return due_date
         return None
-    
+
+class CourceInstallmentListSerializer(serializers.ModelSerializer):
+    # installment_no = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+    due_date = serializers.SerializerMethodField()
+    paid_date = serializers.SerializerMethodField()
+    payment_method = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CourseInstallment
+        fields = [
+            "id",
+            # "installment_no",
+            "amount",
+            "status",
+            "due_date",
+            "paid_date",
+            "payment_method",
+        ]
+
+    #  Get payment ONLY for this staff
+    def get_payment(self, obj):
+        staff = self.context.get("staff")
+        if not staff:
+            return None
+        return obj.payments.filter(staff=staff).order_by("-payment_date").first()
+
+    # #  Installment number (1,2,3…)
+    # def get_installment_no(self, obj):
+    #     ids = list(
+    #         obj.course.installments
+    #         .order_by("due_days_after_enrollment")
+    #         .values_list("id", flat=True)
+    #     )
+    #     return f"#{ids.index(obj.id) + 1}"
+
+    #  Paid / Pending (staff-specific)
+    def get_status(self, obj):
+        return "Paid" if self.get_payment(obj) else "Pending"
+
+    #  Paid date
+    def get_paid_date(self, obj):
+        payment = self.get_payment(obj)
+        return payment.payment_date if payment else None
+
+    #  Payment method
+    def get_payment_method(self, obj):
+        payment = self.get_payment(obj)
+        return payment.payment_method if payment else "-"
+
+    #  Due date (based on staff enrollment)
+    def get_due_date(self, obj):
+        staff = self.context.get("staff")
+        enrollment = AssignedStaffCourse.objects.filter(
+            course=obj.course,
+            staff=staff
+        ).first()
+
+        if enrollment:
+            return enrollment.assigned_date + timezone.timedelta(
+                days=obj.due_days_after_enrollment
+            )
+        return None
+
+
+
+
 class CoursePaymentDetailSerializer(serializers.ModelSerializer):
     staff_full_name = serializers.SerializerMethodField()
     employee_id = serializers.CharField(source="staff.job_detail.employee_id", read_only=True)
@@ -259,7 +325,7 @@ class CoursePaymentDetailSerializer(serializers.ModelSerializer):
     pending_fee = serializers.SerializerMethodField()
     next_due_date = serializers.SerializerMethodField()
 
-    # payment_list = serializers.SerializerMethodField()
+    installment_list = CourceInstallmentListSerializer(many=True, source="installment.course.installments", read_only=True)
 
 
 
@@ -281,7 +347,7 @@ class CoursePaymentDetailSerializer(serializers.ModelSerializer):
             "pending_fee",
             "next_due_date",
 
-            # "payment_list",
+            "installment_list",
         ]
 
     def get_staff_full_name(self, obj):
@@ -319,14 +385,11 @@ class CoursePaymentDetailSerializer(serializers.ModelSerializer):
                 return due_date
         return None
     
-    # def get_payment_list(self, obj):
-    #     payments = CoursePayment.objects.filter(
-    #         staff=obj.staff,
-    #         installment__course=obj.installment.course
-    #     ).order_by("payment_date")
-
-    #     return CoursePaymentListSerializer(payments, many=True).data
-
+    def to_representation(self, instance):
+        self.fields["installment_list"].context.update({
+            "staff": instance.staff
+        })
+        return super().to_representation(instance)
 
 
 class AssignedStaffCourseSerializer(serializers.ModelSerializer):

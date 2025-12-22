@@ -10,6 +10,8 @@ from rest_framework.views import APIView
 from django.db.models import Q
 from attendance.models import DailyAttendance
 from django_filters.rest_framework import DjangoFilterBackend
+from decimal import Decimal
+from datetime import timedelta
 
 
 # ===== Course Views ======
@@ -59,21 +61,98 @@ class CoursePaymentRetrieveAPIView(generics.RetrieveAPIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = "instructor"
 
-class CoursePaymentListAPIView(generics.ListAPIView):
-    queryset = CoursePayment.objects.select_related(
-        "staff",
-        "installment",
-        "installment__course"
-    )
-    serializer_class = CoursePaymentListSerializer
+# class CoursePaymentListAPIView(generics.ListAPIView):
+#     queryset = CoursePayment.objects.select_related(
+#         "staff",
+#         "installment",
+#         "installment__course"
+#     )
+#     serializer_class = CoursePaymentListSerializer
+#     permission_classes = [IsAuthenticated, HasModulePermission]
+#     required_module = "instructor"
+
+#     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+#     filterset_fields = {
+#         'installment__course__title': ['icontains']
+#     }
+#     search_fields = ['staff__user__first_name', 'staff__user__last_name']
+
+
+class CoursePaymentListAPIView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = "instructor"
 
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
-    filterset_fields = {
-        'installment__course__title': ['icontains']
-    }
-    search_fields = ['staff__user__first_name', 'staff__user__last_name']
+    def get(self, request):
+
+        queryset = (
+            StaffProfile.objects
+            .filter(job_detail__job_type="internship")
+            .select_related("job_detail", "user")
+            .prefetch_related(
+                "course_payments__installment__course"
+            )
+        )
+
+        data = []
+
+        for staff in queryset:
+            payments = list(staff.course_payments.all())
+            if not payments:
+                continue
+
+            #  Single course (internship assumption)
+            course = payments[0].installment.course
+
+            #  Total fee
+            total_fee = course.total_fee
+
+            #  Paid amount
+            paid_amount = sum(
+                (p.amount_paid for p in payments),
+                Decimal("0.00")
+            )
+
+            #  Pending amount
+            pending_amount = total_fee - paid_amount
+
+            #  Next due date (CORRECT logic)
+            next_due_date = None
+
+            enrollment = AssignedStaffCourse.objects.filter(
+                course=course,
+                staff=staff
+            ).first()
+
+            if enrollment:
+                next_installment = (
+                    CourseInstallment.objects
+                    .filter(course=course)
+                    .exclude(payments__staff=staff)
+                    .order_by("due_days_after_enrollment")
+                    .first()
+                )
+
+                if next_installment:
+                    next_due_date = (
+                        enrollment.assigned_date +
+                        timezone.timedelta(
+                            days=next_installment.due_days_after_enrollment
+                        )
+                    )
+
+            data.append({
+                "id": staff.id,
+                "staff_name": f"{staff.user.first_name} {staff.user.last_name}",
+                "employee_id": staff.job_detail.employee_id,
+                "course_title": course.title,
+                "total_fee": total_fee,
+                "paid_amount": paid_amount,
+                "pending_amount": pending_amount,
+                "next_due_date": next_due_date,
+            })
+
+        return Response(data, status=200)
+
 
 class CoursePaymentDetailAPIView(generics.RetrieveAPIView):
     queryset = CoursePayment.objects.select_related(

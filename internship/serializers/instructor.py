@@ -189,63 +189,65 @@ class CoursePaymentSerializer(serializers.ModelSerializer):
             "Payments cannot be updated once created."
         )
 
-class CoursePaymentListSerializer(serializers.ModelSerializer):
-    staff_full_name = serializers.SerializerMethodField()
-    employee_id = serializers.CharField(source="staff.job_detail.employee_id", read_only=True)
-    course_title = serializers.CharField(source="installment.course.title", read_only=True)
-    course_total_fee = serializers.CharField(source="installment.course.total_fee", read_only=True)
-    installment_amount = serializers.DecimalField(source="installment.amount",max_digits=10,decimal_places=2,read_only=True)
-    pending_fee = serializers.SerializerMethodField()
-    next_due_date = serializers.SerializerMethodField()
+# class CoursePaymentListSerializer(serializers.ModelSerializer):
+#     staff_full_name = serializers.SerializerMethodField()
+#     employee_id = serializers.CharField(source="staff.job_detail.employee_id", read_only=True)
+#     course_title = serializers.CharField(source="installment.course.title", read_only=True)
+#     course_total_fee = serializers.CharField(source="installment.course.total_fee", read_only=True)
+#     installment_amount = serializers.DecimalField(source="installment.amount",max_digits=10,decimal_places=2,read_only=True)
+#     pending_fee = serializers.SerializerMethodField()
+#     next_due_date = serializers.SerializerMethodField()
 
-    class Meta:
-        model = CoursePayment
-        fields = [
-            "id",
-            "staff",
-            "staff_full_name",
-            "employee_id",
-            "course_title",
-            "course_total_fee",
-            "installment",
-            "installment_amount",
-            "amount_paid",
-            "pending_fee",
-            "next_due_date",
-            "payment_method",
-            "transaction_id",
-            "payment_date"
-        ]
+#     class Meta:
+#         model = CoursePayment
+#         fields = [
+#             "id",
+#             "staff",
+#             "staff_full_name",
+#             "employee_id",
+#             "course_title",
+#             "course_total_fee",
+#             "installment",
+#             "installment_amount",
+#             "amount_paid",
+#             "pending_fee",
+#             "next_due_date",
+#             "payment_method",
+#             "transaction_id",
+#             "payment_date"
+#         ]
 
-    def get_staff_full_name(self, obj):
-        return f"{obj.staff.user.first_name} {obj.staff.user.last_name}"
+#     def get_staff_full_name(self, obj):
+#         return f"{obj.staff.user.first_name} {obj.staff.user.last_name}"
     
-    def get_pending_fee(self, obj):
-        course = obj.installment.course
-        total_paid = CoursePayment.objects.filter(
-            staff=obj.staff,
-            installment__course=course
-        ).aggregate(total=models.Sum('amount_paid'))['total'] or 0
-        pending = course.total_fee - total_paid
-        return pending
+#     def get_pending_fee(self, obj):
+#         course = obj.installment.course
+#         total_paid = CoursePayment.objects.filter(
+#             staff=obj.staff,
+#             installment__course=course
+#         ).aggregate(total=models.Sum('amount_paid'))['total'] or 0
+#         pending = course.total_fee - total_paid
+#         return pending
     
-    def get_next_due_date(self, obj):
-        course = obj.installment.course
-        staff = obj.staff
-        next_installment = CourseInstallment.objects.filter(
-            course=course,
-            payments__staff=staff
-        ).order_by('due_days_after_enrollment').last()
-        if next_installment:
-            enrollment = AssignedStaffCourse.objects.filter(
-                course=course,
-                staff=staff
-            ).first()
-            if enrollment:
-                enrollment_date = enrollment.assigned_date
-                due_date = enrollment_date + timezone.timedelta(days=next_installment.due_days_after_enrollment)
-                return due_date
-        return None
+#     def get_next_due_date(self, obj):
+#         course = obj.installment.course
+#         staff = obj.staff
+#         next_installment = CourseInstallment.objects.filter(
+#             course=course,
+#             payments__staff=staff
+#         ).order_by('due_days_after_enrollment').last()
+#         if next_installment:
+#             enrollment = AssignedStaffCourse.objects.filter(
+#                 course=course,
+#                 staff=staff
+#             ).first()
+#             if enrollment:
+#                 enrollment_date = enrollment.assigned_date
+#                 due_date = enrollment_date + timezone.timedelta(days=next_installment.due_days_after_enrollment)
+#                 return due_date
+#         return None
+
+
 
 class CourceInstallmentListSerializer(serializers.ModelSerializer):
     # installment_no = serializers.SerializerMethodField()

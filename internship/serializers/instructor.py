@@ -321,6 +321,7 @@ class CoursePaymentDetailSerializer(serializers.ModelSerializer):
     phone_number = serializers.CharField(source="staff.phone_number", read_only=True)
     email = serializers.CharField(source="staff.user.email", read_only=True)
     course_title = serializers.CharField(source="installment.course.title", read_only=True)
+    course_id = serializers.CharField(source="installment.course.id", read_only=True)
 
     course_total_fee = serializers.CharField(source="installment.course.total_fee", read_only=True)
     total_paid = serializers.SerializerMethodField()
@@ -342,6 +343,7 @@ class CoursePaymentDetailSerializer(serializers.ModelSerializer):
             "phone_number",
             "email",
             "course_title",
+            "course_id",
             # "installment",
 
             "course_total_fee",

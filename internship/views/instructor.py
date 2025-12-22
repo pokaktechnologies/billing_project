@@ -1,3 +1,4 @@
+from django.shortcuts import get_object_or_404
 from rest_framework import generics,filters
 from rest_framework.response import Response
 from internship.models import Course
@@ -154,15 +155,37 @@ class CoursePaymentListAPIView(APIView):
         return Response(data, status=200)
 
 
-class CoursePaymentDetailAPIView(generics.RetrieveAPIView):
-    queryset = CoursePayment.objects.select_related(
-        "staff",
-        "installment",
-        "installment__course"
-    )
-    serializer_class = CoursePaymentDetailSerializer
+class CoursePaymentDetailAPIView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = "instructor"
+
+    def get(self, request, pk):
+
+        # Get staff
+        staff = get_object_or_404(StaffProfile, id=pk)
+
+        # Get latest payment (to identify course)
+        payment = (
+            CoursePayment.objects
+            .filter(staff=staff)
+            .select_related(
+                "staff",
+                "installment",
+                "installment__course"
+            )
+            .order_by("-payment_date")
+            .first()
+        )
+
+        if not payment:
+            return Response(
+                {"detail": "No payments found for this staff"},
+                status=404
+            )
+
+        serializer = CoursePaymentDetailSerializer(payment)
+        return Response(serializer.data, status=200)
+
 
 
 class CoursePaymentDestroyAPIView(generics.DestroyAPIView):

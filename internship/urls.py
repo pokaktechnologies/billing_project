@@ -56,6 +56,8 @@ intern_patterns = [
     path('submissions/', intern.TaskSubmissionListCreateAPI.as_view()),
     path('submissions/<int:pk>/', intern.TaskSubmissionDetailAPI.as_view()),
     path('submission-attachments/<int:pk>/', intern.DeleteTaskSubmissionAttachmentAPI.as_view()),
+
+    path('payments/', intern.MyCoursePaymentListAPIView.as_view()),
     
    
 ]

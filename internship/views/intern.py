@@ -1,8 +1,10 @@
 from rest_framework.views import APIView
 from rest_framework import generics, status, serializers
 from rest_framework.response import Response
+
+from accounts.models import StaffProfile
 from ..models import (
-    Course, AssignedStaffCourse, StudyMaterial, Task, 
+    Course, AssignedStaffCourse, CoursePayment, StudyMaterial, Task, 
     TaskSubmission, TaskAssignment, TaskSubmissionAttachment
 )
 from accounts.permissions import HasModulePermission
@@ -239,3 +241,35 @@ class DeleteTaskSubmissionAttachmentAPI(generics.DestroyAPIView):
         return TaskSubmissionAttachment.objects.filter(
             submission__assignment__staff__user=self.request.user
         )
+    
+class MyCoursePaymentListAPIView(generics.ListAPIView):
+    # serializer_class = CoursePaymentSerializer
+    permission_classes = [IsAuthenticated]
+    queryset = CoursePayment.objects.all()
+
+    def get(self, request,):
+
+        # Get staff
+        staff = get_object_or_404(StaffProfile, id=request.user.staff_profile.id)
+
+        # Get latest payment (to identify course)
+        payment = (
+            CoursePayment.objects
+            .filter(staff=staff)
+            .select_related(
+                "staff",
+                "installment",
+                "installment__course"
+            )
+            .order_by("-payment_date")
+            .first()
+        )
+
+        if not payment:
+            return Response(
+                {"detail": "No payments found for this staff"},
+                status=404
+            )
+
+        serializer = CoursePaymentDetailSerializer(payment)
+        return Response(serializer.data, status=200)

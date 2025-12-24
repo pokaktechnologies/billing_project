@@ -11,7 +11,7 @@ from accounts.permissions import HasModulePermission
 from rest_framework.permissions import IsAuthenticated
 from ..serializers.intern import *
 from rest_framework import viewsets
-from ..serializers.instructor import TaskSerializer, StudyMaterialSerializer, CourseSerializer
+from ..serializers.instructor import TaskSerializer, StudyMaterialSerializer, CourseSerializer ,CoursePaymentDetailSerializer
 from rest_framework.decorators import action
 from django.shortcuts import get_object_or_404
 from django.db.models import OuterRef, Subquery

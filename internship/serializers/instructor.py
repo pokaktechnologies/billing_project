@@ -2,6 +2,7 @@ from rest_framework import serializers
 from internship.models import *
 from accounts.models import StaffProfile
 from accounts.serializers.user import *
+from internship.serializers.intern import TaskSubmissionAttachmentSerializer
 
 
 class SimpleStaffProfileSerializer(serializers.ModelSerializer):
@@ -555,14 +556,29 @@ class TaskSerializer(serializers.ModelSerializer):
     total_staff_count = serializers.SerializerMethodField()
     attachments = TaskAttachmentSerializer(many=True, read_only=True)
 
+    status = serializers.SerializerMethodField()
     class Meta:
         model = Task
         fields = [
             'id', 'title', 'description',
-            'start_date', 'due_date', 'course',
+            'start_date', 'due_date', 'status', 'course',
             'assigned_to', 'attachments',
             'total_staff_count', 'assigned_to_ids'
         ]
+
+    def get_status(self, obj):
+        request = self.context.get("request")
+        if not request:
+            return None
+
+        intern_ids = request.query_params.get("intern")
+        if not intern_ids:
+            return None
+
+        staff_id = int(intern_ids.split(",")[0])
+
+        assignment = obj.assignments.filter(staff_id=staff_id).first()
+        return assignment.status if assignment else None
 
     def get_total_staff_count(self, obj):
         return obj.assigned_to.count()
@@ -681,9 +697,64 @@ from rest_framework import serializers
 from django.utils import timezone
 
 class InstructorSubmissionSerializer(serializers.ModelSerializer):
+    title = serializers.CharField(source='assignment.task.title', read_only=True)
+    status = serializers.CharField(source='assignment.status', read_only=True)
+    staff = serializers.SerializerMethodField()
+    due_date = serializers.DateField(source='assignment.task.due_date', read_only=True)
+
     class Meta:
         model = TaskSubmission
-        fields = "__all__"
+        fields = [
+            "id",
+            "title",
+            "staff",
+            "assignment",
+            "submitted_at",
+            "link",
+            "response", 
+            "instructor_feedback",
+            "reviewed_at",
+            "due_date",
+            "status",
+            # "revision_due_date",
+
+        ]
+    def get_staff(self, obj):
+        return f"{obj.assignment.staff.user.first_name} {obj.assignment.staff.user.last_name}"
+
+class InstructorSubmissionDetailSerializer(serializers.ModelSerializer):
+    title = serializers.CharField(source='assignment.task.title', read_only=True)
+    description = serializers.CharField(source='assignment.task.description', read_only=True)
+    status = serializers.CharField(source='assignment.status', read_only=True)
+    staff = serializers.SerializerMethodField()
+    due_date = serializers.DateField(source='assignment.task.due_date', read_only=True)
+
+    # attachments = serializers.CharField(source='assignment.task.attachments.file', read_only=True)
+    attachments = TaskSubmissionAttachmentSerializer(many=True, read_only=True)
+
+
+    class Meta:
+        model = TaskSubmission
+        fields = [
+            "id",
+            "title",
+            "description",
+            "staff",
+            "status",
+
+            "assignment",
+            "link",
+            "response", 
+            "instructor_feedback",
+
+            "attachments",
+
+            "submitted_at",
+            "reviewed_at",
+            "due_date",
+        ]
+    def get_staff(self, obj):
+        return f"{obj.assignment.staff.user.first_name} {obj.assignment.staff.user.last_name}"
 
 class InstructorSubmissionReviewSerializer(serializers.ModelSerializer):
     # Map status and revision_due_date to the related assignment fields

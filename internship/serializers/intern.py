@@ -67,6 +67,12 @@ class TaskSubmissionSerializer(serializers.ModelSerializer):
     attachments = TaskSubmissionAttachmentSerializer(many=True, read_only=True)
     task_id = serializers.IntegerField(source='assignment.task.id', read_only=True)
 
+    title = serializers.CharField(source='assignment.task.title', read_only=True)
+    description = serializers.CharField(source='assignment.task.description', read_only=True)
+    status = serializers.CharField(source='assignment.status', read_only=True)
+    staff = serializers.SerializerMethodField(read_only=True)
+    due_date = serializers.DateField(source='assignment.task.due_date', read_only=True)
+
     # accept multiple files on create
     files = serializers.ListField(
         child=serializers.FileField(),
@@ -87,8 +93,17 @@ class TaskSubmissionSerializer(serializers.ModelSerializer):
             "attachments",
             "files",
             "task_id",
+
+            "title",
+            "description",
+            "status",
+            "staff",
+            "due_date",
         ]
         read_only_fields = ["submitted_at", "instructor_feedback", "reviewed_at"]
+
+    def get_staff(self, obj):
+        return f"{obj.assignment.staff.user.first_name} {obj.assignment.staff.user.last_name}"
 
     def validate(self, data):
         assignment = data.get("assignment") or self.instance.assignment

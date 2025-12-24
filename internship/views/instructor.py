@@ -539,7 +539,7 @@ class InstructorSubmissionListAPIView(generics.ListAPIView):
 
 # detail view to review a submission
 class InstructorSubmissionDetailAPIView(generics.RetrieveAPIView):
-    serializer_class = InstructorSubmissionSerializer
+    serializer_class = InstructorSubmissionDetailSerializer
     permission_classes = [IsAuthenticated]   # add your instructor permission
 
     def get_queryset(self):

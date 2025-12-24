@@ -86,13 +86,27 @@ class EnquiryStatisticsView(APIView):
     required_module = 'hr_section'
 
     def get(self, request):
-        today = timezone.now().date()
-        total_enquiries_today = Enquiry.objects.filter(created_at__date=today).count()
-        # percntage total enquiries from yesterday
-        yesterday = today - timezone.timedelta(days=1)
-        total_enquiries_yesterday = Enquiry.objects.filter(created_at__date=yesterday).count()
+        now = timezone.now()
+
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = now
+
+        yesterday_start = today_start - timedelta(days=1)
+        yesterday_end = today_start
+
+        total_enquiries_today = Enquiry.objects.filter(
+            created_at__range=(today_start, today_end)
+        ).count()
+
+        total_enquiries_yesterday = Enquiry.objects.filter(
+            created_at__range=(yesterday_start, yesterday_end)
+        ).count()
+
         if total_enquiries_yesterday > 0:
-            percentage_change = ((total_enquiries_today - total_enquiries_yesterday) / total_enquiries_yesterday) * 100
+            percentage_change = (
+                (total_enquiries_today - total_enquiries_yesterday)
+                / total_enquiries_yesterday
+            ) * 100
         else:
             percentage_change = 0
         unread_enquiries = Enquiry.objects.filter(status='new').count()

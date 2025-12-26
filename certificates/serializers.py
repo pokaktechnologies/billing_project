@@ -32,13 +32,17 @@ class CertificateSerializer(serializers.ModelSerializer):
 
 class ManagementStaffSignatureSerializer(serializers.ModelSerializer):
     staff_name = serializers.CharField(source="staff.user.first_name", read_only=True)
-    staff_last_name = serializers.CharField(source="staff.user.last_name", read_only=True)
+    # staff_last_name = serializers.CharField(source="staff.user.last_name", read_only=True)
     signature_image = serializers.ImageField(read_only=True)
+    department = serializers.CharField(source="department.name", read_only=True)
 
     class Meta:
         model = JobDetail
         fields = [
             "staff_name",
-            "staff_last_name",
+            "department",
             "signature_image",
         ]
+
+    def get_staff_name(self, obj):
+        return f"{obj.staff.user.first_name} {obj.staff.user.last_name}"

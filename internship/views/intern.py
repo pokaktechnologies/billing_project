@@ -203,10 +203,18 @@ class TaskSubmissionListCreateAPI(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        # only my submissions
-        return TaskSubmission.objects.filter(
+        queryset = TaskSubmission.objects.filter(
             assignment__staff__user=self.request.user
         )
+
+        #filter by task_id (query param)
+        task_id = self.request.query_params.get("task_id")
+        if task_id:
+            queryset = queryset.filter(
+                assignment__task__id=task_id
+            )
+
+        return queryset
 
     def perform_create(self, serializer):
         assignment_id = self.request.data.get("assignment")

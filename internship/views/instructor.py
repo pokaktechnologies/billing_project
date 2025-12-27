@@ -280,8 +280,14 @@ class InternListAPIView(APIView):
         # output staff profile, not jobdetail itself
         staff_profiles = [item.staff for item in qs]
 
-        serializer = StaffProfileSerializer(staff_profiles, many=True)
+        serializer = InternListSerializer(staff_profiles, many=True)
         return Response(serializer.data)
+
+class InternProfileInfoAPIView(generics.RetrieveAPIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = "instructor"
+    serializer_class = InternProfileSerializer
+    queryset = StaffProfile.objects.all().select_related("user", "job_detail", "job_detail__department")
 
 class InternsStatsAPIView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]

@@ -8,6 +8,7 @@ instructor_patterns = [
     path('assigned-staff-course/<int:pk>/', instructor.InstructorAssignedStaffCourseRetrieveUpdateDestroyAPIView.as_view(), name='instructor-assignedstaffcourse-detail'),
     path('course/<int:course_id>/enrolled-students/', instructor.CourseEnrolledStudentsListAPIView.as_view(), name='instructor-course-enrolled-students'),
     path('interns/', instructor.InternListAPIView.as_view()),
+    path('interns/<int:pk>/', instructor.InternProfileInfoAPIView.as_view()),
     path('interns/stats/', instructor.InternsStatsAPIView.as_view()),
 
     path('study-material/', instructor.StudyMaterialAPIView.as_view(), name='instructor-study-material-list'),

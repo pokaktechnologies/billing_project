@@ -798,3 +798,46 @@ class InstructorSubmissionReviewSerializer(serializers.ModelSerializer):
                 assignment.save()
 
         return instance
+
+
+
+class InternListSerializer(serializers.ModelSerializer):
+    job_detail = JobDetailSerializer(read_only=True)
+    tasks = serializers.SerializerMethodField()
+    intern_name = serializers.SerializerMethodField()
+    email = serializers.CharField(source="user.email", read_only=True)
+
+    class Meta:
+        model = StaffProfile
+        fields = [
+            'id',
+            'intern_name',
+            'email',
+            'staff_email',
+            'job_detail',
+            'tasks',
+        ]
+
+    def get_intern_name(self, obj):
+        return f"{obj.user.first_name} {obj.user.last_name}"
+    def get_tasks(self, obj):
+        total = obj.taskassignment_set.count()
+        completed = obj.taskassignment_set.filter(status='completed').count()
+        return {
+            "completed": completed,
+            "total": total
+        }
+
+
+class InternProfileSerializer(serializers.ModelSerializer):
+    job_detail = JobDetailSerializer(read_only=True)
+    documents = StaffDocumentSerializer(many=True, read_only=True)
+    intern_name = serializers.SerializerMethodField()
+    email = serializers.CharField(source="user.email", read_only=True)
+
+    class Meta:
+        model = StaffProfile
+        fields = ['id','intern_name', 'email', 'phone_number', 'qulification', 'staff_email', 'profile_image', 'date_of_birth', 'address', 'job_detail', 'documents']
+
+    def get_intern_name(self, obj):
+        return f"{obj.user.first_name} {obj.user.last_name}"

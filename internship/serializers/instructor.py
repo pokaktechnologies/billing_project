@@ -437,25 +437,25 @@ class AssignedStaffCourseCreateSerializer(serializers.Serializer):
         staff_qs = StaffProfile.objects.filter(id__in=staff_ids)
         found_ids = set(staff_qs.values_list("id", flat=True))
 
-        # Missing staff
+        #  Missing staff
         missing = [sid for sid in staff_ids if sid not in found_ids]
         if missing:
             raise serializers.ValidationError({
                 "staff_ids": f"Staff ids not found: {missing}"
             })
 
-        # Staff already assigned
-        existing = AssignedStaffCourse.objects.filter(
-            course=course, staff__in=staff_qs
+        #  Staff already assigned to ANY course
+        already_assigned = AssignedStaffCourse.objects.filter(
+            staff__in=staff_qs
         ).values_list("staff_id", flat=True)
 
-        existing_list = list(existing)
-        if existing_list:
+        already_assigned = list(set(already_assigned))
+        if already_assigned:
             raise serializers.ValidationError({
-                "staff_ids": f"Staff already assigned to the course: {existing_list}"
+                "staff_ids": f"These staff are already assigned to another course: {already_assigned}"
             })
 
-        # Validate job_type
+        #  Validate internship job_type
         invalid = []
         for s in staff_qs:
             jd = getattr(s, "job_detail", None)
@@ -483,6 +483,8 @@ class AssignedStaffCourseCreateSerializer(serializers.Serializer):
             AssignedStaffCourse(course=course, staff=sp)
             for sp in staff_qs if sp.id not in existing
         ]
+
+
 
         return AssignedStaffCourse.objects.bulk_create(to_create)
 

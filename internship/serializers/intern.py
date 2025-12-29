@@ -1,14 +1,10 @@
 from rest_framework import serializers
-from ..models import CoursePayment, TaskSubmission, TaskAssignment, Task, TaskSubmissionAttachment, AssignedStaffCourse, CourseInstallment
+from ..models import TaskAttachment, TaskSubmission, TaskAssignment, Task, TaskSubmissionAttachment, AssignedStaffCourse, CourseInstallment
 from datetime import date
 
-# from rest_framework import serializers
-# from internship.models import *
-# from accounts.models import StaffProfile
-# from accounts.serializers.user import *
-from django.utils import timezone
+# from django.utils import timezone
 
-from django.db.models import Sum
+# from django.db.models import Sum
 
 
 
@@ -17,9 +13,16 @@ class TaskAssignmentSerializer(serializers.ModelSerializer):
         model = TaskAssignment
         fields = "__all__"
 
+class TaskAttachmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TaskAttachment
+        fields = ["id", "file", "uploaded_at"]
+        read_only_fields = ["id", "uploaded_at"]
+
 class InternTaskSerializer(serializers.ModelSerializer):
     status = serializers.SerializerMethodField()
     assignment_details = serializers.SerializerMethodField()
+    task_attachment = serializers.SerializerMethodField()
 
     class Meta:
         model = Task
@@ -32,6 +35,7 @@ class InternTaskSerializer(serializers.ModelSerializer):
             "course",
             "status",
             "assignment_details",
+            "task_attachment",
         ]
 
     def get_status(self, obj):
@@ -52,7 +56,10 @@ class InternTaskSerializer(serializers.ModelSerializer):
             return []
 
         return TaskAssignmentSerializer(assignment).data
-
+    
+    def get_task_attachment(self, obj):
+        attachments = TaskAttachment.objects.filter(task=obj)
+        return TaskAttachmentSerializer(attachments, many=True).data
 
 
 
@@ -65,6 +72,7 @@ class TaskSubmissionAttachmentSerializer(serializers.ModelSerializer):
 
 class TaskSubmissionSerializer(serializers.ModelSerializer):
     attachments = TaskSubmissionAttachmentSerializer(many=True, read_only=True)
+    task_attachment = serializers.SerializerMethodField(read_only=True)
     task_id = serializers.IntegerField(source='assignment.task.id', read_only=True)
 
     title = serializers.CharField(source='assignment.task.title', read_only=True)
@@ -96,6 +104,7 @@ class TaskSubmissionSerializer(serializers.ModelSerializer):
 
             "title",
             "description",
+            "task_attachment",
             "status",
             "staff",
             "due_date",
@@ -104,6 +113,10 @@ class TaskSubmissionSerializer(serializers.ModelSerializer):
 
     def get_staff(self, obj):
         return f"{obj.assignment.staff.user.first_name} {obj.assignment.staff.user.last_name}"
+    
+    def get_task_attachment(self, obj):
+        attachments = TaskAttachment.objects.filter(task=obj.assignment.task)
+        return TaskAttachmentSerializer(attachments, many=True).data
 
     def validate(self, data):
         assignment = data.get("assignment") or self.instance.assignment

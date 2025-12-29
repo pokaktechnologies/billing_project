@@ -273,17 +273,23 @@ class JobPostingStats(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        total_openings = JobPosting.objects.all().count()
+        now = timezone.now()
+        start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_of_day = start_of_day + timedelta(days=1)
+
+        total_openings = JobPosting.objects.count()
         total_active_jobs = JobPosting.objects.filter(status='active').count()
-        today_posting_count = JobPosting.objects.filter(created_at__date=timezone.now().date()).count()
 
-        stats = {
-            'total_openings': total_openings,
-            'total_active_jobs': total_active_jobs,
-            'today_posting_count': today_posting_count,
-        }
+        today_posting_count = JobPosting.objects.filter(
+            created_at__gte=start_of_day,
+            created_at__lt=end_of_day
+        ).count()
 
-        return Response(stats, status=status.HTTP_200_OK)
+        return Response({
+            "total_openings": total_openings,
+            "total_active_jobs": total_active_jobs,
+            "today_posting_count": today_posting_count,
+        })
 
 
 class JobApplicationView(APIView):

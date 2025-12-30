@@ -222,7 +222,8 @@ class JobPostingView(APIView):
 
     def get(self, request):
         job_postings = JobPosting.objects.all().order_by('-created_at')
-        serializer = JobPostingListSerializer(job_postings, many=True)
+        serializer = JobPostingSerializer(job_postings, many=True)
+        # serializer = JobPostingListSerializer(job_postings, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def post(self, request):

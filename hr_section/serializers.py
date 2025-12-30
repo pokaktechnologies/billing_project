@@ -3,7 +3,7 @@ from django.db import transaction
 
 from .models import (
     Enquiry, Designation, JobResponsibility, JobRequirement,
-    JobWhyJoinUs, JobPosting, JobApplication
+    JobWhyJoinUs, JobPosting, JobApplication, JobPostingSkill
 )
 
 # Enquiry Serializers
@@ -38,6 +38,11 @@ class JobRequirementSerializer(ModelSerializer):
         model = JobRequirement
         fields = ['requirement']
 
+class JobSkillSerializer(ModelSerializer):
+    class Meta:
+        model = JobPostingSkill
+        fields = ['skill']
+
 class JobWhyJoinUsSerializer(ModelSerializer):
     class Meta:
         model = JobWhyJoinUs
@@ -49,13 +54,14 @@ class JobPostingCreateSerializer(ModelSerializer):
     responsibilities = JobResponsibilitySerializer(many=True, required=False)
     requirements = JobRequirementSerializer(many=True, required=False)
     benefits = JobWhyJoinUsSerializer(many=True, required=False)
+    skill = JobSkillSerializer(many=True, required=False)
 
     class Meta:
         model = JobPosting
         fields = [
             'job_title', 'job_type', 'work_mode', 'job_description',
             'more_details', 'status', 'experience_required', 'salery_range',
-            'responsibilities', 'requirements', 'benefits','designation',
+            'responsibilities', 'requirements', 'benefits', 'designation', 'education','skill'
         ]
 
     def validate(self, attrs):
@@ -71,6 +77,7 @@ class JobPostingCreateSerializer(ModelSerializer):
         responsibilities_data = validated_data.pop('responsibilities', [])
         requirements_data = validated_data.pop('requirements', [])
         benefits_data = validated_data.pop('benefits', [])
+        skills_data = validated_data.pop('skill', [])
 
         with transaction.atomic():
             job_posting = JobPosting.objects.create(**validated_data)
@@ -78,6 +85,7 @@ class JobPostingCreateSerializer(ModelSerializer):
             self._create_related_items(job_posting, responsibilities_data, JobResponsibility)
             self._create_related_items(job_posting, requirements_data, JobRequirement)
             self._create_related_items(job_posting, benefits_data, JobWhyJoinUs)
+            self._create_related_items(job_posting, skills_data, JobPostingSkill)
 
         return job_posting
 
@@ -85,6 +93,7 @@ class JobPostingCreateSerializer(ModelSerializer):
         responsibilities_data = validated_data.pop('responsibilities', [])
         requirements_data = validated_data.pop('requirements', [])
         benefits_data = validated_data.pop('benefits', [])
+        skills_data = validated_data.pop('skill', [])
 
         with transaction.atomic():
             for attr, value in validated_data.items():
@@ -102,6 +111,10 @@ class JobPostingCreateSerializer(ModelSerializer):
             if benefits_data:
                 instance.benefits.all().delete()
                 self._create_related_items(instance, benefits_data, JobWhyJoinUs)
+            
+            if skills_data:
+                instance.skills.all().delete()
+                self._create_related_items(instance, skills_data, JobPostingSkill)
 
         return instance
 
@@ -125,6 +138,7 @@ class JobPostingSerializer(ModelSerializer):
     responsibilities = JobResponsibilitySerializer(many=True, read_only=True)
     requirements = JobRequirementSerializer(many=True, read_only=True)
     benefits = JobWhyJoinUsSerializer(many=True, read_only=True)
+    skills = JobSkillSerializer(many=True, read_only=True)
 
     class Meta:
         model = JobPosting

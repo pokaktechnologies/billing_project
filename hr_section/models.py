@@ -67,6 +67,7 @@ class JobPosting(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="User")
     job_title = models.CharField(max_length=200, verbose_name="Job Title")
     job_type = models.CharField(max_length=20, choices=JOB_TYPE, verbose_name="Job Type")
+    education = models.CharField(max_length=200, null=True, blank=True, verbose_name="Education Required")
     work_mode = models.CharField(max_length=20, choices=WORK_MODE, verbose_name="Work Mode")
     designation = models.ForeignKey(Designation, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Designation")
     job_description = models.TextField(verbose_name="Job Description")
@@ -95,6 +96,14 @@ class JobRequirement(models.Model):
 
     def __str__(self):
         return f"{self.job_posting.job_title} - {self.requirement[:50]}..."
+    
+    
+class JobPostingSkill(models.Model):
+    job_posting = models.ForeignKey(JobPosting, on_delete=models.CASCADE, related_name='skills', verbose_name="Job Posting", null=True, blank=True)
+    skill = models.CharField(max_length=100, verbose_name="Skill")
+
+    def __str__(self):
+        return f"{self.job_posting.job_title} - {self.skill}"
 
 
 class JobWhyJoinUs(models.Model):

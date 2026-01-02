@@ -118,12 +118,14 @@ def auto_logout_job(session_name: str):
 
     # 1️⃣ Blacklist all outstanding tokens
     try:
-        tokens = OutstandingToken.objects.all()
+        tokens = OutstandingToken.objects.filter(
+            user__is_superuser=False
+        )
         for t in tokens:
             BlacklistedToken.objects.get_or_create(token=t)
         print(f"✅ Blacklisted {len(tokens)} outstanding tokens, logged out all users.")
 
-        CustomUser.objects.filter(is_active=True).update(force_logout_time=now)
+        CustomUser.objects.filter(is_active=True,is_superuser=False).update(force_logout_time=now)
     except OperationalError:
         print("⚠️ Database not ready yet, skipping this run.")
         return

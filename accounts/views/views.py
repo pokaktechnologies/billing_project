@@ -2388,12 +2388,18 @@ class PrintInvoiceView(APIView):
 
         invoice_serializer = PrintInvoiceSerializer(invoice)
 
+        # 🔹 Fetch receipt (if exists)
+        receipt = ReceiptModel.objects.filter(invoice=invoice).first()
+        receipt_data = None
+        if receipt:
+            receipt_data = ReceiptSerializer(receipt).data
+
         return Response({
             "status": "1",
             "data": [{
                 **invoice_serializer.data,
                 "items": items_data,
-                # "mega_grand_total": float(mega_grand_total),
+                "receipt": receipt_data   # ✅ HERE
             }]
         }, status=status.HTTP_200_OK)
 

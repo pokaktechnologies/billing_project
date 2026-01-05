@@ -763,6 +763,15 @@ class ReceiptSerializer(serializers.ModelSerializer):
 
     def get_invoice_number(self, obj):
         return obj.invoice.invoice_number if obj.invoice else None
+class ReceiptForInvoiceSerializer(serializers.ModelSerializer):
+    invoice_number = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ReceiptModel
+        fields = '__all__'
+
+    def get_invoice_number(self, obj):
+        return obj.invoice.invoice_number if obj.invoice else None
 
 class PrintReceiptSerializer(serializers.ModelSerializer):
     # termsandconditions = serializers.SerializerMethodField()

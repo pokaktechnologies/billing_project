@@ -2101,7 +2101,7 @@ class InvoiceOrderAPI(APIView):
                 # Fetch receipt (if exists)
                 receipt = ReceiptModel.objects.filter(invoice=invoice).first()
                 invoice_data["receipt"] = (
-                    ReceiptSerializer(receipt).data if receipt else None
+                    ReceiptForInvoiceSerializer(receipt).data if receipt else None
                 )
 
                 response_data.append(invoice_data)

@@ -2093,8 +2093,24 @@ class InvoiceOrderAPI(APIView):
 
         else:
             invoices = InvoiceModel.objects.all().order_by("-created_at")
-            serializer = InvoiceModelSerializer(invoices, many=True)
-            return Response({"status": "1", "data": serializer.data}, status=status.HTTP_200_OK)
+
+            response_data = []
+            for invoice in invoices:
+                invoice_data = InvoiceModelSerializer(invoice).data
+
+                # Fetch receipt (if exists)
+                receipt = ReceiptModel.objects.filter(invoice=invoice).first()
+                invoice_data["receipt"] = (
+                    ReceiptSerializer(receipt).data if receipt else None
+                )
+
+                response_data.append(invoice_data)
+
+            return Response({
+                "status": "1",
+                "data": response_data
+            }, status=status.HTTP_200_OK)
+
 
 
 
@@ -2388,18 +2404,18 @@ class PrintInvoiceView(APIView):
 
         invoice_serializer = PrintInvoiceSerializer(invoice)
 
-        # 🔹 Fetch receipt (if exists)
-        receipt = ReceiptModel.objects.filter(invoice=invoice).first()
-        receipt_data = None
-        if receipt:
-            receipt_data = ReceiptSerializer(receipt).data
+        # # Fetch receipt (if exists)
+        # receipt = ReceiptModel.objects.filter(invoice=invoice).first()
+        # receipt_data = None
+        # if receipt:
+        #     receipt_data = ReceiptSerializer(receipt).data
 
         return Response({
             "status": "1",
             "data": [{
                 **invoice_serializer.data,
                 "items": items_data,
-                "receipt": receipt_data   # ✅ HERE
+                # "receipt": receipt_data   # ✅ HERE
             }]
         }, status=status.HTTP_200_OK)
 

@@ -32,6 +32,51 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
+    def get(self, request, *args, **kwargs):
+        return Response(
+            {"detail": "Method 'GET' not allowed."},
+            status=status.HTTP_405_METHOD_NOT_ALLOWED
+        )
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+
+        try:
+            serializer.is_valid(raise_exception=True)
+        except TokenError as e:
+            raise InvalidToken(e.args[0])
+
+        user = serializer.user
+
+        job_role = None
+        department = None
+
+        staff_profile = getattr(user, "staff_profile", None)
+
+        if staff_profile:
+            job_data = JobDetail.objects.select_related("department").filter(
+                staff=staff_profile
+            ).only("role", "department").first()
+
+            if job_data:
+                job_role = job_data.role
+                if job_data.department:
+                    department = {
+                        "id": job_data.department.id,
+                        "name": job_data.department.name
+                    }
+
+        return Response(
+            {
+                **serializer.validated_data,  # access & refresh tokens
+                "id": user.id,
+                "job_role": job_role,
+                "department": department,
+            },
+            status=status.HTTP_200_OK
+        )
+
+
 
 class SuperuserTokenObtainPairView(TokenObtainPairView):
     """Token view that only issues tokens for superusers."""

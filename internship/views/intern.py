@@ -14,7 +14,7 @@ from rest_framework import viewsets
 from ..serializers.instructor import TaskSerializer, StudyMaterialSerializer, CourseSerializer ,CoursePaymentDetailSerializer
 from rest_framework.decorators import action
 from django.shortcuts import get_object_or_404
-from django.db.models import OuterRef, Subquery
+from django.db.models import OuterRef, Subquery, Sum
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -281,3 +281,105 @@ class MyCoursePaymentListAPIView(generics.ListAPIView):
 
         serializer = CoursePaymentDetailSerializer(payment)
         return Response(serializer.data, status=200)
+
+
+
+
+###  FOR DASHABOARD ----------
+
+
+class InternDashboardAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        staff_profile = getattr(user, "staff_profile", None)
+
+        if not staff_profile:
+            return Response(
+                {"detail": "Staff profile not found"},
+                status=400
+            )
+
+        # ================================
+        # TASKS (STATUS COUNTS + LATEST)
+        # ================================
+
+        latest_assignment_subquery = (
+            TaskAssignment.objects
+            .filter(staff=staff_profile, task=OuterRef("pk"))
+            .order_by("-assigned_at")
+        )
+
+        tasks_qs = (
+            Task.objects
+            .filter(assignments__staff=staff_profile)
+            .distinct()
+            .annotate(
+                latest_status=Subquery(
+                    latest_assignment_subquery.values("status")[:1]
+                )
+            )
+        )
+
+        task_stats = {
+            "total": tasks_qs.count(),
+            "pending": tasks_qs.filter(latest_status="pending").count(),
+            "submitted": tasks_qs.filter(latest_status="submitted").count(),
+            "completed": tasks_qs.filter(latest_status="completed").count(),
+            "revision": tasks_qs.filter(latest_status="revision_required").count(),
+        }
+
+        latest_tasks = InternTaskMiniSerializer(
+            tasks_qs.order_by("-id")[:5],
+            many=True
+        ).data
+
+        # ================================
+        # STUDY MATERIALS
+        # ================================
+
+        study_materials_qs = StudyMaterial.objects.filter(
+            course__assignedstaffcourse__staff=staff_profile
+        ).distinct()[:5]
+
+        study_materials = StudyMaterialMiniSerializer(
+            study_materials_qs,
+            many=True
+        ).data
+
+        # ================================
+        # PAYMENTS SUMMARY
+        # ================================
+
+        payments_qs = CoursePayment.objects.filter(staff=staff_profile)
+
+        total_paid = payments_qs.aggregate(
+            total=Sum("amount_paid")
+        )["total"] or 0
+
+        course = payments_qs.first().installment.course if payments_qs.exists() else None
+        total_fee = course.total_fee if course else 0
+        balance = total_fee - total_paid
+
+        payment_summary = {
+            "total_fee": total_fee,
+            "paid_amount": total_paid,
+            "balance_amount": balance,
+            "status": "Paid" if balance <= 0 else "Pending"
+        }
+
+        # ================================
+        # FINAL RESPONSE
+        # ================================
+
+        return Response({
+            "status": "success",
+            "message": "Intern dashboard data fetched successfully",
+            "data": {
+                "task_stats": task_stats,
+                "latest_tasks": latest_tasks,
+                "study_materials": study_materials,
+                "payments": payment_summary,
+            }
+        })

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from ..models import TaskAttachment, TaskSubmission, TaskAssignment, Task, TaskSubmissionAttachment, AssignedStaffCourse, CourseInstallment
+from ..models import StudyMaterial, TaskAttachment, TaskSubmission, TaskAssignment, Task, TaskSubmissionAttachment, AssignedStaffCourse, CourseInstallment
 from datetime import date
 
 # from django.utils import timezone
@@ -186,4 +186,45 @@ class TaskSubmissionSerializer(serializers.ModelSerializer):
 
         return instance
     
-    
+
+## DASHABOARD --------------
+
+class InternTaskMiniSerializer(serializers.ModelSerializer):
+    status = serializers.CharField(source="latest_status")  # ✅ FIX
+    course = serializers.CharField(source="course.title")  # ✅ FIX
+    attachment = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Task
+        fields = [
+            "id",
+            "title",
+            "description",
+            "start_date",
+            "due_date",
+            "course",
+            "status",
+            "due_date",
+            "status",
+            "attachment",
+        ]
+
+    def get_attachment(self, obj):
+        attachments = TaskAttachment.objects.filter(task=obj)
+        return TaskAttachmentSerializer(attachments, many=True).data
+
+
+
+class StudyMaterialMiniSerializer(serializers.ModelSerializer):
+    course = serializers.CharField(source="course.title")
+
+    class Meta:
+        model = StudyMaterial
+        fields = ["id", "title","course", "material_type", "file", "url"]
+
+
+# class PaymentSummarySerializer(serializers.Serializer):
+#     total_fee = serializers.DecimalField(max_digits=10, decimal_places=2)
+#     paid_amount = serializers.DecimalField(max_digits=10, decimal_places=2)
+#     balance_amount = serializers.DecimalField(max_digits=10, decimal_places=2)
+#     status = serializers.CharField()

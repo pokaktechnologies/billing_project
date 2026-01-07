@@ -190,8 +190,8 @@ class TaskSubmissionSerializer(serializers.ModelSerializer):
 ## DASHABOARD --------------
 
 class InternTaskMiniSerializer(serializers.ModelSerializer):
-    status = serializers.CharField(source="latest_status")  # ✅ FIX
-    course = serializers.CharField(source="course.title")  # ✅ FIX
+    status = serializers.CharField(source="latest_status")
+    course = serializers.CharField(source="course.title")
     attachment = serializers.SerializerMethodField()
 
     class Meta:

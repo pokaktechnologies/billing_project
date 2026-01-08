@@ -628,12 +628,11 @@ class DeveloperDashboardView(APIView):
 
         ## task list by status
 
-        not_started_tasks = tasks.filter(status='not_started')
-        in_progress_tasks = tasks.filter(status='in_progress')
-        completed_tasks = tasks.filter(status='completed')
-        on_hold_tasks = tasks.filter(status='on_hold')
-        cancelled_tasks = tasks.filter(status='cancelled')
-
+        not_started_tasks = tasks.filter(status='not_started')[:3]
+        in_progress_tasks = tasks.filter(status='in_progress')[:3]
+        completed_tasks = tasks.filter(status='completed')[:3]
+        on_hold_tasks = tasks.filter(status='on_hold')[:3]
+        cancelled_tasks = tasks.filter(status='cancelled')[:3]
         not_started_tasks_data = TaskListSerializer(not_started_tasks, many=True).data
         in_progress_tasks_data = TaskListSerializer(in_progress_tasks, many=True).data
         completed_tasks_data = TaskListSerializer(completed_tasks, many=True).data

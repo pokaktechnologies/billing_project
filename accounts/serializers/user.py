@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from ..models import *
+from project_management.models import ProjectManagement, Task
 
 
 
@@ -271,3 +272,23 @@ class StaffPersonalInfoSerializer(serializers.ModelSerializer):
         model = CustomUser
         fields = ['id', 'email', 'first_name', 'last_name', 'profile']
 
+
+
+
+## DASHBOARD ---------##
+
+class ProjectsDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProjectManagement
+        fields = ['id', 'project_name', 'status', 'start_date', 'end_date']
+
+class TaskListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Task
+        fields = [
+            "id",
+            "task_name",
+            "status",
+            "start_date",
+            "end_date",
+        ]

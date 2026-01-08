@@ -155,4 +155,8 @@ urlpatterns = [
     path('staff/attendance/',StaffPersonalAttendanceView.as_view(), name='staff-attendance-info'),
 
     path('unassigned-staff/', UnassignedStaffListView.as_view(), name='unassigned-staff-list'),
+
+
+    ## DASHBOARD URLS
+    path('dashboard/developer/', DeveloperDashboardView.as_view(), name='developers-dashboard'),
 ]

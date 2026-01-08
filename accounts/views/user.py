@@ -20,6 +20,8 @@ from attendance.serializers import DailyAttendanceSessionDetailSerializer
 from django.utils.dateparse import parse_date
 from datetime import datetime
 
+from project_management.models import ProjectManagement, Task
+
 
 
 class DepartmentView(APIView):
@@ -560,4 +562,114 @@ class UnassignedStaffListView(APIView):
             "status": "1",
             "message": "success",
             "data": serializer.data
+        })
+
+
+
+
+## DASHBOARD ---------##
+
+class DeveloperDashboardView(APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    # required_module = 'development'
+
+    def get(self, request):
+        user = request.user
+        staff_profile = getattr(user, 'staff_profile', None)
+
+        if not staff_profile:
+            return Response(
+                {"status": "0", "message": "No staff profile found"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        job_detail = getattr(staff_profile, 'job_detail', None)
+        if not job_detail:
+            return Response(
+                {"status": "0", "message": "No job detail found"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        department = job_detail.department
+        if not department or department.name != "Development":
+            return Response(
+                {
+                    "status": "0",
+                    "message": "Access restricted to Development department only"
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+
+        ## Projects Detail 
+        projects = ProjectManagement.objects.filter(
+            projectmember__member__user=user
+        ).distinct()[:2]
+
+        # Task Summary
+        tasks = Task.objects.filter(
+            project_member__member__user=user
+        )
+
+        total_tasks = tasks.count()
+        not_started = tasks.filter(status='not_started').count()
+        in_progress = tasks.filter(status='in_progress').count()
+        completed = tasks.filter(status='completed').count()
+        on_hold = tasks.filter(status='on_hold').count()
+        cancelled = tasks.filter(status='cancelled').count()
+        task_summary = {
+            "total_tasks": total_tasks,
+            "not_started": not_started,
+            "in_progress": in_progress,
+            "completed": completed,
+            "on_hold": on_hold,
+            "cancelled": cancelled,
+        }
+
+        ## task list by status
+
+        not_started_tasks = tasks.filter(status='not_started')
+        in_progress_tasks = tasks.filter(status='in_progress')
+        completed_tasks = tasks.filter(status='completed')
+        on_hold_tasks = tasks.filter(status='on_hold')
+        cancelled_tasks = tasks.filter(status='cancelled')
+
+        not_started_tasks_data = TaskListSerializer(not_started_tasks, many=True).data
+        in_progress_tasks_data = TaskListSerializer(in_progress_tasks, many=True).data
+        completed_tasks_data = TaskListSerializer(completed_tasks, many=True).data
+        on_hold_tasks_data = TaskListSerializer(on_hold_tasks, many=True).data
+        cancelled_tasks_data = TaskListSerializer(cancelled_tasks, many=True).data
+
+
+        serializers_projects = ProjectsDetailSerializer(projects, many=True)
+
+        return Response({
+            "status": "1",
+            "message": "success",
+            "data": {
+                "user": {
+                    "employee_id": job_detail.employee_id,
+                    "job_type": job_detail.job_type,
+                    "role": job_detail.role,
+                    "email": user.email,
+                    "name": f"{user.first_name} {user.last_name}",
+                    "department": {
+                        "id": department.id,
+                        "name": department.name,
+                    }
+                },
+                # "attendance": {
+                #     "status": "Present",
+                #     "checkIn": "09:15 AM",
+                #     "checkOut": "06:30 PM",
+                #     "workingHours": "8h 15m"
+                # },
+                "projects": serializers_projects.data,
+                "task_summary": task_summary,
+                "not_started_tasks": not_started_tasks_data,
+                "in_progress_tasks": in_progress_tasks_data,
+                "completed_tasks": completed_tasks_data,
+                "on_hold_tasks": on_hold_tasks_data,
+                "cancelled_tasks": cancelled_tasks_data,
+            }
         })

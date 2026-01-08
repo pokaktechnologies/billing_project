@@ -16,7 +16,8 @@ class AdminLeadsView(APIView):
     def get(self, request):
 
         # Base queryset
-        leads = Lead.objects.filter(lead_type="assigned_lead")
+        # leads = Lead.objects.filter(lead_type="assigned_lead")
+        leads = Lead.objects.all()
         print("Initial count:", leads.count())
 
         # --- Filters ---

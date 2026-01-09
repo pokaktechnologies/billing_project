@@ -26,6 +26,7 @@ class AdminLeadsView(APIView):
         start_date = request.query_params.get("start_date")           # YYYY-MM-DD
         end_date = request.query_params.get("end_date")               # YYYY-MM-DD
         name = request.query_params.get("name")                       # string search
+        status = request.query_params.get("status")                    
 
         # Filter salesperson null or not null
         if salesperson_filter == "null":
@@ -33,6 +34,11 @@ class AdminLeadsView(APIView):
 
         if salesperson_filter == "not_null":
             leads = leads.filter(salesperson__isnull=False)
+
+        # Filter by lead status
+        if status:
+            leads = leads.filter(lead_status__icontains=status)
+
 
         # Filter by lead source
         if lead_source:

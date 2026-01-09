@@ -106,4 +106,16 @@ class Task(models.Model):
 
     def __str__(self):
         return f"{self.task_name} ({self.project_member})"    
+    
 
+class TaskAssign(models.Model):
+    assigned_by = models.ForeignKey(CustomUser,on_delete=models.CASCADE,related_name="assigned_tasks")
+    task = models.ForeignKey(Task,on_delete=models.CASCADE,related_name="assignments")
+    assigned_to = models.ForeignKey(ProjectMember,on_delete=models.CASCADE,related_name="received_tasks")
+    assigned_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return (
+            f"Task: {self.task.task_name} → "
+            f"{self.assigned_to.member.name}"
+        )

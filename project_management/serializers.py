@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ProjectManagement, Member, Stack, ProjectMember, Task,ClientContract
+from .models import ProjectManagement, Member, Stack, ProjectMember, Task,ClientContract, TaskAssign
 
 
 class ClientContractSerializer(serializers.ModelSerializer):
@@ -163,3 +163,30 @@ class TaskSerializer(serializers.ModelSerializer):
         return obj.get_status_display()
 
 
+## DASHBOARD VIEW------#
+
+class ProjectManagerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProjectManagement
+        fields = ['id', 'project_name', 'status', 'start_date', 'end_date']
+
+class AssignedTaskListSerializer(serializers.ModelSerializer):
+    task_name = serializers.CharField(source="task.task_name", read_only=True)
+    task_status = serializers.CharField(source="task.status", read_only=True)
+    start_date = serializers.DateField(source="task.start_date", read_only=True)
+    end_date = serializers.DateField(source="task.end_date", read_only=True)
+    project_name = serializers.CharField(source="task.project_member.project.project_name",read_only=True)
+    assigned_to = serializers.CharField(source="assigned_to.member.name",read_only=True)
+
+    class Meta:
+        model = TaskAssign
+        fields = [
+            "id",
+            "task_name",
+            "task_status",
+            "start_date",
+            "end_date",
+            "project_name",
+            "assigned_to",
+            "assigned_at",
+        ]

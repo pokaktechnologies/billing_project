@@ -663,7 +663,14 @@ class TaskView(APIView):
         # Start a transaction block
         with transaction.atomic():
             if serializer.is_valid():
-                serializer.save()
+                # Create task
+                task = serializer.save()
+                # Create task assignment
+                TaskAssign.objects.create(
+                    assigned_by=request.user,
+                    task=task,
+                    assigned_to=project_member
+                )
                 return Response(
                     {"status": "1", "message": "Task created successfully"},
                     status=status.HTTP_201_CREATED
@@ -1010,5 +1017,73 @@ class TaskSearchByMembersView(APIView):
 
         return Response(
             {"status": "1", "message": "success", "data": serializer.data},
+            status=status.HTTP_200_OK
+        )
+    
+
+## DASHBOARD VIEW------#
+
+
+class ProjectManagerDashboardView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    # required_module = 'project_management'
+
+    def get(self, request):
+        user = request.user
+
+        # -----------------------------
+        # PROJECTS OWNED BY PM
+        # -----------------------------
+        total_projects = ProjectManagement.objects.filter(user=user).order_by("-created_at")
+
+        active_projects_count = total_projects.filter(status__in=["not_started", "in_progress", "on_hold"]).count()
+
+        # -----------------------------
+        # TASK ASSIGNMENTS BY PM
+        # -----------------------------
+        assigned_tasks = TaskAssign.objects.select_related("task",
+                                                           "assigned_to__member",
+                                                           "task__project_member__project"
+                                                           ).filter(assigned_by=user).order_by("-assigned_at")
+        
+        submitted_tasks = assigned_tasks.filter(task__status="completed")
+
+        completed_tasks = assigned_tasks.filter(task__status="completed").count()
+
+        pending_tasks = assigned_tasks.filter(
+            task__status__in=["not_started", "in_progress", "on_hold"]).count()
+
+        overdue_tasks = assigned_tasks.filter(
+            task__end_date__lt=date.today(),
+            task__status__in=["not_started", "in_progress", "on_hold"]).count()
+
+        # -----------------------------
+        # SERIALIZERS
+        # -----------------------------
+        project_serializer = ProjectManagerSerializer(total_projects[:3], many=True)
+
+        assigned_task_serializer = AssignedTaskListSerializer(assigned_tasks[:3], many=True)
+        submitted_tasks_serializer = AssignedTaskListSerializer(submitted_tasks[:3], many=True)
+
+        # -----------------------------
+        # RESPONSE
+        # -----------------------------
+        return Response(
+            {
+                "status": "1",
+                "message": "success",
+                "data": {
+                    "stats": {
+                        "total_projects": active_projects_count,
+                        "completed_tasks": completed_tasks,
+                        "pending_tasks": pending_tasks,
+                        "overdue_tasks": overdue_tasks,
+                    },
+                    "projects": project_serializer.data,
+                    "assigned_tasks": assigned_task_serializer.data,
+                    "submitted_tasks": submitted_tasks_serializer.data,
+                }
+            },
             status=status.HTTP_200_OK
         )

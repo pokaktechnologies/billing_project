@@ -37,4 +37,7 @@ urlpatterns = [
     path('members/search/', MembersSearchView.as_view(), name='members_search'),
     path('task/<int:project_member_id>/project_members/search/', TaskSearchByProjectMembersView.as_view(), name='task_search_by_project_members'),
     path('task/<int:member_id>/members/search/', TaskSearchByMembersView.as_view(), name='task_search_by_members'),
+
+    #Dashaboard
+    path('dashboard/', ProjectManagerDashboardView.as_view(), name='dashboard'),
 ]

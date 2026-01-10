@@ -612,7 +612,7 @@ class InvoiceModel(models.Model):
     invoice_number = models.CharField(max_length=50, unique=True)
     invoice_date = models.DateField()
     client = models.ForeignKey('Customer', on_delete=models.PROTECT,null=True, blank=True)
-    sales_order = models.ForeignKey(SalesOrderModel, on_delete=models.PROTECT)
+    sales_order = models.ForeignKey(SalesOrderModel, on_delete=models.PROTECT, null=True, blank=True)
     # delivery = models.ForeignKey(DeliveryFormModel, on_delete=models.SET_NULL, null=True, blank=True)
     invoice_grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
 

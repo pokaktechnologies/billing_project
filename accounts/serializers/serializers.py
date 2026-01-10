@@ -716,7 +716,7 @@ class InvoiceModelSerializer(serializers.ModelSerializer):
     client_firstname = serializers.CharField(source='client.first_name', read_only=True)
     client_lastname = serializers.CharField(source='client.last_name', read_only=True)
     # salesperson = serializers.CharField(source='salesperson.first_name', read_only=True)
-    sales_order_number = serializers.CharField(source='sales_order.sales_order_number', read_only=True)
+    sales_order_number = serializers.CharField(source='sales_order.sales_order_number', read_only=True, allow_null=True, required=False)
     termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
 
     class Meta:

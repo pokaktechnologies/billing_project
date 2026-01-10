@@ -2167,7 +2167,7 @@ class InvoiceOrderAPI(APIView):
                 # Required field extraction
                 customer_id = data.get("client")
                 terms_id = data.get("termsandconditions")
-                sales_order_id = data.get("sales_order")
+                sales_order_id = data.get("sales_order")  # optional
                 invoice_date = data.get("invoice_date")
                 delivery_ids = data.get("deliveries", [])  # Expecting a list
 
@@ -2175,8 +2175,6 @@ class InvoiceOrderAPI(APIView):
                     return Response({"error": "Customer not provided."}, status=status.HTTP_400_BAD_REQUEST)
                 if not terms_id:
                     return Response({"error": "Terms and conditions not provided."}, status=status.HTTP_400_BAD_REQUEST)
-                if not sales_order_id:
-                    return Response({"error": "Sales order not provided."}, status=status.HTTP_400_BAD_REQUEST)
                 if not delivery_ids or not isinstance(delivery_ids, list):
                     return Response({"error": "Deliveries must be a list of IDs."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -2185,8 +2183,9 @@ class InvoiceOrderAPI(APIView):
                     delivery = get_object_or_404(DeliveryFormModel, id=delivery_id)
                     if delivery.customer.id != customer_id:
                         return Response({"error": f"Delivery {delivery.id} does not belong to the provided customer."}, status=status.HTTP_400_BAD_REQUEST)
-                    if delivery.sales_order.id != sales_order_id:
-                        return Response({"error": f"Delivery {delivery.id} does not belong to the provided sales order."}, status=status.HTTP_400_BAD_REQUEST)
+                    if sales_order_id and delivery.sales_order_id != sales_order_id:
+                        return Response({"error": f"Delivery {delivery.id} does not belong to the provided sales order."},status=status.HTTP_400_BAD_REQUEST)
+
 
                     # check the delivary is already invoiced or not
                 deliveries = DeliveryFormModel.objects.filter(id__in=delivery_ids)
@@ -2200,8 +2199,9 @@ class InvoiceOrderAPI(APIView):
                     # Fetch related models
                 customer = get_object_or_404(Customer, id=customer_id)
                 terms = get_object_or_404(TermsAndConditions, id=terms_id)
-                sales_order = get_object_or_404(SalesOrderModel, id=sales_order_id)
-                deliveries = DeliveryFormModel.objects.filter(id__in=delivery_ids)
+                sales_order = None
+                if sales_order_id:
+                    sales_order = get_object_or_404(SalesOrderModel, id=sales_order_id)
 
                 if deliveries.count() != len(delivery_ids):
                     return Response({"error": "Some delivery IDs are invalid."}, status=status.HTTP_400_BAD_REQUEST)
@@ -2215,7 +2215,7 @@ class InvoiceOrderAPI(APIView):
                     client=customer,
                     invoice_number=data.get("invoice_number"),
                     user=request.user,
-                    sales_order=sales_order,
+                    sales_order=sales_order,  # now optional
                     invoice_date=invoice_date,
                     invoice_grand_total=invoice_grand_total_amount,
                     termsandconditions=terms,
@@ -2236,11 +2236,16 @@ class InvoiceOrderAPI(APIView):
                 debit_account = Account.objects.get(name=accounts['debit'])
                 credit_account = Account.objects.get(name=accounts['credit'])
                 print("debit_account, credit_account",debit_account, credit_account)
+
+                salesperson = None
+                if sales_order:
+                    salesperson = sales_order.customer.salesperson
                 with transaction.atomic():
                     journal = JournalEntry.objects.create(
                         type='invoice',
                         type_number=invoice_form.invoice_number,
-                        salesperson=invoice_form.sales_order.customer.salesperson,
+                        # salesperson=invoice_form.sales_order.customer.salesperson,
+                        salesperson=salesperson,
                         narration=f'Invoice {invoice_form.invoice_number} for {customer.first_name} {customer.last_name}',
                         user=request.user
                     )
@@ -2275,14 +2280,15 @@ class InvoiceOrderAPI(APIView):
             return Response({"error": "Invalid client ID."}, status=status.HTTP_400_BAD_REQUEST)
 
         # 2) Validate sales_order
-        if "sales_order" in data:
+        if "sales_order" in data and new_sales_order_id:
             if not SalesOrderModel.objects.filter(id=new_sales_order_id).exists():
                 return Response({"error": "Invalid sales order ID."}, status=status.HTTP_400_BAD_REQUEST)
-            # ensure the invoice.client matches the sales_order.customer
+
             so = SalesOrderModel.objects.get(id=new_sales_order_id)
             if so.customer_id != new_client_id:
                 return Response({"error": "Sales order does not belong to the client."},
                                 status=status.HTTP_400_BAD_REQUEST)
+
 
         # 3) Validate deliveries list if provided
         if new_delivery_ids is not None:
@@ -2296,10 +2302,14 @@ class InvoiceOrderAPI(APIView):
                 if not delivery:
                     return Response({"error": f"Delivery {did} does not exist."},
                                     status=status.HTTP_400_BAD_REQUEST)
-                if delivery.customer_id != new_client_id or delivery.sales_order_id != new_sales_order_id:
-                    # print(delivery.customer_id, new_client_id, delivery.sales_order_id, new_sales_order_id)
-                    return Response({"error": f"Delivery {did} mismatch client/sales order."},
+                if delivery.customer_id != new_client_id:
+                    return Response({"error": f"Delivery {did} does not belong to client."},
                                     status=status.HTTP_400_BAD_REQUEST)
+
+                if new_sales_order_id and delivery.sales_order_id != new_sales_order_id:
+                    return Response({"error": f"Delivery {did} does not belong to sales order."},
+                                    status=status.HTTP_400_BAD_REQUEST)
+
                 # if it's already linked to THIS invoice, that's fine; if linked to another invoice, reject
                 if delivery.is_invoiced and not invoice.items.filter(delivary=delivery).exists():
                     return Response({"error": f"Delivery {did} is already invoiced."},

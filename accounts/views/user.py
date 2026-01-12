@@ -672,3 +672,52 @@ class DeveloperDashboardView(APIView):
                 "cancelled_tasks": cancelled_tasks_data,
             }
         })
+
+class GraphicDesignerDashboardView(APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    # required_module = 'design_section'
+
+    def get(self, request):
+        user = request.user
+        staff_profile = getattr(user, 'staff_profile', None)
+
+        if not staff_profile:
+            return Response(
+                {"status": "0", "message": "No staff profile found"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        job_detail = getattr(staff_profile, 'job_detail', None)
+        if not job_detail:
+            return Response(
+                {"status": "0", "message": "No job detail found"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        department = job_detail.department
+        if not department or department.name != "Design":
+            return Response(
+                {
+                    "status": "0",
+                    "message": "Access restricted to Design department only"
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        return Response({
+            "status": "1",
+            "message": "success",
+            "data": {
+                "user": {
+                    "employee_id": job_detail.employee_id,
+                    "job_type": job_detail.job_type,
+                    "role": job_detail.role,
+                    "email": user.email,
+                    "name": f"{user.first_name} {user.last_name}",
+                    "department": {
+                        "id": department.id,
+                        "name": department.name,
+                    }
+                },
+            }
+        })

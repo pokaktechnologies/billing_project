@@ -19,6 +19,7 @@ urlpatterns = [
     path('profile/', ProfileAPIView.as_view()),
     path('logout/', LogoutView.as_view()),
     path('token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('client/token/', ClientTokenObtainPairView.as_view(), name='client_token_obtain_pair'),
     path('admin/token/', SuperuserTokenObtainPairView.as_view(), name='superuser_token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('create-staff/', CreateStaffWithPermissionsView.as_view(), name="create-staff"),

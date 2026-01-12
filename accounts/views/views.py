@@ -76,7 +76,14 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             status=status.HTTP_200_OK
         )
 
+class ClientTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomClientTokenObtainPairSerializer
 
+    def get(self, request, *args, **kwargs):
+        return Response(
+            {"detail": "Method 'GET' not allowed."},
+            status=status.HTTP_405_METHOD_NOT_ALLOWED
+        )
 
 class SuperuserTokenObtainPairView(TokenObtainPairView):
     """Token view that only issues tokens for superusers."""

@@ -104,6 +104,37 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             print(f"Skipping attendance update for {user.email} (not staff)")
 
         return data
+    
+
+class CustomClientTokenObtainPairSerializer(TokenObtainPairSerializer):
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        user = self.user
+
+        # Block superuser
+        if user.is_superuser:
+            raise serializers.ValidationError({
+                "detail": "Admin login not allowed here."
+            })
+
+        # Allowed modules
+        allowed_modules = ["client", "sales_person", "marketing"]
+
+        has_permission = ModulePermission.objects.filter(
+            user=user,
+            module_name__in=allowed_modules
+        ).exists()
+
+        # Block only if NONE of the allowed permissions exist
+        if not has_permission:
+            raise serializers.ValidationError({
+                "detail": "You do not have client access permission."
+            })
+
+        return data
+
+
 
 # Custom serializer for superuser token obtain (allows only superusers)
 class CustomSuperuserTokenObtainPairSerializer(TokenObtainPairSerializer):

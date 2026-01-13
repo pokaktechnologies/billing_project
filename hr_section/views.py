@@ -523,3 +523,23 @@ class JobApplicationStatsAPIView(APIView):
                 "most_applied_designation": {"name": "Error", "count": 0, "applications_this_week": 0},
                 "shortlisted_this_week": 0
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+class HrDashaboardView(APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'hr_section'
+
+    def get(self, request):
+        total_designations = Designation.objects.count()
+        total_job_postings = JobPosting.objects.count()
+        active_job_postings = JobPosting.objects.filter(status='active').count()
+        total_job_applications = JobApplication.objects.count()
+
+        dashboard_data = {
+            'total_designations': total_designations,
+            'total_job_postings': total_job_postings,
+            'active_job_postings': active_job_postings,
+            'total_job_applications': total_job_applications,
+        }
+
+        return Response(dashboard_data, status=status.HTTP_200_OK)

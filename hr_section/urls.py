@@ -25,4 +25,7 @@ urlpatterns = [
     path('job_application/<int:application_id>/status/', JobApplicationStatusUpdateView.as_view(), name='job_application_status_update'),
     path('job_application/search/', JobApplicationSearchView.as_view(), name='job_application_resume'),
     path('job_application/stats/', JobApplicationStatsAPIView.as_view(), name='job_application_stats'),
+
+    #Dashaboard
+    path('dashboard/', HrDashaboardView.as_view(), name='hr_dashboard_overview'),
 ]

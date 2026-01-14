@@ -608,6 +608,24 @@ class DeliveryItem(models.Model):
 
 
 class InvoiceModel(models.Model):
+    INVOICE_TYPES = (
+        ('client', 'Client'),
+        ('intern', 'Intern'),
+    )
+    invoice_type = models.CharField(
+        max_length=20,
+        choices=INVOICE_TYPES,
+        default='client'
+    )
+
+    # Intern reference
+    intern = models.ForeignKey(CustomUser, on_delete=models.PROTECT, null=True, blank=True, related_name="intern_invoices")
+    # Course reference
+    course = models.ForeignKey('internship.Course', on_delete=models.PROTECT, null=True, blank=True)
+
+    intern_name = models.CharField(max_length=100, null=True, blank=True)
+    course_name = models.CharField(max_length=200, null=True, blank=True)
+    
     user = models.ForeignKey(CustomUser, on_delete=models.PROTECT,null=True, blank=True)
     invoice_number = models.CharField(max_length=50, unique=True)
     invoice_date = models.DateField()
@@ -623,7 +641,42 @@ class InvoiceModel(models.Model):
 
 class InvoiceItem(models.Model):
     invoice = models.ForeignKey(InvoiceModel, related_name='items', on_delete=models.CASCADE)
-    delivary = models.ManyToManyField(DeliveryFormModel)
+    # Product-based invoice item fields
+    product = models.ForeignKey(Product, on_delete=models.PROTECT, null=True, blank=True)
+    quantity = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    sgst_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    cgst_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+
+    total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
+    sgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
+    cgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
+    sub_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
+
+    # Keep delivery link for backward compatibility (optional)
+    delivary = models.ManyToManyField(DeliveryFormModel, blank=True)
+
+    def save(self, *args, **kwargs):
+        # If unit_price not supplied, use product.unit_price
+        if self.unit_price == 0 and self.product:
+            self.unit_price = Decimal(self.product.unit_price)
+
+        quantity_decimal = Decimal(self.quantity)
+        unit_price_decimal = Decimal(self.unit_price)
+        sgst_pct = Decimal(str(self.sgst_percentage))
+        cgst_pct = Decimal(str(self.cgst_percentage))
+
+        self.total = unit_price_decimal * quantity_decimal
+        self.sgst = ((sgst_pct * unit_price_decimal) / Decimal(100)) * quantity_decimal
+        self.cgst = ((cgst_pct * unit_price_decimal) / Decimal(100)) * quantity_decimal
+        self.sub_total = self.total + self.sgst + self.cgst
+
+        super().save(*args, **kwargs)
+        # Update invoice grand total
+        if self.invoice:
+            total = sum(item.sub_total for item in self.invoice.items.all())
+            self.invoice.invoice_grand_total = total
+            self.invoice.save(update_fields=['invoice_grand_total'])
 
 
 class ReceiptModel(models.Model):

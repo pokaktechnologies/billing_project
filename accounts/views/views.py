@@ -2092,6 +2092,153 @@ class DelivaryOrderItemsList(APIView):
 
         return Response({"status": "1", "data": result}, status=status.HTTP_200_OK)
 
+from django.apps import apps
+Course = apps.get_model('internship', 'Course')
+
+class InternFeeInvoiceAPI(APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'invoice'
+
+
+    def get(self, request, ioid=None):
+
+        #  Single intern invoice
+        if ioid:
+            invoice = get_object_or_404(
+                InvoiceModel,
+                id=ioid,
+                invoice_type='intern'
+            )
+
+            return Response(
+                {
+                    "status": "1",
+                    "data": InvoiceOrderSerializer(invoice).data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        #  List all intern invoices
+        invoices = InvoiceModel.objects.filter(
+            invoice_type='intern'
+        ).order_by("-created_at")
+
+        return Response(
+            {
+                "status": "1",
+                "data": InvoiceOrderSerializer(invoices, many=True).data
+            },
+            status=status.HTTP_200_OK
+        )
+
+
+    def post(self, request):
+        data = request.data
+
+        try:
+            with transaction.atomic():
+
+                intern_id = data.get("intern")
+                course_id = data.get("course")
+                terms_id = data.get("termsandconditions")
+                invoice_date = data.get("invoice_date")
+                invoice_number = data.get("invoice_number")
+
+                fee_amount = Decimal(str(data.get("fee_amount", "0")))
+
+                # ❌ GST NOT ACCEPTED FROM REQUEST
+                sgst_pct = Decimal("0")
+                cgst_pct = Decimal("0")
+
+                if not intern_id or not course_id:
+                    return Response(
+                        {"error": "Intern and course are required"},
+                        status=400
+                    )
+                if not invoice_number:
+                    return Response({"error": "Invoice number required"}, status=400)
+
+                if InvoiceModel.objects.filter(invoice_number=invoice_number).exists():
+                    return Response({"error": "Invoice number already exists"}, status=400)
+
+                if fee_amount <= 0:
+                    return Response({"error": "Invalid fee amount"}, status=400)
+
+                intern = get_object_or_404(CustomUser, id=intern_id)
+                course = get_object_or_404(Course, id=course_id)
+                terms = get_object_or_404(TermsAndConditions, id=terms_id)
+
+                # ✅ Ensure intern
+                staff_profile = getattr(intern, "staff_profile", None)
+                job = getattr(staff_profile, "job_detail", None)
+
+                if not job or job.job_type != "internship":
+                    return Response(
+                        {"error": "Selected user is not an intern"},
+                        status=400
+                    )
+
+                # ✅ NO TAX FOR INTERN
+                sgst = Decimal("0")
+                cgst = Decimal("0")
+                grand_total = fee_amount
+
+                # Create invoice
+                invoice = InvoiceModel.objects.create(
+                    invoice_type='intern',
+                    intern=intern,
+                    course=course,
+                    intern_name=f"{intern.first_name} {intern.last_name}",
+                    course_name=course.title,
+                    invoice_number=invoice_number,
+                    invoice_date=invoice_date,
+                    user=request.user,
+                    invoice_grand_total=grand_total,
+                    termsandconditions=terms,
+                    remark=data.get("remark", "Intern Fee Invoice")
+                )
+
+                # One invoice item (fee-based)
+                InvoiceItem.objects.create(
+                    invoice=invoice,
+                    quantity=1,
+                    unit_price=fee_amount,
+                    sgst_percentage=0,
+                    cgst_percentage=0
+                )
+
+                # Journal Entry
+                accounts = JOURNAL_ACCOUNT_MAPPING['invoice']
+
+                journal = JournalEntry.objects.create(
+                    type='invoice',
+                    type_number=invoice.invoice_number,
+                    narration=f"Intern Fee Invoice {invoice.invoice_number}",
+                    user=request.user
+                )
+
+                JournalLine.objects.create(
+                    journal=journal,
+                    account=Account.objects.get(name=accounts['debit']),
+                    debit=grand_total
+                )
+
+                JournalLine.objects.create(
+                    journal=journal,
+                    account=Account.objects.get(name=accounts['credit']),
+                    credit=grand_total
+                )
+
+                return Response(
+                    {
+                        "status": "1",
+                        "data": InvoiceOrderSerializer(invoice).data
+                    },
+                    status=201
+                )
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
 
 
 class InvoiceOrderAPI(APIView):
@@ -2099,170 +2246,135 @@ class InvoiceOrderAPI(APIView):
     required_module = 'invoice'
     
     def get(self, request, ioid=None):
+
         if ioid:
-            invoice = get_object_or_404(InvoiceModel, id=ioid)
+            invoice = get_object_or_404(
+                InvoiceModel,
+                id=ioid,
+                invoice_type='client'   # 🔒 client only
+            )
+
             invoice_items = InvoiceItem.objects.filter(invoice=invoice)
-            termsandconditions_points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=invoice.termsandconditions)
-            termsandconditions_point_serializer = TermsAndConditionsPointSerializer(termsandconditions_points, many=True)
+            terms_points = TermsAndConditionsPoint.objects.filter(
+                terms_and_conditions=invoice.termsandconditions
+            )
+            items = InvoiceItemSerializer(invoice_items, many=True).data
 
-            # Get delivery forms linked to the invoice
-            delivery_forms = DeliveryFormModel.objects.filter(
-                id__in=invoice_items.values_list('delivary__id', flat=True)
-            ).distinct()
 
-            delivery_items = DeliveryItem.objects.filter(delivery_form__in=delivery_forms).distinct()
 
-            # Serialize invoice
-            invoice_serializer = InvoiceModelSerializer(invoice)
-
-            # Build the deliveries list with grouped items
-            deliveries_data = []
-            # mega_grand_total = Decimal("0.00")
-
-            for delivery in delivery_forms:
-                items = delivery_items.filter(delivery_form=delivery)
-                item_serializer = DeliveryItemsSerializer(items, many=True)
-
-                grand_total = delivery.grand_total or Decimal("0.00")
-                # mega_grand_total += grand_total
-
-                deliveries_data.append({
-                    "delivery_id": delivery.id,
-                    "delivery_number": delivery.delivery_number,
-                    "grand_total": float(grand_total),
-                    "items": item_serializer.data
-                })
             return Response({
                 "status": "1",
                 "data": [{
-                    **invoice_serializer.data,
-                    # "mega_grand_total": float(mega_grand_total),
-                    "termsandconditions_points": termsandconditions_point_serializer.data,
-                    "deliveries": deliveries_data
+                    **InvoiceModelSerializer(invoice).data,
+                    "termsandconditions_points": TermsAndConditionsPointSerializer(
+                        terms_points, many=True
+                    ).data,
+                    "items": items
+
                 }]
-            }, status=status.HTTP_200_OK)
+            }, status=200)
 
+        # LIST (client invoices only)
+        invoices = InvoiceModel.objects.filter(
+            invoice_type='client'
+        ).order_by("-created_at")
 
-        else:
-            invoices = InvoiceModel.objects.all().order_by("-created_at")
-
-            response_data = []
-            for invoice in invoices:
-                invoice_data = InvoiceModelSerializer(invoice).data
-
-                # Fetch receipt (if exists)
-                receipt = ReceiptModel.objects.filter(invoice=invoice).first()
-                invoice_data["receipt"] = (
-                    ReceiptForInvoiceSerializer(receipt).data if receipt else None
-                )
-
-                response_data.append(invoice_data)
-
-            return Response({
-                "status": "1",
-                "data": response_data
-            }, status=status.HTTP_200_OK)
-
+        return Response({
+            "status": "1",
+            "data": InvoiceModelSerializer(invoices, many=True).data
+        }, status=200)
 
 
 
     def post(self, request):
         data = request.data
         try:
-            # Generate a random invoice ID
+            # Create invoice with product items (no sales_order/deliveries)
             with transaction.atomic():
-                # Required field extraction
                 customer_id = data.get("client")
                 terms_id = data.get("termsandconditions")
-                sales_order_id = data.get("sales_order")  # optional
                 invoice_date = data.get("invoice_date")
-                delivery_ids = data.get("deliveries", [])  # Expecting a list
+                invoice_number = data.get("invoice_number")
+
+                if not invoice_number:
+                    return Response({"error": "Invoice number is required."}, status=status.HTTP_400_BAD_REQUEST)
+                if InvoiceModel.objects.filter(invoice_number=invoice_number).exists():
+                    return Response({"error": "Invoice number already exists."}, status=status.HTTP_400_BAD_REQUEST)
 
                 if not customer_id:
                     return Response({"error": "Customer not provided."}, status=status.HTTP_400_BAD_REQUEST)
                 if not terms_id:
                     return Response({"error": "Terms and conditions not provided."}, status=status.HTTP_400_BAD_REQUEST)
-                if not delivery_ids or not isinstance(delivery_ids, list):
-                    return Response({"error": "Deliveries must be a list of IDs."}, status=status.HTTP_400_BAD_REQUEST)
 
-                # check deliveries belong to same customer and sales order
-                for delivery_id in delivery_ids:
-                    delivery = get_object_or_404(DeliveryFormModel, id=delivery_id)
-                    if delivery.customer.id != customer_id:
-                        return Response({"error": f"Delivery {delivery.id} does not belong to the provided customer."}, status=status.HTTP_400_BAD_REQUEST)
-                    if sales_order_id and delivery.sales_order_id != sales_order_id:
-                        return Response({"error": f"Delivery {delivery.id} does not belong to the provided sales order."},status=status.HTTP_400_BAD_REQUEST)
-
-
-                    # check the delivary is already invoiced or not
-                deliveries = DeliveryFormModel.objects.filter(id__in=delivery_ids)
-                if deliveries.count() != len(delivery_ids):
-                    return Response({"error": "Some delivery IDs are invalid."}, status=status.HTTP_400_BAD_REQUEST)
-
-                for delivery in deliveries:
-                    if delivery.is_invoiced:
-                        return Response({"error": f"Delivery {delivery.id} is already invoiced."}, status=status.HTTP_400_BAD_REQUEST)
-
-                    # Fetch related models
                 customer = get_object_or_404(Customer, id=customer_id)
                 terms = get_object_or_404(TermsAndConditions, id=terms_id)
-                sales_order = None
-                if sales_order_id:
-                    sales_order = get_object_or_404(SalesOrderModel, id=sales_order_id)
 
-                if deliveries.count() != len(delivery_ids):
-                    return Response({"error": "Some delivery IDs are invalid."}, status=status.HTTP_400_BAD_REQUEST)
-                
-                invoice_grand_total_amount = Decimal("0.00")
-                for delivery in deliveries:
-                    invoice_grand_total_amount += delivery.grand_total
+                items = data.get("items", [])
+                if not items or not isinstance(items, list):
+                    return Response({"error": "Invoice must include an 'items' list."}, status=status.HTTP_400_BAD_REQUEST)
 
-                # Create the invoice
+                # Create invoice record first
                 invoice_form = InvoiceModel.objects.create(
+                    invoice_type='client',
                     client=customer,
-                    invoice_number=data.get("invoice_number"),
+                    invoice_number=invoice_number,
                     user=request.user,
-                    sales_order=sales_order,  # now optional
                     invoice_date=invoice_date,
-                    invoice_grand_total=invoice_grand_total_amount,
+                    invoice_grand_total=Decimal("0.00"),
                     termsandconditions=terms,
                     remark=data.get("remark", "")
                 )
 
-                # Create InvoiceItems and assign deliveries (M2M)
-                for delivery in deliveries:
-                    invoice_item = InvoiceItem.objects.create(invoice=invoice_form)
-                    invoice_item.delivary.add(delivery)  # M2M assignment
-                
-                #updated is_invoiced field in DeliveryFormModel
-                for delivery in deliveries:
-                    delivery.is_invoiced = True
-                    delivery.save()
-                    
+                # Create product-based InvoiceItems
+                grand_total = Decimal("0.00")
+                for it in items:
+                    product_id = it.get("product")
+                    if not product_id:
+                        invoice_form.delete()
+                        return Response({"error": "Each item must include a 'product' id."}, status=status.HTTP_400_BAD_REQUEST)
+
+                    product = get_object_or_404(Product, id=product_id)
+                    quantity = Decimal(str(it.get("quantity", "0")))
+                    unit_price = Decimal(str(it.get("unit_price", product.unit_price)))
+                    sgst_pct = Decimal(str(it.get("sgst_percentage", product.sgst)))
+                    cgst_pct = Decimal(str(it.get("cgst_percentage", product.cgst)))
+
+                    inv_item = InvoiceItem.objects.create(
+                        invoice=invoice_form,
+                        product=product,
+                        quantity=quantity,
+                        unit_price=unit_price,
+                        sgst_percentage=sgst_pct,
+                        cgst_percentage=cgst_pct,
+                    )
+                    # inv_item.save() will compute totals and update invoice
+                    grand_total += inv_item.sub_total
+
+                # ensure invoice_grand_total set
+                invoice_form.invoice_grand_total = grand_total
+                invoice_form.save(update_fields=["invoice_grand_total"])
+
+                # Create journal entry
                 accounts = JOURNAL_ACCOUNT_MAPPING['invoice']
                 debit_account = Account.objects.get(name=accounts['debit'])
                 credit_account = Account.objects.get(name=accounts['credit'])
-                print("debit_account, credit_account",debit_account, credit_account)
 
-                salesperson = None
-                if sales_order:
-                    salesperson = sales_order.customer.salesperson
                 with transaction.atomic():
                     journal = JournalEntry.objects.create(
                         type='invoice',
                         type_number=invoice_form.invoice_number,
-                        # salesperson=invoice_form.sales_order.customer.salesperson,
-                        salesperson=salesperson,
+                        salesperson=None,
                         narration=f'Invoice {invoice_form.invoice_number} for {customer.first_name} {customer.last_name}',
                         user=request.user
                     )
 
-                    JournalLine.objects.create(journal=journal, account=debit_account, debit=invoice_grand_total_amount)
-                    JournalLine.objects.create(journal=journal, account=credit_account, credit=invoice_grand_total_amount)
+                    JournalLine.objects.create(journal=journal, account=debit_account, debit=grand_total)
+                    JournalLine.objects.create(journal=journal, account=credit_account, credit=grand_total)
+
+                invoice_data = InvoiceOrderSerializer(invoice_form).data
                 return Response({
-                    "message": "Invoice created successfully",
-                    "invoice_number": invoice_form.invoice_number,
-                    "invoice_id": invoice_form.id
+                    "status": "1",
+                    "data": [invoice_data]
                 }, status=status.HTTP_201_CREATED)
 
         except IntegrityError as e:
@@ -2270,166 +2382,101 @@ class InvoiceOrderAPI(APIView):
         except Exception as e:
             return Response({"error": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
     def patch(self, request, ioid=None):
         if not ioid:
             return Response({"error": "Invoice ID is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         invoice = get_object_or_404(InvoiceModel, id=ioid)
 
+        # 🔒 Block intern invoices
+        if invoice.invoice_type != 'client':
+            return Response(
+                {"error": "Intern invoices cannot be modified"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         data = request.data
-        new_client_id      = data.get("client",       invoice.client_id)
-        new_sales_order_id = data.get("sales_order",  invoice.sales_order_id)
-        new_delivery_ids   = data.get("deliveries",   None)  # only validate if present
 
-        # 1) Validate client
-        if "client" in data and not Customer.objects.filter(id=new_client_id).exists():
-            return Response({"error": "Invalid client ID."}, status=status.HTTP_400_BAD_REQUEST)
+        # Validate client (if provided)
+        if "client" in data:
+            if not Customer.objects.filter(id=data["client"]).exists():
+                return Response({"error": "Invalid client ID"}, status=400)
 
-        # 2) Validate sales_order
-        if "sales_order" in data and new_sales_order_id:
-            if not SalesOrderModel.objects.filter(id=new_sales_order_id).exists():
-                return Response({"error": "Invalid sales order ID."}, status=status.HTTP_400_BAD_REQUEST)
-
-            so = SalesOrderModel.objects.get(id=new_sales_order_id)
-            if so.customer_id != new_client_id:
-                return Response({"error": "Sales order does not belong to the client."},
-                                status=status.HTTP_400_BAD_REQUEST)
-
-
-        # 3) Validate deliveries list if provided
-        if new_delivery_ids is not None:
-            if not isinstance(new_delivery_ids, list) or not new_delivery_ids:
-                return Response({"error": "Deliveries must be a non-empty list of IDs."},
-                                status=status.HTTP_400_BAD_REQUEST)
-
-            # ensure each delivery exists, belongs to the client & sales_order, and is not already invoiced by another invoice
-            for did in new_delivery_ids:
-                delivery = DeliveryFormModel.objects.filter(id=did).first()
-                if not delivery:
-                    return Response({"error": f"Delivery {did} does not exist."},
-                                    status=status.HTTP_400_BAD_REQUEST)
-                if delivery.customer_id != new_client_id:
-                    return Response({"error": f"Delivery {did} does not belong to client."},
-                                    status=status.HTTP_400_BAD_REQUEST)
-
-                if new_sales_order_id and delivery.sales_order_id != new_sales_order_id:
-                    return Response({"error": f"Delivery {did} does not belong to sales order."},
-                                    status=status.HTTP_400_BAD_REQUEST)
-
-                # if it's already linked to THIS invoice, that's fine; if linked to another invoice, reject
-                if delivery.is_invoiced and not invoice.items.filter(delivary=delivery).exists():
-                    return Response({"error": f"Delivery {did} is already invoiced."},
-                                    status=status.HTTP_400_BAD_REQUEST)
-
-
-
-
-        # 4) Now perform the update
-        serializer = InvoiceModelSerializer(invoice, data=data, partial=True)
-        # update the invoice grand total
-        # print(new_delivery_ids)
+        serializer = InvoiceModelSerializer(
+            invoice,
+            data=data,
+            partial=True
+        )
 
         if not serializer.is_valid():
-            return Response({"status": "0", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"status": "0", "errors": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         serializer.save()
 
-        # 5) If deliveries were provided, replace M2M links
-        if new_delivery_ids is not None:
-            with transaction.atomic():
-                # un‐invoice old deliveries we’re unlinking
-                old_dids = invoice.items.values_list('delivary__id', flat=True)
-                for old in old_dids:
-                    if old not in new_delivery_ids:
-                        d = DeliveryFormModel.objects.get(id=old)
-                        d.is_invoiced = False
-                        d.save(update_fields=["is_invoiced"])
-
-                # drop existing join‐rows
-                invoice.items.all().delete()
-
-                # link new set and mark them invoiced
-                for did in new_delivery_ids:
-                    delivery = DeliveryFormModel.objects.get(id=did)
-                    inv_item = InvoiceItem.objects.create(invoice=invoice)
-                    inv_item.delivary.add(delivery)
-                    delivery.is_invoiced = True
-                    delivery.save(update_fields=["is_invoiced"])
-        
-        # 6) Recompute the invoice’s grand total
-        total = Decimal("0.00")
-        for inv_item in invoice.items.all():
-            # each InvoiceItem has exactly one delivery in your design
-            delivery = inv_item.delivary.first()
-            if delivery and delivery.grand_total:
-                total += delivery.grand_total
-
-        invoice.invoice_grand_total = total
-        invoice.save(update_fields=["invoice_grand_total"])
-
-        # 7) Return updated invoice
-        updated = InvoiceModelSerializer(invoice)
-        # After updating invoice grand total
-        invoice_grand_total_amount = invoice.invoice_grand_total
-
-        # Fetch the journal linked to this invoice via type_number
-        journal = JournalEntry.objects.filter(type='invoice', type_number=invoice.invoice_number).first()
+        # 🔁 Update journal
+        journal = JournalEntry.objects.filter(
+            type='invoice',
+            type_number=invoice.invoice_number
+        ).first()
 
         if journal:
-            # Update narration and date if needed
-            customer_display = f"{invoice.client.first_name} {invoice.client.last_name}"  # or company_name
+            customer_display = f"{invoice.client.first_name} {invoice.client.last_name}"
             journal.narration = f"Invoice {invoice.invoice_number} for {customer_display}"
             journal.date = invoice.invoice_date
-            journal.save(update_fields=['narration', 'date'])
+            journal.save(update_fields=["narration", "date"])
 
-            # Remove old journal lines
             journal.lines.all().delete()
 
-            # Recreate journal lines with updated amounts
             accounts = JOURNAL_ACCOUNT_MAPPING['invoice']
-            debit_account = Account.objects.get(name=accounts['debit'])
-            credit_account = Account.objects.get(name=accounts['credit'])
+            JournalLine.objects.create(
+                journal=journal,
+                account=Account.objects.get(name=accounts['debit']),
+                debit=invoice.invoice_grand_total
+            )
+            JournalLine.objects.create(
+                journal=journal,
+                account=Account.objects.get(name=accounts['credit']),
+                credit=invoice.invoice_grand_total
+            )
 
-            JournalLine.objects.create(journal=journal, account=debit_account, debit=invoice_grand_total_amount)
-            JournalLine.objects.create(journal=journal, account=credit_account, credit=invoice_grand_total_amount)
-
-        return Response({"status": "1", "message": "Invoice updated successfully.",}, status=status.HTTP_200_OK)
+        return Response(
+            {"status": "1", "message": "Invoice updated successfully"},
+            status=status.HTTP_200_OK
+        )
 
     def delete(self, request, ioid=None):
         if not ioid:
             return Response({"error": "Invoice ID is required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            with transaction.atomic():
-                invoice = get_object_or_404(InvoiceModel, id=ioid)
+        invoice = get_object_or_404(InvoiceModel, id=ioid)
 
-                # 1) Collect all linked deliveries
-                linked_delivery_ids = invoice.items.values_list('delivary__id', flat=True)
+        # 🔒 Block intern invoices
+        if invoice.invoice_type != 'client':
+            return Response(
+                {"error": "Intern invoices cannot be deleted"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-                # 2) Revert their is_invoiced flags
-                for did in linked_delivery_ids:
-                    delivery = DeliveryFormModel.objects.get(id=did)
-                    delivery.is_invoiced = False
-                    delivery.save(update_fields=["is_invoiced"])
+        with transaction.atomic():
+            # Delete invoice items
+            invoice.items.all().delete()
 
-                # 3) Delete all InvoiceItem rows for this invoice
-                invoice.items.all().delete()
+            # Delete journal
+            JournalEntry.objects.filter(
+                type='invoice',
+                type_number=invoice.invoice_number
+            ).delete()
 
-                # 4) Finally delete the invoice itself
-                invoice.delete()
+            # Delete invoice
+            invoice.delete()
 
-                # Fetch the journal linked to this invoice
-                journal = JournalEntry.objects.filter(type='invoice', type_number=invoice.invoice_number).first()
-
-                if journal:
-                    journal.delete()
-                return Response({
-                    "status": "1",
-                    "message": "Invoice deleted and linked deliveries marked uninvoiced."
-                }, status=status.HTTP_200_OK)
-
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {"status": "1", "message": "Invoice deleted successfully"},
+            status=status.HTTP_200_OK
+        )
 
 
 

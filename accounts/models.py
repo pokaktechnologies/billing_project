@@ -619,7 +619,7 @@ class InvoiceModel(models.Model):
     )
 
     # Intern reference
-    intern = models.ForeignKey(CustomUser, on_delete=models.PROTECT, null=True, blank=True, related_name="intern_invoices")
+    intern = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, null=True, blank=True, related_name="intern_invoices")
     # Course reference
     course = models.ForeignKey('internship.Course', on_delete=models.PROTECT, null=True, blank=True)
 

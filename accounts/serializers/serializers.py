@@ -773,7 +773,7 @@ class PrintInvoiceSerializer(serializers.ModelSerializer):
     def get_salesperson(self, obj):
         salesperson = obj.sales_order.customer.salesperson
 class InvoiceOrderSerializer(serializers.ModelSerializer):
-    intern_email = serializers.CharField(source='intern.email', read_only=True)
+    intern_email = serializers.CharField(source='intern.user.email', read_only=True)
     course_title = serializers.CharField(source='course.title', read_only=True)
     # client = CustomerSerializer(read_only=True)
     termsandconditions = serializers.SerializerMethodField()

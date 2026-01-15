@@ -2099,38 +2099,27 @@ class InternFeeInvoiceAPI(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'invoice'
 
-
     def get(self, request, ioid=None):
 
-        #  Single intern invoice
         if ioid:
             invoice = get_object_or_404(
                 InvoiceModel,
                 id=ioid,
                 invoice_type='intern'
             )
-
             return Response(
-                {
-                    "status": "1",
-                    "data": InvoiceOrderSerializer(invoice).data
-                },
+                {"status": "1", "data": InvoiceOrderSerializer(invoice).data},
                 status=status.HTTP_200_OK
             )
 
-        #  List all intern invoices
         invoices = InvoiceModel.objects.filter(
             invoice_type='intern'
         ).order_by("-created_at")
 
         return Response(
-            {
-                "status": "1",
-                "data": InvoiceOrderSerializer(invoices, many=True).data
-            },
+            {"status": "1", "data": InvoiceOrderSerializer(invoices, many=True).data},
             status=status.HTTP_200_OK
         )
-
 
     def post(self, request):
         data = request.data
@@ -2146,15 +2135,13 @@ class InternFeeInvoiceAPI(APIView):
 
                 fee_amount = Decimal(str(data.get("fee_amount", "0")))
 
-                # ❌ GST NOT ACCEPTED FROM REQUEST
-                sgst_pct = Decimal("0")
-                cgst_pct = Decimal("0")
+                # ✅ GST ALLOWED (OPTIONAL)
+                sgst_pct = Decimal(str(data.get("sgst_percentage", "0")))
+                cgst_pct = Decimal(str(data.get("cgst_percentage", "0")))
 
                 if not intern_id or not course_id:
-                    return Response(
-                        {"error": "Intern and course are required"},
-                        status=400
-                    )
+                    return Response({"error": "Intern and course are required"}, status=400)
+
                 if not invoice_number:
                     return Response({"error": "Invoice number required"}, status=400)
 
@@ -2164,31 +2151,29 @@ class InternFeeInvoiceAPI(APIView):
                 if fee_amount <= 0:
                     return Response({"error": "Invalid fee amount"}, status=400)
 
-                intern = get_object_or_404(CustomUser, id=intern_id)
+                intern = get_object_or_404(StaffProfile, id=intern_id)
+                user = intern.user
                 course = get_object_or_404(Course, id=course_id)
                 terms = get_object_or_404(TermsAndConditions, id=terms_id)
 
-                # ✅ Ensure intern
-                staff_profile = getattr(intern, "staff_profile", None)
-                job = getattr(staff_profile, "job_detail", None)
+                # Ensure intern
+                job = getattr(intern, "job_detail", None)
+
 
                 if not job or job.job_type != "internship":
-                    return Response(
-                        {"error": "Selected user is not an intern"},
-                        status=400
-                    )
+                    return Response({"error": "Selected user is not an intern"}, status=400)
 
-                # ✅ NO TAX FOR INTERN
-                sgst = Decimal("0")
-                cgst = Decimal("0")
-                grand_total = fee_amount
+                # GST calculation
+                sgst = (fee_amount * sgst_pct) / Decimal(100)
+                cgst = (fee_amount * cgst_pct) / Decimal(100)
+                grand_total = fee_amount + sgst + cgst
 
                 # Create invoice
                 invoice = InvoiceModel.objects.create(
                     invoice_type='intern',
                     intern=intern,
                     course=course,
-                    intern_name=f"{intern.first_name} {intern.last_name}",
+                    intern_name=f"{user.first_name} {user.last_name}",
                     course_name=course.title,
                     invoice_number=invoice_number,
                     invoice_date=invoice_date,
@@ -2198,13 +2183,13 @@ class InternFeeInvoiceAPI(APIView):
                     remark=data.get("remark", "Intern Fee Invoice")
                 )
 
-                # One invoice item (fee-based)
+                # Invoice item
                 InvoiceItem.objects.create(
                     invoice=invoice,
                     quantity=1,
                     unit_price=fee_amount,
-                    sgst_percentage=0,
-                    cgst_percentage=0
+                    sgst_percentage=sgst_pct,
+                    cgst_percentage=cgst_pct
                 )
 
                 # Journal Entry
@@ -2230,11 +2215,8 @@ class InternFeeInvoiceAPI(APIView):
                 )
 
                 return Response(
-                    {
-                        "status": "1",
-                        "data": InvoiceOrderSerializer(invoice).data
-                    },
-                    status=201
+                    {"status": "1", "data": InvoiceOrderSerializer(invoice).data},
+                    status=status.HTTP_201_CREATED
                 )
 
         except Exception as e:

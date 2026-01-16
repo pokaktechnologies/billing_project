@@ -2223,48 +2223,80 @@ class InternFeeInvoiceAPI(APIView):
             return Response({"error": str(e)}, status=500)
 
 
+
 class InvoiceOrderAPI(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'invoice'
-    
-    def get(self, request, ioid=None):
 
-        if ioid:
-            invoice = get_object_or_404(
-                InvoiceModel,
-                id=ioid,
-                invoice_type='client'   # 🔒 client only
+    def get(self, request):
+        """
+        Query params:
+        ?type=client|intern|all
+        ?id=invoice_id
+        ?intern=staffprofile_id
+        ?client=customer_id
+        ?from_date=YYYY-MM-DD
+        ?to_date=YYYY-MM-DD
+        """
+
+        qs = InvoiceModel.objects.all().order_by("-created_at")
+
+        invoice_id = request.query_params.get("id")
+        invoice_type = request.query_params.get("type")
+        intern_id = request.query_params.get("intern")
+        client_id = request.query_params.get("client")
+        from_date = request.query_params.get("from_date")
+        to_date = request.query_params.get("to_date")
+
+        # 1. Single invoice
+        if invoice_id:
+            invoice = get_object_or_404(InvoiceModel, id=invoice_id)
+
+            serializer = (
+                InternInvoiceSerializer(invoice)
+                if invoice.invoice_type == "intern"
+                else ClientInvoiceSerializer(invoice)
             )
 
-            invoice_items = InvoiceItem.objects.filter(invoice=invoice)
-            terms_points = TermsAndConditionsPoint.objects.filter(
-                terms_and_conditions=invoice.termsandconditions
+            return Response(
+                {"status": "1", "data": serializer.data},
+                status=status.HTTP_200_OK
             )
-            items = InvoiceItemSerializer(invoice_items, many=True).data
 
+        # 2. Type filter
+        if invoice_type in ["client", "intern"]:
+            qs = qs.filter(invoice_type=invoice_type)
 
+        # 3. Intern filter
+        if intern_id:
+            qs = qs.filter(intern_id=intern_id)
 
-            return Response({
-                "status": "1",
-                "data": [{
-                    **InvoiceModelSerializer(invoice).data,
-                    "termsandconditions_points": TermsAndConditionsPointSerializer(
-                        terms_points, many=True
-                    ).data,
-                    "items": items
+        # 4. Client filter
+        if client_id:
+            qs = qs.filter(client_id=client_id)
 
-                }]
-            }, status=200)
+        # 5. Date filters
+        if from_date:
+            qs = qs.filter(invoice_date__gte=from_date)
+        if to_date:
+            qs = qs.filter(invoice_date__lte=to_date)
 
-        # LIST (client invoices only)
-        invoices = InvoiceModel.objects.filter(
-            invoice_type='client'
-        ).order_by("-created_at")
+        # 6. Mixed response
+        response_data = []
+        for invoice in qs:
+            if invoice.invoice_type == "intern":
+                response_data.append(
+                    InternInvoiceSerializer(invoice).data
+                )
+            else:
+                response_data.append(
+                    ClientInvoiceSerializer(invoice).data
+                )
 
-        return Response({
-            "status": "1",
-            "data": InvoiceModelSerializer(invoices, many=True).data
-        }, status=200)
+        return Response(
+            {"status": "1", "data": response_data},
+            status=status.HTTP_200_OK
+        )
 
 
 
@@ -2370,7 +2402,7 @@ class InvoiceOrderAPI(APIView):
 
         invoice = get_object_or_404(InvoiceModel, id=ioid)
 
-        # 🔒 Block intern invoices
+        #  Block intern invoices
         if invoice.invoice_type != 'client':
             return Response(
                 {"error": "Intern invoices cannot be modified"},
@@ -2398,7 +2430,7 @@ class InvoiceOrderAPI(APIView):
 
         serializer.save()
 
-        # 🔁 Update journal
+        #  Update journal
         journal = JournalEntry.objects.filter(
             type='invoice',
             type_number=invoice.invoice_number
@@ -2435,7 +2467,7 @@ class InvoiceOrderAPI(APIView):
 
         invoice = get_object_or_404(InvoiceModel, id=ioid)
 
-        # 🔒 Block intern invoices
+        #  Block intern invoices
         if invoice.invoice_type != 'client':
             return Response(
                 {"error": "Intern invoices cannot be deleted"},
@@ -2506,7 +2538,7 @@ class PrintInvoiceView(APIView):
             "data": [{
                 **invoice_serializer.data,
                 "items": items_data,
-                # "receipt": receipt_data   # ✅ HERE
+                # "receipt": receipt_data   
             }]
         }, status=status.HTTP_200_OK)
 

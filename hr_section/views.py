@@ -6,9 +6,13 @@ from rest_framework import permissions, status as drf_status
 from django.db.models import Count, Q, F
 from django.shortcuts import get_object_or_404
 from rest_framework.parsers import MultiPartParser, FormParser
+from accounts.models import StaffProfile
 from accounts.permissions import HasModulePermission
 from rest_framework.permissions import IsAuthenticated
 from datetime import timedelta
+
+from accounts.serializers.user import StaffProfileSerializer
+from attendance.models import DailyAttendance
 
 from .models import *
 from .serializers import *
@@ -530,16 +534,52 @@ class HrDashaboardView(APIView):
     required_module = 'hr_section'
 
     def get(self, request):
-        total_designations = Designation.objects.count()
-        total_job_postings = JobPosting.objects.count()
-        active_job_postings = JobPosting.objects.filter(status='active').count()
-        total_job_applications = JobApplication.objects.count()
+        enquiries = Enquiry.objects.all()
+        total_enquiries = enquiries.count()
+        total_new_enquiries = enquiries.filter(status='new').count()
+        total_reviewed_enquiries = enquiries.filter(status='reviewed').count()
+        total_responded_enquiries = enquiries.filter(status='responded').count()
 
-        dashboard_data = {
-            'total_designations': total_designations,
-            'total_job_postings': total_job_postings,
-            'active_job_postings': active_job_postings,
-            'total_job_applications': total_job_applications,
+        enquiries_list = EnquirySerializer(enquiries[:3], many=True).data
+
+        staff = StaffProfile.objects.filter(job_detail__isnull=False)
+        total_staff = staff.count()
+        active_staff = staff.filter(job_detail__status='active').count()
+        staff_on_leave = StaffProfile.objects.filter(
+            daily_attendance__status="leave",
+            daily_attendance__date=timezone.localdate()).distinct()
+        on_leave = staff_on_leave.count()
+        staff_list = StaffProfileSerializer(staff_on_leave[:3], many=True).data
+
+
+        enquiries_data = {
+            'total_enquiries': total_enquiries,
+            'total_new_enquiries': total_new_enquiries,
+            'total_reviewed_enquiries': total_reviewed_enquiries,
+            'total_responded_enquiries': total_responded_enquiries,
+            'enquiries_list': enquiries_list,
+        }
+        staff_data = {
+            'total_staff': total_staff,
+            'active_staff': active_staff,
+            'on_leave': on_leave,
+            'staff_list': staff_list,
+        }
+        attendance_data = {
+            'absent_staff': on_leave,
+            'present_staff': total_staff - on_leave,
+            'late_staff': DailyAttendance.objects.filter(
+                sessions__status='late',
+                date=timezone.localdate()
+            ).distinct().count(),
         }
 
-        return Response(dashboard_data, status=status.HTTP_200_OK)
+
+
+        return Response(
+            {
+             'enquiries': enquiries_data, 
+             'staff': staff_data,
+            'attendance': attendance_data
+            },
+            status=status.HTTP_200_OK)

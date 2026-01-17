@@ -16,7 +16,7 @@ from django.conf import settings
 from django.db.models import Q
 
 from attendance.models import DailyAttendance
-from attendance.serializers import DailyAttendanceSessionDetailSerializer
+from attendance.serializers import DailyAttendanceSerializer, DailyAttendanceSessionDetailSerializer
 from django.utils.dateparse import parse_date
 from datetime import datetime
 
@@ -642,6 +642,17 @@ class DeveloperDashboardView(APIView):
 
         serializers_projects = ProjectsDetailSerializer(projects, many=True)
 
+        today = timezone.localdate()
+        today_attendance = DailyAttendance.objects.filter(
+            staff=staff_profile,
+            date=today
+        ).first()
+        if today_attendance:
+            attendance = DailyAttendanceSessionDetailSerializer(today_attendance).data
+        else:
+            attendance = None
+
+
         return Response({
             "status": "1",
             "message": "success",
@@ -657,12 +668,6 @@ class DeveloperDashboardView(APIView):
                         "name": department.name,
                     }
                 },
-                # "attendance": {
-                #     "status": "Present",
-                #     "checkIn": "09:15 AM",
-                #     "checkOut": "06:30 PM",
-                #     "workingHours": "8h 15m"
-                # },
                 "projects": serializers_projects.data,
                 "task_summary": task_summary,
                 "not_started_tasks": not_started_tasks_data,
@@ -670,6 +675,7 @@ class DeveloperDashboardView(APIView):
                 "completed_tasks": completed_tasks_data,
                 "on_hold_tasks": on_hold_tasks_data,
                 "cancelled_tasks": cancelled_tasks_data,
+                "attendance": attendance,
             }
         })
 

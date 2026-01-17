@@ -4,11 +4,15 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.authentication import JWTAuthentication
+
+from attendance.models import DailyAttendance
+from attendance.serializers import DailyAttendanceSessionDetailSerializer
 from .serializers import *
 from .models import *
 from django.db import transaction
 from datetime import datetime
 from accounts.permissions import HasModulePermission
+from django.utils import timezone
 
 
 
@@ -1031,6 +1035,13 @@ class ProjectManagerDashboardView(APIView):
 
     def get(self, request):
         user = request.user
+        staff_profile = getattr(user, 'staff_profile', None)
+
+        if not staff_profile:
+            return Response(
+                {"status": "0", "message": "No staff profile found"},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         # -----------------------------
         # PROJECTS OWNED BY PM
@@ -1066,6 +1077,17 @@ class ProjectManagerDashboardView(APIView):
         assigned_task_serializer = AssignedTaskListSerializer(assigned_tasks[:3], many=True)
         submitted_tasks_serializer = AssignedTaskListSerializer(submitted_tasks[:3], many=True)
 
+        today = timezone.localdate()
+        today_attendance = DailyAttendance.objects.filter(
+            staff=staff_profile,
+            date=today
+        ).first()
+        if today_attendance:
+            attendance = DailyAttendanceSessionDetailSerializer(today_attendance).data
+        else:
+            attendance = None
+
+
         # -----------------------------
         # RESPONSE
         # -----------------------------
@@ -1083,6 +1105,7 @@ class ProjectManagerDashboardView(APIView):
                     "projects": project_serializer.data,
                     "assigned_tasks": assigned_task_serializer.data,
                     "submitted_tasks": submitted_tasks_serializer.data,
+                    'attendance': attendance,
                 }
             },
             status=status.HTTP_200_OK

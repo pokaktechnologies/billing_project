@@ -11,6 +11,8 @@ from django.utils.timezone import make_aware
 from django.db.models import Q
 
 from accounts.permissions import HasModulePermission
+from attendance.models import DailyAttendance
+from attendance.serializers import DailyAttendanceSessionDetailSerializer
 
 from ..models import *
 from ..serializers.LeadsSerializers import *
@@ -955,3 +957,217 @@ class RemindersSummaryView(SalesPersonBaseView, APIView):
                 "overdue": overdue
             }
         })
+
+
+#Dashboard BDE ---------
+
+from datetime import date, timedelta, datetime
+from django.db.models import Count
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+
+class BDEDashboardView(SalesPersonBaseView, APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'marketing'
+
+    def get(self, request):
+        salesperson = self.get_salesperson(request.user)
+        if not salesperson:
+            return Response({"status": "0", "message": "No salesperson assigned"}, status=400)
+
+        today = date.today()
+        start_of_month = today.replace(day=1)
+        start_of_week = today - timedelta(days=today.weekday())
+        tomorrow = today + timedelta(days=1)
+
+        # ================= LEADS =================
+        all_leads = Lead.objects.filter(salesperson=salesperson)
+
+        total_leads = all_leads.count()
+
+        # Leads by status (SINGLE QUERY)
+        lead_status_summary = {
+            'new': 0,
+            'contacted': 0,
+            'follow_up': 0,
+            'in_progress': 0,
+            'converted': 0,
+            'lost': 0,
+        }
+
+        status_counts = all_leads.values('lead_status').annotate(count=Count('id'))
+        for item in status_counts:
+            lead_status_summary[item['lead_status']] = item['count']
+
+        # Leads by source (SINGLE QUERY)
+        leads_by_source_qs = all_leads.values(
+            'lead_source__name'
+        ).annotate(count=Count('id'))
+
+        leads_by_source_data = {
+            item['lead_source__name'] or 'Unknown': item['count']
+            for item in leads_by_source_qs
+        }
+
+        leads_this_month = all_leads.filter(created_at__gte=start_of_month).count()
+        leads_this_week = all_leads.filter(created_at__gte=start_of_week).count()
+
+        # ================= MEETINGS =================
+        meetings_base = Meeting.objects.filter(
+            lead__salesperson=salesperson
+        )
+
+        meetings_today_qs = meetings_base.filter(
+            date=today,
+            status='scheduled'
+        ).select_related('lead').order_by('time')
+
+        meetings_data = [
+            {
+                "client": m.lead.company or m.lead.name,
+                "time": m.time.strftime("%I:%M %p") if m.time else "N/A",
+                "type": m.get_meeting_type_display(),
+                "date": "Today"
+            }
+            for m in meetings_today_qs
+        ]
+
+        meeting_counts = meetings_base.values('status').annotate(count=Count('id'))
+        meeting_summary_map = {m['status']: m['count'] for m in meeting_counts}
+
+        total_meetings = sum(meeting_summary_map.values())
+        completed_meetings = meeting_summary_map.get('completed', 0)
+        upcoming_meetings = meetings_base.filter(
+            date__gte=today,
+            status='scheduled'
+        ).count()
+
+        meeting_summary = {
+            'total': total_meetings,
+            'completed': completed_meetings,
+            'upcoming': upcoming_meetings,
+            'today': meetings_today_qs.count(),
+            'conversion_rate': f"{round((completed_meetings / total_meetings * 100), 1) if total_meetings else 0}%"
+        }
+
+        # ================= REMINDERS =================
+        reminders_today = Reminders.objects.filter(
+            lead__salesperson=salesperson,
+            date=today,
+            status='scheduled'
+        ).order_by('time')
+
+        reminders_data = []
+        current_time = datetime.now().time()
+
+        for r in reminders_today:
+            if r.time and r.time > current_time:
+                diff = (
+                    datetime.combine(today, r.time)
+                    - datetime.combine(today, current_time)
+                )
+                hours, remainder = divmod(diff.seconds, 3600)
+                minutes = remainder // 60
+                time_display = (
+                    f"In {hours} hour{'s' if hours != 1 else ''}"
+                    if hours > 0 else
+                    f"In {minutes} minute{'s' if minutes != 1 else ''}"
+                )
+            else:
+                time_display = "Overdue"
+
+            reminders_data.append({
+                "text": r.title,
+                "time": time_display
+            })
+
+        tomorrow_reminders = Reminders.objects.filter(
+            lead__salesperson=salesperson,
+            date=tomorrow,
+            status='scheduled'
+        ).order_by('time')[:2]
+
+        for r in tomorrow_reminders:
+            reminders_data.append({
+                "text": r.title,
+                "time": "Tomorrow"
+            })
+
+        # ================= FOLLOW UPS =================
+        all_followups = FollowUp.objects.filter(lead__salesperson=salesperson)
+
+        followup_counts = all_followups.values('status').annotate(count=Count('id'))
+        followup_status_map = {f['status']: f['count'] for f in followup_counts}
+
+        followup_summary = {
+            'total': all_followups.count(),
+            'today': all_followups.filter(date=today).count(),
+            'upcoming': all_followups.filter(date__gt=today).count(),
+            'overdue': all_followups.filter(date__lt=today, status='new').count(),
+            'completed': followup_status_map.get('completed', 0),
+        }
+
+        # ================= Attendance =================
+        staff_profile = salesperson.assigned_staff
+        today = timezone.localdate()
+
+        today_attendance = DailyAttendance.objects.filter(
+            staff=staff_profile,
+            date=today
+        ).first()
+
+        attendance = (
+            DailyAttendanceSessionDetailSerializer(today_attendance).data
+            if today_attendance else None
+        )
+        # ================= ACTIVITY LOGS =================
+        # recent_activities = ActivityLog.objects.filter(
+        #     lead__salesperson=salesperson
+        # ).select_related('lead').order_by('-timestamp')[:5]
+
+        # activities_data = [
+        #     {
+        #         'lead_name': a.lead.name,
+        #         'activity_type': a.get_activity_type_display(),
+        #         'action': a.action,
+        #         'timestamp': a.timestamp.strftime("%b %d, %I:%M %p")
+        #     }
+        #     for a in recent_activities
+        # ]
+
+        # ================= CONVERSION METRICS =================
+        # converted = lead_status_summary['converted']
+        # lost = lead_status_summary['lost']
+
+        # metrics = {
+        #     'conversion_rate': f"{round((converted / total_leads * 100), 1) if total_leads else 0}%",
+        #     'loss_rate': f"{round((lost / total_leads * 100), 1) if total_leads else 0}%",
+        #     'converted_leads': converted,
+        #     'lost_leads': lost,
+        #     'pending_leads': total_leads - converted - lost
+        # }
+
+        return Response({
+            "status": "1",
+            "message": "success",
+            "data": {
+                "lead_overview": {
+                    "total_leads": total_leads,
+                    "leads_this_month": leads_this_month,
+                    "leads_this_week": leads_this_week,
+                    "by_status": lead_status_summary,
+                    "by_source": leads_by_source_data,
+                },
+                "meetings": {
+                    "today_list": meetings_data,
+                    "summary": meeting_summary,
+                },
+                "reminders": reminders_data,
+                "follow_ups": followup_summary,
+                # "recent_activities": activities_data,
+                # "conversion_metrics": metrics,
+                "attendance": attendance,
+            }
+        })
+
+

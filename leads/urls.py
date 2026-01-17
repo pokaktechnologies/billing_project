@@ -57,5 +57,9 @@ urlpatterns = [
     # salesperson leads management
     path('admin/salesperson/lead-stats/', SalespersonLeadStatsView.as_view(), name='salesperson_lead_stats'),
 
+    #Dashboard
+    path('dashboard/', BDEDashboardView.as_view(), name='leads_by_source_chart'),
+
+
     
 ]

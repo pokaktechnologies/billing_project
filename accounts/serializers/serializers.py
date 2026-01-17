@@ -746,6 +746,7 @@ class PrintDeliverySerializer(serializers.ModelSerializer):
 class InvoiceModelSerializer(serializers.ModelSerializer):
     client_firstname = serializers.CharField(source='client.first_name', read_only=True)
     client_lastname = serializers.CharField(source='client.last_name', read_only=True)
+    prepared_by = serializers.CharField(source='user.email', read_only=True)
     # salesperson = serializers.CharField(source='salesperson.first_name', read_only=True)
     sales_order_number = serializers.CharField(source='sales_order.sales_order_number', read_only=True, allow_null=True, required=False)
     termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
@@ -775,6 +776,7 @@ class PrintInvoiceSerializer(serializers.ModelSerializer):
 class InvoiceOrderSerializer(serializers.ModelSerializer):
     intern_email = serializers.CharField(source='intern.user.email', read_only=True)
     course_title = serializers.CharField(source='course.title', read_only=True)
+    prepared_by = serializers.SerializerMethodField()
     # client = CustomerSerializer(read_only=True)
     termsandconditions = serializers.SerializerMethodField()
     sales_order_number = serializers.CharField(source='sales_order.sales_order_number', read_only=True)
@@ -790,6 +792,11 @@ class InvoiceOrderSerializer(serializers.ModelSerializer):
     
     def get_invoice_grand_total(self, obj):
         return "{:,.2f}".format(obj.invoice_grand_total)
+    
+    def get_prepared_by(self, obj):
+        if obj.user:
+            return f"{obj.user.first_name} {obj.user.last_name} ({obj.user.email})"
+        return None
     
     def get_salesperson(self, obj):
         # sales_order may be None (invoices created without sales orders)
@@ -1501,6 +1508,7 @@ class ContractDetailSerializer(serializers.ModelSerializer):
 
 class BaseInvoiceSerializer(serializers.ModelSerializer):
     invoice_grand_total = serializers.SerializerMethodField()
+    prepared_by = serializers.SerializerMethodField()
     termsandconditions_title = serializers.CharField(
         source='termsandconditions.title',
         read_only=True
@@ -1517,12 +1525,19 @@ class BaseInvoiceSerializer(serializers.ModelSerializer):
             "termsandconditions",
             "termsandconditions_title",
             "remark",
+            "description",
+            "prepared_by",
             "created_at",
             "is_receipted",
         ]
 
     def get_invoice_grand_total(self, obj):
         return "{:,.2f}".format(obj.invoice_grand_total)
+    
+    def get_prepared_by(self, obj):
+        if obj.user:
+            return f"{obj.user.first_name} {obj.user.last_name} ({obj.user.email})"
+        return None
 
 class ClientInvoiceSerializer(BaseInvoiceSerializer):
     client_firstname = serializers.CharField(

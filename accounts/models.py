@@ -636,6 +636,7 @@ class InvoiceModel(models.Model):
 
     termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.SET_NULL, null=True, blank=True)
     remark = models.CharField(max_length=255, blank=True)
+    description = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True,null=True,blank=True)
     is_receipted = models.BooleanField(default=False)
 

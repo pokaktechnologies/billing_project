@@ -2180,7 +2180,8 @@ class InternFeeInvoiceAPI(APIView):
                     user=request.user,
                     invoice_grand_total=grand_total,
                     termsandconditions=terms,
-                    remark=data.get("remark", "Intern Fee Invoice")
+                    remark=data.get("remark", "Intern Fee Invoice"),
+                    description=data.get("description", "")
                 )
 
                 # Invoice item
@@ -2336,7 +2337,8 @@ class InvoiceOrderAPI(APIView):
                     invoice_date=invoice_date,
                     invoice_grand_total=Decimal("0.00"),
                     termsandconditions=terms,
-                    remark=data.get("remark", "")
+                    remark=data.get("remark", ""),
+                    description=data.get("description", "")
                 )
 
                 # Create product-based InvoiceItems
@@ -2415,6 +2417,10 @@ class InvoiceOrderAPI(APIView):
         if "client" in data:
             if not Customer.objects.filter(id=data["client"]).exists():
                 return Response({"error": "Invalid client ID"}, status=400)
+
+        # Handle description field separately
+        if "description" in data:
+            invoice.description = data["description"]
 
         serializer = InvoiceModelSerializer(
             invoice,

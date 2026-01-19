@@ -531,7 +531,7 @@ class JobApplicationStatsAPIView(APIView):
 
 class HrDashaboardView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'hr_section'
+    # required_module = 'hr_section'
 
     def get(self, request):
         enquiries = Enquiry.objects.all()

@@ -968,7 +968,7 @@ from rest_framework.permissions import IsAuthenticated
 
 class BDEDashboardView(SalesPersonBaseView, APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'marketing'
+    # required_module = 'marketing'
 
     def get(self, request):
         salesperson = self.get_salesperson(request.user)

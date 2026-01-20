@@ -1042,6 +1042,13 @@ class ProjectManagerDashboardView(APIView):
                 {"status": "0", "message": "No staff profile found"},
                 status=status.HTTP_403_FORBIDDEN
             )
+        
+        job_detail = getattr(staff_profile, 'job_detail', None)
+        if not job_detail:
+            return Response(
+                {"status": "0", "message": "No job detail found"},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         # -----------------------------
         # PROJECTS OWNED BY PM
@@ -1087,6 +1094,14 @@ class ProjectManagerDashboardView(APIView):
         else:
             attendance = None
 
+        user_data =  {
+                    "employee_id": job_detail.employee_id,
+                    "job_type": job_detail.job_type,
+                    "role": job_detail.role,
+                    "email": user.email,
+                    "name": f"{user.first_name} {user.last_name}",
+                }
+
 
         # -----------------------------
         # RESPONSE
@@ -1096,6 +1111,7 @@ class ProjectManagerDashboardView(APIView):
                 "status": "1",
                 "message": "success",
                 "data": {
+                    "user": user_data,
                     "stats": {
                         "total_projects": active_projects_count,
                         "completed_tasks": completed_tasks,

@@ -1190,9 +1190,25 @@ class ProductSerializer(serializers.ModelSerializer):
     category_id = serializers.IntegerField(source='category.id', read_only=True)
     category_name = serializers.CharField(source='category.name', read_only=True)
 
+    sgst = serializers.SerializerMethodField()
+    cgst = serializers.SerializerMethodField()
+    total_tax_percentage = serializers.IntegerField(source='tax_setting.rate', read_only=True)
+
     class Meta:
         model = Product
         fields = "__all__"
+        read_only_fields = ['sgst', 'cgst', 'unit_id', 'unit_name', 'category_id', 'category_name', 'total_tax_percentage']
+
+
+    def get_sgst(self, obj):
+        if not obj.tax_setting:
+            return 0
+        return obj.tax_setting.rate / 2
+
+    def get_cgst(self, obj):
+        if not obj.tax_setting:
+            return 0
+        return obj.tax_setting.rate / 2
 
     def validate_unit(self, value):
         try:
@@ -1201,8 +1217,6 @@ class ProductSerializer(serializers.ModelSerializer):
             return Unit.objects.get(name=value)
         except Unit.DoesNotExist:
             raise serializers.ValidationError(f"Unit '{value}' does not exist.")
-
-
 
     def validate_category(self, value):
         try:

@@ -12,7 +12,10 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, generics
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
+
 from django_filters.rest_framework import DjangoFilterBackend
+
 
 # Local app imports
 from .models import *
@@ -580,3 +583,39 @@ class CashflowStatementView(APIView):
 
         return Response(report)
 
+
+
+# TAX SETTINGS VIEWS
+
+
+
+# views.py
+class TaxSettingsListCreateAPIView(ListCreateAPIView):
+    serializer_class = TaxSettingsSerializer
+
+    def get_queryset(self):
+        queryset = TaxSettings.objects.all()
+
+        name = self.request.query_params.get('name')
+        is_active = self.request.query_params.get('is_active')
+        rate_min = self.request.query_params.get('rate_min')
+        rate_max = self.request.query_params.get('rate_max')
+
+        if name:
+            queryset = queryset.filter(name__icontains=name)
+
+        if is_active is not None:
+            queryset = queryset.filter(is_active=is_active.lower() == 'true')
+
+        if rate_min:
+            queryset = queryset.filter(rate__gte=rate_min)
+
+        if rate_max:
+            queryset = queryset.filter(rate__lte=rate_max)
+
+        return queryset
+
+
+class TaxSettingsRetrieveUpdateDestroyAPIView(RetrieveUpdateDestroyAPIView):
+    queryset = TaxSettings.objects.all()
+    serializer_class = TaxSettingsSerializer

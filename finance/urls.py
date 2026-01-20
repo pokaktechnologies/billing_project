@@ -30,5 +30,10 @@ urlpatterns = [
     path('cashflow-mappings/', CashflowCategoryMappingListCreateView.as_view(), name='cashflow-mapping-list'),
     path('cashflow-mappings/<int:pk>/', CashflowCategoryMappingDetailView.as_view(), name='cashflow-mapping-detail'),
     path('cashflow-statement/', CashflowStatementView.as_view(), name='cashflow-statement'),
+
+
+    # Tax Settings
+    path('tax-settings/',TaxSettingsListCreateAPIView.as_view(),name='tax-settings'),
+    path('tax-settings/<int:pk>/',TaxSettingsRetrieveUpdateDestroyAPIView.as_view(),name='tax-settings-detail'),
 ]
 

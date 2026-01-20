@@ -339,3 +339,11 @@ class CashflowStatementSerializer(serializers.Serializer):
     total_inflow = serializers.DecimalField(max_digits=12, decimal_places=2)
     total_outflow = serializers.DecimalField(max_digits=12, decimal_places=2)
     net_cashflow = serializers.DecimalField(max_digits=12, decimal_places=2)
+
+
+
+
+class TaxSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TaxSettings
+        fields = "__all__"

@@ -1,4 +1,5 @@
 from rest_framework import viewsets,status
+from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.views import APIView
@@ -19,6 +20,8 @@ from decimal import Decimal
 from django.utils.dateparse import parse_date
 from leads.models import Lead
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
+
 # from .serializers import CustomUserCreateSerializer, OTPSerializer, GettingStartedSerializer,HelpLinkSerializer,NotificationSerializer, UserSettingSerializer, FeedbackSerializer,QuotationOrderSerializer,InvoiceOrderSerializer,DeliveryOrderSerializer,SupplierPurchaseSerializer,SupplierSerializer,DeliveryChallanSerializer
 from django.core.mail import send_mail
 import random
@@ -838,70 +841,60 @@ class UpdateDeliveryChallanAPI(APIView):
 class ProductListCreateAPIView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'products'
+
     def get(self, request):
-        products = Product.objects.all()
-        data = ProductSerializer(products, many=True).data
+        products = Product.objects.select_related(
+            'unit', 'category', 'tax_setting'
+        )
+        serializer = ProductSerializer(products, many=True)
         return Response({
             "Status": "1",
             "message": "Success",
-            "Data": data
+            "Data": serializer.data
         }, status=status.HTTP_200_OK)
 
     def post(self, request):
         serializer = ProductSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            with transaction.atomic():
+                serializer.save()
             return Response({
                 "Status": "1",
                 "message": "Product created successfully.",
-                "Data": [serializer.data]
+                "Data": serializer.data
             }, status=status.HTTP_201_CREATED)
+
         return Response({
             "Status": "0",
             "message": "Validation failed.",
             "Errors": serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
 
-# Retrieve, Update, and Delete a Product
+
 class ProductDetailAPI(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'products'
-    def get_object(self, product_id):
-        try:
-            return Product.objects.get(id=product_id)
-        except Product.DoesNotExist:
-            return None
 
     def get(self, request, product_id):
-        product = self.get_object(product_id)
-        if not product:
-            return Response({
-                "Status": "0",
-                "message": "Product not found."
-            }, status=status.HTTP_404_NOT_FOUND)
-        
-        data = [ProductSerializer(product).data]
+        product = get_object_or_404(Product, id=product_id)
+        serializer = ProductSerializer(product)
         return Response({
             "Status": "1",
             "message": "Success",
-            "Data": data
-        }, status=status.HTTP_200_OK)
+            "Data": serializer.data
+        })
 
-    def put(self, request, product_id):
-        product = self.get_object(product_id)
-        if not product:
-            return Response({
-                "Status": "0",
-                "message": "Product not found."
-            }, status=status.HTTP_404_NOT_FOUND)
-        
+    def patch(self, request, product_id):
+        product = get_object_or_404(Product, id=product_id)
         serializer = ProductSerializer(product, data=request.data, partial=True)
+
         if serializer.is_valid():
-            serializer.save()
+            with transaction.atomic():
+                serializer.save()
             return Response({
                 "Status": "1",
                 "message": "Product updated successfully.",
-                "Data": [serializer.data]
+                "Data": serializer.data
             }, status=status.HTTP_200_OK)
 
         return Response({
@@ -911,13 +904,7 @@ class ProductDetailAPI(APIView):
         }, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, product_id):
-        product = self.get_object(product_id)
-        if not product:
-            return Response({
-                "Status": "0",
-                "message": "Product not found."
-            }, status=status.HTTP_404_NOT_FOUND)
-
+        product = get_object_or_404(Product, id=product_id)
         product.delete()
         return Response({
             "Status": "1",
@@ -2352,8 +2339,8 @@ class InvoiceOrderAPI(APIView):
                     product = get_object_or_404(Product, id=product_id)
                     quantity = Decimal(str(it.get("quantity", "0")))
                     unit_price = Decimal(str(it.get("unit_price", product.unit_price)))
-                    sgst_pct = Decimal(str(it.get("sgst_percentage", product.sgst)))
-                    cgst_pct = Decimal(str(it.get("cgst_percentage", product.cgst)))
+                    sgst_pct = Decimal(str(it.get("sgst_percentage", product.sgst_pct)))
+                    cgst_pct = Decimal(str(it.get("cgst_percentage", product.cgst_pct)))
 
                     inv_item = InvoiceItem.objects.create(
                         invoice=invoice_form,

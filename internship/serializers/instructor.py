@@ -37,6 +37,10 @@ class CourseSerializer(serializers.ModelSerializer):
         required=False
     )
 
+    sgst = serializers.SerializerMethodField()
+    cgst = serializers.SerializerMethodField()
+    total_tax_percentage = serializers.SerializerMethodField()
+
     class Meta:
         model = Course
         fields = [
@@ -49,9 +53,29 @@ class CourseSerializer(serializers.ModelSerializer):
             "number_of_installments",
             "installments",
             "created_at",
+            "tax_settings",
+            "sgst",
+            "cgst",
+            "total_tax_percentage",
         ]
-        read_only_fields = ["created_at"]
+        read_only_fields = ["created_at", "sgst", "cgst", "total_tax_percentage"]
 
+
+    # ---------- TAX LOGIC ----------
+    def get_sgst(self, obj):
+        if not obj.tax_settings:
+            return 0
+        return obj.tax_settings.rate / 2
+
+    def get_cgst(self, obj):
+        if not obj.tax_settings:
+            return 0
+        return obj.tax_settings.rate / 2
+    
+    def get_total_tax_percentage(self, obj):
+        if not obj.tax_settings:
+            return 0
+        return obj.tax_settings.rate
     def validate(self, data):
         installments = data.get("installments", [])
         total_fee = data.get("total_fee", getattr(self.instance, "total_fee", None))

@@ -211,7 +211,8 @@ class Feedback(models.Model):
 
     def __str__(self):
         return f"{self.user} - {self.rating}"   
-    
+
+
 class Product(models.Model):
 
     UNIT_CHOICES = [
@@ -230,13 +231,39 @@ class Product(models.Model):
     # stock = models.DecimalField(max_digits=10, decimal_places=2, default=0,blank=True, null=True)
     stock = models.IntegerField(default=0)  # Stock quantity
     category = models.ForeignKey('Category', on_delete=models.CASCADE, related_name='products')
-    sgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="SGST percentage (e.g. 9.00)")  
-    cgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="CGST percentage (e.g. 9.00)")  
 
+    # NEW: tax setting
+    tax_setting = models.ForeignKey(
+        'finance.TaxSettings',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True
+    )
+
+
+
+    # --------- TAX PROPERTIES ---------
+    @property
+    def sgst_pct(self):
+        """
+        Returns SGST percentage (half of GST rate).
+        Safe even if tax_setting is None.
+        """
+        if not self.tax_setting:
+            return Decimal("0.00")
+        return self.tax_setting.rate / 2
+
+    @property
+    def cgst_pct(self):
+        """
+        Returns CGST percentage (half of GST rate).
+        """
+        if not self.tax_setting:
+            return Decimal("0.00")
+        return self.tax_setting.rate / 2
+    
     def __str__(self):
         return self.name
-
-
 class Unit(models.Model):
     name = models.CharField(max_length=50, unique=True)  # Unit name (e.g., kg, piece)
     description = models.TextField(blank=True)  # Optional description

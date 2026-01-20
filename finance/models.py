@@ -406,3 +406,14 @@ class CashflowCategoryMapping(models.Model):
 
     def __str__(self):
         return f"{self.category.title()} - {self.sub_category}"
+
+
+
+class TaxSettings(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    rate = models.DecimalField(max_digits=5, decimal_places=2)
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"{self.name} - {self.rate}%"
+

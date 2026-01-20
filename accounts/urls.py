@@ -71,12 +71,9 @@ urlpatterns = [
     path('delivery-orders/is_invoiced/<int:sid>/', DeliveryOrderIsInvoiced.as_view(), name='delivery_order_is_invoiced'),
     path('delivery-orders/items/', DelivaryOrderItemsList.as_view(), name='delivery_order_items_list'),
 
-    path('invoice-orders/', InvoiceOrderAPI.as_view(), name='invoice-order'),
-    path('invoice-orders/intern/', InternFeeInvoiceAPI.as_view(), name='intern-invoice-order'),
 
-    path('invoice-orders/<int:ioid>/', InvoiceOrderAPI.as_view(), name='invoice-order'),
-    path('print-invoice-orders/<int:ioid>/', PrintInvoiceView.as_view(), name='print_invoice_order'),
-    path('invoice-orders/is_receipted/<int:client_id>/', InvoiceOrderIsReceipted.as_view(), name='invoice_order_is_receipted'),
+    path('invoice/', InvoiceAPI.as_view(), name='invoice'),
+    path("invoice/<int:ioid>/", InvoiceDetailAPI.as_view()),
 
     path('receipts/', ReceiptView.as_view(), name='receipt'),
     path('receipts/<int:rec_id>/', ReceiptView.as_view(), name='receipt'),

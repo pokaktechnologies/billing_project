@@ -738,99 +738,6 @@ class PrintDeliverySerializer(serializers.ModelSerializer):
         points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=terms)
         return PrintTermsAndConditionsSerializer(points, many=True).data
 
-    
-
-
-        
-
-class InvoiceModelSerializer(serializers.ModelSerializer):
-    client_firstname = serializers.CharField(source='client.first_name', read_only=True)
-    client_lastname = serializers.CharField(source='client.last_name', read_only=True)
-    prepared_by = serializers.CharField(source='user.email', read_only=True)
-    # salesperson = serializers.CharField(source='salesperson.first_name', read_only=True)
-    sales_order_number = serializers.CharField(source='sales_order.sales_order_number', read_only=True, allow_null=True, required=False)
-    termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
-
-    class Meta:
-        model = InvoiceModel
-        fields = '__all__'  
-
-class PrintInvoiceSerializer(serializers.ModelSerializer):
-    client = CustomerSerializer(read_only=True)
-    termsandconditions = serializers.SerializerMethodField()
-    sales_order_number = serializers.CharField(source='sales_order.sales_order_number', read_only=True)
-    salesperson = serializers.SerializerMethodField()
-    termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
-    invoice_grand_total = serializers.SerializerMethodField()
-
-
-    class Meta:
-        model = InvoiceModel
-        fields = '__all__'
-    
-    def get_invoice_grand_total(self, obj):
-        return "{:,.2f}".format(obj.invoice_grand_total)
-    
-    def get_salesperson(self, obj):
-        salesperson = obj.sales_order.customer.salesperson
-class InvoiceOrderSerializer(serializers.ModelSerializer):
-    intern_email = serializers.CharField(source='intern.user.email', read_only=True)
-    course_title = serializers.CharField(source='course.title', read_only=True)
-    prepared_by = serializers.SerializerMethodField()
-    # client = CustomerSerializer(read_only=True)
-    termsandconditions = serializers.SerializerMethodField()
-    sales_order_number = serializers.CharField(source='sales_order.sales_order_number', read_only=True)
-    salesperson = serializers.SerializerMethodField()
-    termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
-    invoice_grand_total = serializers.SerializerMethodField()
-    items = serializers.SerializerMethodField()
-
-
-    class Meta:
-        model = InvoiceModel
-        fields = '__all__'
-    
-    def get_invoice_grand_total(self, obj):
-        return "{:,.2f}".format(obj.invoice_grand_total)
-    
-    def get_prepared_by(self, obj):
-        if obj.user:
-            return f"{obj.user.first_name} {obj.user.last_name} ({obj.user.email})"
-        return None
-    
-    def get_salesperson(self, obj):
-        # sales_order may be None (invoices created without sales orders)
-        sales_order = getattr(obj, 'sales_order', None)
-        if not sales_order:
-            return None
-        customer = getattr(sales_order, 'customer', None)
-        if not customer:
-            return None
-        salesperson = getattr(customer, 'salesperson', None)
-        return SalesPersonSerializer(salesperson).data if salesperson else None
-
-    def get_termsandconditions(self, obj):
-        # Get related TermsAndConditions
-        terms = obj.termsandconditions
-        # Get points related to this TermsAndConditions
-        points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=terms)
-        return PrintTermsAndConditionsSerializer(points, many=True).data
-
-    def get_items(self, obj):
-        # Build item list from InvoiceItem model
-        items = obj.items.all()
-        return InvoiceItemSerializer(items, many=True).data
-
-
-class InvoiceItemSerializer(serializers.ModelSerializer):
-    product_name = serializers.CharField(source='product.name', read_only=True)
-    class Meta:
-        model = InvoiceItem
-        fields = [
-            'id', 'product', 'product_name', 'quantity', 'unit_price',
-            'sgst_percentage', 'cgst_percentage', 'total', 'sgst', 'cgst', 'sub_total'
-        ]
-
 
 class ReceiptSerializer(serializers.ModelSerializer):
     # termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
@@ -1520,97 +1427,66 @@ class ContractDetailSerializer(serializers.ModelSerializer):
 
 
 
-class BaseInvoiceSerializer(serializers.ModelSerializer):
-    invoice_grand_total = serializers.SerializerMethodField()
-    prepared_by = serializers.SerializerMethodField()
-    termsandconditions_title = serializers.CharField(
-        source='termsandconditions.title',
-        read_only=True
+
+
+
+# new invoice serializers
+
+class InvoiceItemCreateSerializer(serializers.Serializer):
+    product = serializers.IntegerField(required=False)
+    quantity = serializers.DecimalField(max_digits=10, decimal_places=2)
+    unit_price = serializers.DecimalField(max_digits=10, decimal_places=2)
+    sgst_percentage = serializers.DecimalField(
+        max_digits=5, decimal_places=2, required=False, default=0
+    )
+    cgst_percentage = serializers.DecimalField(
+        max_digits=5, decimal_places=2, required=False, default=0
     )
 
-    class Meta:
-        model = InvoiceModel
-        fields = [
-            "id",
-            "invoice_type",
-            "invoice_number",
-            "invoice_date",
-            "invoice_grand_total",
-            "termsandconditions",
-            "termsandconditions_title",
-            "remark",
-            "description",
-            "prepared_by",
-            "created_at",
-            "is_receipted",
-        ]
 
-    def get_invoice_grand_total(self, obj):
-        return "{:,.2f}".format(obj.invoice_grand_total)
-    
-    def get_prepared_by(self, obj):
-        if obj.user:
-            return f"{obj.user.first_name} {obj.user.last_name} ({obj.user.email})"
-        return None
+class InvoiceCreateSerializer(serializers.Serializer):
+    invoice_type = serializers.ChoiceField(choices=["client", "intern"])
+    invoice_number = serializers.CharField()
+    invoice_date = serializers.DateField()
 
-class ClientInvoiceSerializer(BaseInvoiceSerializer):
-    client_firstname = serializers.CharField(
-        source="client.first_name",
-        read_only=True
+    client = serializers.IntegerField(required=False)
+    intern = serializers.IntegerField(required=False)
+    course = serializers.IntegerField(required=False)
+
+    # Intern-only fields
+    fee_amount = serializers.DecimalField(
+        max_digits=12, decimal_places=2, required=False
     )
-    client_lastname = serializers.CharField(
-        source="client.last_name",
-        read_only=True
+    sgst_percentage = serializers.DecimalField(
+        max_digits=5, decimal_places=2, required=False
     )
-    # sales_order_number = serializers.CharField(
-    #     source="sales_order.sales_order_number",
-    #     read_only=True,
-    #     allow_null=True
-    # )
-    items = serializers.SerializerMethodField()
-
-    class Meta(BaseInvoiceSerializer.Meta):
-        fields = BaseInvoiceSerializer.Meta.fields + [
-            "client",
-            "client_firstname",
-            "client_lastname",
-            # "sales_order",
-            # "sales_order_number",
-            "items",
-        ]
-
-    def get_items(self, obj):
-        items = obj.items.all()
-        return InvoiceItemSerializer(items, many=True).data
-
-class InternInvoiceSerializer(BaseInvoiceSerializer):
-    intern_id = serializers.IntegerField(source="intern.id", read_only=True)
-    intern_name = serializers.CharField(read_only=True)
-    intern_email = serializers.CharField(
-        source="intern.user.email",
-        read_only=True
+    cgst_percentage = serializers.DecimalField(
+        max_digits=5, decimal_places=2, required=False
     )
 
-    course_id = serializers.IntegerField(source="course.id", read_only=True)
-    course_title = serializers.CharField(
-        source="course.title",
-        read_only=True
-    )
+    termsandconditions = serializers.IntegerField()
+    remark = serializers.CharField(required=False, allow_blank=True)
+    description = serializers.CharField(required=False, allow_blank=True)
 
-    items = serializers.SerializerMethodField()
+    items = InvoiceItemCreateSerializer(many=True, required=False)
 
-    class Meta(BaseInvoiceSerializer.Meta):
-        fields = BaseInvoiceSerializer.Meta.fields + [
-            "intern_id",
-            "intern_name",
-            "intern_email",
-            "course_id",
-            "course_title",
-            "items",
-        ]
+    def validate(self, data):
+        if data["invoice_type"] == "client":
+            if not data.get("items"):
+                raise serializers.ValidationError(
+                    "Client invoice requires items"
+                )
 
-    def get_items(self, obj):
-        return InvoiceItemSerializer(obj.items.all(), many=True).data
+        if data["invoice_type"] == "intern":
+            if not data.get("fee_amount"):
+                raise serializers.ValidationError(
+                    "Intern invoice requires fee_amount"
+                )
+            if not data.get("intern") or not data.get("course"):
+                raise serializers.ValidationError(
+                    "Intern invoice requires intern and course"
+                )
+        return data
 
 
 class InvoiceItemSerializer(serializers.ModelSerializer):
@@ -1619,18 +1495,52 @@ class InvoiceItemSerializer(serializers.ModelSerializer):
         read_only=True
     )
 
+    product_description = serializers.CharField(
+        source='product.product_description',
+        read_only=True
+    )
+
+
     class Meta:
         model = InvoiceItem
+        fields = "__all__"
+
+
+class InvoiceSerializer(serializers.ModelSerializer):
+    items = InvoiceItemSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = InvoiceModel
+        fields = "__all__"
+
+class InvoiceListSerializer(serializers.ModelSerializer):
+    client_name = serializers.CharField(
+        source='client.first_name',
+        read_only=True
+    )
+    intern_name = serializers.CharField(
+        source='intern.user.first_name',
+        read_only=True
+    )
+    pending_amount = serializers.SerializerMethodField()
+    class Meta:
+        model = InvoiceModel
         fields = [
             "id",
-            "product",
-            "product_name",
-            "quantity",
-            "unit_price",
-            "sgst_percentage",
-            "cgst_percentage",
-            "total",
-            "sgst",
-            "cgst",
-            "sub_total",
+            "invoice_type",
+            "invoice_number",
+            "invoice_date",
+            "invoice_grand_total",
+            "client_name",
+            "intern_name",
+            "invoice_grand_total",
+            "pending_amount",
+            "created_at",
         ]
+
+    def get_pending_amount(self, obj):
+        receipt = ReceiptModel.objects.filter(invoice=obj).aggregate(
+            total=Sum('cheque_amount')
+        )
+        total_received = receipt['total'] or 0
+        return obj.invoice_grand_total - total_received

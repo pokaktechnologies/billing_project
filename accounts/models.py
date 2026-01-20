@@ -5,7 +5,9 @@ from decimal import Decimal
 from django_countries.fields import CountryField
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-
+from decimal import Decimal
+from django.db import models
+from django.db.models import Sum
 
 class CustomUserManager(BaseUserManager):
     def create_user(self, first_name, last_name, email, password=None, **extra_fields):
@@ -650,8 +652,6 @@ class InvoiceModel(models.Model):
     # Course reference
     course = models.ForeignKey('internship.Course', on_delete=models.PROTECT, null=True, blank=True)
 
-    intern_name = models.CharField(max_length=100, null=True, blank=True)
-    course_name = models.CharField(max_length=200, null=True, blank=True)
     
     user = models.ForeignKey(CustomUser, on_delete=models.PROTECT,null=True, blank=True)
     invoice_number = models.CharField(max_length=50, unique=True)
@@ -666,7 +666,20 @@ class InvoiceModel(models.Model):
     description = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True,null=True,blank=True)
     is_receipted = models.BooleanField(default=False)
+    class Meta:
+        ordering = ["-created_at"]
 
+    def recalculate_total(self):
+        total = self.items.aggregate(
+            total=Sum("sub_total")
+        )["total"] or Decimal("0.00")
+
+        self.invoice_grand_total = total
+        self.save(update_fields=["invoice_grand_total"])
+
+    def __str__(self):
+        return f"{self.invoice_number} ({self.invoice_type})"
+    
 class InvoiceItem(models.Model):
     invoice = models.ForeignKey(InvoiceModel, related_name='items', on_delete=models.CASCADE)
     # Product-based invoice item fields
@@ -685,26 +698,15 @@ class InvoiceItem(models.Model):
     delivary = models.ManyToManyField(DeliveryFormModel, blank=True)
 
     def save(self, *args, **kwargs):
-        # If unit_price not supplied, use product.unit_price
-        if self.unit_price == 0 and self.product:
-            self.unit_price = Decimal(self.product.unit_price)
-
-        quantity_decimal = Decimal(self.quantity)
-        unit_price_decimal = Decimal(self.unit_price)
-        sgst_pct = Decimal(str(self.sgst_percentage))
-        cgst_pct = Decimal(str(self.cgst_percentage))
-
-        self.total = unit_price_decimal * quantity_decimal
-        self.sgst = ((sgst_pct * unit_price_decimal) / Decimal(100)) * quantity_decimal
-        self.cgst = ((cgst_pct * unit_price_decimal) / Decimal(100)) * quantity_decimal
+        self.total = self.quantity * self.unit_price
+        self.sgst = (self.total * self.sgst_percentage) / Decimal("100")
+        self.cgst = (self.total * self.cgst_percentage) / Decimal("100")
         self.sub_total = self.total + self.sgst + self.cgst
 
         super().save(*args, **kwargs)
-        # Update invoice grand total
-        if self.invoice:
-            total = sum(item.sub_total for item in self.invoice.items.all())
-            self.invoice.invoice_grand_total = total
-            self.invoice.save(update_fields=['invoice_grand_total'])
+
+        if self.invoice_id:
+            self.invoice.recalculate_total()
 
 
 class ReceiptModel(models.Model):
@@ -712,7 +714,7 @@ class ReceiptModel(models.Model):
     receipt_number = models.CharField(max_length=50, unique=True)
     receipt_date = models.DateField()
     client = models.ForeignKey('Customer', on_delete=models.PROTECT,null=True, blank=True)
-    invoice = models.OneToOneField(InvoiceModel, on_delete=models.PROTECT, null=True, blank=True)
+    invoice = models.ForeignKey(InvoiceModel, on_delete=models.PROTECT, null=True, blank=True)
     # termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.SET_NULL, null=True, blank=True)
     remark = models.CharField(max_length=255, blank=True)
     description = models.TextField(blank=True, null=True)

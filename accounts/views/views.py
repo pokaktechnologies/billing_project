@@ -2079,490 +2079,7 @@ class DelivaryOrderItemsList(APIView):
 
         return Response({"status": "1", "data": result}, status=status.HTTP_200_OK)
 
-from django.apps import apps
-Course = apps.get_model('internship', 'Course')
 
-class InternFeeInvoiceAPI(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'invoice'
-
-    def get(self, request, ioid=None):
-
-        if ioid:
-            invoice = get_object_or_404(
-                InvoiceModel,
-                id=ioid,
-                invoice_type='intern'
-            )
-            return Response(
-                {"status": "1", "data": InvoiceOrderSerializer(invoice).data},
-                status=status.HTTP_200_OK
-            )
-
-        invoices = InvoiceModel.objects.filter(
-            invoice_type='intern'
-        ).order_by("-created_at")
-
-        return Response(
-            {"status": "1", "data": InvoiceOrderSerializer(invoices, many=True).data},
-            status=status.HTTP_200_OK
-        )
-
-    def post(self, request):
-        data = request.data
-
-        try:
-            with transaction.atomic():
-
-                intern_id = data.get("intern")
-                course_id = data.get("course")
-                terms_id = data.get("termsandconditions")
-                invoice_date = data.get("invoice_date")
-                invoice_number = data.get("invoice_number")
-
-                fee_amount = Decimal(str(data.get("fee_amount", "0")))
-
-                # ✅ GST ALLOWED (OPTIONAL)
-                sgst_pct = Decimal(str(data.get("sgst_percentage", "0")))
-                cgst_pct = Decimal(str(data.get("cgst_percentage", "0")))
-
-                if not intern_id or not course_id:
-                    return Response({"error": "Intern and course are required"}, status=400)
-
-                if not invoice_number:
-                    return Response({"error": "Invoice number required"}, status=400)
-
-                if InvoiceModel.objects.filter(invoice_number=invoice_number).exists():
-                    return Response({"error": "Invoice number already exists"}, status=400)
-
-                if fee_amount <= 0:
-                    return Response({"error": "Invalid fee amount"}, status=400)
-
-                intern = get_object_or_404(StaffProfile, id=intern_id)
-                user = intern.user
-                course = get_object_or_404(Course, id=course_id)
-                terms = get_object_or_404(TermsAndConditions, id=terms_id)
-
-                # Ensure intern
-                job = getattr(intern, "job_detail", None)
-
-
-                if not job or job.job_type != "internship":
-                    return Response({"error": "Selected user is not an intern"}, status=400)
-
-                # GST calculation
-                sgst = (fee_amount * sgst_pct) / Decimal(100)
-                cgst = (fee_amount * cgst_pct) / Decimal(100)
-                grand_total = fee_amount + sgst + cgst
-
-                # Create invoice
-                invoice = InvoiceModel.objects.create(
-                    invoice_type='intern',
-                    intern=intern,
-                    course=course,
-                    intern_name=f"{user.first_name} {user.last_name}",
-                    course_name=course.title,
-                    invoice_number=invoice_number,
-                    invoice_date=invoice_date,
-                    user=request.user,
-                    invoice_grand_total=grand_total,
-                    termsandconditions=terms,
-                    remark=data.get("remark", "Intern Fee Invoice"),
-                    description=data.get("description", "")
-                )
-
-                # Invoice item
-                InvoiceItem.objects.create(
-                    invoice=invoice,
-                    quantity=1,
-                    unit_price=fee_amount,
-                    sgst_percentage=sgst_pct,
-                    cgst_percentage=cgst_pct
-                )
-
-                # Journal Entry
-                accounts = JOURNAL_ACCOUNT_MAPPING['invoice']
-
-                journal = JournalEntry.objects.create(
-                    type='invoice',
-                    type_number=invoice.invoice_number,
-                    narration=f"Intern Fee Invoice {invoice.invoice_number}",
-                    user=request.user
-                )
-
-                JournalLine.objects.create(
-                    journal=journal,
-                    account=Account.objects.get(name=accounts['debit']),
-                    debit=grand_total
-                )
-
-                JournalLine.objects.create(
-                    journal=journal,
-                    account=Account.objects.get(name=accounts['credit']),
-                    credit=grand_total
-                )
-
-                return Response(
-                    {"status": "1", "data": InvoiceOrderSerializer(invoice).data},
-                    status=status.HTTP_201_CREATED
-                )
-
-        except Exception as e:
-            return Response({"error": str(e)}, status=500)
-
-
-
-class InvoiceOrderAPI(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'invoice'
-
-    def get(self, request):
-        """
-        Query params:
-        ?type=client|intern|all
-        ?id=invoice_id
-        ?intern=staffprofile_id
-        ?client=customer_id
-        ?from_date=YYYY-MM-DD
-        ?to_date=YYYY-MM-DD
-        """
-
-        qs = InvoiceModel.objects.all().order_by("-created_at")
-
-        invoice_id = request.query_params.get("id")
-        invoice_type = request.query_params.get("type")
-        intern_id = request.query_params.get("intern")
-        client_id = request.query_params.get("client")
-        from_date = request.query_params.get("from_date")
-        to_date = request.query_params.get("to_date")
-
-        # 1. Single invoice
-        if invoice_id:
-            invoice = get_object_or_404(InvoiceModel, id=invoice_id)
-
-            serializer = (
-                InternInvoiceSerializer(invoice)
-                if invoice.invoice_type == "intern"
-                else ClientInvoiceSerializer(invoice)
-            )
-
-            return Response(
-                {"status": "1", "data": serializer.data},
-                status=status.HTTP_200_OK
-            )
-
-        # 2. Type filter
-        if invoice_type in ["client", "intern"]:
-            qs = qs.filter(invoice_type=invoice_type)
-
-        # 3. Intern filter
-        if intern_id:
-            qs = qs.filter(intern_id=intern_id)
-
-        # 4. Client filter
-        if client_id:
-            qs = qs.filter(client_id=client_id)
-
-        # 5. Date filters
-        if from_date:
-            qs = qs.filter(invoice_date__gte=from_date)
-        if to_date:
-            qs = qs.filter(invoice_date__lte=to_date)
-
-        # 6. Mixed response
-        response_data = []
-        for invoice in qs:
-            if invoice.invoice_type == "intern":
-                response_data.append(
-                    InternInvoiceSerializer(invoice).data
-                )
-            else:
-                response_data.append(
-                    ClientInvoiceSerializer(invoice).data
-                )
-
-        return Response(
-            {"status": "1", "data": response_data},
-            status=status.HTTP_200_OK
-        )
-
-
-
-    def post(self, request):
-        data = request.data
-        try:
-            # Create invoice with product items (no sales_order/deliveries)
-            with transaction.atomic():
-                customer_id = data.get("client")
-                terms_id = data.get("termsandconditions")
-                invoice_date = data.get("invoice_date")
-                invoice_number = data.get("invoice_number")
-
-                if not invoice_number:
-                    return Response({"error": "Invoice number is required."}, status=status.HTTP_400_BAD_REQUEST)
-                if InvoiceModel.objects.filter(invoice_number=invoice_number).exists():
-                    return Response({"error": "Invoice number already exists."}, status=status.HTTP_400_BAD_REQUEST)
-
-                if not customer_id:
-                    return Response({"error": "Customer not provided."}, status=status.HTTP_400_BAD_REQUEST)
-                if not terms_id:
-                    return Response({"error": "Terms and conditions not provided."}, status=status.HTTP_400_BAD_REQUEST)
-
-                customer = get_object_or_404(Customer, id=customer_id)
-                terms = get_object_or_404(TermsAndConditions, id=terms_id)
-
-                items = data.get("items", [])
-                if not items or not isinstance(items, list):
-                    return Response({"error": "Invoice must include an 'items' list."}, status=status.HTTP_400_BAD_REQUEST)
-
-                # Create invoice record first
-                invoice_form = InvoiceModel.objects.create(
-                    invoice_type='client',
-                    client=customer,
-                    invoice_number=invoice_number,
-                    user=request.user,
-                    invoice_date=invoice_date,
-                    invoice_grand_total=Decimal("0.00"),
-                    termsandconditions=terms,
-                    remark=data.get("remark", ""),
-                    description=data.get("description", "")
-                )
-
-                # Create product-based InvoiceItems
-                grand_total = Decimal("0.00")
-                for it in items:
-                    product_id = it.get("product")
-                    if not product_id:
-                        invoice_form.delete()
-                        return Response({"error": "Each item must include a 'product' id."}, status=status.HTTP_400_BAD_REQUEST)
-
-                    product = get_object_or_404(Product, id=product_id)
-                    quantity = Decimal(str(it.get("quantity", "0")))
-                    unit_price = Decimal(str(it.get("unit_price", product.unit_price)))
-                    sgst_pct = Decimal(str(it.get("sgst_percentage", product.sgst_pct)))
-                    cgst_pct = Decimal(str(it.get("cgst_percentage", product.cgst_pct)))
-
-                    inv_item = InvoiceItem.objects.create(
-                        invoice=invoice_form,
-                        product=product,
-                        quantity=quantity,
-                        unit_price=unit_price,
-                        sgst_percentage=sgst_pct,
-                        cgst_percentage=cgst_pct,
-                    )
-                    # inv_item.save() will compute totals and update invoice
-                    grand_total += inv_item.sub_total
-
-                # ensure invoice_grand_total set
-                invoice_form.invoice_grand_total = grand_total
-                invoice_form.save(update_fields=["invoice_grand_total"])
-
-                # Create journal entry
-                accounts = JOURNAL_ACCOUNT_MAPPING['invoice']
-                debit_account = Account.objects.get(name=accounts['debit'])
-                credit_account = Account.objects.get(name=accounts['credit'])
-
-                with transaction.atomic():
-                    journal = JournalEntry.objects.create(
-                        type='invoice',
-                        type_number=invoice_form.invoice_number,
-                        salesperson=None,
-                        narration=f'Invoice {invoice_form.invoice_number} for {customer.first_name} {customer.last_name}',
-                        user=request.user
-                    )
-
-                    JournalLine.objects.create(journal=journal, account=debit_account, debit=grand_total)
-                    JournalLine.objects.create(journal=journal, account=credit_account, credit=grand_total)
-
-                invoice_data = InvoiceOrderSerializer(invoice_form).data
-                return Response({
-                    "status": "1",
-                    "data": [invoice_data]
-                }, status=status.HTTP_201_CREATED)
-
-        except IntegrityError as e:
-            return Response({"error": f"Database error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        except Exception as e:
-            return Response({"error": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    def patch(self, request, ioid=None):
-        if not ioid:
-            return Response({"error": "Invoice ID is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-        invoice = get_object_or_404(InvoiceModel, id=ioid)
-
-        #  Block intern invoices
-        if invoice.invoice_type != 'client':
-            return Response(
-                {"error": "Intern invoices cannot be modified"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        data = request.data
-
-        # Validate client (if provided)
-        if "client" in data:
-            if not Customer.objects.filter(id=data["client"]).exists():
-                return Response({"error": "Invalid client ID"}, status=400)
-
-        # Handle description field separately
-        if "description" in data:
-            invoice.description = data["description"]
-
-        serializer = InvoiceModelSerializer(
-            invoice,
-            data=data,
-            partial=True
-        )
-
-        if not serializer.is_valid():
-            return Response(
-                {"status": "0", "errors": serializer.errors},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        serializer.save()
-
-        #  Update journal
-        journal = JournalEntry.objects.filter(
-            type='invoice',
-            type_number=invoice.invoice_number
-        ).first()
-
-        if journal:
-            customer_display = f"{invoice.client.first_name} {invoice.client.last_name}"
-            journal.narration = f"Invoice {invoice.invoice_number} for {customer_display}"
-            journal.date = invoice.invoice_date
-            journal.save(update_fields=["narration", "date"])
-
-            journal.lines.all().delete()
-
-            accounts = JOURNAL_ACCOUNT_MAPPING['invoice']
-            JournalLine.objects.create(
-                journal=journal,
-                account=Account.objects.get(name=accounts['debit']),
-                debit=invoice.invoice_grand_total
-            )
-            JournalLine.objects.create(
-                journal=journal,
-                account=Account.objects.get(name=accounts['credit']),
-                credit=invoice.invoice_grand_total
-            )
-
-        return Response(
-            {"status": "1", "message": "Invoice updated successfully"},
-            status=status.HTTP_200_OK
-        )
-
-    def delete(self, request, ioid=None):
-        if not ioid:
-            return Response({"error": "Invoice ID is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-        invoice = get_object_or_404(InvoiceModel, id=ioid)
-
-        #  Block intern invoices
-        if invoice.invoice_type != 'client':
-            return Response(
-                {"error": "Intern invoices cannot be deleted"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        with transaction.atomic():
-            # Delete invoice items
-            invoice.items.all().delete()
-
-            # Delete journal
-            JournalEntry.objects.filter(
-                type='invoice',
-                type_number=invoice.invoice_number
-            ).delete()
-
-            # Delete invoice
-            invoice.delete()
-
-        return Response(
-            {"status": "1", "message": "Invoice deleted successfully"},
-            status=status.HTTP_200_OK
-        )
-
-
-
-class PrintInvoiceView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'invoice'
-    def get(self, request, ioid=None):
-        invoice = get_object_or_404(InvoiceModel, id=ioid)
-        invoice_items = InvoiceItem.objects.filter(invoice=invoice)
-
-        # Get delivery forms linked to the invoice
-        delivery_forms = DeliveryFormModel.objects.filter(
-            id__in=invoice_items.values_list('delivary__id', flat=True)
-        ).distinct()
-
-        # Get all delivery items related to the delivery forms
-        delivery_items = DeliveryItem.objects.filter(delivery_form__in=delivery_forms).distinct()
-
-        # Initialize total
-        # mega_grand_total = Decimal("0.00")
-        items_data = []
-
-        for delivery in delivery_forms:
-            grand_total = delivery.grand_total or Decimal("0.00")
-            # mega_grand_total += grand_total
-
-        for item in delivery_items:
-            item_data = PrintDeliveryItemsSerializer(item).data
-            item_data.update({
-                "delivary_number": item.delivery_form.delivery_number,
-                "delivary_id": item.delivery_form.id,
-            })
-            items_data.append(item_data)
-
-        invoice_serializer = PrintInvoiceSerializer(invoice)
-
-        # # Fetch receipt (if exists)
-        # receipt = ReceiptModel.objects.filter(invoice=invoice).first()
-        # receipt_data = None
-        # if receipt:
-        #     receipt_data = ReceiptSerializer(receipt).data
-
-        return Response({
-            "status": "1",
-            "data": [{
-                **invoice_serializer.data,
-                "items": items_data,
-                # "receipt": receipt_data   
-            }]
-        }, status=status.HTTP_200_OK)
-
-
-
-class InvoiceOrderIsReceipted(APIView):
-
-
-    def get(self, request, client_id=None):
-        if not client_id:
-            return Response(
-                {"status": "0", "message": "Client ID is required."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        client = get_object_or_404(Customer, id=client_id)
-        
-        invoices = InvoiceModel.objects.filter(client=client, is_receipted=False).order_by('-created_at')
-
-        if not invoices.exists():
-            return Response(
-                {"status": "0", "message": "No invoices found for this client.", "data": []},
-                status=status.HTTP_200_OK
-            )
-        
-        serialized_data = InvoiceModelSerializer(invoices, many=True).data
-
-        return Response(
-            {"status": "1", "data": serialized_data},
-            status=status.HTTP_200_OK
-        )
 
 class ReceiptView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
@@ -4257,3 +3774,81 @@ class ContractPointListCreateAPIView(APIView):
         return Response({"status": "1", "message": "Point Deleted Succesfully"}, status=status.HTTP_204_NO_CONTENT)
 
 
+
+
+
+
+
+
+
+# New invoice
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from django.shortcuts import get_object_or_404
+from django.db import IntegrityError
+from accounts.services.invoice_factory import InvoiceFactory
+from accounts.permissions import HasModulePermission
+
+
+class InvoiceAPI(APIView):
+    permission_classes = [IsAuthenticated,HasModulePermission]
+    required_module = 'invoice'
+
+    def get(self, request):
+        qs = InvoiceModel.objects.filter(user=request.user)
+        return Response({"status": 1, "data": InvoiceListSerializer(qs, many=True).data})
+
+    def post(self, request):
+        serializer = InvoiceCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            invoice = InvoiceFactory.create(
+                serializer.validated_data["invoice_type"],
+                serializer.validated_data,
+                request.user
+            )
+        except IntegrityError:
+            return Response({"error": "Invoice number already exists"}, status=400)
+
+        return Response(
+            {"status": 1, "message": "Invoice created successfully" },
+            status=201
+        )
+
+
+class InvoiceDetailAPI(APIView):
+    permission_classes = [IsAuthenticated,HasModulePermission]
+    required_module = 'invoice'
+
+    def get(self, request, ioid):
+        invoice = get_object_or_404(
+            InvoiceModel, id=ioid, user=request.user
+        )
+        return Response({"status": 1, "data": InvoiceSerializer(invoice).data})
+
+    def patch(self, request, ioid):
+        invoice = get_object_or_404(
+            InvoiceModel, id=ioid, user=request.user
+        )
+
+        if invoice.is_receipted:
+            return Response(
+                {"error": "Posted invoices cannot be modified"},
+                status=400
+            )
+
+        updater = InvoiceFactory.get_updater(invoice)
+        invoice = updater.update(invoice, request.data, request.user)
+
+        return Response(
+            {"status": 1, "message": "Invoice updated successfully"},
+            status=200
+        )
+    def delete(self, request, ioid):
+        invoice = get_object_or_404(
+            InvoiceModel, id=ioid, user=request.user
+        )
+        invoice.delete()
+        return Response({"status": 1, "message": "Invoice deleted"})

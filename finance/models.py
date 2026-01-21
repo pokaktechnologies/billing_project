@@ -72,6 +72,7 @@ class JournalEntry(models.Model):
         ('credit_note', 'Credit Note'),
         ('debit_note', 'Debit Note'),
         ('journal_voucher', 'Journal Voucher'),
+        ('tax_payment', 'Tax Payment'),
     ]
     user = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True)
     salesperson = models.ForeignKey(SalesPerson, on_delete=models.SET_NULL, null=True, blank=True)

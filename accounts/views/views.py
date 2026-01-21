@@ -2120,6 +2120,8 @@ class ReceiptView(APIView):
         if serializer.is_valid():
             invoice_id = request.data.get('invoice')
             receipt = serializer.save(user=request.user)
+            credit_id = request.data.get('credit_id')
+            debit_id = request.data.get('debit_id')
 
             # Mark invoice as receipted if linked
             if invoice_id:
@@ -2128,10 +2130,19 @@ class ReceiptView(APIView):
                 invoice.save(update_fields=['is_receipted'])
 
             # --- JOURNAL ENTRY CREATION ---
-            accounts = JOURNAL_ACCOUNT_MAPPING['receipt']
-            debit_account = Account.objects.get(name=accounts['debit'])
-            credit_account = Account.objects.get(name=accounts['credit'])
+            debit_account = get_object_or_404(Account, pk=int(debit_id))
+            credit_account = get_object_or_404(Account, pk=int(credit_id))
             amount = receipt.cheque_amount
+
+            # --- CREATE JOURNAL ---
+            accounts_tax = JOURNAL_ACCOUNT_MAPPING['receipt_tax']
+            debit_account_tax = Account.objects.get(name=accounts_tax['debit'])
+            credit_account_tax = Account.objects.get(name=accounts_tax['credit'])
+
+
+            # calculate tax amount
+            rate = receipt.tax_setting.rate if receipt.tax_setting else 0
+            tax_amount = (amount * rate) / (100 + rate) if rate > 0 else 0
 
             with transaction.atomic():
                 journal = JournalEntry.objects.create(
@@ -2144,6 +2155,17 @@ class ReceiptView(APIView):
 
                 JournalLine.objects.create(journal=journal, account=debit_account, debit=amount)
                 JournalLine.objects.create(journal=journal, account=credit_account, credit=amount)
+
+                journal_tax = JournalEntry.objects.create(
+                    type='tax_payment',
+                    type_number=receipt.receipt_number + '_TAX',
+                    salesperson=receipt.client.salesperson,
+                    narration=f'Receipt Tax {receipt.receipt_number} from {receipt.client.first_name} {receipt.client.last_name}',
+                    user=request.user,
+                )
+
+                JournalLine.objects.create(journal=journal_tax, account=debit_account_tax, debit=tax_amount)
+                JournalLine.objects.create(journal=journal_tax, account=credit_account_tax, credit=tax_amount)
 
             return Response({
                 "status": "1",

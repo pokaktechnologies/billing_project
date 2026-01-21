@@ -713,6 +713,7 @@ class ReceiptModel(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.PROTECT,null=True, blank=True)
     receipt_number = models.CharField(max_length=50, unique=True)
     receipt_date = models.DateField()
+    tax_setting = models.ForeignKey('finance.TaxSettings', on_delete=models.PROTECT, null=True, blank=True)
     client = models.ForeignKey('Customer', on_delete=models.PROTECT,null=True, blank=True)
     invoice = models.ForeignKey(InvoiceModel, on_delete=models.PROTECT, null=True, blank=True)
     # termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.SET_NULL, null=True, blank=True)

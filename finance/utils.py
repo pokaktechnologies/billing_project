@@ -17,6 +17,7 @@ def generate_next_number(model, field_name: str, prefix: str, length: int) -> st
 JOURNAL_ACCOUNT_MAPPING = {
     'invoice': {'debit': 'Accounts Receivable', 'credit': 'Sales'},
     'receipt': {'debit': 'Cash', 'credit': 'Accounts Receivable'},
+    'receipt_tax': {'debit': 'Tax Clearing', 'credit': 'Tax Payable'},
     'credit_note': {'debit': 'Sales Returns', 'credit': 'Accounts Receivable'},
     'debit_note': {'debit': 'Accounts Payable', 'credit': 'Purchase Returns'},
 }

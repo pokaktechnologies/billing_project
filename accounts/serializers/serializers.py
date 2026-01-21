@@ -1508,10 +1508,22 @@ class InvoiceItemSerializer(serializers.ModelSerializer):
 
 class InvoiceSerializer(serializers.ModelSerializer):
     items = InvoiceItemSerializer(many=True, read_only=True)
+    pending_amount = serializers.SerializerMethodField()
 
     class Meta:
         model = InvoiceModel
         fields = "__all__"
+
+    def get_pending_amount(self, obj):
+        receipt = ReceiptModel.objects.filter(invoice=obj).aggregate(
+            total=Sum('cheque_amount')
+        )
+        total_received = receipt['total'] or 0
+        return obj.invoice_grand_total - total_received
+    
+from django.db.models import Sum, F, DecimalField, ExpressionWrapper
+from django.db.models.functions import Coalesce
+from decimal import Decimal
 
 class InvoiceListSerializer(serializers.ModelSerializer):
     client_name = serializers.CharField(
@@ -1523,6 +1535,7 @@ class InvoiceListSerializer(serializers.ModelSerializer):
         read_only=True
     )
     pending_amount = serializers.SerializerMethodField()
+    effective_tax_rate = serializers.SerializerMethodField()
     class Meta:
         model = InvoiceModel
         fields = [
@@ -1535,6 +1548,7 @@ class InvoiceListSerializer(serializers.ModelSerializer):
             "intern_name",
             "invoice_grand_total",
             "pending_amount",
+            "effective_tax_rate",
             "created_at",
         ]
 
@@ -1544,3 +1558,22 @@ class InvoiceListSerializer(serializers.ModelSerializer):
         )
         total_received = receipt['total'] or 0
         return obj.invoice_grand_total - total_received
+
+    def get_effective_tax_rate(self, obj):
+        totals = obj.items.aggregate(
+            net=Coalesce(Sum('total'), Decimal("0.00")),
+            tax=Coalesce(
+                Sum(
+                    ExpressionWrapper(
+                        F('sgst') + F('cgst'),
+                        output_field=DecimalField(max_digits=12, decimal_places=2)
+                    )
+                ),
+                Decimal("0.00")
+            )
+        )
+
+        if totals['net'] > 0:
+            return (totals['tax'] / totals['net']) * Decimal("100.00")
+
+        return Decimal("0.00")

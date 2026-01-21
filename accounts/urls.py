@@ -74,6 +74,7 @@ urlpatterns = [
 
     path('invoice/', InvoiceAPI.as_view(), name='invoice'),
     path("invoice/<int:ioid>/", InvoiceDetailAPI.as_view()),
+    path('invoice/pending/', PendingInvoiceListView.as_view()),
 
     path('receipts/', ReceiptView.as_view(), name='receipt'),
     path('receipts/<int:rec_id>/', ReceiptView.as_view(), name='receipt'),

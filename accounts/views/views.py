@@ -3880,7 +3880,14 @@ class InvoiceDetailAPI(APIView):
         invoice = get_object_or_404(
             InvoiceModel, id=ioid, user=request.user
         )
-        return Response({"status": 1, "data": InvoiceSerializer(invoice).data})
+        serializer = InvoiceSerializer(
+            invoice,
+            context={"request": request}
+        )
+        return Response({
+            "status": 1,
+            "data": serializer.data
+        })
 
     def patch(self, request, ioid):
         invoice = get_object_or_404(

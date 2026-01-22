@@ -20,6 +20,9 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.utils import timezone
 from datetime import datetime, time as dt_time
 from attendance.models import DailyAttendance, AttendanceSession
+from django.db.models import Sum, F, DecimalField, ExpressionWrapper
+from django.db.models.functions import Coalesce
+from decimal import Decimal
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
@@ -1509,6 +1512,7 @@ class InvoiceItemSerializer(serializers.ModelSerializer):
 class InvoiceSerializer(serializers.ModelSerializer):
     items = InvoiceItemSerializer(many=True, read_only=True)
     pending_amount = serializers.SerializerMethodField()
+    prepared_by = serializers.SerializerMethodField()
 
     class Meta:
         model = InvoiceModel
@@ -1520,10 +1524,17 @@ class InvoiceSerializer(serializers.ModelSerializer):
         )
         total_received = receipt['total'] or 0
         return obj.invoice_grand_total - total_received
+
+    def get_prepared_by(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return None
+        user = request.user
+        return f"{user.first_name} {user.last_name}".strip()
+
+
     
-from django.db.models import Sum, F, DecimalField, ExpressionWrapper
-from django.db.models.functions import Coalesce
-from decimal import Decimal
+
 
 class InvoiceListSerializer(serializers.ModelSerializer):
     client_name = serializers.CharField(

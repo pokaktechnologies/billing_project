@@ -1,5 +1,7 @@
 from django.db import models
+from django.db.models import Sum
 from accounts.models import CustomUser,Customer
+from django.core.validators import MinValueValidator, MaxValueValidator
 
 STATUS_CHOICES = [
     ('not_started', 'Not Started'),
@@ -119,3 +121,66 @@ class TaskAssign(models.Model):
             f"Task: {self.task.task_name} → "
             f"{self.assigned_to.member.name}"
         )
+
+
+# -------------------------------
+# Report Model
+# -------------------------------
+class Report(models.Model):
+
+    REPORT_TYPE_CHOICES = (
+        ('daily', 'Daily'),
+        ('weekly', 'Weekly'),
+        ('monthly', 'Monthly'),
+    )
+
+    project = models.ForeignKey('ProjectManagement',on_delete=models.CASCADE,related_name='reports')
+    report_type = models.CharField(max_length=10,choices=REPORT_TYPE_CHOICES)
+
+    executive_summary = models.TextField()
+    next_period_plan = models.TextField(null=True, blank=True)
+
+    attachment_file = models.FileField(upload_to='reports/%Y/%m/',null=True,blank=True)
+    link = models.URLField(null=True, blank=True)
+    submitted_by = models.ForeignKey('accounts.CustomUser',on_delete=models.CASCADE)
+    submitted_at = models.DateTimeField(auto_now_add=True)
+
+    @property
+    def total_worked_hours(self):
+        """Auto calculate total hours from tasks"""
+        return self.tasks.aggregate(
+            total=Sum('hours')
+        )['total'] or 0
+
+    def __str__(self):
+        return f"Report - {self.project} ({self.submitted_at.date()})"
+    
+class ReportingTask(models.Model):
+    report = models.ForeignKey(Report, on_delete=models.CASCADE, related_name='tasks')
+    task_name = models.CharField(max_length=255)
+    task_description = models.TextField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='in_progress')
+    progress_percentage = models.PositiveIntegerField(default=0, validators=[MinValueValidator(0), MaxValueValidator(100)])
+    hours = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+
+    class Meta:
+        ordering = ['id']
+
+    def __str__(self):
+        return f"{self.task_name} - {self.report.id}"
+
+# -------------------------------
+# Challenges & Resolutions
+# -------------------------------
+class ChallengeResolution(models.Model):
+    report = models.ForeignKey(Report, on_delete=models.CASCADE, related_name='challenges')
+
+    issue = models.TextField()
+    impact = models.TextField()
+    resolution = models.TextField()
+
+    class Meta:
+        ordering = ['id']
+
+    def __str__(self):
+        return f"Challenge for Report {self.report.id}"

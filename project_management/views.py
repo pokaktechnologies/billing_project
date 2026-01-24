@@ -1126,3 +1126,40 @@ class ProjectManagerDashboardView(APIView):
             },
             status=status.HTTP_200_OK
         )
+
+
+
+#---------------
+# Reporting Module Views
+#---------------
+
+class ReportView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'project_management'
+    
+    def get(self, request):
+        report_type = request.query_params.get('type')
+        reports = Report.objects.all().order_by('-submitted_at')
+
+        if report_type:
+            reports = reports.filter(report_type=report_type)
+
+        serializer = ReportSerializer(reports, many=True)
+        return Response(
+            {"status":"1", "message":"success", "data":serializer.data},
+            status=status.HTTP_200_OK
+        )
+    
+    def post(self, request):
+        serializer = ReportSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(submitted_by = request.user)
+            return Response(
+                {"status":"1", "message":"Report Created successfully",},
+                status = status.HTTP_201_CREATED
+            )
+        return Response(
+            {"status":"0","message":"Report Created Failed","errors":serializer.errors},
+            status =status.HTTP_400_BAD_REQUEST
+        )

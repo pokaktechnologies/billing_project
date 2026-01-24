@@ -1,6 +1,5 @@
 from rest_framework import serializers
-from .models import ProjectManagement, Member, Stack, ProjectMember, Task,ClientContract, TaskAssign
-
+from .models import ChallengeResolution, ProjectManagement, Member, Report, ReportingTask, Stack, ProjectMember, Task,ClientContract, TaskAssign
 
 class ClientContractSerializer(serializers.ModelSerializer):
     client_first_name =  serializers.CharField(source='client.first_name', read_only=True)
@@ -190,3 +189,80 @@ class AssignedTaskListSerializer(serializers.ModelSerializer):
             "assigned_to",
             "assigned_at",
         ]
+
+
+#-----------------
+# Report Serializers
+#-----------------
+
+class ReportingTaskSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReportingTask
+        fields = [
+            'id',
+            'task_name',
+            'task_description',
+            'status',
+            'progress_percentage',
+            'hours',
+        ]
+
+class ChallengeResolutionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChallengeResolution
+        fields = [
+            'id',
+            'issue',
+            'impact',
+            'resolution',
+        ]
+
+
+class ReportSerializer(serializers.ModelSerializer):
+    tasks = ReportingTaskSerializer(many=True, write_only=True)
+    challenges = ChallengeResolutionSerializer(many=True, write_only=True)
+    total_worked_hours = serializers.SerializerMethodField()
+    submitted_by = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = Report
+        read_only_fields = ['submitted_by', 'submitted_at']
+        fields = [
+            'id',
+            'project',
+            'report_type',
+            'executive_summary',
+            'next_period_plan',
+            'attachment_file',
+            'link',
+            'submitted_by',
+            'submitted_at',
+            'tasks',
+            'challenges',
+            'total_worked_hours',
+        ]
+
+    def get_total_worked_hours(self, obj):
+        return obj.total_worked_hours
+    
+    def get_submitted_by(self, obj):
+        if obj.submitted_by:
+            return f"{obj.submitted_by.first_name} {obj.submitted_by.last_name}".strip()
+
+    def create(self, validated_data):
+        tasks_data = validated_data.pop('tasks', [])
+        challenges_data = validated_data.pop('challenges', [])
+
+        report = Report.objects.create(**validated_data)
+
+        ReportingTask.objects.bulk_create([
+            ReportingTask(report=report, **task)
+            for task in tasks_data
+        ])
+
+        ChallengeResolution.objects.bulk_create([
+            ChallengeResolution(report=report, **challenge)
+            for challenge in challenges_data
+        ])
+
+        return report

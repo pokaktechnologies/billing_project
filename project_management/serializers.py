@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ChallengeResolution, ProjectManagement, Member, Report, ReportingTask, Stack, ProjectMember, Task,ClientContract, TaskAssign
+from .models import ChallengeResolution, ProjectManagement, Member, Report, ReportAttachment, ReportLink, ReportingTask, Stack, ProjectMember, Task,ClientContract, TaskAssign
 
 class ClientContractSerializer(serializers.ModelSerializer):
     client_first_name =  serializers.CharField(source='client.first_name', read_only=True)
@@ -218,11 +218,33 @@ class ChallengeResolutionSerializer(serializers.ModelSerializer):
         ]
 
 
+class ReportAttachmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReportAttachment
+        fields = ['file']
+
+class ReportLinkSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReportLink
+        fields = ['url']
+
+
 class ReportSerializer(serializers.ModelSerializer):
     tasks = ReportingTaskSerializer(many=True, write_only=True)
     challenges = ChallengeResolutionSerializer(many=True, write_only=True)
+    task_list = ReportingTaskSerializer(source='tasks', many=True, read_only=True)
+    challenge_list = ChallengeResolutionSerializer(source='challenges', many=True, read_only=True)
+
+    attachments = ReportAttachmentSerializer(many=True, write_only=True, required=False, allow_empty=True)
+    links = ReportLinkSerializer(many=True, write_only=True, required=False, allow_empty=True)
+
+    attachment_list = ReportAttachmentSerializer(source='attachments', many=True, read_only=True)
+    link_list = ReportLinkSerializer(source='links', many=True, read_only=True)
+
     total_worked_hours = serializers.SerializerMethodField()
     submitted_by = serializers.SerializerMethodField(read_only=True)
+    job_title = serializers.SerializerMethodField()
+    staff_email = serializers.SerializerMethodField()
 
     class Meta:
         model = Report
@@ -233,12 +255,18 @@ class ReportSerializer(serializers.ModelSerializer):
             'report_type',
             'executive_summary',
             'next_period_plan',
-            'attachment_file',
-            'link',
+            'attachments',
+            'links',
+            'attachment_list',
+            'link_list',
             'submitted_by',
+            'job_title',
+            'staff_email',
             'submitted_at',
             'tasks',
             'challenges',
+            'task_list',
+            'challenge_list',
             'total_worked_hours',
         ]
 
@@ -248,10 +276,30 @@ class ReportSerializer(serializers.ModelSerializer):
     def get_submitted_by(self, obj):
         if obj.submitted_by:
             return f"{obj.submitted_by.first_name} {obj.submitted_by.last_name}".strip()
+        
+    def get_job_title(self, obj):
+        user = obj.submitted_by
+        staff_profile = getattr(user, 'staff_profile', None)
+        job_detail = getattr(staff_profile, 'job_detail', None) if staff_profile else None
+        return job_detail.role if job_detail else None
+    
+    def get_staff_email(self, obj):
+        user = obj.submitted_by
+        if not user:
+            return None
+
+        staff_profile = getattr(user, 'staff_profile', None)
+        if not staff_profile:
+            return None
+
+        return staff_profile.staff_email or user.email
+
 
     def create(self, validated_data):
         tasks_data = validated_data.pop('tasks', [])
         challenges_data = validated_data.pop('challenges', [])
+        attachments_data = validated_data.pop('attachments', [])
+        links_data = validated_data.pop('links', [])
 
         report = Report.objects.create(**validated_data)
 
@@ -263,6 +311,16 @@ class ReportSerializer(serializers.ModelSerializer):
         ChallengeResolution.objects.bulk_create([
             ChallengeResolution(report=report, **challenge)
             for challenge in challenges_data
+        ])
+
+        ReportAttachment.objects.bulk_create([
+            ReportAttachment(report=report, **attachment)
+            for attachment in attachments_data
+        ])
+
+        ReportLink.objects.bulk_create([
+            ReportLink(report=report, **link)
+            for link in links_data
         ])
 
         return report

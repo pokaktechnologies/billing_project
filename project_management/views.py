@@ -14,6 +14,9 @@ from datetime import datetime
 from accounts.permissions import HasModulePermission
 from django.utils import timezone
 
+from datetime import datetime, timedelta
+
+
 
 
 #Client contract views
@@ -1138,23 +1141,191 @@ class ReportView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'project_management'
     
-    def get(self, request):
-        report_type = request.query_params.get('type')
-        reports = Report.objects.all().order_by('-submitted_at')
+    def get(self, request, id=None):
+        report_type = request.query_params.get('type')  # daily, weekly, monthly
+        date_str = request.query_params.get('date')     # YYYY-MM-DD
+        week_str = request.query_params.get('week')     # YYYY-MM-DD
+        month_str = request.query_params.get('month')   # YYYY-MM
 
+        
+        user = request.user
+
+        #  Get member profile
+        member = Member.objects.filter(user=user).first()
+        if not member:
+            return Response(
+                {"status": "0", "message": "User is not a project member"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        #  Get projects where user is a member
+        project_ids = ProjectMember.objects.filter(
+            member=member
+        ).values_list('project_id', flat=True)
+
+        #  IF ID IS PROVIDED → RETRIEVE SINGLE REPORT
+        if id is not None:
+            try:
+                report = Report.objects.select_related(
+                    'submitted_by',
+                    'submitted_by__staff_profile',
+                    'submitted_by__staff_profile__job_detail'
+                ).prefetch_related(
+                    'tasks',
+                    'challenges'
+                ).get(
+                    id=id,
+                    project_id__in=project_ids
+                )
+            except Report.DoesNotExist:
+                return Response(
+                    {"status": "0", "message": "Report not found or access denied"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            serializer = ReportSerializer(report)
+            return Response(
+                {"status": "1", "message": "success", "data": serializer.data},
+                status=status.HTTP_200_OK
+            )
+
+
+        # Fetch reports only for those projects
+        reports = Report.objects.filter(
+            project_id__in=project_ids
+        )
+
+        #  Filter by report type
         if report_type:
             reports = reports.filter(report_type=report_type)
+        
+        #  Daily filter
+        if date_str:
+            try:
+                date = datetime.strptime(date_str, '%Y-%m-%d').date()
 
+                start_datetime = timezone.make_aware(
+                    datetime.combine(date, datetime.min.time())
+                )
+                end_datetime = timezone.make_aware(
+                    datetime.combine(date, datetime.max.time())
+                )
+
+                reports = reports.filter(
+                    submitted_at__range=(start_datetime, end_datetime),
+                    report_type='daily'
+                )
+
+            except ValueError:
+                return Response(
+                    {"status": "0", "message": "Invalid date format (YYYY-MM-DD)"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                    
+        #  Weekly filter
+        if week_str:
+            try:
+                week_date = datetime.strptime(week_str, '%Y-%m-%d').date()
+                start_week = week_date - timedelta(days=week_date.weekday())
+                end_week = start_week + timedelta(days=6)
+
+                start_datetime = timezone.make_aware(
+                    datetime.combine(start_week, datetime.min.time())
+                )
+                end_datetime = timezone.make_aware(
+                    datetime.combine(end_week, datetime.max.time())
+                )
+
+                reports = reports.filter(
+                    submitted_at__range=(start_datetime, end_datetime),
+                    report_type='weekly'
+                )
+
+            except ValueError:
+                return Response(
+                    {"status": "0", "message": "Invalid week format (YYYY-MM-DD)"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            
+        #  Monthly filter
+        if month_str:
+            try:
+                month_date = datetime.strptime(month_str, '%Y-%m')
+                start_month = month_date.replace(day=1)
+                end_month = (start_month + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+
+                start_datetime = timezone.make_aware(
+                    datetime.combine(start_month, datetime.min.time())
+                )
+                end_datetime = timezone.make_aware(
+                    datetime.combine(end_month, datetime.max.time())
+                )
+
+                reports = reports.filter(
+                    submitted_at__range=(start_datetime, end_datetime),
+                    report_type='monthly'
+                )
+
+            except ValueError:
+                return Response(
+                    {"status": "0", "message": "Invalid month format (YYYY-MM)"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+        reports = reports.select_related(
+            'submitted_by',
+            'submitted_by__staff_profile',
+            'submitted_by__staff_profile__job_detail'
+        ).prefetch_related(
+            'tasks',
+            'challenges'
+        ).order_by('-submitted_at')
+            
         serializer = ReportSerializer(reports, many=True)
         return Response(
             {"status":"1", "message":"success", "data":serializer.data},
             status=status.HTTP_200_OK
         )
     
+
     def post(self, request):
+        user = request.user
+
+        #Get member profile
+        member = Member.objects.filter(user=user).first()
+        if not member:
+            return Response(
+                {"status": "0", "message": "User is not a project member"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        #Get project from request
+        project_id = request.data.get('project')
+        if not project_id:
+            return Response(
+                {"status": "0", "message": "Project is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        #Check membership for this project
+        is_member = ProjectMember.objects.filter(
+            project_id=project_id,
+            member=member
+        ).exists()
+
+        if not is_member:
+            return Response(
+                {
+                    "status": "0",
+                    "message": "You are not a member of this project"
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
         serializer = ReportSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(submitted_by = request.user)
+            serializer.save(submitted_by = user)
             return Response(
                 {"status":"1", "message":"Report Created successfully",},
                 status = status.HTTP_201_CREATED
@@ -1163,3 +1334,4 @@ class ReportView(APIView):
             {"status":"0","message":"Report Created Failed","errors":serializer.errors},
             status =status.HTTP_400_BAD_REQUEST
         )
+

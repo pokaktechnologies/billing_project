@@ -140,8 +140,8 @@ class Report(models.Model):
     executive_summary = models.TextField()
     next_period_plan = models.TextField(null=True, blank=True)
 
-    attachment_file = models.FileField(upload_to='reports/%Y/%m/',null=True,blank=True)
-    link = models.URLField(null=True, blank=True)
+    # attachment_file = models.FileField(upload_to='reports/%Y/%m/',null=True,blank=True)
+    # link = models.URLField(null=True, blank=True)
     submitted_by = models.ForeignKey('accounts.CustomUser',on_delete=models.CASCADE)
     submitted_at = models.DateTimeField(auto_now_add=True)
 
@@ -184,3 +184,25 @@ class ChallengeResolution(models.Model):
 
     def __str__(self):
         return f"Challenge for Report {self.report.id}"
+    
+#-----------
+# Attachments
+#-----------
+class ReportAttachment(models.Model):
+    report = models.ForeignKey(Report, on_delete=models.CASCADE, related_name='attachments')
+    file = models.FileField(upload_to='report_attachments/%Y/%m/')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Attachment for Report {self.report.id}"
+    
+#-------------
+# Links
+#-------------
+class ReportLink(models.Model):
+    report = models.ForeignKey(Report, on_delete=models.CASCADE, related_name='links')
+    url = models.URLField()
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Link for Report {self.report.id}"

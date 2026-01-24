@@ -40,6 +40,7 @@ urlpatterns = [
 
     # Report
     path('report/', ReportView.as_view(), name='project_report'),
+    path('report/<int:id>/', ReportView.as_view(), name='project_report_detail'),
 
     #Dashaboard
     path('dashboard/', ProjectManagerDashboardView.as_view(), name='dashboard'),

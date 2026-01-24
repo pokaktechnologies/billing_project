@@ -1139,7 +1139,7 @@ class ProjectManagerDashboardView(APIView):
 class ReportView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    # required_module = 'project_management'
     
     def get(self, request, id=None):
         report_type = request.query_params.get('type')  # daily, weekly, monthly

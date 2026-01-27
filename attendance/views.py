@@ -269,3 +269,66 @@ class StaffWiseAttendanceStats(APIView):
 
         return Response(results)
 
+class AllStaffWiseAttendanceStats(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
+        department = request.query_params.get("department")
+
+        # -----------------------------
+        # BASE STAFF QUERY
+        # -----------------------------
+        staff_qs = StaffProfile.objects.select_related("user", "job_detail", "job_detail__department")
+
+        # --- FILTER BY DEPARTMENT ---
+        if department:
+            staff_qs = staff_qs.filter(job_detail__department_id=department)
+
+        
+        # -----------------------------
+        # ATTENDANCE QUERY 
+        # -----------------------------
+        attendance_qs = DailyAttendance.objects.all()
+
+        # --- DATE RANGE ---
+        if start_date:
+            attendance_qs = attendance_qs.filter(date__gte=start_date)
+
+        if end_date:
+            attendance_qs = attendance_qs.filter(date__lte=end_date)
+
+        # -----------------------------
+        # GROUP & AGGREGATE
+        # -----------------------------
+        stats_map = {
+            row["staff_id"]: row
+            for row in attendance_qs.values("staff_id").annotate(
+                total_records=Count("id"),
+                present_count=Count("id", filter=Q(status="full_day")),
+                half_day_count=Count("id", filter=Q(status="half_day")),
+                leave_count=Count("id", filter=Q(status="leave")),
+            )
+        }
+        
+        # -----------------------------
+        # FINAL RESULT
+        # -----------------------------
+        results = []
+        for staff in staff_qs:
+            s = stats_map.get(staff.id, {})
+
+            results.append({
+                "staff_id": staff.id,
+                "name": f"{staff.user.first_name} {staff.user.last_name}",
+                "email": staff.user.email,
+                "department": staff.job_detail.department.name if staff.job_detail and staff.job_detail.department else None,
+
+                "total_records": s.get("total_records", 0),
+                "present_count": s.get("present_count", 0),
+                "half_day_count": s.get("half_day_count", 0),
+                "leave_count": s.get("leave_count", 0),
+            })
+
+        return Response(results)

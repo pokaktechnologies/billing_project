@@ -12,4 +12,5 @@ urlpatterns = [
 
     path('today/staff/',StaffAttendanceTodayView.as_view(), name='staff-attendance-today'),
     path('staff-wise-attendance-stats/',StaffWiseAttendanceStats.as_view(), name='staff-wise-attendance-stats'),
+    path('all-staff-wise-attendance-stats/',AllStaffWiseAttendanceStats.as_view(), name='all-staff-wise-attendance-stats'),
 ]

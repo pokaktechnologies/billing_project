@@ -262,6 +262,8 @@ class ReportSerializer(serializers.ModelSerializer):
             'submitted_by',
             'job_title',
             'staff_email',
+            'week_start',
+            'week_end',
             'submitted_at',
             'tasks',
             'challenges',
@@ -294,6 +296,35 @@ class ReportSerializer(serializers.ModelSerializer):
 
         return staff_profile.staff_email or user.email
 
+    def validate(self, data):
+        report_type = data.get('report_type')
+
+        if report_type == 'weekly':
+            week_start = data.get('week_start')
+            week_end = data.get('week_end')
+
+            if not week_start or not week_end:
+                raise serializers.ValidationError(
+                    "week_start and week_end are required for weekly reports"
+                )
+
+            request = self.context.get('request')
+            user = request.user if request else None
+            project = data.get('project')
+
+            if user and Report.objects.filter(
+                project=project,
+                submitted_by=user,
+                report_type='weekly',
+                week_start=week_start,
+                week_end=week_end
+            ).exists():
+                raise serializers.ValidationError(
+                    "Weekly report already submitted for this week"
+                )
+
+        return data
+
 
     def create(self, validated_data):
         tasks_data = validated_data.pop('tasks', [])
@@ -324,3 +355,4 @@ class ReportSerializer(serializers.ModelSerializer):
         ])
 
         return report
+

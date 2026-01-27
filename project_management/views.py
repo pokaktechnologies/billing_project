@@ -15,6 +15,8 @@ from accounts.permissions import HasModulePermission
 from django.utils import timezone
 
 from datetime import datetime, timedelta
+from math import ceil
+
 
 
 
@@ -1323,7 +1325,8 @@ class ReportView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        serializer = ReportSerializer(data=request.data)
+        serializer = ReportSerializer(data=request.data,
+                                          context={'request': request})
         if serializer.is_valid():
             serializer.save(submitted_by = user)
             return Response(
@@ -1333,5 +1336,152 @@ class ReportView(APIView):
         return Response(
             {"status":"0","message":"Report Created Failed","errors":serializer.errors},
             status =status.HTTP_400_BAD_REQUEST
+        )
+
+class ReportManagerView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'project_management'
+
+    def get(self, request):
+        reports = Report.objects.all().select_related(
+            'submitted_by',
+            'submitted_by__staff_profile',
+            'submitted_by__staff_profile__job_detail'
+        ).prefetch_related(
+            'tasks',
+            'challenges'
+        ).order_by('-submitted_at')
+
+        serializer = ReportSerializer(reports, many=True)
+        return Response(
+            {"status":"1", "message":"success", "data":serializer.data},
+            status=status.HTTP_200_OK
+        )
+
+class ManagerWeeklyReportSummaryView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'project_management'
+
+    def get(self, request):
+        project_id = request.query_params.get('project')
+
+        if not project_id:
+            return Response(
+                {"status": "0", "message": "project is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        project = ProjectManagement.objects.get(id=project_id)
+
+        #  Project date range
+        start_date = project.start_date
+        end_date = min(project.end_date, timezone.now().date())
+
+        #  Project members
+        members = ProjectMember.objects.filter(
+            project=project
+        ).select_related('member', 'member__user')
+
+        weeks = []
+        current = start_date
+
+        while current <= end_date:
+            #  Calculate week range
+            week_start = current - timedelta(days=current.weekday())
+            week_end = week_start + timedelta(days=6)
+
+            deadline = timezone.make_aware(
+                datetime.combine(week_end, datetime.max.time())
+            )
+
+            #  Get weekly reports for THIS week
+            reports = Report.objects.filter(
+                project=project,
+                report_type='weekly',
+                week_start__lte=week_end,
+                week_end__gte=week_start
+            )
+
+            report_map = {r.submitted_by_id: r for r in reports}
+
+            submitted = 0
+            late = 0
+            pending = 0
+            employees = []
+
+            for pm in members:
+                user = pm.member.user
+                report = report_map.get(user.id)
+
+                if report:
+                    submitted_on = report.submitted_at.date()
+
+                    #  Late logic
+                    if report.submitted_at > deadline:
+                        status_text = "Late"
+                        late += 1
+                    else:
+                        status_text = "Submitted"
+                        submitted += 1
+                else:
+                    status_text = "Not Submitted"
+                    submitted_on = None
+                    pending += 1
+
+                employees.append({
+                    "name": f"{user.first_name} {user.last_name}",
+                    "role": pm.member.role,
+                    "submitted_on": submitted_on,
+                    "status": status_text,
+                    "report_id": report.id if report else None
+                })
+
+            weeks.append({
+                "week_start": week_start,
+                "week": f"{week_start.strftime('%d %b')} – {week_end.strftime('%d %b %Y')}",
+                "submitted": submitted,
+                "late": late,
+                "pending": pending,
+                "employees": employees
+            })
+
+            current = week_end + timedelta(days=1)
+
+        #  Latest week first
+        weeks = sorted(weeks, key=lambda x: x["week_start"], reverse=True)
+        for w in weeks:
+            w.pop("week_start")
+
+        # -----------------
+        # Pagination
+        # -----------------
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 4))  # default 4 weeks
+
+        total_items = len(weeks)
+        total_pages = ceil(total_items / page_size)
+
+        start = (page - 1) * page_size
+        end = start + page_size
+
+        paginated_weeks = weeks[start:end]
+
+        return Response(
+            {
+                "status": "1",
+                "message": "success",
+                "pagination": {
+                    "total_items": total_items,
+                    "total_pages": total_pages,
+                    "current_page": page,
+                    "page_size": page_size,
+                    "next_page": page + 1 if page < total_pages else None,
+                    "previous_page": page - 1 if page > 1 else None
+                },
+                "weeks": paginated_weeks
+            },
+            status=status.HTTP_200_OK
         )
 

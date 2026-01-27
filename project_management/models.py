@@ -59,7 +59,7 @@ class Member(models.Model):
         ('tester', 'Tester'),
     ]
 
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, null=True, blank=True)
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
     name = models.CharField(max_length=255)
     email = models.EmailField()
     phone_number = models.CharField(max_length=15)
@@ -140,8 +140,9 @@ class Report(models.Model):
     executive_summary = models.TextField()
     next_period_plan = models.TextField(null=True, blank=True)
 
-    # attachment_file = models.FileField(upload_to='reports/%Y/%m/',null=True,blank=True)
-    # link = models.URLField(null=True, blank=True)
+    week_start = models.DateField(null=True, blank=True)
+    week_end = models.DateField(null=True, blank=True)
+
     submitted_by = models.ForeignKey('accounts.CustomUser',on_delete=models.CASCADE)
     submitted_at = models.DateTimeField(auto_now_add=True)
 

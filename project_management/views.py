@@ -16,6 +16,10 @@ from django.utils import timezone
 
 from datetime import datetime, timedelta
 from math import ceil
+from rest_framework import generics
+from django_filters.rest_framework import DjangoFilterBackend
+
+
 
 
 
@@ -1131,7 +1135,14 @@ class ProjectManagerDashboardView(APIView):
             },
             status=status.HTTP_200_OK
         )
+    
 
+# Pagination class
+from rest_framework.pagination import PageNumberPagination
+class Pagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 50
 
 
 #---------------
@@ -1283,11 +1294,17 @@ class ReportView(APIView):
             'tasks',
             'challenges'
         ).order_by('-submitted_at')
-            
-        serializer = ReportSerializer(reports, many=True)
-        return Response(
+
+        # -----------------
+        # Pagination
+        # -----------------
+        
+        paginator = Pagination()
+        page = paginator.paginate_queryset(reports, request)
+
+        serializer = ReportSerializer(page, many=True)
+        return paginator.get_paginated_response(
             {"status":"1", "message":"success", "data":serializer.data},
-            status=status.HTTP_200_OK
         )
     
 
@@ -1338,13 +1355,12 @@ class ReportView(APIView):
             status =status.HTTP_400_BAD_REQUEST
         )
 
-class ReportManagerView(APIView):
+class ReportManagerDetailView(generics.RetrieveAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'project_management'
-
-    def get(self, request):
-        reports = Report.objects.all().select_related(
+    serializer_class = ReportSerializer
+    queryset = Report.objects.all().select_related(
             'submitted_by',
             'submitted_by__staff_profile',
             'submitted_by__staff_profile__job_detail'
@@ -1352,12 +1368,11 @@ class ReportManagerView(APIView):
             'tasks',
             'challenges'
         ).order_by('-submitted_at')
+    lookup_field = 'id'
+    # pagination_class = Pagination
+    # filter_backends = [DjangoFilterBackend]
+    # filterset_fields = ['report_type', 'project__id', 'submitted_by__id']
 
-        serializer = ReportSerializer(reports, many=True)
-        return Response(
-            {"status":"1", "message":"success", "data":serializer.data},
-            status=status.HTTP_200_OK
-        )
 
 class ManagerWeeklyReportSummaryView(APIView):
     authentication_classes = [JWTAuthentication]
@@ -1458,7 +1473,7 @@ class ManagerWeeklyReportSummaryView(APIView):
         # Pagination
         # -----------------
         page = int(request.query_params.get('page', 1))
-        page_size = int(request.query_params.get('page_size', 4))  # default 4 weeks
+        page_size = int(request.query_params.get('page_size', 5))  # default 4 weeks
 
         total_items = len(weeks)
         total_pages = ceil(total_items / page_size)

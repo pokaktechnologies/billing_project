@@ -42,6 +42,7 @@ urlpatterns = [
     path('report/', ReportView.as_view(), name='project_report'),
     path('report/<int:id>/', ReportView.as_view(), name='project_report_detail'),
     
+    path('manager/report/<int:id>/', ReportManagerDetailView.as_view(), name='manager_report'),
     path('manager/weekly_report_summary/', ManagerWeeklyReportSummaryView.as_view(), name='manager_weekly_report_summary'),
 
     #Dashaboard

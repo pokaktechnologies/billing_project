@@ -1188,7 +1188,8 @@ class ReportView(APIView):
                     'challenges'
                 ).get(
                     id=id,
-                    project_id__in=project_ids
+                    project_id__in=project_ids,
+                    submitted_by=user
                 )
             except Report.DoesNotExist:
                 return Response(
@@ -1205,7 +1206,8 @@ class ReportView(APIView):
 
         # Fetch reports only for those projects
         reports = Report.objects.filter(
-            project_id__in=project_ids
+            project_id__in=project_ids,
+            submitted_by=user
         )
 
         #  Filter by report type

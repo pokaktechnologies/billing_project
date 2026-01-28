@@ -101,6 +101,13 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 ROOT_URLCONF = 'core.urls'
 
 CORS_ALLOW_ALL_ORIGINS = True
+CSRF_TRUSTED_ORIGINS = [
+    "https://billingbackend.bricksnmix.com",
+    "https://www.billingbackend.bricksnmix.com",
+    "http://93.127.167.39:8030",
+    "http://localhost:8030",
+    "http://127.0.0.1:8000",
+]
 
 
 TEMPLATES = [

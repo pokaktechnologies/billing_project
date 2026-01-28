@@ -356,3 +356,59 @@ class ReportSerializer(serializers.ModelSerializer):
 
         return report
 
+class ReportUpdateSerializer(serializers.ModelSerializer):
+    tasks = ReportingTaskSerializer(many=True, write_only=True, required=False)
+    challenges = ChallengeResolutionSerializer(many=True, write_only=True, required=False)
+    attachments = ReportAttachmentSerializer(many=True, write_only=True, required=False)
+    links = ReportLinkSerializer(many=True, write_only=True, required=False)
+
+    class Meta:
+        model = Report
+        fields = [
+            'executive_summary',
+            'next_period_plan',
+            'week_start',
+            'week_end',
+            'tasks',
+            'challenges',
+            'attachments',
+            'links',
+        ]
+
+    def update(self, instance, validated_data):
+        tasks = validated_data.pop('tasks', None)
+        challenges = validated_data.pop('challenges', None)
+        attachments = validated_data.pop('attachments', None)
+        links = validated_data.pop('links', None)
+
+        # update report fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        # replace tasks
+        if tasks is not None:
+            instance.tasks.all().delete()
+            ReportingTask.objects.bulk_create(
+                [ReportingTask(report=instance, **t) for t in tasks]
+            )
+
+        if challenges is not None:
+            instance.challenges.all().delete()
+            ChallengeResolution.objects.bulk_create(
+                [ChallengeResolution(report=instance, **c) for c in challenges]
+            )
+
+        if attachments is not None:
+            instance.attachments.all().delete()
+            ReportAttachment.objects.bulk_create(
+                [ReportAttachment(report=instance, **a) for a in attachments]
+            )
+
+        if links is not None:
+            instance.links.all().delete()
+            ReportLink.objects.bulk_create(
+                [ReportLink(report=instance, **l) for l in links]
+            )
+
+        return instance

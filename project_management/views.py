@@ -1355,6 +1355,56 @@ class ReportView(APIView):
             status =status.HTTP_400_BAD_REQUEST
         )
 
+    def patch(self, request, id):
+        try:
+            report = Report.objects.get(
+                id=id,
+                submitted_by=request.user
+            )
+        except Report.DoesNotExist:
+            return Response(
+                {"status": "0", "message": "Report not found or access denied"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = ReportUpdateSerializer(
+            report,
+            data=request.data,
+            partial=True,
+            context={'request': request}
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                {"status": "1", "message": "Report updated successfully"},
+                status=status.HTTP_200_OK
+            )
+
+        return Response(
+            {"status": "0", "errors": serializer.errors},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+
+class ReportListManagerView(generics.ListAPIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'project_management'
+    serializer_class = ReportSerializer
+    queryset = Report.objects.all().select_related(
+            'submitted_by',
+            'submitted_by__staff_profile',
+            'submitted_by__staff_profile__job_detail'
+        ).prefetch_related(
+            'tasks',
+            'challenges'
+        ).order_by('-submitted_at')
+    pagination_class = Pagination
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['report_type', 'project__id', 'submitted_by__id']
+
 class ReportManagerDetailView(generics.RetrieveAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated, HasModulePermission]
@@ -1369,9 +1419,7 @@ class ReportManagerDetailView(generics.RetrieveAPIView):
             'challenges'
         ).order_by('-submitted_at')
     lookup_field = 'id'
-    # pagination_class = Pagination
-    # filter_backends = [DjangoFilterBackend]
-    # filterset_fields = ['report_type', 'project__id', 'submitted_by__id']
+
 
 
 class ManagerWeeklyReportSummaryView(APIView):

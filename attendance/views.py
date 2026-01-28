@@ -319,11 +319,14 @@ class AllStaffWiseAttendanceStats(APIView):
         for staff in staff_qs:
             s = stats_map.get(staff.id, {})
 
+            job_detail = getattr(staff, "job_detail", None)
+            department = getattr(job_detail, "department", None)
+
             results.append({
                 "staff_id": staff.id,
                 "name": f"{staff.user.first_name} {staff.user.last_name}",
                 "email": staff.user.email,
-                "department": staff.job_detail.department.name if staff.job_detail and staff.job_detail.department else None,
+                "department": department.name if department else None,
 
                 "total_records": s.get("total_records", 0),
                 "present_count": s.get("present_count", 0),

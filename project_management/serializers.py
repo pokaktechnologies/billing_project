@@ -318,6 +318,11 @@ class ReportLinkSerializer(serializers.ModelSerializer):
 from django.db import transaction
 from rest_framework import serializers
 
+from rest_framework import serializers
+from django.db import transaction
+from .models import Report, ReportingTask, ChallengeResolution, ReportAttachment, ReportLink
+
+
 class ReportSerializer(serializers.ModelSerializer):
     tasks = ReportingTaskSerializer(many=True, write_only=True)
     challenges = ChallengeResolutionSerializer(many=True, write_only=True)
@@ -345,11 +350,14 @@ class ReportSerializer(serializers.ModelSerializer):
             'executive_summary',
             'next_period_plan',
 
-            # weekly
+            # DAILY
+            'report_date',
+
+            # WEEKLY
             'week_start',
             'week_end',
 
-            # monthly
+            # MONTHLY
             'month',
             'year',
 
@@ -370,9 +378,9 @@ class ReportSerializer(serializers.ModelSerializer):
             'total_worked_hours',
         ]
 
-    # -----------------------------
+    # -------------------------
     # READ HELPERS
-    # -----------------------------
+    # -------------------------
     def get_total_worked_hours(self, obj):
         return obj.total_worked_hours
 
@@ -393,14 +401,33 @@ class ReportSerializer(serializers.ModelSerializer):
         staff_profile = getattr(user, 'staff_profile', None)
         return staff_profile.staff_email if staff_profile else user.email
 
-    # -----------------------------
+    # -------------------------
     # VALIDATION
-    # -----------------------------
+    # -------------------------
     def validate(self, data):
         report_type = data.get('report_type')
         request = self.context.get('request')
         user = request.user if request else None
         project = data.get('project')
+
+        # DAILY VALIDATION
+        if report_type == 'daily':
+            report_date = data.get('report_date')
+
+            if not report_date:
+                raise serializers.ValidationError(
+                    "report_date is required for daily reports"
+                )
+
+            if user and Report.objects.filter(
+                project=project,
+                submitted_by=user,
+                report_type='daily',
+                report_date=report_date
+            ).exists():
+                raise serializers.ValidationError(
+                    "Daily report already submitted"
+                )
 
         # WEEKLY VALIDATION
         if report_type == 'weekly':
@@ -409,7 +436,7 @@ class ReportSerializer(serializers.ModelSerializer):
 
             if not week_start or not week_end:
                 raise serializers.ValidationError(
-                    "week_start and week_end are required for weekly reports"
+                    "week_start and week_end required for weekly reports"
                 )
 
             if user and Report.objects.filter(
@@ -420,7 +447,7 @@ class ReportSerializer(serializers.ModelSerializer):
                 week_end=week_end
             ).exists():
                 raise serializers.ValidationError(
-                    "Weekly report already submitted for this week"
+                    "Weekly report already submitted"
                 )
 
         # MONTHLY VALIDATION
@@ -430,7 +457,7 @@ class ReportSerializer(serializers.ModelSerializer):
 
             if not month or not year:
                 raise serializers.ValidationError(
-                    "month and year are required for monthly reports"
+                    "month and year required for monthly reports"
                 )
 
             if user and Report.objects.filter(
@@ -446,9 +473,9 @@ class ReportSerializer(serializers.ModelSerializer):
 
         return data
 
-    # -----------------------------
+    # -------------------------
     # CREATE
-    # -----------------------------
+    # -------------------------
     @transaction.atomic
     def create(self, validated_data):
         tasks = validated_data.pop('tasks', [])
@@ -487,6 +514,7 @@ class ReportUpdateSerializer(serializers.ModelSerializer):
         fields = [
             'executive_summary',
             'next_period_plan',
+            'report_date',
             'week_start',
             'week_end',
             'month',

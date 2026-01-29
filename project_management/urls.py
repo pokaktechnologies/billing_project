@@ -58,6 +58,7 @@ urlpatterns = [
     
     path('manager/report/', ReportListManagerView.as_view(), name='manager_report_list'),
     path('manager/report/<int:id>/', ReportManagerDetailView.as_view(), name='manager_report'),
+    path('manager/daily_report_summary/', ManagerDailyReportSummaryView.as_view(), name='manager_daily_report_summary'),
     path('manager/weekly_report_summary/', ManagerWeeklyReportSummaryView.as_view(), name='manager_weekly_report_summary'),
     path('manager/monthly_report_summary/', ManagerMonthlyReportSummaryView.as_view(), name='manager_monthly_report_summary'),
 

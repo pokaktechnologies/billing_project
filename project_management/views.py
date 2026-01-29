@@ -1839,3 +1839,97 @@ class ManagerMonthlyReportSummaryView(APIView):
             "pending": pending,
             "employees": employees
         })
+
+class ManagerDailyReportSummaryView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'project_management'
+
+    def get(self, request):
+        project_id = request.query_params.get('project')
+        date_param = request.query_params.get('date')
+
+        if not project_id:
+            return Response(
+                {"status": "0", "message": "project required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        project = get_object_or_404(ProjectManagement, id=project_id)
+
+        #  selected date or today
+        if date_param:
+            try:
+                selected_date = datetime.strptime(date_param, "%Y-%m-%d").date()
+            except ValueError:
+                return Response(
+                    {"status": "0", "message": "Invalid date format YYYY-MM-DD"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        else:
+            selected_date = timezone.now().date()
+
+        members = ProjectMember.objects.filter(
+            project=project
+        ).select_related('member', 'member__user')
+
+        #  filter by report_date
+        reports = Report.objects.filter(
+            project=project,
+            report_type='daily',
+            report_date=selected_date
+        )
+
+        report_map = {r.submitted_by_id: r for r in reports}
+
+        submitted = 0
+        pending = 0
+        late = 0
+        employees = []
+
+        # deadline = end of selected date
+        deadline = timezone.make_aware(
+            datetime.combine(selected_date, datetime.max.time())
+        )
+
+        for pm in members:
+            user = pm.member.user
+            report = report_map.get(user.id)
+
+            if report:
+                submitted_on = report.submitted_at.date()
+
+                if report.submitted_at > deadline:
+                    status_text = "Late"
+                    late += 1
+                else:
+                    status_text = "Submitted"
+                    submitted += 1
+            else:
+                status_text = "Not Submitted"
+                submitted_on = None
+                pending += 1
+
+            role = ""
+            if hasattr(user, 'staff_profile') and user.staff_profile:
+                jd = getattr(user.staff_profile, 'job_detail', None)
+                if jd:
+                    role = jd.role
+
+            employees.append({
+                "name": f"{user.first_name} {user.last_name}",
+                "role": role,
+                "submitted_on": submitted_on,
+                "status": status_text,
+                "report_id": report.id if report else None
+            })
+
+        return Response({
+            "status": "1",
+            "message": "success",
+            "date": str(selected_date),
+            "submitted": submitted,
+            "late": late,
+            "pending": pending,
+            "employees": employees
+        })

@@ -172,6 +172,9 @@ class Report(models.Model):
     executive_summary = models.TextField()
     next_period_plan = models.TextField(null=True, blank=True)
 
+    #daily report fields
+    report_date = models.DateField(null=True, blank=True)
+
     #weekly report fields
     week_start = models.DateField(null=True, blank=True)
     week_end = models.DateField(null=True, blank=True)
@@ -179,7 +182,6 @@ class Report(models.Model):
     #monthly report fields
     month = models.IntegerField(null=True, blank=True)
     year = models.IntegerField(null=True, blank=True)
-
 
     submitted_by = models.ForeignKey('accounts.CustomUser',on_delete=models.CASCADE)
     submitted_at = models.DateTimeField(auto_now_add=True)
@@ -192,7 +194,7 @@ class Report(models.Model):
         )['total'] or 0
 
     def __str__(self):
-        return f"Report - {self.project} ({self.submitted_at.date()})"
+        return f"Report - {self.project} ({self.report_type}-{self.submitted_by.first_name})"
     
 class ReportingTask(models.Model):
     report = models.ForeignKey(Report, on_delete=models.CASCADE, related_name='tasks')

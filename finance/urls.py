@@ -1,5 +1,5 @@
 from django.urls import path
-from .views.accounts import AccountListCreateAPIView, AccountRetrieveUpdateDestroyAPIView
+from .views.accounts import AccountListCreateAPIView, AccountRetrieveUpdateDestroyAPIView, GenerateAccountNumberView
 from .views.ledger import JournalEntryListCreateView, JournalEntryDetailView, ListJournalVoucherView, JournalLineListView, JournalLineDetailView
 from .views.documents import CreditNoteListCreateAPIView, CreditNoteRetrieveUpdateDestroyAPIView, DebitNoteListCreateAPIView, DebitNoteRetrieveUpdateDestroyAPIView
 from .views.settings import FinaceNumberGeneratorView, CashflowCategoryMappingListCreateView, CashflowCategoryMappingDetailView, TaxSettingsListCreateAPIView, TaxSettingsRetrieveUpdateDestroyAPIView
@@ -8,6 +8,7 @@ from .views.reports import TrialBalanceView, ProfitAndLossView, BalanceSheetView
 urlpatterns = [
     path('account/', AccountListCreateAPIView.as_view(), name='account'),
     path('account/<int:pk>/', AccountRetrieveUpdateDestroyAPIView.as_view(), name='account-detail'),
+    path('generate-account-number/', GenerateAccountNumberView.as_view(), name='generate-account-number'),
 
     path('journal-entry/', JournalEntryListCreateView.as_view(), name='journal-entry'),
     path('journal-entry/<int:pk>/', JournalEntryDetailView.as_view(), name='journal-entry-detail'),

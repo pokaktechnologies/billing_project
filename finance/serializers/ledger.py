@@ -1,15 +1,41 @@
 from rest_framework import serializers
-from ..models import JournalEntry, JournalLine
+from ..models import JournalEntry, JournalLine, Account
 from django.utils import timezone
 from .accounts import AccountSerializer # If needed, or use ID
 
 class JournalLineSerializer(serializers.ModelSerializer):
+    """
+    Serializer for JournalLine with posting account validation.
+    """
     account_name = serializers.CharField(source='account.name', read_only=True)
     account_type = serializers.CharField(source='account.type', read_only=True)
+    account_is_posting = serializers.BooleanField(source='account.is_posting', read_only=True)
+    
     class Meta:
         model = JournalLine
-        fields = ['id', 'account', 'account_name', 'account_type', 'debit', 'credit', 'created_at']
+        fields = [
+            'id', 
+            'account', 
+            'account_name', 
+            'account_type', 
+            'account_is_posting',
+            'debit', 
+            'credit', 
+            'created_at'
+        ]
         read_only_fields = ['id', 'created_at']
+    
+    def validate_account(self, account):
+        """
+        Validate that the account is a posting account.
+        Non-posting accounts (parent/type accounts) cannot receive journal entries.
+        """
+        if not account.is_posting:
+            raise serializers.ValidationError(
+                f"Cannot post to non-posting account '{account.name}'. "
+                f"Only posting (leaf) accounts can receive journal entries."
+            )
+        return account
     
     def validate(self, data):
         debit = data.get('debit', 0)

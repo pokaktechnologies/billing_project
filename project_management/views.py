@@ -1,3 +1,4 @@
+from calendar import monthrange
 from django.shortcuts import render,get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -10,12 +11,10 @@ from attendance.serializers import DailyAttendanceSessionDetailSerializer
 from .serializers import *
 from .models import *
 from django.db import transaction
-from datetime import datetime
 from accounts.permissions import HasModulePermission
 from django.utils import timezone
 
-from datetime import datetime, timedelta
-from math import ceil
+from datetime import datetime, timedelta, date
 from rest_framework import generics
 from django_filters.rest_framework import DjangoFilterBackend
 
@@ -1611,7 +1610,6 @@ class ReportManagerDetailView(generics.RetrieveAPIView):
     lookup_field = 'id'
 
 
-
 class ManagerWeeklyReportSummaryView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated, HasModulePermission]
@@ -1619,6 +1617,7 @@ class ManagerWeeklyReportSummaryView(APIView):
 
     def get(self, request):
         project_id = request.query_params.get('project')
+        month_str = request.query_params.get('month')  # optional
 
         if not project_id:
             return Response(
@@ -1628,11 +1627,33 @@ class ManagerWeeklyReportSummaryView(APIView):
 
         project = get_object_or_404(ProjectManagement, id=project_id)
 
-        #  Project date range
-        start_date = project.start_date
-        end_date = min(project.end_date, timezone.now().date())
+        # -----------------------------
+        # DEFAULT = CURRENT MONTH
+        # -----------------------------
+        today = timezone.now().date()
 
-        #  Project members
+        if not month_str:
+            year = today.year
+            month = today.month
+        else:
+            try:
+                year, month = map(int, month_str.split('-'))
+            except:
+                return Response(
+                    {"status": "0", "message": "Invalid month format YYYY-MM"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        last_day = monthrange(year, month)[1]
+        month_start = date(year, month, 1)
+        month_end = date(year, month, last_day)
+
+        # -----------------------------
+        # PROJECT RANGE
+        # -----------------------------
+        start_date = project.start_date
+        end_date = min(project.end_date, today)
+
         members = ProjectMember.objects.filter(
             project=project
         ).select_related('member', 'member__user')
@@ -1640,16 +1661,23 @@ class ManagerWeeklyReportSummaryView(APIView):
         weeks = []
         current = start_date
 
+        # -----------------------------
+        # LOOP WEEKS
+        # -----------------------------
         while current <= end_date:
-            #  Calculate week range
+
             week_start = current - timedelta(days=current.weekday())
             week_end = week_start + timedelta(days=6)
+
+            # Skip weeks not touching selected month
+            if week_end < month_start or week_start > month_end:
+                current = week_end + timedelta(days=1)
+                continue
 
             deadline = timezone.make_aware(
                 datetime.combine(week_end, datetime.max.time())
             )
 
-            #  Get weekly reports for THIS week
             reports = Report.objects.filter(
                 project=project,
                 report_type='weekly',
@@ -1671,7 +1699,6 @@ class ManagerWeeklyReportSummaryView(APIView):
                 if report:
                     submitted_on = report.submitted_at.date()
 
-                    #  Late logic
                     if report.submitted_at > deadline:
                         status_text = "Late"
                         late += 1
@@ -1683,9 +1710,16 @@ class ManagerWeeklyReportSummaryView(APIView):
                     submitted_on = None
                     pending += 1
 
+                # safe role lookup
+                role = ""
+                if hasattr(user, 'staff_profile') and user.staff_profile:
+                    jd = getattr(user.staff_profile, 'job_detail', None)
+                    if jd:
+                        role = jd.role
+
                 employees.append({
                     "name": f"{user.first_name} {user.last_name}",
-                    "role": pm.member.role,
+                    "role": role,
                     "submitted_on": submitted_on,
                     "status": status_text,
                     "report_id": report.id if report else None
@@ -1702,39 +1736,17 @@ class ManagerWeeklyReportSummaryView(APIView):
 
             current = week_end + timedelta(days=1)
 
-        #  Latest week first
+        # latest week first
         weeks = sorted(weeks, key=lambda x: x["week_start"], reverse=True)
         for w in weeks:
             w.pop("week_start")
-
-        # -----------------
-        # Pagination
-        # -----------------
-        page = int(request.query_params.get('page', 1))
-        page_size = int(request.query_params.get('page_size', 5))  # default 4 weeks
-
-        total_items = len(weeks)
-        total_pages = ceil(total_items / page_size)
-
-        start = (page - 1) * page_size
-        end = start + page_size
-
-        paginated_weeks = weeks[start:end]
 
         return Response(
             {
                 "status": "1",
                 "message": "success",
-                "pagination": {
-                    "total_items": total_items,
-                    "total_pages": total_pages,
-                    "current_page": page,
-                    "page_size": page_size,
-                    "next_page": page + 1 if page < total_pages else None,
-                    "previous_page": page - 1 if page > 1 else None
-                },
-                "weeks": paginated_weeks
+                "month": f"{year}-{str(month).zfill(2)}",
+                "weeks": weeks
             },
             status=status.HTTP_200_OK
         )
-

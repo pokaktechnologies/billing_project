@@ -172,8 +172,14 @@ class Report(models.Model):
     executive_summary = models.TextField()
     next_period_plan = models.TextField(null=True, blank=True)
 
+    #weekly report fields
     week_start = models.DateField(null=True, blank=True)
     week_end = models.DateField(null=True, blank=True)
+
+    #monthly report fields
+    month = models.IntegerField(null=True, blank=True)
+    year = models.IntegerField(null=True, blank=True)
+
 
     submitted_by = models.ForeignKey('accounts.CustomUser',on_delete=models.CASCADE)
     submitted_at = models.DateTimeField(auto_now_add=True)

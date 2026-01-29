@@ -315,14 +315,17 @@ class ReportLinkSerializer(serializers.ModelSerializer):
         fields = ['url']
 
 
+from django.db import transaction
+from rest_framework import serializers
+
 class ReportSerializer(serializers.ModelSerializer):
     tasks = ReportingTaskSerializer(many=True, write_only=True)
     challenges = ChallengeResolutionSerializer(many=True, write_only=True)
     task_list = ReportingTaskSerializer(source='tasks', many=True, read_only=True)
     challenge_list = ChallengeResolutionSerializer(source='challenges', many=True, read_only=True)
 
-    attachments = ReportAttachmentSerializer(many=True, write_only=True, required=False, allow_empty=True)
-    links = ReportLinkSerializer(many=True, write_only=True, required=False, allow_empty=True)
+    attachments = ReportAttachmentSerializer(many=True, write_only=True, required=False)
+    links = ReportLinkSerializer(many=True, write_only=True, required=False)
 
     attachment_list = ReportAttachmentSerializer(source='attachments', many=True, read_only=True)
     link_list = ReportLinkSerializer(source='links', many=True, read_only=True)
@@ -341,16 +344,25 @@ class ReportSerializer(serializers.ModelSerializer):
             'report_type',
             'executive_summary',
             'next_period_plan',
+
+            # weekly
+            'week_start',
+            'week_end',
+
+            # monthly
+            'month',
+            'year',
+
             'attachments',
             'links',
             'attachment_list',
             'link_list',
+
             'submitted_by',
             'job_title',
             'staff_email',
-            'week_start',
-            'week_end',
             'submitted_at',
+
             'tasks',
             'challenges',
             'task_list',
@@ -358,33 +370,39 @@ class ReportSerializer(serializers.ModelSerializer):
             'total_worked_hours',
         ]
 
+    # -----------------------------
+    # READ HELPERS
+    # -----------------------------
     def get_total_worked_hours(self, obj):
         return obj.total_worked_hours
-    
+
     def get_submitted_by(self, obj):
         if obj.submitted_by:
             return f"{obj.submitted_by.first_name} {obj.submitted_by.last_name}".strip()
-        
+
     def get_job_title(self, obj):
         user = obj.submitted_by
         staff_profile = getattr(user, 'staff_profile', None)
         job_detail = getattr(staff_profile, 'job_detail', None) if staff_profile else None
         return job_detail.role if job_detail else None
-    
+
     def get_staff_email(self, obj):
         user = obj.submitted_by
         if not user:
             return None
-
         staff_profile = getattr(user, 'staff_profile', None)
-        if not staff_profile:
-            return None
+        return staff_profile.staff_email if staff_profile else user.email
 
-        return staff_profile.staff_email or user.email
-
+    # -----------------------------
+    # VALIDATION
+    # -----------------------------
     def validate(self, data):
         report_type = data.get('report_type')
+        request = self.context.get('request')
+        user = request.user if request else None
+        project = data.get('project')
 
+        # WEEKLY VALIDATION
         if report_type == 'weekly':
             week_start = data.get('week_start')
             week_end = data.get('week_end')
@@ -393,10 +411,6 @@ class ReportSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     "week_start and week_end are required for weekly reports"
                 )
-
-            request = self.context.get('request')
-            user = request.user if request else None
-            project = data.get('project')
 
             if user and Report.objects.filter(
                 project=project,
@@ -409,35 +423,55 @@ class ReportSerializer(serializers.ModelSerializer):
                     "Weekly report already submitted for this week"
                 )
 
+        # MONTHLY VALIDATION
+        if report_type == 'monthly':
+            month = data.get('month')
+            year = data.get('year')
+
+            if not month or not year:
+                raise serializers.ValidationError(
+                    "month and year are required for monthly reports"
+                )
+
+            if user and Report.objects.filter(
+                project=project,
+                submitted_by=user,
+                report_type='monthly',
+                month=month,
+                year=year
+            ).exists():
+                raise serializers.ValidationError(
+                    "Monthly report already submitted"
+                )
+
         return data
 
-
+    # -----------------------------
+    # CREATE
+    # -----------------------------
+    @transaction.atomic
     def create(self, validated_data):
-        tasks_data = validated_data.pop('tasks', [])
-        challenges_data = validated_data.pop('challenges', [])
-        attachments_data = validated_data.pop('attachments', [])
-        links_data = validated_data.pop('links', [])
+        tasks = validated_data.pop('tasks', [])
+        challenges = validated_data.pop('challenges', [])
+        attachments = validated_data.pop('attachments', [])
+        links = validated_data.pop('links', [])
 
         report = Report.objects.create(**validated_data)
 
         ReportingTask.objects.bulk_create([
-            ReportingTask(report=report, **task)
-            for task in tasks_data
+            ReportingTask(report=report, **t) for t in tasks
         ])
 
         ChallengeResolution.objects.bulk_create([
-            ChallengeResolution(report=report, **challenge)
-            for challenge in challenges_data
+            ChallengeResolution(report=report, **c) for c in challenges
         ])
 
         ReportAttachment.objects.bulk_create([
-            ReportAttachment(report=report, **attachment)
-            for attachment in attachments_data
+            ReportAttachment(report=report, **a) for a in attachments
         ])
 
         ReportLink.objects.bulk_create([
-            ReportLink(report=report, **link)
-            for link in links_data
+            ReportLink(report=report, **l) for l in links
         ])
 
         return report
@@ -455,24 +489,27 @@ class ReportUpdateSerializer(serializers.ModelSerializer):
             'next_period_plan',
             'week_start',
             'week_end',
+            'month',
+            'year',
             'tasks',
             'challenges',
             'attachments',
             'links',
         ]
 
+    @transaction.atomic
     def update(self, instance, validated_data):
         tasks = validated_data.pop('tasks', None)
         challenges = validated_data.pop('challenges', None)
         attachments = validated_data.pop('attachments', None)
         links = validated_data.pop('links', None)
 
-        # update report fields
+        # update main fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
 
-        # replace tasks
+        # replace nested data
         if tasks is not None:
             instance.tasks.all().delete()
             ReportingTask.objects.bulk_create(

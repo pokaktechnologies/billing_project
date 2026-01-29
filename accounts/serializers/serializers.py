@@ -757,10 +757,17 @@ class ReceiptSerializer(serializers.ModelSerializer):
         return obj.invoice.invoice_number if obj.invoice else None
     
     def get_tax_amount(self, obj):
-        if obj.invoice:
-            tax_amount = obj.invoice.grand_total - obj.invoice.subtotal
-            return "{:,.2f}".format(tax_amount)
-        return None
+        rate = obj.tax_rate or Decimal("0.00")
+        amount = obj.cheque_amount or Decimal("0.00")
+
+        if rate <= 0:
+            return Decimal("0.00")
+
+        tax_amount = (amount * rate) / (Decimal("100.00") + rate)
+        return format(tax_amount, '.2f')
+    
+
+    
 class ReceiptForInvoiceSerializer(serializers.ModelSerializer):
     invoice_number = serializers.SerializerMethodField()
 

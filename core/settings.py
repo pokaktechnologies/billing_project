@@ -69,7 +69,10 @@ REST_FRAMEWORK = {
     )
 }
 
-
+CSRF_TRUSTED_ORIGINS = [
+    "https://billingbackend.bricksnmix.com",
+    "http://93.127.167.39:8030"
+]
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'

@@ -94,20 +94,53 @@ class ProjectMember(models.Model):
         unique_together = ('project', 'member')
 
 
-# null=True, blank=True
 
+# -------------------------------
+# Task Model    
+# -------------------------------
+
+#board
+class TaskBoard(models.Model):
+    project = models.ForeignKey(ProjectManagement, on_delete=models.CASCADE)
+    name = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    def __str__(self):
+        return self.name
+    
+#columns
+class StatusColumns(models.Model):
+    board = models.ForeignKey(TaskBoard, on_delete=models.CASCADE)
+    name = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    def __str__(self):
+        return self.name
+    
 class Task(models.Model):
-    project_member = models.ForeignKey(ProjectMember, on_delete=models.CASCADE)
+    difficulty_choice = [
+        ('easy','Easy'),
+        ('medium','Medium'),
+        ('hard','Hard')
+    ]
+    project = models.ForeignKey(ProjectManagement, on_delete=models.CASCADE, null=True, blank=True)
+    board = models.ForeignKey(TaskBoard, on_delete=models.DO_NOTHING, null=True, blank=True)
+    status_column = models.ForeignKey(StatusColumns,on_delete=models.DO_NOTHING, null=True, blank=True)
+
     task_name = models.CharField(max_length=255)
-    task_description = models.TextField()
-    start_date = models.DateField()
+    description = models.TextField()
+    difficulty = models.CharField(max_length=100,choices=difficulty_choice, null=True, blank=True)
     end_date = models.DateField()
-    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='not_started')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # start_date = models.DateField()
+    # status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='not_started')
+    #     project_member = models.ForeignKey(ProjectMember, on_delete=models.CASCADE)
+
+
     def __str__(self):
-        return f"{self.task_name} ({self.project_member})"    
+        return f"{self.task_name} ({self.project})"
     
 
 class TaskAssign(models.Model):

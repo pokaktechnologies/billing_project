@@ -648,67 +648,109 @@ class ProjectMembersListByProjectView(APIView):
 
 # Task views
 
-class TaskView(APIView):
+
+#Create Board
+class CreateListBoard(generics.ListCreateAPIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'project_management'
+    queryset = TaskBoard.objects.all().order_by('-created_at')
+    serializer_class = TaskBoardSerializer
+
+class DistroyUpdateBoard(generics.RetrieveUpdateDestroyAPIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'project_management'
+    queryset = TaskBoard.objects.all()
+    serializer_class = TaskBoardSerializer
+
+class CreateStatusColumn(generics.ListCreateAPIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'project_management'
+    serializer_class = StatusColumnWithTasksSerializer
+
+    def get_queryset(self):
+        board_id = self.request.query_params.get('board')
+
+        qs = StatusColumns.objects.prefetch_related(
+            'task_set'
+        ).order_by('id')
+
+        if board_id:
+            qs = qs.filter(board_id=board_id)
+
+        return qs
+
+
+class DistroyUpdateStatusColumn(generics.RetrieveUpdateDestroyAPIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'project_management'
+    queryset = StatusColumns.objects.all()
+    serializer_class = StatusColumnWithTasksSerializer
+
+
+class TaskListCreateView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'project_management'
 
-    def get(self, request, format=None):
-        tasks = Task.objects.all().order_by('-created_at')
-       
-        serializer = TaskSerializer(tasks, many=True)
+    def get(self, request):
+        task = Task.objects.all().order_by('-created_at')
+        serializer = TaskSerializer(task, many=True)
         return Response(
             {"status": "1", "message": "success", "data": serializer.data},
             status=status.HTTP_200_OK
         )
 
-    def post(self, request, format=None):
+    def post(self, request):
         serializer = TaskSerializer(data=request.data)
 
-        # Check if project member belongs to user or not
-        project_member = ProjectMember.objects.filter(pk=request.data.get('project_member')).first()
+        if not serializer.is_valid():
+            return Response(
+                {"status": "0", "errors": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        assigned_to = request.data.get("assigned_to")
+        if not assigned_to:
+            return Response(
+                {"status": "0", "message": "assigned_to field is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        project_member = ProjectMember.objects.filter(pk=assigned_to).first()
         if not project_member:
             return Response(
                 {"status": "0", "message": "Project member not found"},
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Start a transaction block
         with transaction.atomic():
-            if serializer.is_valid():
-                # Create task
-                task = serializer.save()
-                # Create task assignment
-                TaskAssign.objects.create(
-                    assigned_by=request.user,
-                    task=task,
-                    assigned_to=project_member
-                )
-                return Response(
-                    {"status": "1", "message": "Task created successfully"},
-                    status=status.HTTP_201_CREATED
-                )
+            task = serializer.save()
+
+            TaskAssign.objects.create(
+                task=task,
+                assigned_by=request.user,
+                assigned_to=project_member
+            )
 
         return Response(
-            {"status": "0", "message": "Task creation failed", "errors": serializer.errors},
-            status=status.HTTP_400_BAD_REQUEST
+            {"status": "1", "message": "Task created successfully"},
+            status=status.HTTP_201_CREATED
         )
 
 
-class TaskDetail(APIView):
+
+class TaskRetrieveUpdateDeleteView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'project_management'
 
-    def get_task(self, pk):
-        try:
-            task = Task.objects.get(pk=pk)
-            return task
-        except Task.DoesNotExist:
-            return None
-
-    def get(self, request, pk, format=None):
-        task = self.get_task(pk)
+    # -------- RETRIEVE --------
+    def get(self, request, pk):
+        task = Task.objects.filter(pk=pk).first()
         if not task:
             return Response(
                 {"status": "0", "message": "Task not found"},
@@ -717,12 +759,13 @@ class TaskDetail(APIView):
 
         serializer = TaskSerializer(task)
         return Response(
-            {"status": "1", "message": "success", "data": [serializer.data]},
+            {"status": "1", "data": serializer.data},
             status=status.HTTP_200_OK
         )
 
-    def patch(self, request, pk, format=None):
-        task = self.get_task(pk)
+    # -------- UPDATE (PATCH) --------
+    def patch(self, request, pk):
+        task = Task.objects.filter(pk=pk).first()
         if not task:
             return Response(
                 {"status": "0", "message": "Task not found"},
@@ -730,37 +773,54 @@ class TaskDetail(APIView):
             )
 
         serializer = TaskSerializer(task, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
+        if not serializer.is_valid():
             return Response(
-                {"status": "1", "message": "Task updated successfully"},
-                status=status.HTTP_200_OK
+                {"status": "0", "errors": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
             )
 
+        assigned_to = request.data.get("assigned_to")
+
+        with transaction.atomic():
+            serializer.save()
+
+            if assigned_to:
+                project_member = ProjectMember.objects.filter(pk=assigned_to).first()
+                if not project_member:
+                    return Response(
+                        {"status": "0", "message": "Project member not found"},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+
+                # update or create assignment
+                TaskAssign.objects.update_or_create(
+                    task=task,
+                    defaults={
+                        "assigned_to": project_member,
+                        "assigned_by": request.user
+                    }
+                )
+
         return Response(
-            {"status": "0", "message": "Task update failed", "errors": serializer.errors},
-            status=status.HTTP_400_BAD_REQUEST
+            {"status": "1", "message": "Task updated successfully"},
+            status=status.HTTP_200_OK
         )
 
-    def delete(self, request, pk, format=None):
-        task = self.get_task(pk)
+    # -------- DELETE --------
+    def delete(self, request, pk):
+        task = Task.objects.filter(pk=pk).first()
         if not task:
             return Response(
                 {"status": "0", "message": "Task not found"},
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        try:
-            task.delete()
-            return Response(
-                {"status": "1", "message": "Task deleted successfully"},
-                status=status.HTTP_200_OK
-            )
-        except Exception as e:
-            return Response(
-                {"status": "0", "message": "Task deletion failed", "errors": str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        task.delete()
+        return Response(
+            {"status": "1", "message": "Task deleted successfully"},
+            status=status.HTTP_200_OK
+        )
+
 
 class TaskListByMembers(APIView):
     authentication_classes = [JWTAuthentication]
@@ -781,13 +841,28 @@ class TaskListByProjectMember(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'project_management'
 
-    def get(self, request, project_member_id, format=None):
-        tasks = Task.objects.filter(project_member__id=project_member_id).order_by('-created_at')
+    def get(self, request, project_member_id):
+        project_member = ProjectMember.objects.filter(pk=project_member_id).first()
+        if not project_member:
+            return Response(
+                {"status": "0", "message": "Project member not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        tasks = Task.objects.filter(
+            assignments__assigned_to=project_member
+        ).select_related(
+            'project', 'board', 'status_column'
+        ).prefetch_related(
+            'assignments'
+        ).distinct().order_by('-created_at')
+
         serializer = TaskSerializer(tasks, many=True)
         return Response(
             {"status": "1", "message": "success", "data": serializer.data},
             status=status.HTTP_200_OK
         )
+
 
 # search views
 

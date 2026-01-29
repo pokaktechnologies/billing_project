@@ -571,7 +571,7 @@ class TaskAssignmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = TaskAssignment
         fields = "__all__"
-
+from internship.models import Task
 class TaskSerializer(serializers.ModelSerializer):
     assigned_to = serializers.ListField(
         child=serializers.IntegerField(),

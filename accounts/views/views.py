@@ -1,3 +1,4 @@
+from xmlrpc import client
 from rest_framework import viewsets,status
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from rest_framework.response import Response
@@ -2084,10 +2085,10 @@ class DelivaryOrderItemsList(APIView):
 class ReceiptView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'receipt'
+
     def get(self, request, rec_id=None):
         if rec_id:
             receipt = get_object_or_404(ReceiptModel, id=rec_id)
-            # termsandconditions_points = TermsAndConditionsPoint.objects.filter(terms_and_conditions=receipt.termsandconditions_id)
             invoice_items = []
             items = []
 
@@ -2096,89 +2097,97 @@ class ReceiptView(APIView):
                 items = DeliveryItem.objects.filter(
                     delivery_form__in=invoice_items.values_list('delivary__id', flat=True)
                 ).distinct()
+
             serializer = ReceiptSerializer(receipt)
             return Response({
                 'Status': '1',
                 'Message': 'Success',
                 'Data': [{
                     **serializer.data,
-                    # 'termsandconditions_points': TermsAndConditionsPointSerializer(termsandconditions_points, many=True).data,
                     'items': DeliveryItemsSerializer(items, many=True).data
                 }]
             })
         else:
             receipts = ReceiptModel.objects.all().order_by('-created_at')
             serializer = ReceiptSerializer(receipts, many=True)
+
         return Response({
             'Status': '1',
             'Message': 'Success',
             'Data': serializer.data
         })
-    
+
     def post(self, request):
         serializer = ReceiptSerializer(data=request.data)
-        if serializer.is_valid():
-            invoice_id = request.data.get('invoice')
-            receipt = serializer.save(user=request.user)
-            credit_id = request.data.get('credit_id')
-            debit_id = request.data.get('debit_id')
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-            # Mark invoice as receipted if linked
-            if invoice_id:
-                invoice = get_object_or_404(InvoiceModel, id=invoice_id)
-                invoice.is_receipted = True
-                invoice.save(update_fields=['is_receipted'])
+        invoice_id = request.data.get('invoice')
+        receipt = serializer.save(user=request.user)
 
-            # --- JOURNAL ENTRY CREATION ---
-            debit_account = get_object_or_404(Account, pk=int(debit_id))
-            credit_account = get_object_or_404(Account, pk=int(credit_id))
-            amount = receipt.cheque_amount
+        credit_id = request.data.get('credit_id')
+        debit_id = request.data.get('debit_id')
 
-            # --- CREATE JOURNAL ---
-            accounts_tax = JOURNAL_ACCOUNT_MAPPING['receipt_tax']
-            debit_account_tax = Account.objects.get(name=accounts_tax['debit'])
-            credit_account_tax = Account.objects.get(name=accounts_tax['credit'])
+        if invoice_id:
+            invoice = get_object_or_404(InvoiceModel, id=invoice_id)
+            invoice.is_receipted = True
+            invoice.save(update_fields=['is_receipted'])
 
+        debit_account = get_object_or_404(Account, pk=int(debit_id))
+        credit_account = get_object_or_404(Account, pk=int(credit_id))
+        amount = receipt.cheque_amount
 
-            # calculate tax amount
-            rate = receipt.tax_rate if receipt.tax_rate else 0
-            tax_amount = (amount * rate) / (100 + rate) if rate > 0 else 0
+        accounts_tax = JOURNAL_ACCOUNT_MAPPING['receipt_tax']
+        debit_account_tax = Account.objects.get(name=accounts_tax['debit'])
+        credit_account_tax = Account.objects.get(name=accounts_tax['credit'])
 
-            with transaction.atomic():
-                journal = JournalEntry.objects.create(
-                    type='receipt',
-                    type_number=receipt.receipt_number,
-                    salesperson=receipt.client.salesperson,
-                    narration=f'Receipt {receipt.receipt_number} from {receipt.client.first_name} {receipt.client.last_name}',
-                    user=request.user,
-                )
+        rate = receipt.tax_rate or 0
+        tax_amount = (amount * rate) / (100 + rate) if rate > 0 else 0
 
-                JournalLine.objects.create(journal=journal, account=debit_account, debit=amount)
-                JournalLine.objects.create(journal=journal, account=credit_account, credit=amount)
+        client = receipt.client
+        salesperson = client.salesperson if client and client.salesperson else None
 
-                journal_tax = JournalEntry.objects.create(
-                    type='tax_payment',
-                    type_number=receipt.receipt_number + '_TAX',
-                    salesperson=receipt.client.salesperson,
-                    narration=f'Receipt Tax {receipt.receipt_number} from {receipt.client.first_name} {receipt.client.last_name}',
-                    user=request.user,
-                )
+        with transaction.atomic():
+            journal = JournalEntry.objects.create(
+                type='receipt',
+                type_number=receipt.receipt_number,
+                salesperson=salesperson,
+                narration=(
+                    f"Receipt {receipt.receipt_number} from {client.first_name} {client.last_name}"
+                    if client else
+                    f"Receipt {receipt.receipt_number}"
+                ),
+                user=request.user,
+            )
 
-                JournalLine.objects.create(journal=journal_tax, account=debit_account_tax, debit=tax_amount)
-                JournalLine.objects.create(journal=journal_tax, account=credit_account_tax, credit=tax_amount)
+            JournalLine.objects.create(journal=journal, account=debit_account, debit=amount)
+            JournalLine.objects.create(journal=journal, account=credit_account, credit=amount)
 
-            return Response({
-                "status": "1",
-                "message": "Receipt created successfully.",
-                "receipt_number": receipt.receipt_number,
-                "receipt_id": receipt.id,
-            }, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            journal_tax = JournalEntry.objects.create(
+                type='tax_payment',
+                type_number=receipt.receipt_number + '_TAX',
+                salesperson=salesperson,
+                narration=(
+                    f"Receipt Tax {receipt.receipt_number} from {client.first_name} {client.last_name}"
+                    if client else
+                    f"Receipt Tax {receipt.receipt_number}"
+                ),
+                user=request.user,
+            )
 
-    
+            JournalLine.objects.create(journal=journal_tax, account=debit_account_tax, debit=tax_amount)
+            JournalLine.objects.create(journal=journal_tax, account=credit_account_tax, credit=tax_amount)
+
+        return Response({
+            "status": "1",
+            "message": "Receipt created successfully.",
+            "receipt_number": receipt.receipt_number,
+            "receipt_id": receipt.id,
+        }, status=status.HTTP_201_CREATED)
+
     def patch(self, request, rec_id=None):
         receipt = get_object_or_404(ReceiptModel, id=rec_id)
-        old_invoice = receipt.invoice  # may be None
+        old_invoice = receipt.invoice
 
         serializer = ReceiptSerializer(receipt, data=request.data, partial=True)
         if not serializer.is_valid():
@@ -2187,8 +2196,6 @@ class ReceiptView(APIView):
         new_invoice_id = request.data.get("invoice")
 
         with transaction.atomic():
-
-            # ---- INVOICE LINK HANDLING ----
             if new_invoice_id:
                 new_invoice = get_object_or_404(InvoiceModel, id=new_invoice_id)
 
@@ -2203,14 +2210,12 @@ class ReceiptView(APIView):
                     old_invoice.is_receipted = False
                     old_invoice.save(update_fields=["is_receipted"])
 
-            # ---- SAVE RECEIPT ----
             receipt = serializer.save()
 
             amount = receipt.cheque_amount
             rate = receipt.tax_rate or 0
             tax_amount = (amount * rate) / (100 + rate) if rate > 0 else 0
 
-            # ---- ACCOUNTS ----
             debit_account = get_object_or_404(Account, pk=int(request.data.get('debit_id')))
             credit_account = get_object_or_404(Account, pk=int(request.data.get('credit_id')))
 
@@ -2218,9 +2223,9 @@ class ReceiptView(APIView):
             debit_account_tax = Account.objects.get(name=accounts_tax['debit'])
             credit_account_tax = Account.objects.get(name=accounts_tax['credit'])
 
-            # ==========================================================
-            # 1️⃣ UPDATE / CREATE RECEIPT JOURNAL
-            # ==========================================================
+            client = receipt.client
+            salesperson = client.salesperson if client and client.salesperson else None
+
             journal = JournalEntry.objects.filter(
                 type='receipt',
                 type_number=receipt.receipt_number
@@ -2233,17 +2238,18 @@ class ReceiptView(APIView):
                     user=request.user,
                 )
 
-            journal.salesperson = receipt.client.salesperson
-            journal.narration = f"Receipt {receipt.receipt_number} from {receipt.client.first_name} {receipt.client.last_name}"
+            journal.salesperson = salesperson
+            journal.narration = (
+                f"Receipt {receipt.receipt_number} from {client.first_name} {client.last_name}"
+                if client else
+                f"Receipt {receipt.receipt_number}"
+            )
             journal.save(update_fields=["salesperson", "narration"])
 
             journal.lines.all().delete()
             JournalLine.objects.create(journal=journal, account=debit_account, debit=amount)
             JournalLine.objects.create(journal=journal, account=credit_account, credit=amount)
 
-            # ==========================================================
-            # 2️⃣ UPDATE / CREATE RECEIPT TAX JOURNAL
-            # ==========================================================
             journal_tax = JournalEntry.objects.filter(
                 type='tax_payment',
                 type_number=receipt.receipt_number + "_TAX"
@@ -2256,8 +2262,12 @@ class ReceiptView(APIView):
                     user=request.user,
                 )
 
-            journal_tax.salesperson = receipt.client.salesperson
-            journal_tax.narration = f"Receipt Tax {receipt.receipt_number} from {receipt.client.first_name} {receipt.client.last_name}"
+            journal_tax.salesperson = salesperson
+            journal_tax.narration = (
+                f"Receipt Tax {receipt.receipt_number} from {client.first_name} {client.last_name}"
+                if client else
+                f"Receipt Tax {receipt.receipt_number}"
+            )
             journal_tax.save(update_fields=["salesperson", "narration"])
 
             journal_tax.lines.all().delete()
@@ -2269,8 +2279,6 @@ class ReceiptView(APIView):
             status=status.HTTP_200_OK,
         )
 
-
-
     def delete(self, request, rec_id=None):
         if not rec_id:
             return Response(
@@ -2280,34 +2288,27 @@ class ReceiptView(APIView):
 
         with transaction.atomic():
             receipt = get_object_or_404(ReceiptModel, id=rec_id)
-            invoice = receipt.invoice  # may be None
+            invoice = receipt.invoice
             receipt_number = receipt.receipt_number
 
-            # ---- DELETE RECEIPT JOURNAL ----
             JournalEntry.objects.filter(
                 type='receipt',
                 type_number=receipt_number
             ).delete()
 
-            # ---- DELETE RECEIPT TAX JOURNAL ----
             JournalEntry.objects.filter(
                 type='tax_payment',
                 type_number=receipt_number + "_TAX"
             ).delete()
 
-            # ---- DELETE RECEIPT ----
             receipt.delete()
 
-            # ---- UNMARK INVOICE ----
             if invoice:
                 invoice.is_receipted = False
                 invoice.save(update_fields=["is_receipted"])
 
         return Response(
-            {
-                "status": "1",
-                "message": "Receipt and related journals deleted successfully."
-            },
+            {"status": "1", "message": "Receipt and related journals deleted successfully."},
             status=status.HTTP_200_OK
         )
 

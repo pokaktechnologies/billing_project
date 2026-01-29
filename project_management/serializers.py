@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ChallengeResolution, ProjectManagement, Member, Report, ReportAttachment, ReportLink, ReportingTask, Stack, ProjectMember, Task,ClientContract, TaskAssign
+from .models import ChallengeResolution, ProjectManagement, Member, Report, ReportAttachment, ReportLink, ReportingTask, Stack, ProjectMember, StatusColumns, Task,ClientContract, TaskAssign, TaskBoard
 
 class ClientContractSerializer(serializers.ModelSerializer):
     client_first_name =  serializers.CharField(source='client.first_name', read_only=True)
@@ -127,39 +127,89 @@ class ProjectMemberSerializer(serializers.ModelSerializer):
     member_name = serializers.CharField(source='member.name', read_only=True)
     stack_name = serializers.CharField(source='stack.name', read_only=True)
     project_name = serializers.CharField(source='project.project_name', read_only=True)
-    task_count = serializers.SerializerMethodField()
+    # task_count = serializers.SerializerMethodField()
 
     class Meta:
         model = ProjectMember
-        fields = ['id', 'member', 'stack','stack_name' , 'member_name', 'project', 'project_name', 'task_count', 'created_at']
+        fields = ['id', 'member', 'stack','stack_name' , 'member_name', 'project', 'project_name', 'created_at']
     
-    def get_task_count(self, obj):
-        return obj.task_set.count()
+    # def get_task_count(self, obj):
+    #     return obj.task_set.count()
 
 
+#-----------------
+# Task Serializers
+#-----------------
 
-class TaskSerializer(serializers.ModelSerializer):
-    project_name = serializers.CharField(source='project_member.project.project_name', read_only=True)
-    status_display = serializers.SerializerMethodField()  # for human-readable display only
+
+class TaskBoardSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TaskBoard
+        fields = ['id', 'project', 'name', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
+
+
+class TaskMiniSerializer(serializers.ModelSerializer):
+    board_name = serializers.CharField(source='board.name', read_only=True)
+    column_name = serializers.CharField(source='status_column.name', read_only=True)
 
     class Meta:
         model = Task
         fields = [
             'id',
-            'project_member',
-            'project_name',
             'task_name',
-            'task_description',
-            'start_date',
+            'difficulty',
             'end_date',
-            'status',
-            'status_display',
-            'created_at',
-            'updated_at'
+            'board_name',
+            'column_name',
         ]
+class StatusColumnWithTasksSerializer(serializers.ModelSerializer):
+    tasks = TaskMiniSerializer(
+        source='task_set',
+        many=True,
+        read_only=True
+    )
 
-    def get_status_display(self, obj):
-        return obj.get_status_display()
+    class Meta:
+        model = StatusColumns
+        fields = [
+            'id',
+            'board',
+            'name',
+            'created_at',
+            'updated_at',
+            'tasks'
+        ]
+class TaskAssignSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TaskAssign
+        fields = ['id', 'assigned_by', 'task', 'assigned_to', 'assigned_at']
+        read_only_fields = ['assigned_at']
+
+class TaskSerializer(serializers.ModelSerializer):
+    assignments  = TaskAssignSerializer(many=True, read_only=True)
+    project_name = serializers.CharField(source = 'project.project_name', read_only=True)
+    board_name = serializers.CharField(source = 'board.name', read_only=True)
+    column_name = serializers.CharField(source = 'status_column.name', read_only=True)
+    class Meta:
+        model = Task
+        fields =[
+            'id',
+            'project',
+            'project_name',
+            'board',
+            'board_name',
+            'status_column',
+            'column_name',
+            'task_name',
+            'description',
+            'difficulty',
+            'end_date',
+            'created_at',
+            'updated_at',
+            'assignments'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
 
 
 ## DASHBOARD VIEW------#

@@ -358,6 +358,7 @@ class CourseStudyMaterialListAPIView(generics.ListAPIView):
 
 # ===== Task Views ======
 
+from internship.models import Task
 class TaskListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = TaskSerializer
     permission_classes = [IsAuthenticated]

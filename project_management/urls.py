@@ -26,8 +26,15 @@ urlpatterns = [
 
 
     # Tasks
-    path('task/', TaskView.as_view(), name='task_list'),
-    path('task/<int:pk>/', TaskDetail.as_view(), name='task_detail'),
+    path('task/board/', CreateListBoard.as_view(), name='task_board_list'),
+    path('task/board/<int:pk>/', DistroyUpdateBoard.as_view(), name='task_board_detail'),
+
+    path('task/column/', CreateStatusColumn.as_view(), name='status_column_list'),
+    path('task/column/<int:pk>/', DistroyUpdateStatusColumn.as_view(), name='status_column_detail'),
+    
+    path('task/', TaskListCreateView.as_view(), name='task_list'),
+    path('task/<int:pk>/', TaskRetrieveUpdateDeleteView.as_view(), name='task_detail'),
+    
     path('task/<int:member_id>/members/', TaskListByMembers.as_view(), name='task_by_members'),
     path('task/<int:project_member_id>/project_members/', TaskListByProjectMember.as_view(), name='task_by_project_members'),
 

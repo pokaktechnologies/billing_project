@@ -306,25 +306,25 @@ class MembersView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'project_management'
 
-    def get(self, request, format=None):
+    def get(self, request):
         members = Member.objects.all().order_by('-created_at')
         serializer = MemberSerializer(members, many=True)
         return Response(
             {"status": "1", "message": "success", "data": serializer.data},
             status=status.HTTP_200_OK
         )
-    
-    def post(self, request, format=None):
+
+    def post(self, request):
         serializer = MemberSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(user=request.user)
+            serializer.save()
             return Response(
                 {"status": "1", "message": "Member created successfully"},
                 status=status.HTTP_201_CREATED
             )
 
         return Response(
-            {"status": "0", "message": "Member creation failed", "errors": serializer.errors},
+            {"status": "0", "errors": serializer.errors},
             status=status.HTTP_400_BAD_REQUEST
         )
 

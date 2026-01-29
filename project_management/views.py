@@ -645,6 +645,53 @@ class ProjectMembersListByProjectView(APIView):
             status=status.HTTP_200_OK
         )
 
+#My Projects
+class MyProjectsView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    # required_module = 'project_management'
+
+    def get(self, request):
+        user = request.user
+
+        projects = ProjectManagement.objects.filter(
+            projectmember__member__user=user
+        ).select_related('contract').prefetch_related('projectmember_set').distinct()
+
+
+        serializer = ProjectManagementSerializer(projects, many=True)
+        return Response(
+            {"status": "1", "message": "success", "data": serializer.data},
+            status=status.HTTP_200_OK
+        )
+
+
+class MyProjectDetailView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+
+    def get(self, request, project_id):
+        user = request.user
+
+        project = ProjectManagement.objects.filter(
+            id=project_id,
+            projectmember__member__user=user
+        ).select_related('contract').first()
+
+        if not project:
+            return Response(
+                {"status": "0", "message": "Project not found or access denied"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = ProjectManagementSerializer(project)
+
+        return Response(
+            {"status": "1", "message": "success", "data": serializer.data},
+            status=status.HTTP_200_OK
+        )
+
+
 
 # Task views
 
@@ -654,8 +701,25 @@ class CreateListBoard(generics.ListCreateAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'project_management'
-    queryset = TaskBoard.objects.all().order_by('-created_at')
+    queryset = TaskBoard.objects.all().order_by('-updated_at')
     serializer_class = TaskBoardSerializer
+
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['project']
+
+class ListBoardMember(generics.ListAPIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    # required_module = 'project_management'
+    serializer_class = TaskBoardSerializer
+
+    def get_queryset(self):
+        return TaskBoard.objects.filter(
+            project__projectmember__member__user=self.request.user
+        ).select_related('project').distinct().order_by('-updated_at')
+    
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['project']
 
 class DistroyUpdateBoard(generics.RetrieveUpdateDestroyAPIView):
     authentication_classes = [JWTAuthentication]
@@ -697,7 +761,11 @@ class TaskListCreateView(APIView):
     required_module = 'project_management'
 
     def get(self, request):
-        task = Task.objects.all().order_by('-created_at')
+        project = self.request.query_params.get('project')
+        if project:
+            task = Task.objects.filter(project__id=project).order_by('-created_at')
+        else:
+            task = Task.objects.all().order_by('-created_at')
         serializer = TaskSerializer(task, many=True)
         return Response(
             {"status": "1", "message": "success", "data": serializer.data},
@@ -740,6 +808,51 @@ class TaskListCreateView(APIView):
             {"status": "1", "message": "Task created successfully"},
             status=status.HTTP_201_CREATED
         )
+    
+#MyProject Tasks
+class MyProjectTaskListView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+
+    def get(self, request, task_id=None):
+        user = request.user
+        project_id = request.query_params.get("project")
+
+        tasks = Task.objects.filter(
+            assignments__assigned_to__member__user=user
+        )
+
+        # optional project filter
+        if project_id:
+            tasks = tasks.filter(project_id=project_id)
+
+        tasks = tasks.select_related(
+            'project', 'board', 'status_column'
+        ).prefetch_related(
+            'assignments'
+        ).distinct().order_by('-created_at')
+
+        # retrieve single task
+        if task_id:
+            task = tasks.filter(id=task_id).first()
+            if not task:
+                return Response(
+                    {"status": "0", "message": "Task not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            serializer = TaskSerializer(task)
+            return Response(
+                {"status": "1", "data": serializer.data},
+                status=status.HTTP_200_OK
+            )
+
+        serializer = TaskSerializer(tasks, many=True)
+        return Response(
+            {"status": "1", "message": "success", "data": serializer.data},
+            status=status.HTTP_200_OK
+        )
+
 
 
 
@@ -1513,7 +1626,7 @@ class ManagerWeeklyReportSummaryView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        project = ProjectManagement.objects.get(id=project_id)
+        project = get_object_or_404(ProjectManagement, id=project_id)
 
         #  Project date range
         start_date = project.start_date

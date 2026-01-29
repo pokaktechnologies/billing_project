@@ -23,18 +23,25 @@ urlpatterns = [
     path('project_members/', ProjectMembersView.as_view(), name='project_members_list'),
     path('project_members/<int:pk>/', ProjectMembersDetail.as_view(), name='project_members_detail'),
     path('<int:project_id>/members/', ProjectMembersListByProjectView.as_view(), name='project_members_by_project'),
+    path('my_projects/', MyProjectsView.as_view(), name='my_projects'),
+    path('my_projects/<int:project_id>/', MyProjectDetailView.as_view(), name='my_project_detail'),
+
 
 
     # Tasks
     path('task/board/', CreateListBoard.as_view(), name='task_board_list'),
     path('task/board/<int:pk>/', DistroyUpdateBoard.as_view(), name='task_board_detail'),
 
+    path('myprojects/board/', ListBoardMember.as_view(), name='myprojects_board_list'),
+
     path('task/column/', CreateStatusColumn.as_view(), name='status_column_list'),
     path('task/column/<int:pk>/', DistroyUpdateStatusColumn.as_view(), name='status_column_detail'),
     
     path('task/', TaskListCreateView.as_view(), name='task_list'),
     path('task/<int:pk>/', TaskRetrieveUpdateDeleteView.as_view(), name='task_detail'),
-    
+    path('task/myprojects/', MyProjectTaskListView.as_view()),
+    path('task/myprojects/<int:task_id>/', MyProjectTaskListView.as_view()),
+        
     path('task/<int:member_id>/members/', TaskListByMembers.as_view(), name='task_by_members'),
     path('task/<int:project_member_id>/project_members/', TaskListByProjectMember.as_view(), name='task_by_project_members'),
 

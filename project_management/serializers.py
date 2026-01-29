@@ -182,6 +182,7 @@ class TaskMiniSerializer(serializers.ModelSerializer):
     board_name = serializers.CharField(source='board.name', read_only=True)
     column_name = serializers.CharField(source='status_column.name', read_only=True)
 
+
     class Meta:
         model = Task
         fields = [
@@ -198,7 +199,6 @@ class StatusColumnWithTasksSerializer(serializers.ModelSerializer):
         many=True,
         read_only=True
     )
-
     class Meta:
         model = StatusColumns
         fields = [
@@ -210,10 +210,17 @@ class StatusColumnWithTasksSerializer(serializers.ModelSerializer):
             'tasks'
         ]
 class TaskAssignSerializer(serializers.ModelSerializer):
+    assigned_by = serializers.SerializerMethodField(read_only=True)
+    assigned_to = serializers.SerializerMethodField(read_only=True)
     class Meta:
         model = TaskAssign
         fields = ['id', 'assigned_by', 'task', 'assigned_to', 'assigned_at']
         read_only_fields = ['assigned_at']
+    def get_assigned_by(self, obj):
+        return obj.assigned_by.first_name + " " + obj.assigned_by.last_name.strip()
+    def get_assigned_to(self, obj):
+        return obj.assigned_to.member.user.first_name + " " + obj.assigned_to.member.user.last_name.strip()
+
 
 class TaskSerializer(serializers.ModelSerializer):
     assignments  = TaskAssignSerializer(many=True, read_only=True)

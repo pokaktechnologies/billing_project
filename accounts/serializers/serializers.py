@@ -747,6 +747,7 @@ class ReceiptSerializer(serializers.ModelSerializer):
     client_firstname = serializers.CharField(source='client.first_name', read_only=True)
     client_lastname = serializers.CharField(source='client.last_name', read_only=True)
     invoice_number = serializers.SerializerMethodField()
+    tax_amount = serializers.SerializerMethodField()
 
     class Meta:
         model = ReceiptModel
@@ -754,6 +755,12 @@ class ReceiptSerializer(serializers.ModelSerializer):
 
     def get_invoice_number(self, obj):
         return obj.invoice.invoice_number if obj.invoice else None
+    
+    def get_tax_amount(self, obj):
+        if obj.invoice:
+            tax_amount = obj.invoice.grand_total - obj.invoice.subtotal
+            return "{:,.2f}".format(tax_amount)
+        return None
 class ReceiptForInvoiceSerializer(serializers.ModelSerializer):
     invoice_number = serializers.SerializerMethodField()
 
@@ -1547,6 +1554,9 @@ class InvoiceListSerializer(serializers.ModelSerializer):
     )
     pending_amount = serializers.SerializerMethodField()
     effective_tax_rate = serializers.SerializerMethodField()
+    tax_rate = serializers.SerializerMethodField()
+    tax_amount = serializers.SerializerMethodField()
+    total_amount_without_tax = serializers.SerializerMethodField() # total without tax
     class Meta:
         model = InvoiceModel
         fields = [
@@ -1560,6 +1570,9 @@ class InvoiceListSerializer(serializers.ModelSerializer):
             "invoice_grand_total",
             "pending_amount",
             "effective_tax_rate",
+            "tax_rate",
+            "tax_amount",
+            "total_amount_without_tax",
             "created_at",
         ]
 
@@ -1588,3 +1601,19 @@ class InvoiceListSerializer(serializers.ModelSerializer):
             return (totals['tax'] / totals['net']) * Decimal("100.00")
 
         return Decimal("0.00")
+    
+
+    def get_tax_rate(self, obj):
+        if obj.invoice_type == 'intern' and obj.sgst_percentage is not None and obj.cgst_percentage is not None:
+            return obj.sgst_percentage + obj.cgst_percentage
+        return None
+    
+    def get_tax_amount(self, obj):
+        if obj.invoice_type == 'intern' and obj.sgst is not None and obj.cgst is not None:
+            return obj.sgst + obj.cgst
+        return None
+    
+    def get_total_amount_without_tax(self, obj):
+        if obj.invoice_type == 'intern' and obj.invoice_grand_total is not None and obj.sgst is not None and obj.cgst is not None:
+            return obj.invoice_grand_total - (obj.sgst + obj.cgst)
+        return None

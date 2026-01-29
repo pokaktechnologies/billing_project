@@ -1604,14 +1604,40 @@ class InvoiceListSerializer(serializers.ModelSerializer):
     
 
     def get_tax_rate(self, obj):
-        if obj.invoice_type == 'intern' and obj.sgst_percentage is not None and obj.cgst_percentage is not None:
-            return obj.sgst_percentage + obj.cgst_percentage
-        return None
-    
+        totals = obj.items.aggregate(
+            base=Coalesce(Sum('total'), Decimal("0.00")),
+            tax=Coalesce(
+                Sum(
+                    ExpressionWrapper(
+                        F('sgst') + F('cgst'),
+                        output_field=DecimalField(max_digits=12, decimal_places=2)
+                    )
+                ),
+                Decimal("0.00")
+            )
+        )
+
+        if totals["base"] > 0:
+            return (totals["tax"] / totals["base"]) * Decimal("100")
+
+        return Decimal("0.00")
+
+        
     def get_tax_amount(self, obj):
-        if obj.invoice_type == 'intern' and obj.sgst is not None and obj.cgst is not None:
-            return obj.sgst + obj.cgst
-        return None
+        tax = obj.items.aggregate(
+            tax=Coalesce(
+                Sum(
+                    ExpressionWrapper(
+                        F('sgst') + F('cgst'),
+                        output_field=DecimalField(max_digits=12, decimal_places=2)
+                    )
+                ),
+                Decimal("0.00")
+            )
+        )["tax"]
+
+        return tax
+
     
     def get_total_amount_without_tax(self, obj):
         if obj.invoice_type == 'intern' and obj.invoice_grand_total is not None and obj.sgst is not None and obj.cgst is not None:

@@ -48,27 +48,26 @@ class ProjectManagement(models.Model):
 
 
 class Member(models.Model):
-    ROLE_CHOICES = [
-        ('full_stack_developer', 'Full Stack Developer'),
-        ('frontend_developer', 'Frontend Developer'),
-        ('backend_developer', 'Backend Developer'),
-        ('ui_ux_designer', 'UI/UX Designer'),
-        ('project_manager', 'Project Manager'),
-        ('app_developer', 'App Developer'),
-        ('digital_marketing', 'Digital marketing'),
-        ('tester', 'Tester'),
-    ]
+    # ROLE_CHOICES = [
+    #     ('full_stack_developer', 'Full Stack Developer'),
+    #     ('frontend_developer', 'Frontend Developer'),
+    #     ('backend_developer', 'Backend Developer'),
+    #     ('ui_ux_designer', 'UI/UX Designer'),
+    #     ('project_manager', 'Project Manager'),
+    #     ('app_developer', 'App Developer'),
+    #     ('digital_marketing', 'Digital marketing'),
+    #     ('tester', 'Tester'),
+    # ]
 
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
-    name = models.CharField(max_length=255)
-    email = models.EmailField()
-    phone_number = models.CharField(max_length=15)
-    role = models.CharField(max_length=50, choices=ROLE_CHOICES)
+    # name = models.CharField(max_length=255)
+    # email = models.EmailField()
+    # phone_number = models.CharField(max_length=15)
+    # role = models.CharField(max_length=50, choices=ROLE_CHOICES)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.name} ({self.role})"
-
+        return self.user.first_name
 
 
 class Stack(models.Model):

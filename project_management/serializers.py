@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import ChallengeResolution, ProjectManagement, Member, Report, ReportAttachment, ReportLink, ReportingTask, Stack, ProjectMember, StatusColumns, Task,ClientContract, TaskAssign, TaskBoard
-
+from accounts.models import CustomUser
 class ClientContractSerializer(serializers.ModelSerializer):
     client_first_name =  serializers.CharField(source='client.first_name', read_only=True)
     client_last_name =  serializers.CharField(source='client.last_name', read_only=True)
@@ -108,15 +108,44 @@ class ProjectManagementDetailsSerializer(serializers.ModelSerializer):
         
 
 class MemberSerializer(serializers.ModelSerializer):
+    user = serializers.PrimaryKeyRelatedField(
+        queryset=CustomUser.objects.all(),
+        write_only=True
+    )
 
-    role_display = serializers.SerializerMethodField()  # for human-readable display only
+    full_name = serializers.SerializerMethodField()
+    department = serializers.CharField(
+        source='user.staff_profile.job_detail.department.name',
+        read_only=True
+    )
+    role = serializers.CharField(
+        source='user.staff_profile.job_detail.role',
+        read_only=True
+    )
 
     class Meta:
         model = Member
-        fields = ['id', 'name', 'email', 'phone_number', 'role','role_display', 'created_at']
-    
-    def get_role_display(self, obj):
-        return obj.get_role_display()
+        fields = ['id','user','full_name','department','role','created_at']
+        read_only_fields = ['created_at']
+
+    def get_full_name(self, obj):
+        return f"{obj.user.first_name} {obj.user.last_name}".strip()
+
+    def validate_user(self, user):
+        if Member.objects.filter(user=user).exists():
+            raise serializers.ValidationError("This user is already a member.")
+        staff_profile = getattr(user, 'staff_profile', None)
+        if not staff_profile:
+            raise serializers.ValidationError("User is not a staff member")
+
+        job_detail = getattr(staff_profile, 'job_detail', None)
+        if not job_detail:
+            raise serializers.ValidationError("Staff profile does not have job details")
+
+        return user
+
+    # def get_role_display(self, obj):
+    #     return obj.get_role_display()
 
 class StackSerializer(serializers.ModelSerializer):
     class Meta:

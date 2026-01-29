@@ -1640,6 +1640,7 @@ class InvoiceListSerializer(serializers.ModelSerializer):
 
     
     def get_total_amount_without_tax(self, obj):
-        if obj.invoice_type == 'intern' and obj.invoice_grand_total is not None and obj.sgst is not None and obj.cgst is not None:
-            return obj.invoice_grand_total - (obj.sgst + obj.cgst)
-        return None
+        total = obj.items.aggregate(
+            net=Coalesce(Sum('total'), Decimal("0.00"))
+        )["net"]
+        return total

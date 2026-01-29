@@ -748,6 +748,7 @@ class ReceiptSerializer(serializers.ModelSerializer):
     client_lastname = serializers.CharField(source='client.last_name', read_only=True)
     invoice_number = serializers.SerializerMethodField()
     tax_amount = serializers.SerializerMethodField()
+    total_amount_without_tax = serializers.SerializerMethodField()
 
     class Meta:
         model = ReceiptModel
@@ -765,6 +766,17 @@ class ReceiptSerializer(serializers.ModelSerializer):
 
         tax_amount = (amount * rate) / (Decimal("100.00") + rate)
         return format(tax_amount, '.2f')
+    
+    def get_total_amount_without_tax(self, obj):
+        rate = obj.tax_rate or Decimal("0.00")
+        amount = obj.cheque_amount or Decimal("0.00")
+
+        if rate <= 0:
+            return amount
+
+        tax_amount = (amount * rate) / (Decimal("100.00") + rate)
+        total_amount_without_tax = amount - tax_amount
+        return format(total_amount_without_tax, '.2f')
     
 
     

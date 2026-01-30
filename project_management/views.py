@@ -760,12 +760,22 @@ class TaskListCreateView(APIView):
     required_module = 'project_management'
 
     def get(self, request):
-        project = self.request.query_params.get('project')
+        project = request.query_params.get('project')
+        status_filter = request.query_params.get('status')
+
+        task = Task.objects.all().order_by('-created_at')
+
+        # project filter
         if project:
-            task = Task.objects.filter(project__id=project).order_by('-created_at')
-        else:
-            task = Task.objects.all().order_by('-created_at')
+            task = task.filter(project__id=project)
+
+        # allowed status filter
+        allowed_status = ['not_started', 'in_progress', 'completed']
+        if status_filter in allowed_status:
+            task = task.filter(status=status_filter)
+
         serializer = TaskSerializer(task, many=True)
+
         return Response(
             {"status": "1", "message": "success", "data": serializer.data},
             status=status.HTTP_200_OK
@@ -816,6 +826,7 @@ class MyProjectTaskListView(APIView):
     def get(self, request, task_id=None):
         user = request.user
         project_id = request.query_params.get("project")
+        status_filter = request.query_params.get("status")
 
         tasks = Task.objects.filter(
             assignments__assigned_to__member__user=user
@@ -824,9 +835,15 @@ class MyProjectTaskListView(APIView):
         # optional project filter
         if project_id:
             tasks = tasks.filter(project_id=project_id)
+        
+        # allowed status filter
+        allowed_status = ['not_started', 'in_progress', 'completed']
+        if status_filter in allowed_status:
+            tasks = tasks.filter(status=status_filter)
+
 
         tasks = tasks.select_related(
-            'project', 'board', 'status_column'
+            'project', 'board'
         ).prefetch_related(
             'assignments'
         ).distinct().order_by('-created_at')
@@ -964,7 +981,7 @@ class TaskListByProjectMember(APIView):
         tasks = Task.objects.filter(
             assignments__assigned_to=project_member
         ).select_related(
-            'project', 'board', 'status_column'
+            'project', 'board'
         ).prefetch_related(
             'assignments'
         ).distinct().order_by('-created_at')

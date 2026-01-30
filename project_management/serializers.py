@@ -180,7 +180,6 @@ class TaskBoardSerializer(serializers.ModelSerializer):
 
 class TaskMiniSerializer(serializers.ModelSerializer):
     board_name = serializers.CharField(source='board.name', read_only=True)
-    column_name = serializers.CharField(source='status_column.name', read_only=True)
 
 
     class Meta:
@@ -189,9 +188,9 @@ class TaskMiniSerializer(serializers.ModelSerializer):
             'id',
             'task_name',
             'difficulty',
+            'status',
             'end_date',
             'board_name',
-            'column_name',
         ]
 class StatusColumnWithTasksSerializer(serializers.ModelSerializer):
     tasks = TaskMiniSerializer(
@@ -226,7 +225,11 @@ class TaskSerializer(serializers.ModelSerializer):
     assignments  = TaskAssignSerializer(many=True, read_only=True)
     project_name = serializers.CharField(source = 'project.project_name', read_only=True)
     board_name = serializers.CharField(source = 'board.name', read_only=True)
-    column_name = serializers.CharField(source = 'status_column.name', read_only=True)
+    status = serializers.ChoiceField(choices=[
+        ('not_started', 'Not Started'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+    ])
     class Meta:
         model = Task
         fields =[
@@ -235,8 +238,7 @@ class TaskSerializer(serializers.ModelSerializer):
             'project_name',
             'board',
             'board_name',
-            'status_column',
-            'column_name',
+            'status',
             'task_name',
             'description',
             'difficulty',

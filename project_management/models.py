@@ -124,11 +124,12 @@ class Task(models.Model):
     ]
     project = models.ForeignKey(ProjectManagement, on_delete=models.CASCADE, null=True, blank=True)
     board = models.ForeignKey(TaskBoard, on_delete=models.DO_NOTHING, null=True, blank=True)
-    status_column = models.ForeignKey(StatusColumns,on_delete=models.DO_NOTHING, null=True, blank=True)
+    # status_column = models.ForeignKey(StatusColumns,on_delete=models.DO_NOTHING, null=True, blank=True)
 
     task_name = models.CharField(max_length=255)
     description = models.TextField()
     difficulty = models.CharField(max_length=100,choices=difficulty_choice, null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='not_started', null=True, blank=True)
     end_date = models.DateField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

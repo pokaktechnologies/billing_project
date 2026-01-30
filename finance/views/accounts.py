@@ -1,14 +1,43 @@
-from rest_framework import generics
+from rest_framework import generics, filters
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from django_filters.rest_framework import DjangoFilterBackend
 from ..models import Account
 from ..serializers.accounts import AccountSerializer
+from ..filters import AccountFilter
 
 
 class AccountListCreateAPIView(generics.ListCreateAPIView):
     queryset = Account.objects.all().order_by('-created_at')
     serializer_class = AccountSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_class = AccountFilter
+    search_fields = ['name', 'account_number']
+    ordering_fields = ['account_number', 'name', 'created_at', 'opening_balance']
+
+
+class AccountTypeListView(APIView):
+    """
+    List all account types with their Level 1 (Conceptual) Number.
+    Example:
+    [
+        {"type": "asset", "label": "Asset", "prefix": "1", "number": "10000"},
+        ...
+    ]
+    """
+    def get(self, request):
+        types = []
+        for type_code, label in Account.ACCOUNT_TYPES:
+            prefix = Account.TYPE_PREFIX_MAP.get(type_code)
+            number = f"{prefix}0000" if prefix else None
+            types.append({
+                "type": type_code,
+                "label": label,
+                "prefix": prefix,
+                "number": number
+            })
+        return Response(types, status=status.HTTP_200_OK)
 
 
 class AccountRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):

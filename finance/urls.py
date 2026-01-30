@@ -1,12 +1,13 @@
 from django.urls import path
-from .views.accounts import AccountListCreateAPIView, AccountRetrieveUpdateDestroyAPIView, GenerateAccountNumberView
+from .views.accounts import AccountListCreateAPIView, AccountRetrieveUpdateDestroyAPIView, GenerateAccountNumberView, AccountTypeListView
 from .views.ledger import JournalEntryListCreateView, JournalEntryDetailView, ListJournalVoucherView, JournalLineListView, JournalLineDetailView
 from .views.documents import CreditNoteListCreateAPIView, CreditNoteRetrieveUpdateDestroyAPIView, DebitNoteListCreateAPIView, DebitNoteRetrieveUpdateDestroyAPIView
 from .views.settings import FinaceNumberGeneratorView, CashflowCategoryMappingListCreateView, CashflowCategoryMappingDetailView, TaxSettingsListCreateAPIView, TaxSettingsRetrieveUpdateDestroyAPIView
-from .views.reports import TrialBalanceView, ProfitAndLossView, BalanceSheetView, CashflowStatementView
+from .views.reports import TrialBalanceView, ProfitAndLossView, BalanceSheetView, CashflowStatementView, AccountBalanceHierarchyView
 
 urlpatterns = [
     path('account/', AccountListCreateAPIView.as_view(), name='account'),
+    path('account-types/', AccountTypeListView.as_view(), name='account-types'),
     path('account/<int:pk>/', AccountRetrieveUpdateDestroyAPIView.as_view(), name='account-detail'),
     path('generate-account-number/', GenerateAccountNumberView.as_view(), name='generate-account-number'),
 
@@ -31,6 +32,7 @@ urlpatterns = [
     path('cashflow-mappings/', CashflowCategoryMappingListCreateView.as_view(), name='cashflow-mapping-list'),
     path('cashflow-mappings/<int:pk>/', CashflowCategoryMappingDetailView.as_view(), name='cashflow-mapping-detail'),
     path('cashflow-statement/', CashflowStatementView.as_view(), name='cashflow-statement'),
+    path('hierarchical-balance/', AccountBalanceHierarchyView.as_view(), name='hierarchical-balance'),
 
     # Tax Settings
     path('tax-settings/', TaxSettingsListCreateAPIView.as_view(), name='tax-settings'),

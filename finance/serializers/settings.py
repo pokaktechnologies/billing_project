@@ -19,6 +19,16 @@ class CashflowCategoryMappingSerializer(serializers.ModelSerializer):
         model = CashflowCategoryMapping
         fields = ['id', 'category', 'sub_category', 'accounts', 'account_ids']
 
+    def validate_account_ids(self, accounts):
+        """Ensure all selected accounts are posting accounts."""
+        for account in accounts:
+            if not account.is_posting:
+                raise serializers.ValidationError(
+                    f"Account '{account.name}' is not a posting account. "
+                    "Only posting (Level 3) accounts can be mapped to cashflow categories."
+                )
+        return accounts
+
     def create(self, validated_data):
         accounts = validated_data.pop('accounts', [])
         instance = CashflowCategoryMapping.objects.create(**validated_data)

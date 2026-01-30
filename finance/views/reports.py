@@ -38,3 +38,22 @@ class CashflowStatementView(APIView):
         to_date = request.query_params.get("to_date")
         data = get_cashflow_statement_data(from_date, to_date)
         return Response(data)
+
+class AccountBalanceHierarchyView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """
+        API to return total balances grouped by hierarchy (Type -> Parent -> Child).
+        """
+        filters = {
+            'type': request.query_params.get('type'),
+            'parent_account': request.query_params.get('parent_account'),
+            'child_account': request.query_params.get('child_account'),
+            'start_date': request.query_params.get('start_date'),
+            'end_date': request.query_params.get('end_date'),
+        }
+        
+        from ..services.reports import get_hierarchical_balances
+        data = get_hierarchical_balances(filters)
+        return Response(data)

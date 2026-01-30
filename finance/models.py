@@ -9,45 +9,43 @@ from .utils import JOURNAL_ACCOUNT_MAPPING
 from django.db.models import Sum, Value, DecimalField
 from django.db.models.functions import Coalesce
 from decimal import Decimal
+import re
+from django.core.exceptions import ValidationError
 # ----------------------
 # Account Model
 # ----------------------
+
+
+import re
+from decimal import Decimal
+from django.db import models
+from django.core.exceptions import ValidationError
+from django.db.models import Sum, Value, DecimalField
+from django.db.models.functions import Coalesce
+
+
 class Account(models.Model):
     """
-    Chart of Accounts model with strict hierarchy and accounting rules.
-    
-    HIERARCHY RULES:
-    - Maximum 3 levels: Type → Parent → Child
-    - Level 1 (Type): e.g., 10000 Assets - NON-POSTING
-    - Level 2 (Parent): e.g., 1.1000 Current Assets - NON-POSTING  
-    - Level 3 (Child): e.g., 1.10001 Cash - POSTING
-    
-    NUMBERING SCHEME:
-    - Type level: X0000 (no dot) - 10000, 20000, 30000...
-    - Parent level: X.Y000 - 1.1000, 1.2000, 2.1000...
-    - Child level: X.Y000Z - 1.10001, 1.10002, 1.20001...
-    
-    TYPE PREFIXES:
-    - 1 → asset
-    - 2 → liability
-    - 3 → equity
-    - 4 → sales
-    - 5 → cost_of_sales
-    - 6 → revenue
-    - 7 → general_expenses
+    Levels:
+    1 → Type   (10000)
+    2 → Parent (1.1000)
+    3 → Child  (1.1001)
+
+    Rules:
+    - Max 3 levels
+    - Only level-3 can be POSTING
     """
-    
+
     ACCOUNT_TYPES = [
-        ('asset', 'Asset'),  # 1
-        ('liability', 'Liability'),  # 2
-        ('equity', 'Equity'),  # 3
-        ('sales', 'Sales'),  # 4
-        ('cost_of_sales', 'Cost of Sales'),  # 5
-        ('revenue', 'Revenue'),  # 6
-        ('general_expenses', 'General Expenses'),  # 7
+        ('asset', 'Asset'),
+        ('liability', 'Liability'),
+        ('equity', 'Equity'),
+        ('sales', 'Sales'),
+        ('cost_of_sales', 'Cost of Sales'),
+        ('revenue', 'Revenue'),
+        ('general_expenses', 'General Expenses'),
     ]
-    
-    # Maps account type to number prefix for validation
+
     TYPE_PREFIX_MAP = {
         'asset': '1',
         'liability': '2',
@@ -57,190 +55,131 @@ class Account(models.Model):
         'revenue': '6',
         'general_expenses': '7',
     }
-    
-    # Reverse map: prefix to type
+
     PREFIX_TYPE_MAP = {v: k for k, v in TYPE_PREFIX_MAP.items()}
-    
-    # Account types where balance = opening + debit - credit
+
     DEBIT_BALANCE_TYPES = {'asset', 'cost_of_sales', 'general_expenses'}
-    
-    # Account types where balance = opening + credit - debit
     CREDIT_BALANCE_TYPES = {'liability', 'equity', 'sales', 'revenue'}
 
-    # 1,2,3 are for Balance Sheet accounts 
-    # 4,5,6,7 are for P&L accounts
-    # 4-5 = gross profit,
-    # revenue - general expense = operating profit,
-    # 4-5+6-7 = net profit/net loss
-    
     STATUS_CHOICES = [
         ('active', 'Active'),
         ('inactive', 'Inactive'),
     ]
 
-    account_number = models.CharField(max_length=100, unique=True)
+    account_number = models.CharField(max_length=20, unique=True)
     name = models.CharField(max_length=100)
     type = models.CharField(max_length=20, choices=ACCOUNT_TYPES)
     parent_account = models.ForeignKey(
-        'self', 
-        on_delete=models.CASCADE, 
-        null=True, 
-        blank=True, 
+        'self',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name='sub_accounts'
     )
-    is_posting = models.BooleanField(
-        default=True,
-        help_text="Only posting accounts can receive journal entries. Parent accounts must be non-posting."
-    )
+    is_posting = models.BooleanField(default=True)
     opening_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         ordering = ['account_number']
 
+    # ---------------- DEPTH ----------------
+
     def get_depth(self):
-        """
-        Calculate the depth of this account in the hierarchy.
-        Level 1 = no parent (Type account)
-        Level 2 = has parent, parent has no parent (Parent account)
-        Level 3 = has parent, parent has parent (Child/Leaf account)
-        """
-        depth = 1
-        current = self
-        while current.parent_account:
+        # Level 1 is Type (Conceptual). 
+        # DB Root accounts are Level 2.
+        depth = 2 
+        current = self.parent_account
+        while current:
             depth += 1
             current = current.parent_account
-            if depth > 3:
-                # Safety check to prevent infinite loops
-                break
         return depth
-    
-    def get_root_account(self):
-        """Get the root (type-level) account of this hierarchy."""
-        current = self
-        while current.parent_account:
-            current = current.parent_account
-        return current
-    
-    @staticmethod
-    def get_type_from_account_number(account_number):
-        """
-        Derive account type from account number prefix.
-        Returns the account type string or None if invalid.
-        """
-        if not account_number:
-            return None
-        prefix = account_number[0]
-        return Account.PREFIX_TYPE_MAP.get(prefix)
+
+    # ---------------- REGEX ----------------
+    TYPE_REGEX = re.compile(r'^[1-7]0000$')        # 10000 (Level 1 - Conceptual)
+    PARENT_REGEX = re.compile(r'^[1-7]\.\d{4}$')   # 1.1000 (Level 2)
+    CHILD_REGEX = re.compile(r'^[1-7]\.\d{4}$')    # 1.1001 (Level 3)
+
+    # ---------------- VALIDATION ----------------
 
     def clean(self):
-        """
-        Validate account according to Chart of Accounts rules.
-        
-        Validations:
-        1. Account number is required
-        2. Account number prefix must match account type
-        3. Maximum hierarchy depth is 3 levels
-        4. Parent account must be non-posting
-        5. Child account number must follow parent prefix
-        6. Account type must be consistent within hierarchy
-        7. is_posting rules based on depth
-        """
         errors = {}
-        
-        # 1. Account number is required
+
         if not self.account_number:
-            errors['account_number'] = "Account number is required."
-        else:
-            # 2. Validate account number prefix matches type
-            expected_prefix = self.TYPE_PREFIX_MAP.get(self.type)
-            if expected_prefix and not self.account_number.startswith(expected_prefix):
-                errors['account_number'] = (
-                    f"Account number must start with '{expected_prefix}' for type '{self.type}'. "
-                    f"Got: '{self.account_number}'"
-                )
-        
-        # 3. Validate hierarchy depth (max 3 levels)
-        if self.parent_account:
-            # Calculate what the depth would be
-            parent_depth = self.parent_account.get_depth()
-            my_depth = parent_depth + 1
-            
-            if my_depth > 3:
-                errors['parent_account'] = (
-                    f"Maximum hierarchy depth is 3 levels. "
-                    f"Parent '{self.parent_account.name}' is at depth {parent_depth}."
-                )
-            
-            # 4. Parent account must be non-posting
-            if self.parent_account.is_posting:
-                errors['parent_account'] = (
-                    f"Parent account '{self.parent_account.name}' must be non-posting. "
-                    f"Only leaf (child) accounts can be posting accounts."
-                )
-            
-            # 5. Child account number must follow parent prefix
-            if self.account_number and self.parent_account.account_number:
-                # Child number should start with a pattern derived from parent
-                # E.g., parent 1.1000 -> children should be 1.1xxx
-                parent_num = self.parent_account.account_number
-                # Extract common prefix (first 3 chars for parent-child relationship)
-                # 1.0000 -> children start with 1.
-                # 1.1000 -> children start with 1.1
-                if '.' in parent_num:
-                    # Parent is type level (X.0000) or sub-level (X.Y000)
-                    parent_prefix = parent_num.split('.')[0] + '.'
-                    if not self.account_number.startswith(parent_prefix):
-                        errors['account_number'] = (
-                            f"Child account number must start with parent prefix '{parent_prefix}'. "
-                            f"Got: '{self.account_number}'"
-                        )
-            
-            # 6. Account type must match parent type
-            if self.type != self.parent_account.type:
-                errors['type'] = (
-                    f"Account type must match parent account type. "
-                    f"Parent type is '{self.parent_account.type}', got '{self.type}'."
-                )
-        
-        # 7. Validate is_posting based on depth
-        depth = 1
+            raise ValidationError({'account_number': "Account number is required."})
+
+        # ---- Determine depth ----
+        # Level 1 is Type (Conceptual). 
+        # DB Root accounts are Level 2.
+        depth = 2
         if self.parent_account:
             depth = self.parent_account.get_depth() + 1
-        
-        # Type and Parent levels (depth 1 and 2) must be non-posting
+
+        if depth > 3:
+            errors['parent_account'] = "Maximum hierarchy depth is 3 (Level 1=Type, Level 2=Root, Level 3=Child)."
+
+        # ---- Regex by depth ----
+        # Level 1 not stored in DB, so we start checks at Level 2
+        # Ensure base format X.YYYY is met
+        if not self.PARENT_REGEX.match(self.account_number):
+            errors['account_number'] = "Account number must follow format X.YYYY (e.g. 1.1000 or 1.1001)."
+
+        # ---- Root Account (Level 2) Validation ----
+        if depth == 2:
+            # MUST end with '000'
+            if not self.account_number.endswith('000'):
+                errors['account_number'] = "Root accounts (Level 2) must end with '000' (e.g., 1.1000). Child-style numbers are not allowed as roots."
+
+        # ---- Child Account (Level 3) Validation ----
+        if depth == 3:
+            # MUST NOT end with '000'
+            if self.account_number.endswith('000'):
+                errors['account_number'] = "Level 3 (Child) account cannot end in '000'."
+
+            # ---- Parent-child prefix enforcement ----
+            if self.parent_account:
+                parent_num = self.parent_account.account_number
+                # Parent 1.4000 -> Child must start with 1.40
+                required_prefix = parent_num[:4] # First 4 chars
+                if not self.account_number.startswith(required_prefix):
+                     errors['account_number'] = f"Child account must start with parent prefix '{required_prefix}'."
+                
+                # Check Type Match
+                if self.type != self.parent_account.type:
+                    errors['type'] = "Account type must match parent type."
+                
+                # Parent must be NON-POSTING
+                if self.parent_account.is_posting:
+                    errors['parent_account'] = "Parent account must be NON-POSTING."
+
+        # ---- Strict posting rules ----
+        # Level 2 (Root) -> Non-posting
+        # Level 3 (Child) -> Posting
         if depth < 3 and self.is_posting:
-            # Check if this account has any children - if not, it can be posting
-            # This allows leaf accounts at any level to be posting
-            has_children = False
-            if self.pk:
-                has_children = self.sub_accounts.exists()
-            
-            if has_children:
-                errors['is_posting'] = (
-                    f"Accounts with sub-accounts must be non-posting. "
-                    f"This account has child accounts."
-                )
-        
+            errors['is_posting'] = "Only level-3 accounts can be posting."
+
+        if depth == 3 and not self.is_posting:
+            errors['is_posting'] = "Level-3 accounts must be posting."
+
+        # ---- Type from prefix ----
+        prefix = self.account_number[0]
+        expected_type = self.PREFIX_TYPE_MAP.get(prefix)
+
+        if expected_type and self.type != expected_type:
+            errors['type'] = f"Type must be '{expected_type}' for prefix '{prefix}'."
+
         if errors:
             raise ValidationError(errors)
-    
+
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
 
+    # ---------------- BALANCE ----------------
+
     @property
     def closing_balance(self):
-        """
-        Calculate closing balance based on account type.
-        
-        Debit-normal accounts (Asset, Cost of Sales, General Expenses):
-            closing = opening + debit - credit
-            
-        Credit-normal accounts (Liability, Equity, Sales, Revenue):
-            closing = opening + credit - debit
-        """
         debit_total = self.journalline_set.aggregate(
             total=Coalesce(Sum('debit'), Value(0), output_field=DecimalField())
         )['total'] or Decimal(0)
@@ -250,15 +189,12 @@ class Account(models.Model):
         )['total'] or Decimal(0)
 
         if self.type in self.DEBIT_BALANCE_TYPES:
-            # Asset, Cost of Sales, General Expenses: opening + debit - credit
             return self.opening_balance + debit_total - credit_total
         else:
-            # Liability, Equity, Sales, Revenue: opening + credit - debit
             return self.opening_balance + credit_total - debit_total
 
     def __str__(self):
-        posting_indicator = "(POSTING)" if self.is_posting else "(NON-POSTING)"
-        return f"{posting_indicator} {self.account_number} - {self.name} ({self.type})"
+        return f"{'(POSTING)' if self.is_posting else '(NON-POSTING)'} {self.account_number} - {self.name}"
 
 
 # ----------------------

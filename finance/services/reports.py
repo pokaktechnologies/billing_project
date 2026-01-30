@@ -84,7 +84,8 @@ def get_profit_and_loss_data(from_date, to_date):
     def get_balances(account_type, is_credit_positive=True):
         qs = lines.filter(account__type=account_type)
         annotated = qs.values(
-            'account__id', 'account__name', 'account__parent_account__id', 'account__parent_account__name'
+            'account__id', 'account__name', 'account__account_number',
+            'account__parent_account__id', 'account__parent_account__name', 'account__parent_account__account_number'
         ).annotate(
             debit_sum=Coalesce(Sum('debit'), Decimal(0)),
             credit_sum=Coalesce(Sum('credit'), Decimal(0))
@@ -100,14 +101,28 @@ def get_profit_and_loss_data(from_date, to_date):
             net_amount = net_credit - net_debit if is_credit_positive else net_debit - net_credit
             total += net_amount
 
-            account_data = {"account": item['account__name'], "amount": float(net_amount)}
+            account_data = {
+                "id": item['account__id'],
+                "account": item['account__name'],
+                "account_number": item['account__account_number'],
+                "amount": float(net_amount)
+            }
             parent_name = item['account__parent_account__name']
             if parent_name:
-                if 'children' not in temp_accounts[parent_name]:
-                    temp_accounts[parent_name]['children'] = []
+                if parent_name not in temp_accounts:
+                    temp_accounts[parent_name] = {
+                        "id": item['account__parent_account__id'],
+                        "parent": parent_name,
+                        "account_number": item['account__parent_account__account_number'],
+                        "children": []
+                    }
                 temp_accounts[parent_name]['children'].append(account_data)
             else:
+                # Handle root-level accounts if any (unlikely with strict hierarchy)
                 temp_accounts[item['account__name']] = {
+                    "id": item['account__id'],
+                    "parent": item['account__name'],
+                    "account_number": item['account__account_number'],
                     "balance": account_data,
                     "children": temp_accounts.get(item['account__name'], {}).get('children', [])
                 }
@@ -115,7 +130,9 @@ def get_profit_and_loss_data(from_date, to_date):
         structured = []
         for parent_name, data in temp_accounts.items():
             structured.append({
+                "id": data.get("id"),
                 "parent": parent_name,
+                "account_number": data.get("account_number"),
                 "balance": data.get('balance', {"account": parent_name, "amount": 0}),
                 "children": data.get('children', [])
             })
@@ -157,7 +174,8 @@ def get_trial_balance_data(from_date, to_date):
     ]
     lines = JournalLine.objects.filter(journal__date__range=(from_date, to_date), account__status='active')
     balances = lines.values(
-        'account__id', 'account__name', 'account__type', 'account__parent_account__id', 'account__parent_account__name'
+        'account__id', 'account__name', 'account__account_number', 'account__type', 
+        'account__parent_account__id', 'account__parent_account__name', 'account__parent_account__account_number'
     ).annotate(
         debit_sum=Coalesce(Sum('debit'), Decimal(0)),
         credit_sum=Coalesce(Sum('credit'), Decimal(0))
@@ -166,7 +184,6 @@ def get_trial_balance_data(from_date, to_date):
     grouped = {label: {} for code, label in ACCOUNT_TYPES}
     total_debit = Decimal(0)
     total_credit = Decimal(0)
-    parent_children = defaultdict(list)
 
     for item in balances:
         acc_type_label = dict(ACCOUNT_TYPES).get(item['account__type'])
@@ -178,22 +195,51 @@ def get_trial_balance_data(from_date, to_date):
         total_debit += net_debit
         total_credit += net_credit
 
-        account_data = {"account": item['account__name'], "debit": float(net_debit), "credit": float(net_credit)}
+        account_data = {
+            "id": item['account__id'],
+            "account": item['account__name'], 
+            "account_number": item['account__account_number'],
+            "debit": float(net_debit), 
+            "credit": float(net_credit)
+        }
         parent_name = item['account__parent_account__name']
+        
+        # Ensure parent exists in grouped
         if parent_name:
-            parent_children[parent_name].append(account_data)
+            if parent_name not in grouped[acc_type_label]:
+                 grouped[acc_type_label][parent_name] = {
+                     "id": item['account__parent_account__id'],
+                     "parent": parent_name, 
+                     "account_number": item['account__parent_account__account_number'],
+                     "balance": {"account": parent_name, "debit": 0, "credit": 0}, 
+                     "children": []
+                 }
+            grouped[acc_type_label][parent_name]["children"].append(account_data)
         else:
-            grouped[acc_type_label][item['account__name']] = {"balance": account_data, "children": []}
+             # Fallback for Level 1 accounts (shouldn't happen with strict posting rules, but safe to keep)
+            grouped[acc_type_label][item['account__name']] = {
+                "id": item['account__id'],
+                "parent": item['account__name'], 
+                "account_number": item['account__account_number'],
+                "balance": account_data, 
+                "children": []
+            }
 
-    for category in grouped.values():
-        for parent_name, children in parent_children.items():
-            if parent_name in category:
-                category[parent_name]["children"] = children
+    # Was: for category in grouped.values(): ... (Removed as we now populate grouped directly)
 
     accounts_by_type = []
     for code, label in ACCOUNT_TYPES:
-        category_accounts = [{"parent": p, "balance": d["balance"], "children": d["children"]} for p, d in grouped[label].items()]
-        accounts_by_type.append({"type": label, "accounts": category_accounts})
+        category_accounts = [{"id": d.get("id"), "parent": p, "account_number": d.get("account_number"), "balance": d["balance"], "children": d["children"]} for p, d in grouped[label].items()]
+        
+        # Add Type Number (X0000)
+        prefix = Account.TYPE_PREFIX_MAP.get(code, "0")
+        type_number = f"{prefix}0000"
+
+        accounts_by_type.append({
+            "type": label, 
+            "type_number": type_number,
+            "accounts": category_accounts
+        })
 
     return {
         "title": "Trial Balance",
@@ -212,7 +258,8 @@ def get_balance_sheet_data(from_date, to_date, net_profit=0):
     def get_balances(account_type):
         qs = lines.filter(account__type=account_type)
         annotated = qs.values(
-            'account__id', 'account__name', 'account__parent_account__id', 'account__parent_account__name'
+            'account__id', 'account__name', 'account__account_number',
+            'account__parent_account__id', 'account__parent_account__name', 'account__parent_account__account_number'
         ).annotate(
             debit_sum=Coalesce(Sum('debit'), Decimal(0)),
             credit_sum=Coalesce(Sum('credit'), Decimal(0))
@@ -226,18 +273,40 @@ def get_balance_sheet_data(from_date, to_date, net_profit=0):
             net_amount = credit - debit if account_type in ['liability', 'equity'] else debit - credit
             total += net_amount
 
-            acc_id, acc_name = item['account__id'], item['account__name']
-            parent_id, parent_name = item['account__parent_account__id'], item['account__parent_account__name']
-            acc_data = {"account": acc_name, "amount": float(net_amount)}
+            acc_id, acc_name, acc_num = item['account__id'], item['account__name'], item['account__account_number']
+            parent_id, parent_name, parent_num = item['account__parent_account__id'], item['account__parent_account__name'], item['account__parent_account__account_number']
+            
+            acc_data = {
+                "id": acc_id,
+                "account": acc_name,
+                "account_number": acc_num,
+                "amount": float(net_amount)
+            }
 
             if parent_id:
+                if parent_id not in accounts_map:
+                    accounts_map[parent_id] = {
+                        "id": parent_id,
+                        "parent": parent_name,
+                        "account_number": parent_num,
+                        "balance": {"account": parent_name, "amount": 0},
+                        "children": []
+                    }
                 accounts_map[parent_id]["children"].append(acc_data)
-                if "balance" not in accounts_map[parent_id]:
-                    accounts_map[parent_id]["balance"] = {"account": parent_name, "amount": 0}
             else:
                 accounts_map[acc_id]["balance"] = acc_data
+                accounts_map[acc_id]["id"] = acc_id
+                accounts_map[acc_id]["account_number"] = acc_num
 
-        structured = [{"parent": data["balance"]["account"], "balance": data["balance"], "children": data.get("children", [])} for acc_id, data in accounts_map.items()]
+        structured = [
+            {
+                "id": data.get("id"),
+                "parent": data["balance"]["account"],
+                "account_number": data.get("account_number"),
+                "balance": data["balance"],
+                "children": data.get("children", [])
+            } for acc_id, data in accounts_map.items()
+        ]
         return float(total), structured
 
     assets_total, assets_accounts = get_balances('asset')
@@ -247,12 +316,138 @@ def get_balance_sheet_data(from_date, to_date, net_profit=0):
     equity_total += float(net_profit)
     check = assets_total - (liabilities_total + equity_total)
 
+    def get_type_meta(code, label):
+        prefix = Account.TYPE_PREFIX_MAP.get(code, "0")
+        return {"label": label, "number": f"{prefix}0000"}
+
     return {
         "title": "Balance Sheet",
         "period": f"{from_date} to {to_date}",
-        "assets": {"total": assets_total, "accounts": assets_accounts},
-        "liabilities": {"total": liabilities_total, "accounts": liabilities_accounts},
-        "equity": {"total": equity_total, "accounts": equity_accounts},
+        "assets": {
+            "total": assets_total, 
+            "metadata": get_type_meta('asset', 'Asset'),
+            "accounts": assets_accounts
+        },
+        "liabilities": {
+            "total": liabilities_total, 
+            "metadata": get_type_meta('liability', 'Liability'),
+            "accounts": liabilities_accounts
+        },
+        "equity": {
+            "total": equity_total, 
+            "metadata": get_type_meta('equity', 'Equity'),
+            "accounts": equity_accounts
+        },
         "net_profit_used": float(net_profit),
         "check": check
     }
+
+
+def get_hierarchical_balances(filters):
+    """
+    Returns total balances grouped by hierarchy (Type -> Parent -> Child).
+    Filters: type, parent_account, child_account, start_date, end_date.
+    """
+    # 1. Base Query on JournalLine
+    lines = JournalLine.objects.filter(account__status='active')
+
+    # Date Filters (Apply to Lines)
+    start_date = filters.get('start_date')
+    end_date = filters.get('end_date')
+    if start_date:
+        lines = lines.filter(journal__date__gte=start_date)
+    if end_date:
+        lines = lines.filter(journal__date__lte=end_date)
+
+    # 2. Account Filters (Apply to Lines via Account)
+    acc_type = filters.get('type')
+    parent_id = filters.get('parent_account')
+    child_id = filters.get('child_account')
+
+    if acc_type:
+        lines = lines.filter(account__type=acc_type)
+    if parent_id:
+        lines = lines.filter(account__parent_account__id=parent_id)
+    if child_id:
+        lines = lines.filter(account__id=child_id)
+
+    # 3. Aggregation (Group by Account)
+    aggregated = lines.values(
+        'account__id', 'account__name', 'account__account_number', 'account__type', 
+        'account__parent_account__id', 'account__parent_account__name', 'account__parent_account__account_number'
+    ).annotate(
+        total_debit=Coalesce(Sum('debit'), Decimal(0)),
+        total_credit=Coalesce(Sum('credit'), Decimal(0))
+    )
+
+    # 4. Build Hierarchy in Memory
+    hierarchy = {}
+    
+    # helper for debit/credit normal
+    debit_normal_types = {'asset', 'cost_of_sales', 'general_expenses'}
+
+    for entry in aggregated:
+        # Extract basic data
+        acc_id = entry['account__id']
+        acc_name = entry['account__name']
+        acc_num = entry['account__account_number']
+        acc_type = entry['account__type']
+        parent_id = entry['account__parent_account__id']
+        parent_name = entry['account__parent_account__name']
+        parent_num = entry['account__parent_account__account_number']
+        
+        # Calculate Balance
+        debit = entry['total_debit']
+        credit = entry['total_credit']
+        
+        if acc_type in debit_normal_types:
+            balance = debit - credit
+        else:
+            balance = credit - debit
+
+        balance_float = float(balance)
+
+        # Ensure Type Level exists
+        if acc_type not in hierarchy:
+            prefix = Account.TYPE_PREFIX_MAP.get(acc_type, "0")
+            hierarchy[acc_type] = {
+                "label": acc_type.replace('_', ' ').title(),
+                "number": f"{prefix}0000",
+                "total": 0.0,
+                "accounts": {} 
+            }
+        
+        # Ensure Parent Level exists
+        p_key = parent_id or "root"
+        if p_key not in hierarchy[acc_type]["accounts"]:
+            hierarchy[acc_type]["accounts"][p_key] = {
+                "id": parent_id,
+                "parent": parent_name or "Uncategorized",
+                "account_number": parent_num,
+                "total": 0.0,
+                "children": []
+            }
+
+        # Add Child
+        hierarchy[acc_type]["accounts"][p_key]["children"].append({
+            "id": acc_id,
+            "account": acc_name,
+            "account_number": acc_num,
+            "total": balance_float
+        })
+
+        # Aggregate Upwards
+        hierarchy[acc_type]["accounts"][p_key]["total"] += balance_float
+        hierarchy[acc_type]["total"] += balance_float
+
+    # 5. Format Output (Convert Parent Dict to List)
+    formatted_output = {}
+    for type_key, type_data in hierarchy.items():
+        formatted_output[type_key] = {
+            "label": type_data["label"],
+            "number": type_data["number"],
+            "total": type_data["total"],
+            "accounts": list(type_data["accounts"].values())
+        }
+
+    return formatted_output

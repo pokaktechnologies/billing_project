@@ -868,6 +868,54 @@ class MyProjectTaskListView(APIView):
             {"status": "1", "message": "success", "data": serializer.data},
             status=status.HTTP_200_OK
         )
+    
+    def patch(self, request, task_id):
+        user = request.user
+
+        task = Task.objects.filter(
+            id=task_id,
+            assignments__assigned_to__member__user=user
+        ).first()
+
+        if not task:
+            return Response(
+                {"status": "0", "message": "Task not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # restrict allowed status updates
+        allowed_status = ['not_started', 'in_progress', 'completed']
+        new_status = request.data.get("status")
+
+        if new_status and new_status not in allowed_status:
+            return Response(
+                {"status": "0", "message": "Invalid status"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # prevent changing protected fields
+        protected_fields = ["project", "board"]
+        for field in protected_fields:
+            if field in request.data:
+                return Response(
+                    {"status": "0", "message": f"{field} cannot be updated"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        serializer = TaskSerializer(task, data=request.data, partial=True)
+
+        if not serializer.is_valid():
+            return Response(
+                {"status": "0", "errors": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer.save()
+
+        return Response(
+            {"status": "1", "message": "Task updated successfully"},
+            status=status.HTTP_200_OK
+        )
 
 
 

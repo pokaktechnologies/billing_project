@@ -153,17 +153,19 @@ class StackSerializer(serializers.ModelSerializer):
         fields = ['id', 'name']
 
 class ProjectMemberSerializer(serializers.ModelSerializer):
-    member_name = serializers.CharField(source='member.name', read_only=True)
+    member_name = serializers.SerializerMethodField()
     stack_name = serializers.CharField(source='stack.name', read_only=True)
     project_name = serializers.CharField(source='project.project_name', read_only=True)
     # task_count = serializers.SerializerMethodField()
 
     class Meta:
         model = ProjectMember
-        fields = ['id', 'member', 'stack','stack_name' , 'member_name', 'project', 'project_name', 'created_at']
+        fields = ['id', 'member', 'member_name', 'stack','stack_name' , 'project', 'project_name', 'created_at']
     
     # def get_task_count(self, obj):
     #     return obj.task_set.count()
+    def get_member_name(self, obj):
+        return obj.member.user.first_name + " " + obj.member.user.last_name.strip()
 
 
 #-----------------

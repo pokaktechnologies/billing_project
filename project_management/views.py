@@ -487,7 +487,7 @@ class ProjectMembersView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'project_management'
 
-    def get(self, request, format=None):
+    def get(self, request):
         project_members = ProjectMember.objects.all().order_by('-created_at')
 
         
@@ -636,7 +636,25 @@ class ProjectMembersListByProjectView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'project_management'
 
-    def get(self, request, project_id, format=None):
+    def get(self, request, project_id):
+        project_members = ProjectMember.objects.filter(project__id=project_id).order_by('-created_at')
+        serializer = ProjectMemberSerializer(project_members, many=True)
+        return Response(
+            {"status": "1", "message": "success", "data": serializer.data},
+            status=status.HTTP_200_OK
+        )
+class ProjectMembersViewListByProjectView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    # required_module = 'project_management'
+
+    def get(self, request, project_id):
+        user = request.user
+        if not ProjectMember.objects.filter(project__id=project_id, member__user=user).exists():
+            return Response(
+                {"status": "0", "message": "Access denied to this project's members"},
+                status=status.HTTP_403_FORBIDDEN
+            )
         project_members = ProjectMember.objects.filter(project__id=project_id).order_by('-created_at')
         serializer = ProjectMemberSerializer(project_members, many=True)
         return Response(

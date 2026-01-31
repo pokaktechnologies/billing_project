@@ -608,7 +608,7 @@ class DeveloperDashboardView(APIView):
 
         # Task Summary
         tasks = Task.objects.filter(
-            project_member__member__user=user
+            assignments__assigned_to__member__user=user
         )
 
         total_tasks = tasks.count()

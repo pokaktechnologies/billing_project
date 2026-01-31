@@ -289,6 +289,5 @@ class TaskListSerializer(serializers.ModelSerializer):
             "id",
             "task_name",
             "status",
-            "start_date",
             "end_date",
         ]

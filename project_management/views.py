@@ -1023,7 +1023,7 @@ class TaskListByMembers(APIView):
     required_module = 'project_management'
 
     def get(self, request, member_id, format=None):
-        tasks = Task.objects.filter(project_member__member__id=member_id).order_by('-created_at')
+        tasks = Task.objects.filter(assignments__assigned_to__member__id=member_id).order_by('-created_at')
         serializer = TaskSerializer(tasks, many=True)
         return Response(
             {"status": "1", "message": "success", "data": serializer.data},
@@ -1208,7 +1208,7 @@ class TaskSearchByProjectMembersView(APIView):
             )
         
         task = Task.objects.filter(
-            project_member__id=project_member_id
+            assignments__assigned_to__id=project_member_id
         ).order_by('-created_at')
 
         if task_status:
@@ -1264,7 +1264,7 @@ class TaskSearchByMembersView(APIView):
             )
         
         task = Task.objects.filter(
-            project_member__member__id=member_id
+            assignments__assigned_to__member__id=member_id
         ).order_by('-created_at')
 
         if task_status:
@@ -1341,7 +1341,7 @@ class ProjectManagerDashboardView(APIView):
         # -----------------------------
         assigned_tasks = TaskAssign.objects.select_related("task",
                                                            "assigned_to__member",
-                                                           "task__project_member__project"
+                                                           "assigned_to__project"
                                                            ).filter(assigned_by=user).order_by("-assigned_at")
         
         submitted_tasks = assigned_tasks.filter(task__status="completed")

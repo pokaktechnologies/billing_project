@@ -779,6 +779,7 @@ class TaskListCreateView(APIView):
 
     def get(self, request):
         project = request.query_params.get('project')
+        board = request.query_params.get('board')
         status_filter = request.query_params.get('status')
 
         task = Task.objects.all().order_by('-created_at')
@@ -786,6 +787,10 @@ class TaskListCreateView(APIView):
         # project filter
         if project:
             task = task.filter(project__id=project)
+
+        # board filter
+        if board:
+            task = task.filter(board__id=board)
 
         # allowed status filter
         allowed_status = ['not_started', 'in_progress', 'completed']
@@ -844,11 +849,16 @@ class MyProjectTaskListView(APIView):
     def get(self, request, task_id=None):
         user = request.user
         project_id = request.query_params.get("project")
+        board_id = request.query_params.get("board")
         status_filter = request.query_params.get("status")
 
         tasks = Task.objects.filter(
             assignments__assigned_to__member__user=user
         )
+
+        # optional board filter
+        if board_id:
+            tasks = tasks.filter(board_id=board_id)
 
         # optional project filter
         if project_id:

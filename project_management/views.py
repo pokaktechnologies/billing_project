@@ -2016,3 +2016,66 @@ class ManagerDailyReportSummaryView(APIView):
             "pending": pending,
             "employees": employees
         })
+
+
+## project progression view--------------
+from django.db.models import Count, Q
+
+class ProjectProgressionView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+
+    def get(self, request, project_id):
+        project = get_object_or_404(ProjectManagement, id=project_id)
+
+        # Aggregate counts in ONE query
+        task_counts = Task.objects.filter(project=project).aggregate(
+            total_tasks=Count('id'),
+            not_started=Count('id', filter=Q(status='not_started')),
+            in_progress=Count('id', filter=Q(status='in_progress')),
+            completed=Count('id', filter=Q(status='completed')),
+        )
+
+        # Points configuration
+        POINTS = {
+            "not_started": 0,
+            "in_progress": 1,
+            "completed": 2,
+        }
+
+        total_tasks = task_counts["total_tasks"]
+        total_tasks_point = total_tasks * 2
+
+        not_started_tasks = task_counts["not_started"]
+        in_progress_tasks = task_counts["in_progress"]
+        completed_tasks = task_counts["completed"]
+
+        not_started_tasks_point = not_started_tasks * POINTS["not_started"]
+        in_progress_tasks_point = in_progress_tasks * POINTS["in_progress"]
+        completed_tasks_point = completed_tasks * POINTS["completed"]
+
+        total_point = (
+            not_started_tasks_point +
+            in_progress_tasks_point +
+            completed_tasks_point
+        )
+
+        progression_percentage = (
+            (total_point / total_tasks_point) * 100
+            if total_tasks_point > 0 else 0.0
+        )
+
+        return Response(
+            {
+                "status": "1",
+                "message": "success",
+                "data": {
+                    "total_tasks": total_tasks,
+                    "not_started_tasks": not_started_tasks,
+                    "in_progress_tasks": in_progress_tasks,
+                    "completed_tasks": completed_tasks,
+                    "progression_percentage": round(progression_percentage, 2),
+                }
+            },
+            status=status.HTTP_200_OK
+        )

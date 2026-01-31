@@ -1,5 +1,17 @@
 import django_filters
-from .models import JournalLine
+from .models import JournalLine, JournalEntry
+
+class JournalEntryFilter(django_filters.FilterSet):
+    from_date = django_filters.DateTimeFilter(field_name='date', lookup_expr='gte', label='From Date')
+    to_date = django_filters.DateTimeFilter(field_name='date', lookup_expr='lte', label='To Date')
+    type = django_filters.ChoiceFilter(choices=JournalEntry.TYPE_CHOICES)
+    salesperson = django_filters.NumberFilter(field_name='salesperson__id', lookup_expr='exact')
+    user = django_filters.NumberFilter(field_name='user__id', lookup_expr='exact')
+    type_number = django_filters.CharFilter(lookup_expr='icontains')
+
+    class Meta:
+        model = JournalEntry
+        fields = ['from_date', 'to_date', 'type', 'salesperson', 'user', 'type_number']
 
 class JournalLineFlatFilter(django_filters.FilterSet):
     # ----- Date range filters -----

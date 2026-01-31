@@ -50,7 +50,7 @@ Manage the Chart of Accounts, including hierarchy, numbering, and status.
 
 ### **Hierarchy Rules**
 
-- **Level 1 (Type)**: Conceptual, not stored (e.g., 10000 Assets).
+- **Level 1 (Type)**: Conceptual, not stored (e.g., 1.0000 Assets).
 - **Level 2 (Root)**: Stored in DB, `parent_account=null`, `is_posting=false`. **Must end in '000'** (e.g., 1.1000).
 - **Level 3 (Child)**: Stored in DB, has `parent_account`, `is_posting=true`. **Must NOT end in '000'** and must match parent prefix.
 

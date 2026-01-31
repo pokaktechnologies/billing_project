@@ -231,9 +231,9 @@ def get_trial_balance_data(from_date, to_date):
     for code, label in ACCOUNT_TYPES:
         category_accounts = [{"id": d.get("id"), "parent": p, "account_number": d.get("account_number"), "balance": d["balance"], "children": d["children"]} for p, d in grouped[label].items()]
         
-        # Add Type Number (X0000)
+        # Add Type Number (X.0000)
         prefix = Account.TYPE_PREFIX_MAP.get(code, "0")
-        type_number = f"{prefix}0000"
+        type_number = f"{prefix}.0000"
 
         accounts_by_type.append({
             "type": label, 
@@ -318,7 +318,7 @@ def get_balance_sheet_data(from_date, to_date, net_profit=0):
 
     def get_type_meta(code, label):
         prefix = Account.TYPE_PREFIX_MAP.get(code, "0")
-        return {"label": label, "number": f"{prefix}0000"}
+        return {"label": label, "number": f"{prefix}.0000"}
 
     return {
         "title": "Balance Sheet",
@@ -346,108 +346,104 @@ def get_balance_sheet_data(from_date, to_date, net_profit=0):
 def get_hierarchical_balances(filters):
     """
     Returns total balances grouped by hierarchy (Type -> Parent -> Child).
+    Shows ALL types, parents, and children even if they have no journal entries (with 0 balance).
     Filters: type, parent_account, child_account, start_date, end_date.
     """
-    # 1. Base Query on JournalLine
-    lines = JournalLine.objects.filter(account__status='active')
-
-    # Date Filters (Apply to Lines)
+    from django.db.models import Value, DecimalField
+    from django.db.models.functions import Coalesce
+    from django.db import models
+    
+    # Helper for debit/credit normal types
+    debit_normal_types = {'asset', 'cost_of_sales', 'general_expenses'}
+    
+    # Build date filter
     start_date = filters.get('start_date')
     end_date = filters.get('end_date')
+    line_filter = models.Q()
     if start_date:
-        lines = lines.filter(journal__date__gte=start_date)
+        line_filter &= models.Q(journalline__journal__date__gte=start_date)
     if end_date:
-        lines = lines.filter(journal__date__lte=end_date)
-
-    # 2. Account Filters (Apply to Lines via Account)
-    acc_type = filters.get('type')
+        line_filter &= models.Q(journalline__journal__date__lte=end_date)
+    
+    # Get ALL active accounts with their totals (even those with 0)
+    all_accounts = Account.objects.filter(status='active').annotate(
+        total_debit=Coalesce(
+            Sum('journalline__debit', filter=line_filter),
+            Value(0), output_field=DecimalField()
+        ),
+        total_credit=Coalesce(
+            Sum('journalline__credit', filter=line_filter),
+            Value(0), output_field=DecimalField()
+        )
+    ).order_by('account_number')
+    
+    # Apply optional filters
+    acc_type_filter = filters.get('type')
     parent_id = filters.get('parent_account')
     child_id = filters.get('child_account')
-
-    if acc_type:
-        lines = lines.filter(account__type=acc_type)
-    if parent_id:
-        lines = lines.filter(account__parent_account__id=parent_id)
-    if child_id:
-        lines = lines.filter(account__id=child_id)
-
-    # 3. Aggregation (Group by Account)
-    aggregated = lines.values(
-        'account__id', 'account__name', 'account__account_number', 'account__type', 
-        'account__parent_account__id', 'account__parent_account__name', 'account__parent_account__account_number'
-    ).annotate(
-        total_debit=Coalesce(Sum('debit'), Decimal(0)),
-        total_credit=Coalesce(Sum('credit'), Decimal(0))
-    )
-
-    # 4. Build Hierarchy in Memory
-    hierarchy = {}
     
-    # helper for debit/credit normal
-    debit_normal_types = {'asset', 'cost_of_sales', 'general_expenses'}
-
-    for entry in aggregated:
-        # Extract basic data
-        acc_id = entry['account__id']
-        acc_name = entry['account__name']
-        acc_num = entry['account__account_number']
-        acc_type = entry['account__type']
-        parent_id = entry['account__parent_account__id']
-        parent_name = entry['account__parent_account__name']
-        parent_num = entry['account__parent_account__account_number']
-        
-        # Calculate Balance
-        debit = entry['total_debit']
-        credit = entry['total_credit']
-        
-        if acc_type in debit_normal_types:
-            balance = debit - credit
-        else:
-            balance = credit - debit
-
-        balance_float = float(balance)
-
-        # Ensure Type Level exists
-        if acc_type not in hierarchy:
-            prefix = Account.TYPE_PREFIX_MAP.get(acc_type, "0")
-            hierarchy[acc_type] = {
-                "label": acc_type.replace('_', ' ').title(),
-                "number": f"{prefix}0000",
-                "total": 0.0,
-                "accounts": {} 
-            }
-        
-        # Ensure Parent Level exists
-        p_key = parent_id or "root"
-        if p_key not in hierarchy[acc_type]["accounts"]:
-            hierarchy[acc_type]["accounts"][p_key] = {
-                "id": parent_id,
-                "parent": parent_name or "Uncategorized",
-                "account_number": parent_num,
-                "total": 0.0,
-                "children": []
-            }
-
-        # Add Child
-        hierarchy[acc_type]["accounts"][p_key]["children"].append({
-            "id": acc_id,
-            "account": acc_name,
-            "account_number": acc_num,
-            "total": balance_float
-        })
-
-        # Aggregate Upwards
-        hierarchy[acc_type]["accounts"][p_key]["total"] += balance_float
-        hierarchy[acc_type]["total"] += balance_float
-
-    # 5. Format Output (Convert Parent Dict to List)
+    # Build complete hierarchy for ALL types
     formatted_output = {}
-    for type_key, type_data in hierarchy.items():
-        formatted_output[type_key] = {
-            "label": type_data["label"],
-            "number": type_data["number"],
-            "total": type_data["total"],
-            "accounts": list(type_data["accounts"].values())
+    
+    for type_code, type_label in Account.ACCOUNT_TYPES:
+        # Skip if type filter is set and doesn't match
+        if acc_type_filter and acc_type_filter != type_code:
+            continue
+            
+        prefix = Account.TYPE_PREFIX_MAP.get(type_code, "0")
+        type_number = f"{prefix}.0000"
+        
+        # Get all parent accounts (Level 2) for this type
+        parent_accounts = all_accounts.filter(type=type_code, parent_account__isnull=True)
+        
+        # Apply parent filter if set
+        if parent_id:
+            parent_accounts = parent_accounts.filter(id=parent_id)
+        
+        parents_list = []
+        type_total = 0.0
+        
+        for parent in parent_accounts:
+            # Get all children for this parent
+            children = all_accounts.filter(parent_account=parent)
+            
+            # Apply child filter if set
+            if child_id:
+                children = children.filter(id=child_id)
+            
+            children_list = []
+            parent_total = 0.0
+            
+            for child in children:
+                # Calculate balance based on account type
+                if type_code in debit_normal_types:
+                    balance = float(child.total_debit - child.total_credit)
+                else:
+                    balance = float(child.total_credit - child.total_debit)
+                
+                children_list.append({
+                    'id': child.id,
+                    'account': child.name,
+                    'account_number': child.account_number,
+                    'total': balance
+                })
+                parent_total += balance
+            
+            parents_list.append({
+                'id': parent.id,
+                'parent': parent.name,
+                'account_number': parent.account_number,
+                'total': parent_total,
+                'children': children_list
+            })
+            type_total += parent_total
+        
+        formatted_output[type_code] = {
+            'label': type_label,
+            'number': type_number,
+            'total': type_total,
+            'accounts': parents_list
         }
-
+    
     return formatted_output
+

@@ -22,7 +22,7 @@ class AccountTypeListView(APIView):
     List all account types with their Level 1 (Conceptual) Number.
     Example:
     [
-        {"type": "asset", "label": "Asset", "prefix": "1", "number": "10000"},
+        {"type": "asset", "label": "Asset", "prefix": "1", "number": "1.0000"},
         ...
     ]
     """
@@ -30,7 +30,7 @@ class AccountTypeListView(APIView):
         types = []
         for type_code, label in Account.ACCOUNT_TYPES:
             prefix = Account.TYPE_PREFIX_MAP.get(type_code)
-            number = f"{prefix}0000" if prefix else None
+            number = f"{prefix}.0000" if prefix else None
             types.append({
                 "type": type_code,
                 "label": label,
@@ -51,7 +51,7 @@ class GenerateAccountNumberView(APIView):
     
     Level 1 (Type): Display-only, fixed number per type
         GET /generate-account-number/?type=asset
-        Returns: {"account_number": "10000", "level": 1, "is_fixed": true}
+        Returns: {"account_number": "1.0000", "level": 1, "is_fixed": true}
     
     Level 2 (Parent): Generates NEXT available parent number
         GET /generate-account-number/?type=asset&level=parent
@@ -78,11 +78,12 @@ class GenerateAccountNumberView(APIView):
                 )
             
             # Check parent depth
-            # DB Depth 1 = Level 2 (Parent)
-            # DB Depth 2 = Level 3 (Child)
-            # Cannot add child to DB Depth 2 (Level 3) accounts
+            # get_depth() returns:
+            #   2 for Level 2 (Parent/Root) accounts
+            #   3 for Level 3 (Child) accounts
+            # Only Level 3 accounts cannot have children
             parent_depth = parent.get_depth()
-            if parent_depth >= 2:
+            if parent_depth >= 3:
                 return Response(
                     {"error": "Cannot create child under this account. Maximum depth is 3 levels (Level 3 accounts cannot have children)."},
                     status=status.HTTP_400_BAD_REQUEST
@@ -135,11 +136,11 @@ class GenerateAccountNumberView(APIView):
     
     def _get_type_number(self, account_type, prefix):
         """
-        Get the type-level account number (X0000).
+        Get the type-level account number (X.0000).
         This is a FIXED number per type - only one exists per account type.
-        Format: 10000, 20000, 30000, etc. (no dot for type level)
+        Format: 1.0000, 2.0000, 3.0000, etc.
         """
-        return f"{prefix}0000"
+        return f"{prefix}.0000"
     
     def _get_next_parent_number(self, account_type, prefix):
         """
@@ -157,8 +158,8 @@ class GenerateAccountNumberView(APIView):
             last_number = existing.first().account_number
             try:
                 parts = last_number.split('.')
-                # Extract Y from X.Y000
-                current_sub = int(parts[1][0])
+                # Extract Y from X.Y000 (e.g., "9000" → 9, "10000" → 10)
+                current_sub = int(parts[1][:-3]) if len(parts[1]) > 3 else int(parts[1][0])
                 next_sub = current_sub + 1
                 return f"{prefix}.{next_sub}000"
             except (ValueError, IndexError):
@@ -199,7 +200,6 @@ class GenerateAccountNumberView(APIView):
                 pass
         
         # NO CHILDREN: Determine pattern from parent's number format
-        # NO CHILDREN: Determine pattern from parent's number format
         if '.' in parent_num:
             # Parent has format X.YYYY (e.g., 1.1000)
             # Children increment: 1.1000 -> 1.1001
@@ -211,7 +211,7 @@ class GenerateAccountNumberView(APIView):
                 # Fallback if parsing fails
                 return f"{parent_num}1"
         else:
-            # Parent has format X0000 (e.g., 10000)
+            # Parent has format X.0000 (e.g., 1.0000)
             # Children are X.Y000 format
             prefix = parent_num[0]
             return self._get_next_parent_number(parent.type, prefix)

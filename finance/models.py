@@ -27,7 +27,7 @@ from django.db.models.functions import Coalesce
 class Account(models.Model):
     """
     Levels:
-    1 → Type   (10000)
+    1 → Type   (1.0000)
     2 → Parent (1.1000)
     3 → Child  (1.1001)
 
@@ -97,9 +97,9 @@ class Account(models.Model):
         return depth
 
     # ---------------- REGEX ----------------
-    TYPE_REGEX = re.compile(r'^[1-7]0000$')        # 10000 (Level 1 - Conceptual)
-    PARENT_REGEX = re.compile(r'^[1-7]\.\d{4}$')   # 1.1000 (Level 2)
-    CHILD_REGEX = re.compile(r'^[1-7]\.\d{4}$')    # 1.1001 (Level 3)
+    TYPE_REGEX = re.compile(r'^[1-7]\.0000$')       # 1.0000 (Level 1 - Conceptual)
+    PARENT_REGEX = re.compile(r'^[1-7]\.\d{4,}$')  # 1.1000, 1.10000 (Level 2 - 4+ digits)
+    CHILD_REGEX = re.compile(r'^[1-7]\.\d{4,}$')   # 1.1001, 1.10001 (Level 3 - 4+ digits)
 
     # ---------------- VALIDATION ----------------
 
@@ -121,9 +121,9 @@ class Account(models.Model):
 
         # ---- Regex by depth ----
         # Level 1 not stored in DB, so we start checks at Level 2
-        # Ensure base format X.YYYY is met
+        # Ensure base format X.YYYY (4+ digits after dot)
         if not self.PARENT_REGEX.match(self.account_number):
-            errors['account_number'] = "Account number must follow format X.YYYY (e.g. 1.1000 or 1.1001)."
+            errors['account_number'] = "Account number must follow format X.YYYY (e.g. 1.1000, 1.1001, or 1.10001)."
 
         # ---- Root Account (Level 2) Validation ----
         if depth == 2:

@@ -8,6 +8,7 @@ class JournalLineSerializer(serializers.ModelSerializer):
     Serializer for JournalLine with posting account validation.
     """
     account_name = serializers.CharField(source='account.name', read_only=True)
+    account_number = serializers.CharField(source='account.account_number', read_only=True)
     account_type = serializers.CharField(source='account.type', read_only=True)
     account_is_posting = serializers.BooleanField(source='account.is_posting', read_only=True)
     
@@ -17,6 +18,7 @@ class JournalLineSerializer(serializers.ModelSerializer):
             'id', 
             'account', 
             'account_name', 
+            'account_number',
             'account_type', 
             'account_is_posting',
             'debit', 

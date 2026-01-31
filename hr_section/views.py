@@ -1,6 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
+from rest_framework.pagination import PageNumberPagination
 from django.utils import timezone
 from rest_framework import permissions, status as drf_status
 from django.db.models import Count, Q, F
@@ -323,13 +324,21 @@ class JobApplicationWithoutJob(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class JobApplicationPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
 class JobApplicationListView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'hr_section'
     def get(self, request):
         applications = JobApplication.objects.all().order_by('-applied_at')
-        serializer = JobApplicationListSerializer(applications, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        
+        paginator = JobApplicationPagination()
+        result_page = paginator.paginate_queryset(applications, request)
+        serializer = JobApplicationListSerializer(result_page, many=True)
+        return paginator.get_paginated_response(serializer.data)
 
 
 class JobApplicationDetailView(APIView):
@@ -404,8 +413,10 @@ class JobApplicationSearchView(APIView):
         # Sorting
         applications = applications.order_by(sort)
 
-        serializer = JobApplicationListSerializer(applications, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        paginator = JobApplicationPagination()
+        result_page = paginator.paginate_queryset(applications, request)
+        serializer = JobApplicationListSerializer(result_page, many=True)
+        return paginator.get_paginated_response(serializer.data)
 
 
 

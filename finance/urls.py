@@ -1,6 +1,9 @@
 from django.urls import path
 from .views.accounts import AccountListCreateAPIView, AccountRetrieveUpdateDestroyAPIView, GenerateAccountNumberView, AccountTypeListView
-from .views.ledger import JournalEntryListCreateView, JournalEntryDetailView, ListJournalVoucherView, JournalLineListView, JournalLineDetailView
+from .views.ledger import (
+    JournalEntryListCreateView, JournalEntryDetailView, ListJournalVoucherView, 
+    JournalLineListView, JournalLineDetailView, JournalEntryReportView
+)
 from .views.documents import CreditNoteListCreateAPIView, CreditNoteRetrieveUpdateDestroyAPIView, DebitNoteListCreateAPIView, DebitNoteRetrieveUpdateDestroyAPIView
 from .views.settings import FinaceNumberGeneratorView, CashflowCategoryMappingListCreateView, CashflowCategoryMappingDetailView, TaxSettingsListCreateAPIView, TaxSettingsRetrieveUpdateDestroyAPIView
 from .views.reports import TrialBalanceView, ProfitAndLossView, BalanceSheetView, CashflowStatementView, AccountBalanceHierarchyView
@@ -14,6 +17,7 @@ urlpatterns = [
     path('journal-entry/', JournalEntryListCreateView.as_view(), name='journal-entry'),
     path('journal-entry/<int:pk>/', JournalEntryDetailView.as_view(), name='journal-entry-detail'),
     path('journal-voucher/', ListJournalVoucherView.as_view(), name='journal-voucher'),
+    path('journal-report/', JournalEntryReportView.as_view(), name='journal-report'),
 
     path('journal-lines/', JournalLineListView.as_view(), name='journal-lines-flat'),
     path('journal-lines/<int:id>/', JournalLineDetailView.as_view(), name='journalline-detail'),

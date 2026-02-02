@@ -22,6 +22,14 @@ from django.utils.dateparse import parse_date
 from leads.models import Lead
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from django.shortcuts import get_object_or_404
+from django.db import IntegrityError
+from accounts.services.invoice_factory import InvoiceFactory
+from accounts.services.receipt_factory import ReceiptFactory
+from accounts.permissions import HasModulePermission
 
 # from .serializers import CustomUserCreateSerializer, OTPSerializer, GettingStartedSerializer,HelpLinkSerializer,NotificationSerializer, UserSettingSerializer, FeedbackSerializer,QuotationOrderSerializer,InvoiceOrderSerializer,DeliveryOrderSerializer,SupplierPurchaseSerializer,SupplierSerializer,DeliveryChallanSerializer
 from django.core.mail import send_mail
@@ -2089,23 +2097,11 @@ class ReceiptView(APIView):
     def get(self, request, rec_id=None):
         if rec_id:
             receipt = get_object_or_404(ReceiptModel, id=rec_id)
-            invoice_items = []
-            items = []
-
-            if receipt.invoice:
-                invoice_items = InvoiceItem.objects.filter(invoice=receipt.invoice_id)
-                items = DeliveryItem.objects.filter(
-                    delivery_form__in=invoice_items.values_list('delivary__id', flat=True)
-                ).distinct()
-
             serializer = ReceiptSerializer(receipt)
             return Response({
                 'Status': '1',
                 'Message': 'Success',
-                'Data': [{
-                    **serializer.data,
-                    'items': DeliveryItemsSerializer(items, many=True).data
-                }]
+                'Data': [serializer.data] 
             })
         else:
             receipts = ReceiptModel.objects.all().order_by('-created_at')
@@ -2118,65 +2114,24 @@ class ReceiptView(APIView):
         })
 
     def post(self, request):
-        serializer = ReceiptSerializer(data=request.data)
+        serializer = ReceiptCreateSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        invoice_id = request.data.get('invoice')
-        receipt = serializer.save(user=request.user)
-
-        credit_id = request.data.get('credit_id')
-        debit_id = request.data.get('debit_id')
-
-        if invoice_id:
-            invoice = get_object_or_404(InvoiceModel, id=invoice_id)
-            invoice.is_receipted = True
-            invoice.save(update_fields=['is_receipted'])
-
-        debit_account = get_object_or_404(Account, pk=int(debit_id))
-        credit_account = get_object_or_404(Account, pk=int(credit_id))
-        amount = receipt.cheque_amount
-
-        accounts_tax = JOURNAL_ACCOUNT_MAPPING['receipt_tax']
-        debit_account_tax = Account.objects.get(name=accounts_tax['debit'])
-        credit_account_tax = Account.objects.get(name=accounts_tax['credit'])
-
-        rate = receipt.tax_rate or 0
-        tax_amount = (amount * rate) / (100 + rate) if rate > 0 else 0
-
-        client = receipt.client
-        salesperson = client.salesperson if client and client.salesperson else None
-
-        with transaction.atomic():
-            journal = JournalEntry.objects.create(
-                type='receipt',
-                type_number=receipt.receipt_number,
-                salesperson=salesperson,
-                narration=(
-                    f"Receipt {receipt.receipt_number} from {client.first_name} {client.last_name}"
-                    if client else
-                    f"Receipt {receipt.receipt_number}"
-                ),
-                user=request.user,
-            )
-
-            JournalLine.objects.create(journal=journal, account=debit_account, debit=amount)
-            JournalLine.objects.create(journal=journal, account=credit_account, credit=amount)
-
-            journal_tax = JournalEntry.objects.create(
-                type='tax_payment',
-                type_number=receipt.receipt_number + '_TAX',
-                salesperson=salesperson,
-                narration=(
-                    f"Receipt Tax {receipt.receipt_number} from {client.first_name} {client.last_name}"
-                    if client else
-                    f"Receipt Tax {receipt.receipt_number}"
-                ),
-                user=request.user,
-            )
-
-            JournalLine.objects.create(journal=journal_tax, account=debit_account_tax, debit=tax_amount)
-            JournalLine.objects.create(journal=journal_tax, account=credit_account_tax, credit=tax_amount)
+        try:
+            with transaction.atomic():
+                receipt = ReceiptFactory.create(
+                    serializer.validated_data["receipt_type"],
+                    serializer.validated_data,
+                    request.user
+                )
+        except IntegrityError as e:
+            # Handle database level uniqueness or other integrity constraints
+            return Response({
+                "error": "A database integrity error occurred. This might be due to a duplicate receipt number or related record."
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+             return Response({"error": f"An unexpected error occurred: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response({
             "status": "1",
@@ -2187,97 +2142,13 @@ class ReceiptView(APIView):
 
     def patch(self, request, rec_id=None):
         receipt = get_object_or_404(ReceiptModel, id=rec_id)
-        old_invoice = receipt.invoice
-
+        
         serializer = ReceiptSerializer(receipt, data=request.data, partial=True)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"status": "1", "message": "Receipt updated"}, status=200)
+        return Response(serializer.errors, status=400)
 
-        new_invoice_id = request.data.get("invoice")
-
-        with transaction.atomic():
-            if new_invoice_id:
-                new_invoice = get_object_or_404(InvoiceModel, id=new_invoice_id)
-
-                if old_invoice and old_invoice.id != new_invoice.id:
-                    old_invoice.is_receipted = False
-                    old_invoice.save(update_fields=["is_receipted"])
-
-                new_invoice.is_receipted = True
-                new_invoice.save(update_fields=["is_receipted"])
-            else:
-                if old_invoice:
-                    old_invoice.is_receipted = False
-                    old_invoice.save(update_fields=["is_receipted"])
-
-            receipt = serializer.save()
-
-            amount = receipt.cheque_amount
-            rate = receipt.tax_rate or 0
-            tax_amount = (amount * rate) / (100 + rate) if rate > 0 else 0
-
-            debit_account = get_object_or_404(Account, pk=int(request.data.get('debit_id')))
-            credit_account = get_object_or_404(Account, pk=int(request.data.get('credit_id')))
-
-            accounts_tax = JOURNAL_ACCOUNT_MAPPING['receipt_tax']
-            debit_account_tax = Account.objects.get(name=accounts_tax['debit'])
-            credit_account_tax = Account.objects.get(name=accounts_tax['credit'])
-
-            client = receipt.client
-            salesperson = client.salesperson if client and client.salesperson else None
-
-            journal = JournalEntry.objects.filter(
-                type='receipt',
-                type_number=receipt.receipt_number
-            ).first()
-
-            if not journal:
-                journal = JournalEntry.objects.create(
-                    type='receipt',
-                    type_number=receipt.receipt_number,
-                    user=request.user,
-                )
-
-            journal.salesperson = salesperson
-            journal.narration = (
-                f"Receipt {receipt.receipt_number} from {client.first_name} {client.last_name}"
-                if client else
-                f"Receipt {receipt.receipt_number}"
-            )
-            journal.save(update_fields=["salesperson", "narration"])
-
-            journal.lines.all().delete()
-            JournalLine.objects.create(journal=journal, account=debit_account, debit=amount)
-            JournalLine.objects.create(journal=journal, account=credit_account, credit=amount)
-
-            journal_tax = JournalEntry.objects.filter(
-                type='tax_payment',
-                type_number=receipt.receipt_number + "_TAX"
-            ).first()
-
-            if not journal_tax:
-                journal_tax = JournalEntry.objects.create(
-                    type='tax_payment',
-                    type_number=receipt.receipt_number + "_TAX",
-                    user=request.user,
-                )
-
-            journal_tax.salesperson = salesperson
-            journal_tax.narration = (
-                f"Receipt Tax {receipt.receipt_number} from {client.first_name} {client.last_name}"
-                if client else
-                f"Receipt Tax {receipt.receipt_number}"
-            )
-            journal_tax.save(update_fields=["salesperson", "narration"])
-
-            journal_tax.lines.all().delete()
-            JournalLine.objects.create(journal=journal_tax, account=debit_account_tax, debit=tax_amount)
-            JournalLine.objects.create(journal=journal_tax, account=credit_account_tax, credit=tax_amount)
-
-        return Response(
-            {"status": "1", "message": "Receipt updated successfully."},
-            status=status.HTTP_200_OK,
-        )
 
     def delete(self, request, rec_id=None):
         if not rec_id:
@@ -3837,13 +3708,6 @@ class ContractPointListCreateAPIView(APIView):
 
 
 # New invoice
-from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
-from django.shortcuts import get_object_or_404
-from django.db import IntegrityError
-from accounts.services.invoice_factory import InvoiceFactory
-from accounts.permissions import HasModulePermission
 
 
 class InvoiceAPI(APIView):
@@ -3864,8 +3728,12 @@ class InvoiceAPI(APIView):
                 serializer.validated_data,
                 request.user
             )
-        except IntegrityError:
-            return Response({"error": "Invoice number already exists"}, status=400)
+        except IntegrityError as e:
+            return Response({
+                "error": "A database integrity error occurred. This might be due to a duplicate invoice number or related record."
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": f"An unexpected error occurred: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(
             {"status": 1, "message": "Invoice created successfully" },

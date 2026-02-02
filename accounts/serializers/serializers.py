@@ -749,6 +749,9 @@ class ReceiptSerializer(serializers.ModelSerializer):
     invoice_number = serializers.SerializerMethodField()
     tax_amount = serializers.SerializerMethodField()
     total_amount_without_tax = serializers.SerializerMethodField()
+    intern_name = serializers.SerializerMethodField()
+    course_name = serializers.SerializerMethodField()
+    gst_number = serializers.SerializerMethodField()
 
     class Meta:
         model = ReceiptModel
@@ -777,6 +780,17 @@ class ReceiptSerializer(serializers.ModelSerializer):
         tax_amount = (amount * rate) / (Decimal("100.00") + rate)
         total_amount_without_tax = amount - tax_amount
         return format(total_amount_without_tax, '.2f')
+    
+    def get_intern_name(self, obj):
+        if obj.intern:
+            return f"{obj.intern.user.first_name} {obj.intern.user.last_name}".strip()
+        return None
+
+    def get_course_name(self, obj):
+        return obj.course.title if obj.course else None
+    
+    def get_gst_number(self, obj):
+        return obj.client.gst_number if obj.client else None
     
 
     
@@ -1071,7 +1085,7 @@ class CustomerSerializer(serializers.ModelSerializer):
             'id', 'customer_type', 'first_name', 'last_name',
             'salesperson_id', 'salesperson_name',
             'country', 'state', 'company_name', 'address',
-            'email', 'phone', 'mobile'
+            'email', 'gst_number', 'phone', 'mobile'
         ]
     def get_salesperson_name(self, obj):
         if obj.salesperson:
@@ -1499,6 +1513,12 @@ class InvoiceCreateSerializer(serializers.Serializer):
 
     items = InvoiceItemCreateSerializer(many=True, required=False)
 
+    def validate_invoice_number(self, value):
+        from accounts.models import InvoiceModel
+        if InvoiceModel.objects.filter(invoice_number=value).exists():
+            raise serializers.ValidationError("This invoice number already exists. Please use a unique number.")
+        return value
+
     def validate(self, data):
         if data["invoice_type"] == "client":
             if not data.get("items"):
@@ -1539,6 +1559,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
     items = InvoiceItemSerializer(many=True, read_only=True)
     pending_amount = serializers.SerializerMethodField()
     prepared_by = serializers.SerializerMethodField()
+    gst_number = serializers.SerializerMethodField()
 
     class Meta:
         model = InvoiceModel
@@ -1557,6 +1578,9 @@ class InvoiceSerializer(serializers.ModelSerializer):
             return None
         user = request.user
         return f"{user.first_name} {user.last_name}".strip()
+
+    def get_gst_number(self, obj):
+        return obj.client.gst_number if obj.client else None
 
 
     
@@ -1663,3 +1687,49 @@ class InvoiceListSerializer(serializers.ModelSerializer):
             net=Coalesce(Sum('total'), Decimal("0.00"))
         )["net"]
         return total
+
+class ReceiptCreateSerializer(serializers.Serializer):
+    receipt_type = serializers.ChoiceField(choices=["client", "intern"])
+    receipt_number = serializers.CharField()
+    receipt_date = serializers.DateField()
+
+    # Client specific
+    client = serializers.IntegerField(required=False)
+    
+    # Intern specific
+    intern = serializers.IntegerField(required=False)
+    course = serializers.IntegerField(required=False)
+
+    invoice = serializers.IntegerField(required=False)
+    
+    cheque_amount = serializers.DecimalField(max_digits=12, decimal_places=2, required=False)
+    tax_rate = serializers.DecimalField(max_digits=5, decimal_places=2, required=False)
+    
+    remark = serializers.CharField(required=False, allow_blank=True)
+    description = serializers.CharField(required=False, allow_blank=True)
+    cheque_number = serializers.CharField(required=False, allow_blank=True)
+    bank_name = serializers.CharField(required=False, allow_blank=True)
+    prepared_by = serializers.CharField(required=False, allow_blank=True)
+    recived_by = serializers.CharField(required=False, allow_blank=True)
+    
+    # Accounting
+    debit_id = serializers.IntegerField(required=True)
+    credit_id = serializers.IntegerField(required=True)
+
+    def validate_receipt_number(self, value):
+        if ReceiptModel.objects.filter(receipt_number=value).exists():
+            raise serializers.ValidationError("This receipt number already exists. Please use a unique number.")
+        return value
+
+    def validate(self, data):
+        data['cheque_amount'] = data.get('cheque_amount', 0) 
+        # validate client vs intern
+        if data["receipt_type"] == "client":
+            if not data.get("client"):
+                raise serializers.ValidationError("Client receipt requires client")
+        
+        if data["receipt_type"] == "intern":
+            if not data.get("intern") or not data.get("course"):
+                 raise serializers.ValidationError("Intern receipt requires intern and course")
+
+        return data

@@ -205,7 +205,8 @@ class StaffWiseAttendanceStats(APIView):
         start_date = request.query_params.get("start_date")
         end_date = request.query_params.get("end_date")
         department = request.query_params.get("department")
-        staff_ids = request.query_params.getlist("staff")  # supports ?staff=1&staff=2
+        job_type = request.query_params.get("job_type")
+        staff_ids = [sid for sid in request.query_params.getlist("staff") if sid.isdigit()]  # supports ?staff=1&staff=2
 
         # -----------------------------
         # BASE STAFF QUERY
@@ -216,17 +217,18 @@ class StaffWiseAttendanceStats(APIView):
         if department:
             staff_qs = staff_qs.filter(job_detail__department_id=department)
 
+        # --- FILTER BY JOB TYPE ---
+        if job_type:
+            staff_qs = staff_qs.filter(job_detail__job_type=job_type)
+
         # --- FILTER BY STAFF IDS ---
         if staff_ids:
             staff_qs = staff_qs.filter(id__in=staff_ids)
 
         # -----------------------------
-        # ATTENDANCE QUERY (FILTERED BY STAFF IDs IF GIVEN)
+        # ATTENDANCE QUERY (CONSISTENT WITH STAFF FILTERS)
         # -----------------------------
-        attendance_qs = DailyAttendance.objects.all()
-
-        if staff_ids:
-            attendance_qs = attendance_qs.filter(staff_id__in=staff_ids)
+        attendance_qs = DailyAttendance.objects.filter(staff__in=staff_qs)
 
         # --- DATE RANGE ---
         if start_date:
@@ -254,12 +256,14 @@ class StaffWiseAttendanceStats(APIView):
         results = []
         for staff in staff_qs:
             s = stats_map.get(staff.id, {})
+            job_detail = getattr(staff, "job_detail", None)
+            department = getattr(job_detail, "department", None) if job_detail else None
 
             results.append({
                 "staff_id": staff.id,
                 "name": f"{staff.user.first_name} {staff.user.last_name}",
                 "email": staff.user.email,
-                "department": staff.job_detail.department.name if staff.job_detail and staff.job_detail.department else None,
+                "department": department.name if department else None,
 
                 "total_records": s.get("total_records", 0),
                 "present_count": s.get("present_count", 0),
@@ -276,6 +280,8 @@ class AllStaffWiseAttendanceStats(APIView):
         start_date = request.query_params.get("start_date")
         end_date = request.query_params.get("end_date")
         department = request.query_params.get("department")
+        job_type = request.query_params.get("job_type")
+        staff_ids = [sid for sid in request.query_params.getlist("staff") if sid.isdigit()]
 
         # -----------------------------
         # BASE STAFF QUERY
@@ -286,11 +292,18 @@ class AllStaffWiseAttendanceStats(APIView):
         if department:
             staff_qs = staff_qs.filter(job_detail__department_id=department)
 
-        
+        # --- FILTER BY JOB TYPE ---
+        if job_type:
+            staff_qs = staff_qs.filter(job_detail__job_type=job_type)
+
+        # --- FILTER BY STAFF IDS ---
+        if staff_ids:
+            staff_qs = staff_qs.filter(id__in=staff_ids)
+
         # -----------------------------
-        # ATTENDANCE QUERY 
+        # ATTENDANCE QUERY (CONSISTENT WITH STAFF FILTERS)
         # -----------------------------
-        attendance_qs = DailyAttendance.objects.all()
+        attendance_qs = DailyAttendance.objects.filter(staff__in=staff_qs)
 
         # --- DATE RANGE ---
         if start_date:
@@ -320,7 +333,7 @@ class AllStaffWiseAttendanceStats(APIView):
             s = stats_map.get(staff.id, {})
 
             job_detail = getattr(staff, "job_detail", None)
-            department = getattr(job_detail, "department", None)
+            department = getattr(job_detail, "department", None) if job_detail else None
 
             results.append({
                 "staff_id": staff.id,

@@ -710,6 +710,19 @@ class InvoiceItem(models.Model):
 
 
 class ReceiptModel(models.Model):
+    RECEIPT_TYPES = (
+        ('client', 'Client'),
+        ('intern', 'Intern'),
+    )
+    receipt_type = models.CharField(
+        max_length=20,
+        choices=RECEIPT_TYPES,
+        default='client'
+    )
+    # Intern specifics
+    intern = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, null=True, blank=True, related_name="intern_receipts")
+    course = models.ForeignKey('internship.Course', on_delete=models.PROTECT, null=True, blank=True)
+
     user = models.ForeignKey(CustomUser, on_delete=models.PROTECT,null=True, blank=True)
     receipt_number = models.CharField(max_length=50, unique=True)
     receipt_date = models.DateField()
@@ -855,6 +868,7 @@ class Customer(models.Model):
     company_name = models.CharField(max_length=255, blank=True, null=True)
     address = models.TextField(blank=True, null=True)
     email = models.EmailField(blank=True, null=True)
+    gst_number = models.CharField(max_length=15, blank=True, null=True)
     phone = models.CharField(max_length=15, blank=True, null=True)
     mobile = models.CharField(max_length=15)
 

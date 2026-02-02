@@ -87,7 +87,7 @@ class ProjectMember(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
 
     def __str__(self):
-        return f"{self.member.name} in {self.project.project_name}"
+        return f"{self.member.user.first_name} in {self.project.project_name}"
     
     class Meta:
         unique_together = ('project', 'member')
@@ -152,7 +152,7 @@ class TaskAssign(models.Model):
     def __str__(self):
         return (
             f"Task: {self.task.task_name} → "
-            f"{self.assigned_to.member.name}"
+            
         )
 
 

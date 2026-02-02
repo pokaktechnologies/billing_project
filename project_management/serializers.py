@@ -122,11 +122,21 @@ class MemberSerializer(serializers.ModelSerializer):
         source='user.staff_profile.job_detail.role',
         read_only=True
     )
+    phone_number = serializers.CharField(
+        source='user.staff_profile.phone_number',
+        read_only=True
+    )
+    email = serializers.CharField(
+        source='user.email',
+        read_only=True
+    )
+
+
 
     class Meta:
         model = Member
-        fields = ['id','user','full_name','department','role','created_at']
-        read_only_fields = ['created_at']
+        fields = ['id','user','full_name','department','role','phone_number','email','created_at']
+        read_only_fields = ['created_at', 'full_name', 'department', 'role', 'phone_number', 'email']
 
     def get_full_name(self, obj):
         return f"{obj.user.first_name} {obj.user.last_name}".strip()
@@ -156,11 +166,13 @@ class ProjectMemberSerializer(serializers.ModelSerializer):
     member_name = serializers.SerializerMethodField()
     stack_name = serializers.CharField(source='stack.name', read_only=True)
     project_name = serializers.CharField(source='project.project_name', read_only=True)
+    phone_number = serializers.CharField(source='member.user.staff_profile.phone_number', read_only=True)
+    email = serializers.CharField(source='member.user.email', read_only=True)
     # task_count = serializers.SerializerMethodField()
 
     class Meta:
         model = ProjectMember
-        fields = ['id', 'member', 'member_name', 'stack','stack_name' , 'project', 'project_name', 'created_at']
+        fields = ['id', 'member', 'member_name', 'stack','stack_name' , 'project', 'project_name', 'phone_number', 'email', 'created_at']
     
     # def get_task_count(self, obj):
     #     return obj.task_set.count()

@@ -745,6 +745,12 @@ class DistroyUpdateBoard(generics.RetrieveUpdateDestroyAPIView):
     queryset = TaskBoard.objects.all()
     serializer_class = TaskBoardSerializer
 
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        # Set board to null for all tasks associated with this board
+        Task.objects.filter(board=instance).update(board=None)
+        return super().destroy(request, *args, **kwargs)
+
 class CreateStatusColumn(generics.ListCreateAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated, HasModulePermission]

@@ -11,6 +11,7 @@ from attendance.serializers import DailyAttendanceSessionDetailSerializer
 from .serializers import *
 from .models import *
 from django.db import transaction
+from django.db.models import Q
 from accounts.permissions import HasModulePermission
 from django.utils import timezone
 
@@ -1136,7 +1137,7 @@ class ProjectSearchView(APIView):
             status=status.HTTP_200_OK
         )
 
-class ProjectMemebrsSearchView(APIView):
+class ProjectMembersSearchView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'project_management'
 
@@ -1156,7 +1157,7 @@ class ProjectMemebrsSearchView(APIView):
 
         # Filter by member name if provided
         if member_name:
-            project_members = project_members.filter(member__name__icontains=member_name)
+            project_members = project_members.filter(member__user__first_name__icontains=member_name)
         
         # Filter by stack if provided
         if stack:
@@ -1176,26 +1177,19 @@ class MembersSearchView(APIView):
     required_module = 'project_management'
 
     def get(self, request):
-        member_name = request.query_params.get('name', '').strip()
-        role = request.query_params.get('role', '').strip()
+        search = request.query_params.get('search', '').strip()
 
-        # Ensure at least one filter is provided
-        if not member_name and not role:
+        # Ensure search parameter is provided
+        if not search:
             return Response(
-                {"status": "0", "message": "At least one filter ('name' or 'role') must be provided."},
+                {"status": "0", "message": "Search parameter must be provided."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         # Base QuerySet: All members for the logged-in user
-        members = Member.objects.all().order_by('-created_at')
-
-        # Filter by member name if provided
-        if member_name:
-            members = members.filter(name__icontains=member_name)
-
-        # Filter by role if provided
-        if role:
-            members = members.filter(role=role)
+        members = Member.objects.filter(
+            Q(user__first_name__icontains=search) | Q(user__staff_profile__job_detail__role__icontains=search)
+        ).order_by('-created_at')
 
         # Serialize the filtered data
         serializer = MemberSerializer(members, many=True)
@@ -1234,11 +1228,11 @@ class TaskSearchByProjectMembersView(APIView):
             if start_date_str and end_date_str:
                 start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
                 end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
-                task = task.filter(start_date__gte=start_date, end_date__lte=end_date)
+                task = task.filter(end_date__gte=start_date, end_date__lte=end_date)
 
             elif start_date_str:
                 start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
-                task = task.filter(start_date__gte=start_date)
+                task = task.filter(end_date__gte=start_date)
 
             elif end_date_str:
                 end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
@@ -1290,11 +1284,11 @@ class TaskSearchByMembersView(APIView):
             if start_date_str and end_date_str:
                 start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
                 end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
-                task = task.filter(start_date__gte=start_date, end_date__lte=end_date)
+                task = task.filter(end_date__gte=start_date, end_date__lte=end_date)
 
             elif start_date_str:
                 start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
-                task = task.filter(start_date__gte=start_date)
+                task = task.filter(end_date__gte=start_date)
 
             elif end_date_str:
                 end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()

@@ -51,7 +51,7 @@ urlpatterns = [
 
     # Search
     path('search/', ProjectSearchView.as_view(), name='project_search'),
-    path('project_members/<int:project_id>/search/', ProjectMemebrsSearchView.as_view(), name='project_members_search'),
+    path('project_members/<int:project_id>/search/', ProjectMembersSearchView.as_view(), name='project_members_search'),
     path('members/search/', MembersSearchView.as_view(), name='members_search'),
     path('task/<int:project_member_id>/project_members/search/', TaskSearchByProjectMembersView.as_view(), name='task_search_by_project_members'),
     path('task/<int:member_id>/members/search/', TaskSearchByMembersView.as_view(), name='task_search_by_members'),

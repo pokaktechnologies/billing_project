@@ -664,10 +664,49 @@ class ProjectMembersViewListByProjectView(APIView):
         )
 
 #My Projects
+
+from django.db.models import Count, Q
+
+def get_project_progress_data(project):
+    task_counts = Task.objects.filter(project=project).aggregate(
+        total_tasks=Count('id'),
+        not_started=Count('id', filter=Q(status='not_started')),
+        in_progress=Count('id', filter=Q(status='in_progress')),
+        completed=Count('id', filter=Q(status='completed')),
+    )
+
+    POINTS = {
+        "not_started": 0,
+        "in_progress": 1,
+        "completed": 2,
+    }
+
+    total_tasks = task_counts["total_tasks"]
+    total_tasks_point = total_tasks * 2
+
+    total_point = (
+        task_counts["not_started"] * POINTS["not_started"] +
+        task_counts["in_progress"] * POINTS["in_progress"] +
+        task_counts["completed"] * POINTS["completed"]
+    )
+
+    progression_percentage = (
+        (total_point / total_tasks_point) * 100
+        if total_tasks_point > 0 else 0.0
+    )
+
+    return {
+        "total_tasks": total_tasks,
+        "not_started_tasks": task_counts["not_started"],
+        "in_progress_tasks": task_counts["in_progress"],
+        "completed_tasks": task_counts["completed"],
+        "progression_percentage": round(progression_percentage, 2),
+    }
+
+
 class MyProjectsView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated, HasModulePermission]
-    # required_module = 'project_management'
 
     def get(self, request):
         user = request.user
@@ -676,10 +715,18 @@ class MyProjectsView(APIView):
             projectmember__member__user=user
         ).select_related('contract').prefetch_related('projectmember_set').distinct()
 
-
         serializer = ProjectManagementSerializer(projects, many=True)
+        project_data = serializer.data
+
+        # map project_id -> project_object
+        project_map = {project.id: project for project in projects}
+
+        for project in project_data:
+            project_obj = project_map.get(project["id"])
+            project["progress_data"] = get_project_progress_data(project_obj)
+
         return Response(
-            {"status": "1", "message": "success", "data": serializer.data},
+            {"status": "1", "message": "success", "data": project_data},
             status=status.HTTP_200_OK
         )
 
@@ -702,10 +749,11 @@ class MyProjectDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        serializer = ProjectManagementSerializer(project)
+        data = ProjectManagementSerializer(project).data
+        data["progress_data"] = get_project_progress_data(project)
 
         return Response(
-            {"status": "1", "message": "success", "data": serializer.data},
+            {"status": "1", "message": "success", "data": data},
             status=status.HTTP_200_OK
         )
 
@@ -2028,9 +2076,6 @@ class ManagerDailyReportSummaryView(APIView):
         })
 
 
-## project progression view--------------
-from django.db.models import Count, Q
-
 class ProjectProgressionView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated, HasModulePermission]
@@ -2038,54 +2083,11 @@ class ProjectProgressionView(APIView):
     def get(self, request, project_id):
         project = get_object_or_404(ProjectManagement, id=project_id)
 
-        # Aggregate counts in ONE query
-        task_counts = Task.objects.filter(project=project).aggregate(
-            total_tasks=Count('id'),
-            not_started=Count('id', filter=Q(status='not_started')),
-            in_progress=Count('id', filter=Q(status='in_progress')),
-            completed=Count('id', filter=Q(status='completed')),
-        )
-
-        # Points configuration
-        POINTS = {
-            "not_started": 0,
-            "in_progress": 1,
-            "completed": 2,
-        }
-
-        total_tasks = task_counts["total_tasks"]
-        total_tasks_point = total_tasks * 2
-
-        not_started_tasks = task_counts["not_started"]
-        in_progress_tasks = task_counts["in_progress"]
-        completed_tasks = task_counts["completed"]
-
-        not_started_tasks_point = not_started_tasks * POINTS["not_started"]
-        in_progress_tasks_point = in_progress_tasks * POINTS["in_progress"]
-        completed_tasks_point = completed_tasks * POINTS["completed"]
-
-        total_point = (
-            not_started_tasks_point +
-            in_progress_tasks_point +
-            completed_tasks_point
-        )
-
-        progression_percentage = (
-            (total_point / total_tasks_point) * 100
-            if total_tasks_point > 0 else 0.0
-        )
-
         return Response(
             {
                 "status": "1",
                 "message": "success",
-                "data": {
-                    "total_tasks": total_tasks,
-                    "not_started_tasks": not_started_tasks,
-                    "in_progress_tasks": in_progress_tasks,
-                    "completed_tasks": completed_tasks,
-                    "progression_percentage": round(progression_percentage, 2),
-                }
+                "data": get_project_progress_data(project)
             },
             status=status.HTTP_200_OK
         )

@@ -1,4 +1,13 @@
+from decimal import Decimal, ROUND_HALF_UP
+
 # utils.py
+def round_decimal(value, places=2):
+    if value is None:
+        return Decimal("0.00")
+    if not isinstance(value, Decimal):
+        value = Decimal(str(value))
+    return value.quantize(Decimal(f"1.{'0' * places}"), rounding=ROUND_HALF_UP)
+
 def generate_next_number(model, field_name: str, prefix: str, length: int) -> str:
     start = 10**(length - 1) + 1
 

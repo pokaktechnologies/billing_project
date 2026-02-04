@@ -23,6 +23,7 @@ from attendance.models import DailyAttendance, AttendanceSession
 from django.db.models import Sum, F, DecimalField, ExpressionWrapper
 from django.db.models.functions import Coalesce
 from decimal import Decimal
+from finance.utils import round_decimal
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
@@ -1624,7 +1625,7 @@ class InvoiceListSerializer(serializers.ModelSerializer):
             total=Sum('cheque_amount')
         )
         total_received = receipt['total'] or 0
-        return obj.invoice_grand_total - total_received
+        return round_decimal(obj.invoice_grand_total - total_received)
 
     def get_effective_tax_rate(self, obj):
         totals = obj.items.aggregate(
@@ -1641,7 +1642,7 @@ class InvoiceListSerializer(serializers.ModelSerializer):
         )
 
         if totals['net'] > 0:
-            return (totals['tax'] / totals['net']) * Decimal("100.00")
+            return round_decimal((totals['tax'] / totals['net']) * Decimal("100.00"))
 
         return Decimal("0.00")
     
@@ -1661,7 +1662,7 @@ class InvoiceListSerializer(serializers.ModelSerializer):
         )
 
         if totals["base"] > 0:
-            return (totals["tax"] / totals["base"]) * Decimal("100")
+            return round_decimal((totals["tax"] / totals["base"]) * Decimal("100"))
 
         return Decimal("0.00")
 
@@ -1679,14 +1680,14 @@ class InvoiceListSerializer(serializers.ModelSerializer):
             )
         )["tax"]
 
-        return tax
+        return round_decimal(tax)
 
     
     def get_total_amount_without_tax(self, obj):
         total = obj.items.aggregate(
             net=Coalesce(Sum('total'), Decimal("0.00"))
         )["net"]
-        return total
+        return round_decimal(total)
 
 class ReceiptCreateSerializer(serializers.Serializer):
     receipt_type = serializers.ChoiceField(choices=["client", "intern"])
@@ -1703,7 +1704,7 @@ class ReceiptCreateSerializer(serializers.Serializer):
     invoice = serializers.IntegerField(required=False)
     
     cheque_amount = serializers.DecimalField(max_digits=12, decimal_places=2, required=False)
-    tax_rate = serializers.DecimalField(max_digits=5, decimal_places=2, required=False)
+    tax_rate = serializers.DecimalField(max_digits=10, decimal_places=6, required=False)
     
     remark = serializers.CharField(required=False, allow_blank=True)
     description = serializers.CharField(required=False, allow_blank=True)

@@ -3713,7 +3713,10 @@ class InvoiceAPI(APIView):
     required_module = 'invoice'
 
     def get(self, request):
-        qs = InvoiceModel.objects.filter(user=request.user)
+        if request.user.is_superuser:
+            qs = InvoiceModel.objects.all()
+        else:
+            qs = InvoiceModel.objects.filter(user=request.user)
         return Response({"status": 1, "data": InvoiceListSerializer(qs, many=True).data})
 
     def post(self, request):

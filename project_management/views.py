@@ -1089,11 +1089,21 @@ class TaskListByMembers(APIView):
 
     def get(self, request, member_id, format=None):
         tasks = Task.objects.filter(assignments__assigned_to__member__id=member_id).order_by('-created_at')
+        total_tasks = tasks.count()
+        not_started_tasks = tasks.filter(status='not_started').count()
+        in_progress_tasks = tasks.filter(status='in_progress').count()
+        completed_tasks = tasks.filter(status='completed').count()
         serializer = TaskSerializer(tasks, many=True)
-        return Response(
-            {"status": "1", "message": "success", "data": serializer.data},
-            status=status.HTTP_200_OK
-        )
+        return Response({
+            "status": "1",
+            "message": "success",
+            "total_tasks": total_tasks,
+            "not_started": not_started_tasks,
+            "in_progress": in_progress_tasks,
+            "completed": completed_tasks,
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
 
 
 class TaskListByProjectMember(APIView):

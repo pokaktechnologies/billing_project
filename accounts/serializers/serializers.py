@@ -793,6 +793,19 @@ class ReceiptSerializer(serializers.ModelSerializer):
     def get_gst_number(self, obj):
         return obj.client.gst_number if obj.client else None
     
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        if 'tax_rate' in ret and ret['tax_rate'] is not None:
+            # Remove trailing zeros from tax_rate
+            try:
+                rate = Decimal(str(ret['tax_rate']))
+                normalized = rate.normalize()
+                # Ensure we don't use scientific notation and return as string/float as per serializer field type
+                ret['tax_rate'] = format(normalized, 'f')
+            except Exception:
+                pass
+        return ret
+    
 
     
 class ReceiptForInvoiceSerializer(serializers.ModelSerializer):
@@ -804,6 +817,16 @@ class ReceiptForInvoiceSerializer(serializers.ModelSerializer):
 
     def get_invoice_number(self, obj):
         return obj.invoice.invoice_number if obj.invoice else None
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        if 'tax_rate' in ret and ret['tax_rate'] is not None:
+            try:
+                rate = Decimal(str(ret['tax_rate']))
+                ret['tax_rate'] = format(rate.normalize(), 'f')
+            except Exception:
+                pass
+        return ret
 
 class PrintReceiptSerializer(serializers.ModelSerializer):
     # termsandconditions = serializers.SerializerMethodField()
@@ -834,6 +857,16 @@ class PrintReceiptSerializer(serializers.ModelSerializer):
     def get_salesperson(self, obj):
         salesperson = obj.client.salesperson
         return SalesPersonSerializer(salesperson).data if salesperson else None
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        if 'tax_rate' in ret and ret['tax_rate'] is not None:
+            try:
+                rate = Decimal(str(ret['tax_rate']))
+                ret['tax_rate'] = format(rate.normalize(), 'f')
+            except Exception:
+                pass
+        return ret
 
 
 
@@ -1720,6 +1753,13 @@ class ReceiptCreateSerializer(serializers.Serializer):
     def validate_receipt_number(self, value):
         if ReceiptModel.objects.filter(receipt_number=value).exists():
             raise serializers.ValidationError("This receipt number already exists. Please use a unique number.")
+        return value
+
+    def validate_tax_rate(self, value):
+        if value is not None:
+            # Round to 2 decimal places using ROUND_HALF_UP
+            from decimal import ROUND_HALF_UP
+            return value.quantize(Decimal("0.00"), rounding=ROUND_HALF_UP)
         return value
 
     def validate(self, data):

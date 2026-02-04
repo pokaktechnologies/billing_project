@@ -3805,3 +3805,30 @@ class PendingInvoiceListView(APIView):
 
         serializer = InvoiceListSerializer(invoices, many=True)
         return Response(serializer.data)
+
+class InvoicesByClientAPI(APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'invoice'
+
+    def get(self, request, client_id=None):
+        if not client_id:
+            return Response({
+                "status": "0",
+                "message": "Client ID is required."
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        invoices = InvoiceModel.objects.filter(client_id=client_id).order_by('-created_at')
+        
+        if not invoices.exists():
+            return Response({
+                "status": "1",
+                "message": "No invoices found for this client.",
+                "data": []
+            }, status=status.HTTP_200_OK)
+
+        serializer = InvoiceListSerializer(invoices, many=True)
+        return Response({
+            "status": "1",
+            "message": "Success",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)

@@ -848,8 +848,7 @@ class UpdateDeliveryChallanAPI(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)    
 
 class ProductListCreateAPIView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'products'
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         products = Product.objects.select_related(
@@ -881,8 +880,7 @@ class ProductListCreateAPIView(APIView):
 
 
 class ProductDetailAPI(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'products'
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, product_id):
         product = get_object_or_404(Product, id=product_id)
@@ -3826,6 +3824,35 @@ class InvoicesByClientAPI(APIView):
                 "data": []
             }, status=status.HTTP_200_OK)
 
+        serializer = InvoiceListSerializer(invoices, many=True)
+        return Response({
+            "status": "1",
+            "message": "Success",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+
+
+class InvoicesByInternAPI(APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'invoice'
+    def get(self, request, intern_id=None):
+        if not intern_id:
+            return Response({
+                "status": "0",
+                "message": "Intern ID is required."
+            }, status=status.HTTP_400_BAD_REQUEST)
+        invoices = InvoiceModel.objects.filter(
+            intern_id=intern_id
+            # intern__job_detail__job_type='internship'
+        ).order_by('-created_at')
+        
+        if not invoices.exists():
+            return Response({
+                "status": "1",
+                "message": "No invoices found for this intern.",
+                "data": []
+            }, status=status.HTTP_200_OK)
         serializer = InvoiceListSerializer(invoices, many=True)
         return Response({
             "status": "1",

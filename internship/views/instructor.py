@@ -231,12 +231,34 @@ class CourseEnrolledStudentsListAPIView(APIView):
     required_module = "instructor"
 
     def get(self, request, course_id):
+
+        #search by student name
+        student_name_search = request.query_params.get("student_name")
+
+        #filter by enrollment date range
+        enrollment_date_from = request.query_params.get("date_from")
+        enrollment_date_to = request.query_params.get("date_to")
+
+        #filter by course
         try:
             course = Course.objects.get(id=course_id)
         except Course.DoesNotExist:
             return Response({"detail": "Course not found."}, status=404)
         
         assigned_staff_courses = AssignedStaffCourse.objects.filter(course=course).select_related("staff__user")
+
+        #search by student name (first name) if query param provided
+        if student_name_search:
+            assigned_staff_courses = assigned_staff_courses.filter(
+                staff__user__first_name__icontains=student_name_search
+            )
+
+        #filter by enrollment date range if query params provided
+        if enrollment_date_from:
+            assigned_staff_courses = assigned_staff_courses.filter(assigned_date__gte=enrollment_date_from)
+        if enrollment_date_to:
+            assigned_staff_courses = assigned_staff_courses.filter(assigned_date__lte=enrollment_date_to)
+            
         serializer = AssignedStaffCourseSerializer(assigned_staff_courses, many=True)
         return Response(
             {

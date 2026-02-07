@@ -1621,14 +1621,8 @@ class InvoiceSerializer(serializers.ModelSerializer):
 
 
 class InvoiceListSerializer(serializers.ModelSerializer):
-    client_name = serializers.CharField(
-        source='client.first_name',
-        read_only=True
-    )
-    intern_name = serializers.CharField(
-        source='intern.user.first_name',
-        read_only=True
-    )
+    client_name = serializers.SerializerMethodField()
+    intern_name = serializers.SerializerMethodField()
     pending_amount = serializers.SerializerMethodField()
     effective_tax_rate = serializers.SerializerMethodField()
     tax_rate = serializers.SerializerMethodField()
@@ -1652,6 +1646,12 @@ class InvoiceListSerializer(serializers.ModelSerializer):
             "total_amount_without_tax",
             "created_at",
         ]
+
+    def get_client_name(self, obj):
+        return obj.client.first_name if obj.client else None
+
+    def get_intern_name(self, obj):
+        return obj.intern.user.first_name if obj.intern else None
 
     def get_pending_amount(self, obj):
         receipt = ReceiptModel.objects.filter(invoice=obj).aggregate(

@@ -2094,7 +2094,10 @@ class ReceiptView(APIView):
 
     def get(self, request, rec_id=None):
         if rec_id:
-            receipt = get_object_or_404(ReceiptModel, id=rec_id)
+            if request.user.is_superuser:
+                receipt = get_object_or_404(ReceiptModel, id=rec_id)
+            else:
+                receipt = get_object_or_404(ReceiptModel, id=rec_id, user=request.user)
             serializer = ReceiptSerializer(receipt)
             return Response({
                 'Status': '1',
@@ -2102,7 +2105,10 @@ class ReceiptView(APIView):
                 'Data': [serializer.data] 
             })
         else:
-            receipts = ReceiptModel.objects.all().order_by('-created_at')
+            if request.user.is_superuser:
+                receipts = ReceiptModel.objects.all().order_by('-created_at')
+            else:
+                receipts = ReceiptModel.objects.filter(user=request.user).order_by('-created_at')   
             serializer = ReceiptSerializer(receipts, many=True)
 
         return Response({
@@ -3747,9 +3753,10 @@ class InvoiceDetailAPI(APIView):
     required_module = 'invoice'
 
     def get(self, request, ioid):
-        invoice = get_object_or_404(
-            InvoiceModel, id=ioid, user=request.user
-        )
+        if request.user.is_superuser:
+            invoice = get_object_or_404(InvoiceModel, id=ioid)
+        else:
+            invoice = get_object_or_404(InvoiceModel, id=ioid, user=request.user)
         serializer = InvoiceSerializer(
             invoice,
             context={"request": request}

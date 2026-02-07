@@ -1648,10 +1648,10 @@ class InvoiceListSerializer(serializers.ModelSerializer):
         ]
 
     def get_client_name(self, obj):
-        return obj.client.first_name if obj.client else None
+        return f"{obj.client.first_name} {obj.client.last_name}" if obj.client else None
 
     def get_intern_name(self, obj):
-        return obj.intern.user.first_name if obj.intern else None
+        return f"{obj.intern.user.first_name} {obj.intern.user.last_name}" if obj.intern else None
 
     def get_pending_amount(self, obj):
         receipt = ReceiptModel.objects.filter(invoice=obj).aggregate(

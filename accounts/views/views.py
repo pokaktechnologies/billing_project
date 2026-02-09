@@ -2237,10 +2237,6 @@ class ReceiptView(APIView):
 
             receipt.delete()
 
-            if invoice:
-                invoice.is_receipted = False
-                invoice.save(update_fields=["is_receipted"])
-
         return Response(
             {"status": "1", "message": "Receipt and related journals deleted successfully."},
             status=status.HTTP_200_OK
@@ -3854,12 +3850,6 @@ class InvoiceDetailAPI(APIView):
             invoice = get_object_or_404(InvoiceModel, id=ioid)
         else:
             invoice = get_object_or_404(InvoiceModel, id=ioid, user=request.user)
-
-        if invoice.is_receipted:
-            return Response(
-                {"error": "Posted invoices cannot be modified"},
-                status=400
-            )
 
         updater = InvoiceFactory.get_updater(invoice)
         invoice = updater.update(invoice, request.data, request.user)

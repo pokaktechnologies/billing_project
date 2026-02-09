@@ -36,10 +36,6 @@ class ClientReceiptService:
                 # preserving view logic for debit/credit lookup for journals 
             )
 
-            # Update Invoice status
-            if invoice:
-                invoice.is_receipted = True
-                invoice.save(update_fields=['is_receipted'])
 
             # Journal Entry Creation is currently handled in the View using debit/credit IDs from request.
             # To strictly follow the service pattern, we should move it here. 
@@ -139,11 +135,6 @@ class InternReceiptService:
                 prepared_by=data.get("prepared_by", ""),
                 recived_by=data.get("recived_by", ""),
             )
-
-            # Update Invoice status
-            if invoice:
-                invoice.is_receipted = True
-                invoice.save(update_fields=['is_receipted'])
 
             InternReceiptService._create_journal(receipt, user, data)
 

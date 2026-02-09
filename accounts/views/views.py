@@ -41,6 +41,17 @@ from finance.models import *
 
 from rest_framework_simplejwt.views import TokenObtainPairView
 
+#------------
+#  pagination class
+#--------------
+from rest_framework.pagination import PageNumberPagination
+class Pagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 50
+
+
+
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
@@ -851,15 +862,35 @@ class ProductListCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        products = Product.objects.select_related(
+        search = request.query_params.get('search')
+        category = request.query_params.get('category')
+        unit = request.query_params.get('unit')
+
+        products = Product.objects.all()
+
+        if search:
+            products = products.filter(name__icontains=search)
+
+        if category:
+            products = products.filter(category_id=category)
+
+        if unit:
+            products = products.filter(unit_id=unit)
+
+        products = products.select_related(
             'unit', 'category', 'tax_setting'
         )
-        serializer = ProductSerializer(products, many=True)
-        return Response({
+
+        #pagination
+        paginator = Pagination()
+
+        paginated_products = paginator.paginate_queryset(products, request)
+        serializer = ProductSerializer(paginated_products, many=True)
+        return paginator.get_paginated_response({
             "Status": "1",
             "message": "Success",
             "Data": serializer.data
-        }, status=status.HTTP_200_OK)
+        })
 
     def post(self, request):
         serializer = ProductSerializer(data=request.data)
@@ -931,20 +962,42 @@ class SalesPersonListCreateAPIView(APIView):
         return [permission() for permission in permission_classes]
     
     def get(self, request, pk=None):
+        
+        #search 
+        search = request.query_params.get('search')
+
         if pk:
-            salesperson = get_object_or_404(SalesPerson, pk=pk)
+            queryset = SalesPerson.objects.filter(pk=pk)
+            salesperson = get_object_or_404(queryset)
             serializer = SalesPersonSerializer(salesperson)
+            data = [serializer.data]
             return Response(
-                {"Status": "1", "message": "Success", "Data": [serializer.data]},
+                {"Status": "1", "message": "Success", "Data": data},
                 status=status.HTTP_200_OK
             )
         else:
-            salespersons = SalesPerson.objects.all()
-            serializer = SalesPersonSerializer(salespersons, many=True)
-            return Response(
-                {"Status": "1", "message": "Success", "Data": serializer.data},
-                status=status.HTTP_200_OK
+            queryset = SalesPerson.objects.all()
+
+            if search:
+                queryset = queryset.filter(
+                    Q(first_name__icontains=search) |
+                    Q(last_name__icontains=search) |
+                    Q(email__icontains=search) |
+                    Q(phone__icontains=search)
+                )
+            
+            queryset = queryset.order_by('-created_at')
+
+            paginator = Pagination()
+            paginated_queryset = paginator.paginate_queryset(queryset, request)
+
+            serializer = SalesPersonSerializer(paginated_queryset, many=True)
+            data = serializer.data
+
+            return paginator.get_paginated_response(
+                {"Status": "1", "message": "Success", "Data": data},
             )
+
 
     def post(self, request):
         serializer = SalesPersonSerializer(data=request.data)
@@ -3122,24 +3175,48 @@ class StateView(APIView):
 class CustomerListCreateAPIView(APIView):
 
     def get(self, request, pk=None):
+
+        search = request.query_params.get('search')
+        customer_type = request.query_params.get('customer_type')
+
         if pk:
             customer = get_object_or_404(Customer, pk=pk)
             serializer = CustomerSerializer(customer)
-            response_data = {
-                "Status": "1",
-                "message": "Success",
-                "Data": [serializer.data]  # Returning data inside an array
-            }
-        else:
-            customers = Customer.objects.all()
-            serializer = CustomerSerializer(customers, many=True)
-            response_data = {
-                "Status": "1",
-                "message": "Success",
-                "Data": serializer.data  # Returning list of customers
-            }
-        
-        return Response(response_data, status=status.HTTP_200_OK)
+
+            return Response(
+                {
+                    "Status": "1",
+                    "message": "Success",
+                    "Data": [serializer.data]
+                },
+                status=status.HTTP_200_OK
+            )
+
+        queryset = Customer.objects.all()
+
+        if search:
+            queryset = queryset.filter(
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search) |
+                Q(email__icontains=search) |
+                Q(phone__icontains=search) |
+                Q(company_name__icontains=search)
+            )
+
+        if customer_type:
+            queryset = queryset.filter(customer_type=customer_type)
+
+        paginator = Pagination()
+        paginated_queryset = paginator.paginate_queryset(queryset, request)
+
+        serializer = CustomerSerializer(paginated_queryset, many=True)
+
+        return paginator.get_paginated_response({
+            "Status": "1",
+            "message": "Success",
+            "Data": serializer.data
+        })
+
 
     # POST - Create a new customer
     def post(self, request):

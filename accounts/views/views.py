@@ -931,20 +931,36 @@ class SalesPersonListCreateAPIView(APIView):
         return [permission() for permission in permission_classes]
     
     def get(self, request, pk=None):
+        
+        #search 
+        search = request.query_params.get('search')
+
         if pk:
-            salesperson = get_object_or_404(SalesPerson, pk=pk)
-            serializer = SalesPersonSerializer(salesperson)
-            return Response(
-                {"Status": "1", "message": "Success", "Data": [serializer.data]},
-                status=status.HTTP_200_OK
-            )
+            queryset = SalesPerson.objects.filter(pk=pk)
         else:
-            salespersons = SalesPerson.objects.all()
-            serializer = SalesPersonSerializer(salespersons, many=True)
-            return Response(
-                {"Status": "1", "message": "Success", "Data": serializer.data},
-                status=status.HTTP_200_OK
-            )
+            queryset = SalesPerson.objects.all()
+
+            if search:
+                queryset = queryset.filter(
+                    Q(first_name__icontains=search) |
+                    Q(last_name__icontains=search) |
+                    Q(email__icontains=search) |
+                    Q(phone__icontains=search)
+                )
+
+        if pk:
+            salesperson = get_object_or_404(queryset)
+            serializer = SalesPersonSerializer(salesperson)
+            data = [serializer.data]
+        else:
+            serializer = SalesPersonSerializer(queryset, many=True)
+            data = serializer.data
+
+        return Response(
+            {"Status": "1", "message": "Success", "Data": data},
+            status=status.HTTP_200_OK
+        )
+
 
     def post(self, request):
         serializer = SalesPersonSerializer(data=request.data)

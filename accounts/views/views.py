@@ -998,8 +998,7 @@ class SalesPersonListCreateAPIView(APIView):
                     Q(phone__icontains=search)
                 )
             
-            queryset = queryset.order_by('-created_at')
-
+            #pagination
             paginator = Pagination()
             paginated_queryset = paginator.paginate_queryset(queryset, request)
 

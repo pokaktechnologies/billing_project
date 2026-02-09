@@ -968,6 +968,13 @@ class SalesPersonListCreateAPIView(APIView):
 
         if pk:
             queryset = SalesPerson.objects.filter(pk=pk)
+            salesperson = get_object_or_404(queryset)
+            serializer = SalesPersonSerializer(salesperson)
+            data = [serializer.data]
+            return Response(
+                {"Status": "1", "message": "Success", "Data": data},
+                status=status.HTTP_200_OK
+            )
         else:
             queryset = SalesPerson.objects.all()
 
@@ -978,19 +985,18 @@ class SalesPersonListCreateAPIView(APIView):
                     Q(email__icontains=search) |
                     Q(phone__icontains=search)
                 )
+            
+            queryset = queryset.order_by('-created_at')
 
-        if pk:
-            salesperson = get_object_or_404(queryset)
-            serializer = SalesPersonSerializer(salesperson)
-            data = [serializer.data]
-        else:
-            serializer = SalesPersonSerializer(queryset, many=True)
+            paginator = Pagination()
+            paginated_queryset = paginator.paginate_queryset(queryset, request)
+
+            serializer = SalesPersonSerializer(paginated_queryset, many=True)
             data = serializer.data
 
-        return Response(
-            {"Status": "1", "message": "Success", "Data": data},
-            status=status.HTTP_200_OK
-        )
+            return paginator.get_paginated_response(
+                {"Status": "1", "message": "Success", "Data": data},
+            )
 
 
     def post(self, request):
@@ -3163,24 +3169,48 @@ class StateView(APIView):
 class CustomerListCreateAPIView(APIView):
 
     def get(self, request, pk=None):
+
+        search = request.query_params.get('search')
+        customer_type = request.query_params.get('customer_type')
+
         if pk:
             customer = get_object_or_404(Customer, pk=pk)
             serializer = CustomerSerializer(customer)
-            response_data = {
-                "Status": "1",
-                "message": "Success",
-                "Data": [serializer.data]  # Returning data inside an array
-            }
-        else:
-            customers = Customer.objects.all()
-            serializer = CustomerSerializer(customers, many=True)
-            response_data = {
-                "Status": "1",
-                "message": "Success",
-                "Data": serializer.data  # Returning list of customers
-            }
-        
-        return Response(response_data, status=status.HTTP_200_OK)
+
+            return Response(
+                {
+                    "Status": "1",
+                    "message": "Success",
+                    "Data": [serializer.data]
+                },
+                status=status.HTTP_200_OK
+            )
+
+        queryset = Customer.objects.all()
+
+        if search:
+            queryset = queryset.filter(
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search) |
+                Q(email__icontains=search) |
+                Q(phone__icontains=search) |
+                Q(company_name__icontains=search)
+            )
+
+        if customer_type:
+            queryset = queryset.filter(customer_type=customer_type)
+
+        paginator = Pagination()
+        paginated_queryset = paginator.paginate_queryset(queryset, request)
+
+        serializer = CustomerSerializer(paginated_queryset, many=True)
+
+        return paginator.get_paginated_response({
+            "Status": "1",
+            "message": "Success",
+            "Data": serializer.data
+        })
+
 
     # POST - Create a new customer
     def post(self, request):

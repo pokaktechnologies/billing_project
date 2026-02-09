@@ -19,6 +19,19 @@ from ..serializers.LeadsSerializers import *
 from ..utils import log_activity
 
 
+#------------
+#  pagination class
+#--------------
+from rest_framework.pagination import PageNumberPagination
+class Pagination(PageNumberPagination):
+    page_size_query_param = 'page_size'
+
+    def get_page_size(self, request):
+        page_size = request.query_params.get('page_size')
+        if page_size is None:
+            return None
+        return int(page_size)
+
 class SalesPersonBaseView(APIView):
     def get_salesperson(self, user):
         try:
@@ -94,13 +107,26 @@ class StaffLeadView(APIView):
             
         leads = leads.order_by('-created_at')
 
-        serializer = LeadSerializerListDisplay(leads, many=True)
+        # Pagination 
+        paginator = Pagination()
+        paginated_leads = paginator.paginate_queryset(leads, request)
+
+        if paginated_leads is not None:
+            serializer = LeadSerializerListDisplay(paginated_leads, many=True)
+            
+            return paginator.get_paginated_response({
+                "status": "1",
+                "message": "success",
+                "data": serializer.data
+            })
         
+        serializer = LeadSerializerListDisplay(leads, many=True)
+
         return Response({
             "status": "1",
             "message": "success",
             "data": serializer.data
-        }, status=status.HTTP_200_OK)
+        })
 
 
     def post(self, request):
@@ -284,8 +310,20 @@ class StaffFollowUpView(SalesPersonBaseView,APIView):
 
         followups = followups.order_by('-created_at')
 
-        serializer = FollowUpSerializer(followups, many=True)
+        # PAGINATION
+        paginator = Pagination()
+        paginated_followups = paginator.paginate_queryset(followups, request)
 
+        if paginated_followups is not None:
+            serializer = FollowUpSerializer(paginated_followups, many=True)
+
+            return paginator.get_paginated_response({
+                "status": "1",
+                "message": "success",
+                "data": serializer.data
+            })
+        
+        serializer = FollowUpSerializer(followups, many=True)
         return Response({
             "status": "1",
             "message": "success",
@@ -572,10 +610,15 @@ class MeetingsView(SalesPersonBaseView, APIView):
             elif filter_by == "overdue":
                 meetings = meetings.filter(date__lt=today)
 
+        paginator = Pagination()
+        paginated_meetings = paginator.paginate_queryset(meetings, request)
+        if paginated_meetings is not None:
+
+            serializer = MeetingSerializerDisplay(paginated_meetings, many=True)
+            return paginator.get_paginated_response({"status": "1", "message": "success", "data": serializer.data})
+
         serializer = MeetingSerializerDisplay(meetings, many=True)
-
         return Response({"status": "1", "message": "success", "data": serializer.data})
-
 
     # CREATE MEETING
     def post(self, request):
@@ -808,15 +851,17 @@ class RemindersView(SalesPersonBaseView, APIView):
     def get(self, request):
         salesperson = self.get_salesperson(request.user)
         if not salesperson:
-            return Response({"status": "0", "message": "No salesperson assigned"}, status=400)
+            return Response(
+                {"status": "0", "message": "No salesperson assigned"},
+                status=400
+            )
 
         reminders = Reminders.objects.filter(lead__salesperson=salesperson)
 
-        # Filters
         title = request.query_params.get('title')
         reminder_type = request.query_params.get('type')
         status_param = request.query_params.get('status')
-        filter_by = request.query_params.get('filter_by')  # today, upcoming, overdue, completed
+        filter_by = request.query_params.get('filter_by')
 
         if title:
             reminders = reminders.filter(title__icontains=title)
@@ -824,25 +869,51 @@ class RemindersView(SalesPersonBaseView, APIView):
         if reminder_type:
             reminders = reminders.filter(type=reminder_type)
 
-        if status_param:
-            reminders = reminders.filter(status=status_param)
-
         today = date.today()
+
+        # filter_by has priority
         if filter_by:
             if filter_by == 'today':
                 reminders = reminders.filter(date=today)
+
             elif filter_by == 'upcoming':
                 reminders = reminders.filter(date__gt=today)
+
             elif filter_by == 'overdue':
-                reminders = reminders.filter(status='scheduled', date__lt=today)
+                reminders = reminders.filter(
+                    status='scheduled',
+                    date__lt=today
+                )
+
             elif filter_by == 'completed':
                 reminders = reminders.filter(status='completed')
+
             else:
-                return Response({"status": "0", "message": "Invalid filter_by value"}, status=400)
+                return Response(
+                    {"status": "0", "message": "Invalid filter_by value"},
+                    status=400
+                )
+        else:
+            if status_param:
+                reminders = reminders.filter(status=status_param)
 
         reminders = reminders.order_by('-date')
+
+        paginator = Pagination()
+        paginated_reminders = paginator.paginate_queryset(reminders, request)
+
+        if paginated_reminders is not None:
+
+            serializer = RemindersGetSerializer(paginated_reminders, many=True)
+            return paginator.get_paginated_response({
+                "status": "1",
+                "message": "success",
+                "data": serializer.data
+            })
+        
         serializer = RemindersGetSerializer(reminders, many=True)
-        return Response({"status": "1", "message": "success", "data": serializer.data}, status=200)
+        return Response({"status": "1", "message": "success", "data": serializer.data})
+
 
     def post(self, request):
         salesperson = self.get_salesperson(request.user)

@@ -41,6 +41,17 @@ from finance.models import *
 
 from rest_framework_simplejwt.views import TokenObtainPairView
 
+#------------
+#  pagination class
+#--------------
+from rest_framework.pagination import PageNumberPagination
+class Pagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 50
+
+
+
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
@@ -851,15 +862,35 @@ class ProductListCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        products = Product.objects.select_related(
+        search = request.query_params.get('search')
+        category = request.query_params.get('category')
+        unit = request.query_params.get('unit')
+
+        products = Product.objects.all()
+
+        if search:
+            products = products.filter(name__icontains=search)
+
+        if category:
+            products = products.filter(category_id=category)
+
+        if unit:
+            products = products.filter(unit_id=unit)
+
+        products = products.select_related(
             'unit', 'category', 'tax_setting'
         )
-        serializer = ProductSerializer(products, many=True)
-        return Response({
+
+        #pagination
+        paginator = Pagination()
+
+        paginated_products = paginator.paginate_queryset(products, request)
+        serializer = ProductSerializer(paginated_products, many=True)
+        return paginator.get_paginated_response({
             "Status": "1",
             "message": "Success",
             "Data": serializer.data
-        }, status=status.HTTP_200_OK)
+        })
 
     def post(self, request):
         serializer = ProductSerializer(data=request.data)

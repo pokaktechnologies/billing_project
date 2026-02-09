@@ -20,8 +20,8 @@ def create_daily_attendance_records():
     from accounts.models import CustomUser
     now = timezone.localtime()
     today = timezone.localdate()
-    if is_sunday():
-        print("🛑 Sunday detected — skipping attendance creation.")
+    if is_sunday() or Holiday.objects.filter(date=today).exists():
+        print("🛑 Sunday or Holiday detected — skipping attendance creation. ")
         return
     print(f"⏰ Creating daily attendance for {today}")
 
@@ -50,7 +50,7 @@ def create_daily_attendance_records():
         daily_attendance, created = DailyAttendance.objects.get_or_create(
             staff=staff,
             date=today,
-            defaults={"status": "leave", "total_working_hours": 0.0}
+            defaults={"status": "absent", "total_working_hours": 0.0}
         )
 
         if created:

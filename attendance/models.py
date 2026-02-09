@@ -7,11 +7,12 @@ class DailyAttendance(models.Model):
     date = models.DateField(default=timezone.localdate)
     total_working_hours = models.DecimalField(max_digits=5, decimal_places=2, default=0.0)
     STATUS_CHOICES = [
-        ("leave", "Leave"),
-        ("half_day", "Half Day"),
-        ("full_day", "Full Day"),
+    ("absent", "Absent"),        # default
+    ("leave", "Approved Leave"), # HR-approved only
+    ("half_day", "Half Day"),
+    ("full_day", "Full Day"),
     ]
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="leave")
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="absent")
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -50,3 +51,12 @@ class AttendanceSession(models.Model):
 
     def __str__(self):
         return f"{self.session} - {self.status} - {self.daily_attendance.staff.user.email} "
+
+
+class Holiday(models.Model):
+    date = models.DateField(unique=True)
+    name = models.CharField(max_length=100)
+    is_paid = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"{self.name} - {self.date} - {self.is_paid}"

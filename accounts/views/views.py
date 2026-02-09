@@ -2145,7 +2145,10 @@ class ReceiptView(APIView):
         }, status=status.HTTP_201_CREATED)
 
     def patch(self, request, rec_id=None):
-        receipt = get_object_or_404(ReceiptModel, id=rec_id)
+        if request.user.is_superuser:
+            receipt = get_object_or_404(ReceiptModel, id=rec_id)
+        else:
+            receipt = get_object_or_404(ReceiptModel, id=rec_id, user=request.user)
         
         serializer = ReceiptSerializer(receipt, data=request.data, partial=True)
         if serializer.is_valid():
@@ -2162,7 +2165,10 @@ class ReceiptView(APIView):
             )
 
         with transaction.atomic():
-            receipt = get_object_or_404(ReceiptModel, id=rec_id)
+            if request.user.is_superuser:
+                receipt = get_object_or_404(ReceiptModel, id=rec_id)
+            else:
+                receipt = get_object_or_404(ReceiptModel, id=rec_id, user=request.user)
             invoice = receipt.invoice
             receipt_number = receipt.receipt_number
 
@@ -3767,9 +3773,10 @@ class InvoiceDetailAPI(APIView):
         })
 
     def patch(self, request, ioid):
-        invoice = get_object_or_404(
-            InvoiceModel, id=ioid, user=request.user
-        )
+        if request.user.is_superuser:
+            invoice = get_object_or_404(InvoiceModel, id=ioid)
+        else:
+            invoice = get_object_or_404(InvoiceModel, id=ioid, user=request.user)
 
         if invoice.is_receipted:
             return Response(
@@ -3785,9 +3792,10 @@ class InvoiceDetailAPI(APIView):
             status=200
         )
     def delete(self, request, ioid):
-        invoice = get_object_or_404(
-            InvoiceModel, id=ioid, user=request.user
-        )
+        if request.user.is_superuser:
+            invoice = get_object_or_404(InvoiceModel, id=ioid)
+        else:
+            invoice = get_object_or_404(InvoiceModel, id=ioid, user=request.user)
         invoice.delete()
         return Response({"status": 1, "message": "Invoice deleted"})
 

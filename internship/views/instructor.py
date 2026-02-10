@@ -392,6 +392,15 @@ class TaskListCreateAPIView(generics.ListCreateAPIView):
         title = self.request.query_params.get("title")
         intern_ids = self.request.query_params.get("intern")
         course = self.request.query_params.get("course")
+        status = self.request.query_params.get("status")  # pending, submitted, revision_required, completed
+
+        #assigned date
+        assigned_from = self.request.query_params.get("assigned_from")
+        assigned_to = self.request.query_params.get("assigned_to")
+
+        #due date
+        due_from = self.request.query_params.get("due_from")
+        due_to = self.request.query_params.get("due_to")
 
         if course:
             qs =  qs.filter(course_id=course)
@@ -399,11 +408,30 @@ class TaskListCreateAPIView(generics.ListCreateAPIView):
         if title:
             qs = qs.filter(title__icontains=title)
 
+        #intern-based filtering
         if intern_ids:
             staff_ids = [int(x) for x in intern_ids.split(",") if x.isdigit()]
-            qs = qs.filter(assignments__staff_id__in=staff_ids).distinct()
+            qs = qs.filter(assignments__staff_id__in=staff_ids)
 
-        return qs
+            #status ONLY when intern exists
+            if status:
+                qs = qs.filter(assignments__status=status)
+
+            #assigned_at date range
+            if assigned_from:
+                qs = qs.filter(assignments__assigned_at__date__gte=assigned_from)
+            if assigned_to:
+                qs = qs.filter(assignments__assigned_at__date__lte=assigned_to)
+
+            #revision_due_date range
+            if due_from:
+                qs = qs.filter(assignments__revision_due_date__gte=due_from)
+            if due_to:
+                qs = qs.filter(assignments__revision_due_date__lte=due_to)
+
+        return qs.distinct()
+    
+
 class TaskRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Task.objects.all()
     serializer_class = TaskSerializer

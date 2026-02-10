@@ -3394,8 +3394,13 @@ class BankAccountAPI(APIView):
 
 
 class TermsAndConditionsAPI(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'setup'
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [AllowAny()] 
+        return [IsAuthenticated(), HasModulePermission()]
+        
     def get(self, request, pk=None):
         if pk:
             term = get_object_or_404(TermsAndConditions, pk=pk)
@@ -3428,8 +3433,13 @@ class TermsAndConditionsAPI(APIView):
 
 
 class TermsAndConditionsPointAPI(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'setup'
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [AllowAny()] 
+        return [IsAuthenticated(), HasModulePermission()]
+        
     def get(self, request, pk=None):
         if pk:
             point = get_object_or_404( TermsAndConditionsPoint, pk=pk)
@@ -3461,8 +3471,13 @@ class TermsAndConditionsPointAPI(APIView):
         return Response({"status": "1", "message": "Point deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
 
 class ListTermsandConditionsPointsAPI(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'setup'
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [AllowAny()] 
+        return [IsAuthenticated(), HasModulePermission()]
+        
     def get(self, request, term_id=None):
         if term_id is None:
             return Response({"status": "0", "message": "Invalid Term ID"}, status=status.HTTP_400_BAD_REQUEST)
@@ -3650,8 +3665,13 @@ class MaterialReceiveAPIView(APIView):
 
 
 class ContractListCreateAPIView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'setup'
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [AllowAny()] 
+        return [IsAuthenticated(), HasModulePermission()]
+
     def get(self, request, contract_id=None):
         if contract_id:
             contract = get_object_or_404(Contract, id=contract_id, is_template=True)
@@ -3684,9 +3704,13 @@ class ContractListCreateAPIView(APIView):
 
 
 class ContractDetailViewApiView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'setup'
-    
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [AllowAny()]   
+        return [IsAuthenticated(), HasModulePermission()]
+
     def get(self, request, contract_id):
         contract = get_object_or_404(Contract, id=contract_id, is_template=True)
         serializer = ContractDetailSerializer(contract)
@@ -3696,8 +3720,13 @@ class ContractDetailViewApiView(APIView):
 
 # Section
 class ContractSectionListCreateAPIView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'setup'
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [AllowAny()]   
+        return [IsAuthenticated(), HasModulePermission()]
+        
     def get(self, request, contract_id, section_id=None):
         if section_id:
             section = get_object_or_404(ContractSection, contract_id=contract_id, id=section_id)
@@ -3733,8 +3762,13 @@ class ContractSectionListCreateAPIView(APIView):
 
 # Point
 class ContractPointListCreateAPIView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'setup'
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [AllowAny()]   
+        return [IsAuthenticated(), HasModulePermission()]
+        
     def get(self, request, contract_id, section_id, point_id=None):
         if point_id:
             point = get_object_or_404(

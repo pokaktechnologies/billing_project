@@ -1,130 +1,15 @@
-from rest_framework import generics
-from rest_framework.permissions import IsAuthenticated
-from django.utils import timezone
-from .models import DailyAttendance
-from accounts.models import JobDetail, StaffProfile
-from .serializers import DailyAttendanceSerializer
-from rest_framework import generics, filters
-from rest_framework.permissions import IsAuthenticated
-from django_filters.rest_framework import DjangoFilterBackend
-from .serializers import DailyAttendanceSerializer, DailyAttendanceEmployeeViewSerializer,DailyAttendanceSessionDetailSerializer
-from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.db.models import Avg
-from django.utils.dateparse import parse_date
-from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 from django.utils import timezone
 from datetime import datetime
-from django.db.models import Avg
-from django.db.models import Count, Q, Sum
-
-
-class DailyAttendanceListView(generics.ListAPIView):
-    queryset = DailyAttendance.objects.all()
-    serializer_class = DailyAttendanceSerializer
-    permission_classes = [IsAuthenticated]
-
-    # Enable filtering and ordering
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-
-    # Filters by exact match fields
-    filterset_fields = {
-        'staff': ['exact'],       # filter by staff ID
-        'status': ['exact'],      # leave, half_day, full_day
-        'date': ['exact', 'gte', 'lte'],  # specific date or date range
-    }
-
-    # Ordering fields
-    ordering_fields = ['date', 'status', 'staff']
-    ordering = ['-date']  # default ordering
-
-# 2. Get today's attendance records
-class DailyAttendanceTodayView(generics.ListAPIView):
-    serializer_class = DailyAttendanceSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_queryset(self):
-        today = timezone.localdate()
-        return DailyAttendance.objects.filter(date=today).order_by('-date')
-
-
-# 3. Get attendance details by ID
-class DailyAttendanceDetailView(generics.RetrieveAPIView):
-    queryset = DailyAttendance.objects.all()
-    serializer_class = DailyAttendanceSerializer
-    permission_classes = [IsAuthenticated]
-    lookup_field = 'id'
-
-
-class DailyAttendanceEmployeeView(generics.ListAPIView):
-    permission_classes = [IsAuthenticated]
-    lookup_field = 'id'
-
-    def get(self, request, id):
-        staff_detail = JobDetail.objects.get(staff__id=id)
-        serializer = DailyAttendanceEmployeeViewSerializer(staff_detail)
-        return Response(serializer.data, status=200)
-
-class DailyAttendanceDaysCountView(generics.ListAPIView):
-    def get(self, request, id):
-        queryset = DailyAttendance.objects.filter(staff__id=id)
-        serializer = DailyAttendanceEmployeeViewSerializer(queryset, many=True)
-
-        # 👇 status field in model is `leave`, `half_day`, `full_day`
-        present_days = queryset.filter(status='full_day').count()
-        absent_days = queryset.filter(status='leave').count()
-        half_days = queryset.filter(status='half_day').count()
-
-        data = {
-            "id": id,
-                "present_days": present_days,
-                "half_days": half_days,
-                "absent_days": absent_days,
-        }
-
-        return Response(data, status=200)
-
-class DailyAttendanceSessionView(generics.ListAPIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request, id):
-        start_date = request.query_params.get('start_date')
-        end_date = request.query_params.get('end_date')
-
-        queryset = DailyAttendance.objects.filter(staff__id=id)
-
-        if start_date and end_date:
-            start = parse_date(start_date)
-            end = parse_date(end_date)
-            if start > end:
-                raise ValidationError("Start date cannot be after end date.")
-
-        if start_date:
-            queryset = queryset.filter(date__gte=start)
-        if end_date:
-            queryset = queryset.filter(date__lte=end)
-
-        # ✅ total hours with date filter
-        hurs = queryset.aggregate(
-            total_hours=Sum('total_working_hours')
-        )['total_hours'] or 0
-
-        print(hurs)
-
-        queryset = queryset.order_by('-date')
-        serializer = DailyAttendanceSessionDetailSerializer(queryset, many=True)
-
-        return Response({
-            "total_working_hours": hurs,
-            "data": serializer.data
-        }, status=200)
+from django.db.models import Avg, Count, Q
+from ..models import DailyAttendance
+from accounts.models import StaffProfile
+from .attendance import DailyAttendanceTodayView
 
 class StaffAttendanceTodayView(APIView):
     permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        today_view = DailyAttendanceTodayView()
-        queryset = today_view.get_queryset()
 
     def get(self, request):
         # Base queryset from your existing view

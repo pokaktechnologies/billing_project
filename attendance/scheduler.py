@@ -14,10 +14,11 @@ def create_daily_attendance_records():
     close_old_connections()
     from django.utils import timezone
     from accounts.models import StaffProfile
-    from attendance.models import DailyAttendance, AttendanceSession
+    from attendance.models import DailyAttendance, AttendanceSession, Holiday
     from rest_framework_simplejwt.token_blacklist.models import OutstandingToken, BlacklistedToken
     from django.db.utils import OperationalError
     from accounts.models import CustomUser
+
     now = timezone.localtime()
     today = timezone.localdate()
     if is_sunday() or Holiday.objects.filter(date=today).exists():

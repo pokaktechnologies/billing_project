@@ -325,9 +325,13 @@ class JobApplicationWithoutJob(APIView):
 
 
 class JobApplicationPagination(PageNumberPagination):
-    page_size = 10
     page_size_query_param = 'page_size'
-    max_page_size = 100
+
+    def get_page_size(self, request):
+        page_size = request.query_params.get('page_size')
+        if page_size is None:
+            return None
+        return int(page_size)
 
 class JobApplicationListView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
@@ -337,8 +341,15 @@ class JobApplicationListView(APIView):
         
         paginator = JobApplicationPagination()
         result_page = paginator.paginate_queryset(applications, request)
-        serializer = JobApplicationListSerializer(result_page, many=True)
-        return paginator.get_paginated_response(serializer.data)
+
+        if result_page is not None:
+            serializer = JobApplicationListSerializer(result_page, many=True)
+            return paginator.get_paginated_response(serializer.data)
+
+        serializer = JobApplicationListSerializer(applications, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
 
 
 class JobApplicationDetailView(APIView):
@@ -415,10 +426,12 @@ class JobApplicationSearchView(APIView):
 
         paginator = JobApplicationPagination()
         result_page = paginator.paginate_queryset(applications, request)
-        serializer = JobApplicationListSerializer(result_page, many=True)
-        return paginator.get_paginated_response(serializer.data)
+        if result_page is not None:
+            serializer = JobApplicationListSerializer(result_page, many=True)
+            return paginator.get_paginated_response(serializer.data)
 
-
+        serializer = JobApplicationListSerializer(applications, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 

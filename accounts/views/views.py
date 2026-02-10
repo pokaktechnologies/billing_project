@@ -46,10 +46,13 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 #--------------
 from rest_framework.pagination import PageNumberPagination
 class Pagination(PageNumberPagination):
-    page_size = 10
     page_size_query_param = 'page_size'
-    max_page_size = 50
 
+    def get_page_size(self, request):
+        page_size = request.query_params.get('page_size')
+        if page_size is None:
+            return None 
+        return int(page_size)
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -885,8 +888,17 @@ class ProductListCreateAPIView(APIView):
         paginator = Pagination()
 
         paginated_products = paginator.paginate_queryset(products, request)
-        serializer = ProductSerializer(paginated_products, many=True)
-        return paginator.get_paginated_response({
+
+        if paginated_products is not None:
+            serializer = ProductSerializer(paginated_products, many=True)
+            return paginator.get_paginated_response({
+                "Status": "1",
+                "message": "Success",
+                "Data": serializer.data
+            })
+
+        serializer = ProductSerializer(products, many=True)
+        return Response({
             "Status": "1",
             "message": "Success",
             "Data": serializer.data
@@ -986,16 +998,24 @@ class SalesPersonListCreateAPIView(APIView):
                     Q(phone__icontains=search)
                 )
             
-            queryset = queryset.order_by('-created_at')
-
+            #pagination
             paginator = Pagination()
             paginated_queryset = paginator.paginate_queryset(queryset, request)
 
-            serializer = SalesPersonSerializer(paginated_queryset, many=True)
+            if paginated_queryset is not None:
+                serializer = SalesPersonSerializer(paginated_queryset, many=True)
+                data = serializer.data
+
+                return paginator.get_paginated_response(
+                    {"Status": "1", "message": "Success", "Data": data},
+                )
+
+            serializer = SalesPersonSerializer(queryset, many=True)
             data = serializer.data
 
-            return paginator.get_paginated_response(
+            return Response(
                 {"Status": "1", "message": "Success", "Data": data},
+                status=status.HTTP_200_OK
             )
 
 
@@ -3205,13 +3225,22 @@ class CustomerListCreateAPIView(APIView):
         paginator = Pagination()
         paginated_queryset = paginator.paginate_queryset(queryset, request)
 
-        serializer = CustomerSerializer(paginated_queryset, many=True)
-
-        return paginator.get_paginated_response({
-            "Status": "1",
-            "message": "Success",
-            "Data": serializer.data
-        })
+        if paginated_queryset is not None:
+            serializer = CustomerSerializer(paginated_queryset, many=True)
+            return paginator.get_paginated_response({
+                "Status": "1",
+                "message": "Success",
+                "Data": serializer.data
+            })
+        serializer = CustomerSerializer(queryset, many=True)
+        return Response(
+            {
+                "Status": "1",
+                "message": "Success",
+                "Data": serializer.data
+            },
+            status=status.HTTP_200_OK
+        )
 
 
     # POST - Create a new customer

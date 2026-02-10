@@ -14,7 +14,7 @@ def create_daily_attendance_records():
     close_old_connections()
     from django.utils import timezone
     from accounts.models import StaffProfile
-    from attendance.models import DailyAttendance, AttendanceSession, Holiday
+    from attendance.models import DailyAttendance, AttendanceSession, Holiday, LeaveRequest
     from rest_framework_simplejwt.token_blacklist.models import OutstandingToken, BlacklistedToken
     from django.db.utils import OperationalError
     from accounts.models import CustomUser
@@ -48,11 +48,24 @@ def create_daily_attendance_records():
     created_count = 0
 
     for staff in staffs:
-        daily_attendance, created = DailyAttendance.objects.get_or_create(
-            staff=staff,
-            date=today,
-            defaults={"status": "absent", "total_working_hours": 0.0}
-        )
+        # Check if staff has an APPROVED leave request covering today
+        if LeaveRequest.objects.filter(
+            staff=staff, 
+            start_date__lte=today, 
+            end_date__gte=today,
+            status='approved'
+        ).exists():
+            daily_attendance, created = DailyAttendance.objects.get_or_create(
+                staff=staff,
+                date=today,
+                defaults={"status": "leave", "total_working_hours": 0.0}
+            )
+        else:
+            daily_attendance, created = DailyAttendance.objects.get_or_create(
+                staff=staff,
+                date=today,
+                defaults={"status": "absent", "total_working_hours": 0.0}
+            )
 
         if created:
             created_count += 1

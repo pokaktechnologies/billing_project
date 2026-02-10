@@ -17,4 +17,12 @@ urlpatterns = [
     # Holiday CRUD
     path('holidays/', HolidayViewSet.as_view({'get': 'list', 'post': 'create'}), name='holiday-list-create'),
     path('holidays/<int:pk>/', HolidayViewSet.as_view({'get': 'retrieve', 'put': 'update', 'patch': 'partial_update', 'delete': 'destroy'}), name='holiday-detail'),
+
+    # Leave Request (Employee)
+    path('leave-requests/', EmployeeLeaveRequestView.as_view(), name='employee-leave-request-list'),
+    path('leave-requests/<int:pk>/', EmployeeLeaveRequestDetailView.as_view(), name='employee-leave-request-detail'),
+
+    # HR Leave Report (Admin)
+    path('hr/leave-requests/', HrLeaveRequestListCreateView.as_view(), name='hr-leave-request-list-create'),
+    path('hr/leave-requests/<int:pk>/', HrLeaveRequestDetailView.as_view(), name='hr-leave-request-detail'),
 ]

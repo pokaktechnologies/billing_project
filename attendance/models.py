@@ -60,3 +60,34 @@ class Holiday(models.Model):
 
     def __str__(self):
         return f"{self.name} - {self.date} - {self.is_paid}"
+
+
+class LeaveRequest(models.Model):
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("approved", "Approved"),
+        ("rejected", "Rejected"),
+    ]
+
+    staff = models.ForeignKey(StaffProfile, on_delete=models.CASCADE, related_name='leave_requests_staff')
+    start_date = models.DateField()
+    end_date = models.DateField()
+    reason = models.TextField()
+
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default="pending"
+    )
+
+    requested_at = models.DateTimeField(auto_now_add=True)
+    actioned_at = models.DateTimeField(null=True, blank=True)
+    action_by = models.ForeignKey(StaffProfile, on_delete=models.SET_NULL, null=True, blank=True, related_name='leave_requests_actioned')
+
+    @property
+    def leave_days(self):
+        return (self.end_date - self.start_date).days + 1
+
+
+    def __str__(self):
+        return f"{self.staff.user.email} - {self.start_date} to {self.end_date} - {self.status}"

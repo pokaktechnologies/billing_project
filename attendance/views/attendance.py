@@ -78,3 +78,5 @@ class DailyAttendanceSessionView(generics.ListAPIView):
             "total_working_hours": hurs,
             "data": serializer.data
         }, status=200)
+
+

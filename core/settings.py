@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     'attendance',
     'chat',
     'internship',
+    'payroll',
 
     
     "channels",

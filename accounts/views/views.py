@@ -3071,6 +3071,130 @@ class SalesReportByCategoryView(APIView):
 
         return Response({'Status': '1', 'Message': 'Success', 'Data': data})
 
+# quotation report
+class QuotationReportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        client = request.query_params.get('client')
+        search = request.query_params.get('search')
+        salesperson = request.query_params.get('salesperson')
+
+        quotations = QuotationOrderModel.objects.all().order_by('-id')
+
+        if start_date and end_date:
+            quotations = quotations.filter(
+                quotation_date__range=[start_date, end_date]
+            )
+
+        if client:
+            quotations = quotations.filter(client__id=client)
+
+        if salesperson:
+            quotations = quotations.filter(client__salesperson=salesperson)
+
+        if search:
+            quotations = quotations.filter(
+                Q(client__first_name__icontains=search) |
+                Q(client__last_name__icontains=search) |
+                Q(project_name__icontains=search)
+            )
+
+        paginator = Pagination()
+        paginated_quotations = paginator.paginate_queryset(quotations, request)
+        if paginated_quotations is not None:
+            serializer = QuotationOrderSerializer(paginated_quotations, many=True)
+            return paginator.get_paginated_response(serializer.data)
+
+        serializer = QuotationOrderSerializer(quotations, many=True)
+        return Response({
+            "Status": "1",
+            "Message": "Success",
+            "Count": quotations.count(),
+            "Data": serializer.data
+        })
+
+#invoice report
+class InvoiceReportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        client = request.query_params.get('client')
+        intern = request.query_params.get('intern')
+        search = request.query_params.get('search')
+        invoice_type = request.query_params.get('invoice_type')
+
+        invoices = InvoiceModel.objects.select_related(
+            "client",
+            "intern__user"
+        ).prefetch_related(
+            "items"
+        ).annotate(
+            total_without_tax=Coalesce(
+                Sum("items__total"),
+                Decimal("0.00")
+            ),
+            total_tax=Coalesce(
+                Sum(
+                    ExpressionWrapper(
+                        F("items__sgst") + F("items__cgst"),
+                        output_field=DecimalField(max_digits=12, decimal_places=2)
+                    )
+                ),
+                Decimal("0.00")
+            )
+        ).order_by("-id")
+
+        if start_date and end_date:
+            invoices = invoices.filter(
+                invoice_date__range=[start_date, end_date]
+            )
+
+        if invoice_type and invoice_type != "null":
+            invoices = invoices.filter(invoice_type=invoice_type)
+
+        if client and intern:
+            return Response({
+                "Status": "0",
+                "Message": "You cannot filter by both client and intern at the same time."
+            })
+
+        if client and client != "null":
+            invoices = invoices.filter(client_id=client)
+
+        if intern and intern != "null":
+            invoices = invoices.filter(intern_id=intern)
+
+        if search:
+            invoices = invoices.filter(
+                Q(client__first_name__icontains=search) |
+                Q(client__last_name__icontains=search) |
+                Q(intern__user__first_name__icontains=search) |
+                Q(intern__user__last_name__icontains=search) |
+                Q(invoice_number__icontains=search) |
+                Q(project_name__icontains=search)
+            )
+        paginator = Pagination()
+        paginated_invoices = paginator.paginate_queryset(invoices, request)
+
+
+        if paginated_invoices is not None:
+            serializer = InvoiceReportSerializer(paginated_invoices, many=True)
+            return paginator.get_paginated_response(serializer.data)
+
+        serializer = InvoiceReportSerializer(invoices, many=True)
+        return Response({
+            "Status": "1",
+            "Message": "Success",
+            "Count": invoices.count(),
+            "Data": serializer.data
+        })
 
 
 class CountryView(APIView):

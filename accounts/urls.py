@@ -90,6 +90,10 @@ urlpatterns = [
 
     path('orders/generate-number/', OrderNumberGeneratorView.as_view(), name='order_number_generator'),
 
+    #------------------
+    #REPORTS APIS
+    #------------------
+    path('reports/sales-summary/',SalesReportSummaryView.as_view(), name='sales_report_summary'),
     path('reports/sales-by-client/',SalesReportByClientView.as_view(), name='sales_report_by_client'),
     path('reports/sales-by-items/',SalesReportByItemsView.as_view(), name='sales_report_by_items'),
     path('reports/sales-by-salesperson/',SalesReportBySalespersonView.as_view(), name='sales_report_by_salesperson'),

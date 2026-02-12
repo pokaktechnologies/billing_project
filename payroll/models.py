@@ -2,15 +2,22 @@ from django.db import models
 from accounts.models import StaffProfile
 
 class PayrollPeriod(models.Model):
-    month = models.CharField(max_length=7)  # YYYY-MM
-    is_locked = models.BooleanField(default=False)
+    month = models.CharField(max_length=7, unique=True)  # YYYY-MM
+    STATUS_CHOICES = [
+        ("open", "Open"),
+        ("generated", "Generated"),
+        ("locked", "Locked"),
+    ]
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="open")
+    generated_at = models.DateTimeField(null=True, blank=True)
 
-    class Meta:
-        unique_together = ("month",)
+    def __str__(self):
+        return f"{self.month} - {self.status}"
 
 
 class AttendanceSummary(models.Model):
-    staff = models.ForeignKey(StaffProfile, on_delete=models.CASCADE)
+    staff = models.ForeignKey(StaffProfile, on_delete=models.CASCADE, related_name="attendance_summaries")
+    period = models.ForeignKey(PayrollPeriod, on_delete=models.CASCADE, related_name="attendance_summaries", null=True)
     month = models.CharField(max_length=7)
 
     working_days = models.PositiveSmallIntegerField()
@@ -22,11 +29,15 @@ class AttendanceSummary(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ("staff", "month")
+        unique_together = ("staff", "period")
+
+    def __str__(self):
+        return f"{self.staff.user.email} - {self.period.month if self.period else self.month}"
 
 
 class Payroll(models.Model):
-    staff = models.ForeignKey(StaffProfile, on_delete=models.CASCADE)
+    staff = models.ForeignKey(StaffProfile, on_delete=models.CASCADE, related_name="payrolls")
+    period = models.ForeignKey(PayrollPeriod, on_delete=models.CASCADE, related_name="payrolls", null=True)
     month = models.CharField(max_length=7)
 
     gross_salary = models.DecimalField(max_digits=10, decimal_places=2)
@@ -40,10 +51,22 @@ class Payroll(models.Model):
 
     status = models.CharField(
         max_length=10,
-        choices=[("DRAFT", "Draft"), ("PAID", "Paid")],
-        default="DRAFT"
+        choices=[("Draft", "Draft"), ("Paid", "Paid")],
+        default="Draft"
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
- 
+    class Meta:
+        unique_together = ("staff", "period")
+
+    @property
+    def attendance_summary(self):
+        """
+        Returns the corresponding AttendanceSummary for this payroll record.
+        """
+        from .models import AttendanceSummary
+        return AttendanceSummary.objects.filter(staff=self.staff, period=self.period).first()
+
+    def __str__(self):
+        return f"{self.staff.user.email} - {self.period.month if self.period else self.month}"

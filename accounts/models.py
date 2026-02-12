@@ -64,8 +64,11 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         self.save(update_fields=['last_logout'])
 
 
+    def get_full_name(self):
+        return f"{self.first_name} {self.last_name}".strip()
+
     def __str__(self):
-        return self.email
+        return f"{self.id} - {self.first_name} {self.last_name} - {self.email}"
 
 
 class Department(models.Model):
@@ -85,7 +88,7 @@ class StaffProfile(models.Model):
     address = models.TextField(blank=True, null=True)
 
     def __str__(self):
-        return f"{self.user.email} - ({self.user.first_name} {self.user.last_name})"
+        return f"{self.id} - {self.user.email} - ({self.user.first_name} {self.user.last_name})"
 
 class JobDetail(models.Model):
     staff = models.OneToOneField(StaffProfile, on_delete=models.CASCADE, related_name="job_detail")
@@ -110,7 +113,7 @@ class JobDetail(models.Model):
     ], default="active")
 
     def __str__(self):
-        return f"{self.staff.user.email} - {self.role}"
+        return f"{self.id} - {self.staff.user.email} - {self.role}"
 
 
 class StaffDocument(models.Model):

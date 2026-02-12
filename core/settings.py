@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     'chat',
     'internship',
     'payroll',
+    'core',
 
     
     "channels",

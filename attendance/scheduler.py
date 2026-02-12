@@ -1,4 +1,3 @@
-# attendance/scheduler.py
 from apscheduler.schedulers.background import BackgroundScheduler
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
@@ -188,22 +187,7 @@ def auto_logout_job(session_name: str):
     send_group_notification(message)
 
 
-def start():
-    """Start the scheduler with fixed cron jobs."""
-    scheduler = BackgroundScheduler(timezone="Asia/Kolkata")
 
-    # Daily attendance creation
-    scheduler.add_job(create_daily_attendance_records, "cron", hour=8, minute=0)
-
-    # Auto-logout jobs for sessions
-    scheduler.add_job(auto_logout_job, "cron", hour=12, minute=0, args=["session1"])
-    scheduler.add_job(auto_logout_job, "cron", hour=15, minute=0, args=["session2"])
-    scheduler.add_job(auto_logout_job, "cron", hour=18, minute=0, args=["session3"])
-
-    # Pre-session notifications
-    scheduler.add_job(pre_session_notification, "cron", hour=11, minute=50, args=["session1"])
-    scheduler.add_job(pre_session_notification, "cron", hour=14, minute=50, args=["session2"])
-    scheduler.add_job(pre_session_notification, "cron", hour=17, minute=50, args=["session3"])
-
-    scheduler.start()
-    print("⏱ Scheduler started successfully.")
+    friendly_session = session_labels.get(session_name, session_name)
+    message = f"✅ {friendly_session} has ended. Your session attendance is recorded."
+    send_group_notification(message)

@@ -2738,19 +2738,10 @@ class SalesReportByClientView(APIView):
         to_date_str = request.GET.get('to_date')
 
         # --------------------
-        # DATE VALIDATION
+        # DATE PARSE & VALIDATION
         # --------------------
-
-        if not from_date_str or not to_date_str:
-            return Response({
-                "Status": "0",
-                "Message": "from_date and to_date are required"
-            }, status=400)
-        
-        # from_date = parse_date(from_date_str) if from_date_str else None
-        # to_date = parse_date(to_date_str) if to_date_str else None
-        from_date = parse_date(from_date_str)
-        to_date = parse_date(to_date_str)
+        from_date = parse_date(from_date_str) if from_date_str else None
+        to_date = parse_date(to_date_str) if to_date_str else None
 
         if (from_date_str and not from_date) or (to_date_str and not to_date):
             return Response({
@@ -2781,20 +2772,16 @@ class SalesReportByClientView(APIView):
         # --------------------
         # BASE QUERY
         # --------------------
-        invoices = InvoiceModel.objects.filter(
-            invoice_type='client'
-        )
+        invoices = InvoiceModel.objects.filter(invoice_type='client')
 
         # --------------------
-        # DATE FILTER (ONLY IF GIVEN)
+        # OPTIONAL DATE FILTER
         # --------------------
-        if from_date and to_date:
-            invoices = invoices.filter(
-                invoice_date__range=(
-                    datetime.combine(from_date, time.min),
-                    datetime.combine(to_date, time.max)
-                )
-            )
+        if from_date:
+            invoices = invoices.filter(invoice_date__gte=from_date)
+
+        if to_date:
+            invoices = invoices.filter(invoice_date__lte=to_date)
 
         # --------------------
         # CLIENT FILTER
@@ -2842,10 +2829,20 @@ class SalesReportByClientView(APIView):
                 "sub_total": item.sub_total,
                 "total": item.total,
             })
-        
+
+        # --------------------
+        # PAGINATION
+        # --------------------
+        paginator = Pagination()
+        result_page = paginator.paginate_queryset(data, request)
+
+        if result_page is not None:
+            return paginator.get_paginated_response(result_page)
+
         return Response({
             'Status': '1',
             'Message': 'Success',
+            'Count': len(data),
             'Data': data
         }, status=status.HTTP_200_OK)
 
@@ -2853,59 +2850,101 @@ class SalesReportByItemsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+
         from_date_str = request.GET.get('from_date')
         to_date_str = request.GET.get('to_date')
         item = request.GET.get('item', 'all')
         client = request.GET.get('client', 'all')
 
-        # DATE VALIDATION
-        if not from_date_str or not to_date_str:
-            return Response({
-                "Status": "0",
-                "Message": "from_date and to_date are required"
-            }, status=400)
-        
-        # from_date = parse_date(from_date_str) if from_date_str else None
-        # to_date = parse_date(to_date_str) if to_date_str else None
-        from_date = parse_date(from_date_str)
-        to_date = parse_date(to_date_str)
+        # --------------------
+        # DATE PARSE & VALIDATION (OPTIONAL)
+        # --------------------
+        from_date = parse_date(from_date_str) if from_date_str else None
+        to_date = parse_date(to_date_str) if to_date_str else None
 
         if (from_date_str and not from_date) or (to_date_str and not to_date):
-            return Response({'Status': '0', 'Message': 'Invalid date format'}, status=400)
+            return Response({
+                'Status': '0',
+                'Message': 'Invalid date format. Use YYYY-MM-DD.'
+            }, status=400)
 
         if from_date and to_date and from_date > to_date:
-            return Response({'Status': '0', 'Message': 'Invalid date range'}, status=400)
+            return Response({
+                'Status': '0',
+                'Message': 'Invalid date range.'
+            }, status=400)
 
+        # --------------------
         # CLIENT VALIDATION
-        if client != 'all' and not Customer.objects.filter(id=client).exists():
-            return Response({'Status': '0', 'Message': 'Invalid client ID'}, status=400)
+        # --------------------
+        if client not in ['all', None, '', 'null', 'undefined']:
+            try:
+                client = int(client)
+                if not Customer.objects.filter(id=client).exists():
+                    raise ValueError
+            except:
+                return Response({
+                    'Status': '0',
+                    'Message': 'Invalid client ID.'
+                }, status=400)
 
+        # --------------------
         # ITEM VALIDATION
-        if item != 'all' and not Product.objects.filter(id=item).exists():
-            return Response({'Status': '0', 'Message': 'Invalid item ID'}, status=400)
+        # --------------------
+        if item not in ['all', None, '', 'null', 'undefined']:
+            try:
+                item = int(item)
+                if not Product.objects.filter(id=item).exists():
+                    raise ValueError
+            except:
+                return Response({
+                    'Status': '0',
+                    'Message': 'Invalid item ID.'
+                }, status=400)
 
+        # --------------------
+        # BASE INVOICE QUERY
+        # --------------------
         invoices = InvoiceModel.objects.filter(invoice_type='client')
 
-        # DATE FILTER
-        if from_date and to_date:
-            invoices = invoices.filter(
-                invoice_date__range=(
-                    datetime.combine(from_date, time.min),
-                    datetime.combine(to_date, time.max)
-                )
-            )
+        # --------------------
+        # OPTIONAL DATE FILTER
+        # --------------------
+        if from_date:
+            invoices = invoices.filter(invoice_date__gte=from_date)
 
+        if to_date:
+            invoices = invoices.filter(invoice_date__lte=to_date)
+
+        # --------------------
+        # CLIENT FILTER
+        # --------------------
         if client != 'all':
             invoices = invoices.filter(client_id=client)
 
+        # --------------------
+        # FETCH ITEMS
+        # --------------------
         invoice_items = InvoiceItem.objects.filter(
             invoice__in=invoices
-        ).select_related('invoice', 'invoice__client', 'invoice__sales_order', 'product')
+        ).select_related(
+            'invoice',
+            'invoice__client',
+            'invoice__sales_order',
+            'product'
+        )
 
+        # --------------------
+        # ITEM FILTER
+        # --------------------
         if item != 'all':
             invoice_items = invoice_items.filter(product_id=item)
 
+        # --------------------
+        # RESPONSE DATA
+        # --------------------
         data = []
+
         for i in invoice_items:
             inv = i.invoice
             c = inv.client
@@ -2924,64 +2963,120 @@ class SalesReportByItemsView(APIView):
                 "total": i.total,
             })
 
-        return Response({'Status': '1', 'Message': 'Success', 'Data': data})
+        # --------------------
+        # PAGINATION
+        # --------------------
+        paginator = Pagination()
+        result_page = paginator.paginate_queryset(data, request)
 
+        if result_page is not None:
+            return paginator.get_paginated_response(result_page)
+
+        return Response({
+            'Status': '1',
+            'Message': 'Success',
+            'Count': len(data),
+            'Data': data
+        })
 class SalesReportBySalespersonView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+
         from_date_str = request.GET.get('from_date')
         to_date_str = request.GET.get('to_date')
         salesperson = request.GET.get('salesperson', 'all')
         item = request.GET.get('item', 'all')
-        
-        if not from_date_str or not to_date_str:
-            return Response({
-                "Status": "0",
-                "Message": "from_date and to_date are required"
-            }, status=400)
-        
 
-        # from_date = parse_date(from_date_str) if from_date_str else None
-        # to_date = parse_date(to_date_str) if to_date_str else None
-        from_date = parse_date(from_date_str)
-        to_date = parse_date(to_date_str)
+        # --------------------
+        # DATE PARSE & VALIDATION (OPTIONAL)
+        # --------------------
+        from_date = parse_date(from_date_str) if from_date_str else None
+        to_date = parse_date(to_date_str) if to_date_str else None
 
         if (from_date_str and not from_date) or (to_date_str and not to_date):
-            return Response({'Status': '0', 'Message': 'Invalid date format'}, status=400)
+            return Response({
+                'Status': '0',
+                'Message': 'Invalid date format. Use YYYY-MM-DD.'
+            }, status=400)
 
         if from_date and to_date and from_date > to_date:
-            return Response({'Status': '0', 'Message': 'Invalid date range'}, status=400)
+            return Response({
+                'Status': '0',
+                'Message': 'Invalid date range.'
+            }, status=400)
 
-        if salesperson != 'all' and not SalesPerson.objects.filter(id=salesperson).exists():
-            return Response({'Status': '0', 'Message': 'Invalid salesperson ID'}, status=400)
+        # --------------------
+        # SALESPERSON VALIDATION
+        # --------------------
+        if salesperson not in ['all', None, '', 'null', 'undefined']:
+            try:
+                salesperson = int(salesperson)
+                if not SalesPerson.objects.filter(id=salesperson).exists():
+                    raise ValueError
+            except:
+                return Response({
+                    'Status': '0',
+                    'Message': 'Invalid salesperson ID.'
+                }, status=400)
 
-        if item != 'all' and not Product.objects.filter(id=item).exists():
-            return Response({'Status': '0', 'Message': 'Invalid item ID'}, status=400)
+        # --------------------
+        # ITEM VALIDATION
+        # --------------------
+        if item not in ['all', None, '', 'null', 'undefined']:
+            try:
+                item = int(item)
+                if not Product.objects.filter(id=item).exists():
+                    raise ValueError
+            except:
+                return Response({
+                    'Status': '0',
+                    'Message': 'Invalid item ID.'
+                }, status=400)
 
+        # --------------------
+        # BASE QUERY
+        # --------------------
         invoices = InvoiceModel.objects.filter(invoice_type='client')
 
-        if from_date and to_date:
-            invoices = invoices.filter(
-                invoice_date__range=(
-                    datetime.combine(from_date, time.min),
-                    datetime.combine(to_date, time.max)
-                )
-            )
+        # --------------------
+        # OPTIONAL DATE FILTER
+        # --------------------
+        if from_date:
+            invoices = invoices.filter(invoice_date__gte=from_date)
 
+        if to_date:
+            invoices = invoices.filter(invoice_date__lte=to_date)
+
+        # --------------------
+        # SALESPERSON FILTER
+        # --------------------
         if salesperson != 'all':
             invoices = invoices.filter(client__salesperson_id=salesperson)
 
+        # --------------------
+        # FETCH ITEMS
+        # --------------------
         invoice_items = InvoiceItem.objects.filter(
             invoice__in=invoices
         ).select_related(
-            'invoice', 'invoice__client', 'invoice__client__salesperson', 'product'
+            'invoice',
+            'invoice__client',
+            'invoice__client__salesperson',
+            'product'
         )
 
+        # --------------------
+        # ITEM FILTER
+        # --------------------
         if item != 'all':
             invoice_items = invoice_items.filter(product_id=item)
 
+        # --------------------
+        # RESPONSE DATA
+        # --------------------
         data = []
+
         for i in invoice_items:
             inv = i.invoice
             c = inv.client
@@ -2997,62 +3092,120 @@ class SalesReportBySalespersonView(APIView):
                 "total": i.total,
             })
 
-        return Response({'Status': '1', 'Message': 'Success', 'Data': data})
+        # --------------------
+        # PAGINATION
+        # --------------------
+        paginator = Pagination()
+        result_page = paginator.paginate_queryset(data, request)
 
+        if result_page is not None:
+            return paginator.get_paginated_response(result_page)
+
+        return Response({
+            'Status': '1',
+            'Message': 'Success',
+            'Count': len(data),
+            'Data': data
+        })
 class SalesReportByCategoryView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+
         from_date_str = request.GET.get('from_date')
         to_date_str = request.GET.get('to_date')
         category = request.GET.get('category', 'all')
         item = request.GET.get('item', 'all')
-        
-        if not from_date_str or not to_date_str:
-            return Response({
-                "Status": "0",
-                "Message": "from_date and to_date are required"
-            }, status=400)
-        
 
-        # from_date = parse_date(from_date_str) if from_date_str else None
-        # to_date = parse_date(to_date_str) if to_date_str else None
-        from_date = parse_date(from_date_str)
-        to_date = parse_date(to_date_str)
+        # --------------------
+        # DATE PARSE & VALIDATION (OPTIONAL)
+        # --------------------
+        from_date = parse_date(from_date_str) if from_date_str else None
+        to_date = parse_date(to_date_str) if to_date_str else None
 
         if (from_date_str and not from_date) or (to_date_str and not to_date):
-            return Response({'Status': '0', 'Message': 'Invalid date format'}, status=400)
+            return Response({
+                'Status': '0',
+                'Message': 'Invalid date format. Use YYYY-MM-DD.'
+            }, status=400)
 
         if from_date and to_date and from_date > to_date:
-            return Response({'Status': '0', 'Message': 'Invalid date range'}, status=400)
+            return Response({
+                'Status': '0',
+                'Message': 'Invalid date range.'
+            }, status=400)
 
-        if item != 'all' and not Product.objects.filter(id=item).exists():
-            return Response({'Status': '0', 'Message': 'Invalid item ID'}, status=400)
+        # --------------------
+        # ITEM VALIDATION
+        # --------------------
+        if item not in ['all', None, '', 'null', 'undefined']:
+            try:
+                item = int(item)
+                if not Product.objects.filter(id=item).exists():
+                    raise ValueError
+            except:
+                return Response({
+                    'Status': '0',
+                    'Message': 'Invalid item ID.'
+                }, status=400)
 
-        if category != 'all' and not Category.objects.filter(id=category).exists():
-            return Response({'Status': '0', 'Message': 'Invalid category ID'}, status=400)
+        # --------------------
+        # CATEGORY VALIDATION
+        # --------------------
+        if category not in ['all', None, '', 'null', 'undefined']:
+            try:
+                category = int(category)
+                if not Category.objects.filter(id=category).exists():
+                    raise ValueError
+            except:
+                return Response({
+                    'Status': '0',
+                    'Message': 'Invalid category ID.'
+                }, status=400)
 
+        # --------------------
+        # BASE QUERY
+        # --------------------
         invoices = InvoiceModel.objects.filter(invoice_type='client')
 
-        if from_date and to_date:
-            invoices = invoices.filter(
-                invoice_date__range=(
-                    datetime.combine(from_date, time.min),
-                    datetime.combine(to_date, time.max)
-                )
-            )
+        # --------------------
+        # OPTIONAL DATE FILTER
+        # --------------------
+        if from_date:
+            invoices = invoices.filter(invoice_date__gte=from_date)
 
+        if to_date:
+            invoices = invoices.filter(invoice_date__lte=to_date)
+
+        # --------------------
+        # FETCH ITEMS
+        # --------------------
         invoice_items = InvoiceItem.objects.filter(
             invoice__in=invoices
-        ).select_related('invoice', 'invoice__client', 'product', 'product__category')
+        ).select_related(
+            'invoice',
+            'invoice__client',
+            'product',
+            'product__category'
+        )
 
+        # --------------------
+        # ITEM FILTER
+        # --------------------
         if item != 'all':
             invoice_items = invoice_items.filter(product_id=item)
 
+        # --------------------
+        # CATEGORY FILTER
+        # --------------------
         if category != 'all':
             invoice_items = invoice_items.filter(product__category_id=category)
 
+        # --------------------
+        # RESPONSE DATA
+        # --------------------
         data = []
+
         for i in invoice_items:
             inv = i.invoice
             c = inv.client
@@ -3069,7 +3222,22 @@ class SalesReportByCategoryView(APIView):
                 "total": i.total,
             })
 
-        return Response({'Status': '1', 'Message': 'Success', 'Data': data})
+        # --------------------
+        # PAGINATION
+        # --------------------
+        paginator = Pagination()
+        result_page = paginator.paginate_queryset(data, request)
+
+        if result_page is not None:
+            return paginator.get_paginated_response(result_page)
+
+        return Response({
+            'Status': '1',
+            'Message': 'Success',
+            'Count': len(data),
+            'Data': data
+        })
+
 
 # quotation report
 class QuotationReportView(APIView):

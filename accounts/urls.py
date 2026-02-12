@@ -101,6 +101,8 @@ urlpatterns = [
 
     path('reports/quotation/', QuotationReportView.as_view(), name='quotation_report'),
     path('reports/invoice/', InvoiceReportView.as_view(), name='invoice_report'),
+    path('reports/receipt/', ReceiptReportView.as_view(), name='receipt_report'),
+    path('reports/sales-return/', SalesReturnReportView.as_view(), name='sales_return_report'),
 
     
     path('quotations/', QuotationOrderAPI.as_view(), name='quotation-items-detail'),

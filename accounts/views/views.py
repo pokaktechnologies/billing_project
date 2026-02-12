@@ -3177,8 +3177,7 @@ class InvoiceReportView(APIView):
                 Q(client__last_name__icontains=search) |
                 Q(intern__user__first_name__icontains=search) |
                 Q(intern__user__last_name__icontains=search) |
-                Q(invoice_number__icontains=search) |
-                Q(project_name__icontains=search)
+                Q(invoice_number__icontains=search) 
             )
         paginator = Pagination()
         paginated_invoices = paginator.paginate_queryset(invoices, request)
@@ -3195,6 +3194,142 @@ class InvoiceReportView(APIView):
             "Count": invoices.count(),
             "Data": serializer.data
         })
+
+# Receipt  Report
+class ReceiptReportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        client = request.query_params.get('client')
+        intern = request.query_params.get('intern')
+        search = request.query_params.get('search')
+        receipt_type = request.query_params.get('receipt_type')
+
+        # Optimized queryset
+        receipts = ReceiptModel.objects.select_related(
+            "client", 
+            "intern__user",
+            "invoice",
+            "course"
+        ).order_by("-id")
+
+        # Date filter (Correct field name)
+        if start_date and end_date:
+            receipts = receipts.filter(
+                receipt_date__range=[start_date, end_date]
+            )
+
+        # Receipt type filter
+        if receipt_type and receipt_type != "null":
+            receipts = receipts.filter(receipt_type=receipt_type)
+
+        # Prevent wrong combo
+        if client and intern:
+            return Response({
+                "Status": "0",
+                "Message": "You cannot filter by both client and intern at the same time."
+            })
+
+        # Client filter
+        if client and client != "null":
+            receipts = receipts.filter(
+                receipt_type="client",
+                client_id=client
+            )
+
+        # Intern filter
+        if intern and intern != "null":
+            receipts = receipts.filter(
+                receipt_type="intern",
+                intern_id=intern
+            )
+
+        if search:
+            receipts = receipts.filter(
+                Q(client__first_name__icontains=search) |
+                Q(client__last_name__icontains=search) |
+                Q(intern__user__first_name__icontains=search) |
+                Q(intern__user__last_name__icontains=search) |
+                Q(receipt_number__icontains=search)
+            )
+
+        paginator = Pagination()
+        paginated_receipts = paginator.paginate_queryset(receipts, request)
+
+        if paginated_receipts is not None:
+            serializer = ReceiptSerializer(paginated_receipts, many=True)
+            return paginator.get_paginated_response(serializer.data)
+
+        serializer = ReceiptSerializer(receipts, many=True)
+
+        return Response({
+            "Status": "1",
+            "Message": "Success",
+            "Count": receipts.count(),
+            "Data": serializer.data
+        })
+
+# Sales Return Report
+class SalesReturnReportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        client = request.query_params.get('client')
+        search = request.query_params.get('search')
+
+        sales_returns = SalesReturnModel.objects.select_related(
+            "client",
+            "sales_order",
+            "termsandconditions"
+        ).prefetch_related(
+            "items"
+        ).order_by('-id')
+
+        if start_date and end_date:
+            sales_returns = sales_returns.filter(
+                return_date__range=[start_date, end_date]
+            )
+
+        if client:
+            sales_returns = sales_returns.filter(client_id=client)
+
+        if search:
+            sales_returns = sales_returns.filter(
+                Q(client__first_name__icontains=search) |
+                Q(client__last_name__icontains=search) |
+                Q(sales_return_number__icontains=search) |
+                Q(sales_order__sales_order_number__icontains=search)
+            )
+
+        paginator = Pagination()
+        paginated_sales_returns = paginator.paginate_queryset(sales_returns, request)
+
+        if paginated_sales_returns is not None:
+            serializer = SalesReturnDetailDisplaySerializer(
+                paginated_sales_returns,
+                many=True
+            )
+            return paginator.get_paginated_response(serializer.data)
+
+        serializer = SalesReturnDetailDisplaySerializer(
+            sales_returns,
+            many=True
+        )
+
+        return Response({
+            "Status": "1",
+            "Message": "Success",
+            "Count": sales_returns.count(),
+            "Data": serializer.data
+        })
+
+        
 
 
 class CountryView(APIView):

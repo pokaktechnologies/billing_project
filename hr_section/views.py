@@ -18,6 +18,18 @@ from attendance.models import DailyAttendance
 from .models import *
 from .serializers import *
 
+#------------
+#  pagination class
+#--------------
+from rest_framework.pagination import PageNumberPagination
+class Pagination(PageNumberPagination):
+    page_size_query_param = 'page_size'
+
+    def get_page_size(self, request):
+        page_size = request.query_params.get('page_size')
+        if page_size is None:
+            return None 
+        return int(page_size)
 
 
 # ========== Views for Enquiry ==========
@@ -161,6 +173,13 @@ class SearchEnquiryView(APIView):
         # Apply filtering and sorting
         enquiries = Enquiry.objects.filter(query).order_by(sort)
 
+        paginator = Pagination()
+        paginated_enquiries = paginator.paginate_queryset(enquiries, request)
+        if paginated_enquiries is not None:
+            serializer = EnquirySerializer(paginated_enquiries, many=True)
+            return paginator.get_paginated_response(serializer.data)
+
+        # If no pagination is needed
         serializer = EnquirySerializer(enquiries, many=True)
         return Response(serializer.data, status=drf_status.HTTP_200_OK)
 

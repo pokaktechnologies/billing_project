@@ -90,10 +90,19 @@ urlpatterns = [
 
     path('orders/generate-number/', OrderNumberGeneratorView.as_view(), name='order_number_generator'),
 
+    #------------------
+    # REPORTS APIS
+    #------------------
+    path('reports/sales-summary/',SalesReportSummaryView.as_view(), name='sales_report_summary'),
     path('reports/sales-by-client/',SalesReportByClientView.as_view(), name='sales_report_by_client'),
     path('reports/sales-by-items/',SalesReportByItemsView.as_view(), name='sales_report_by_items'),
     path('reports/sales-by-salesperson/',SalesReportBySalespersonView.as_view(), name='sales_report_by_salesperson'),
     path('reports/sales-by-category/',SalesReportByCategoryView.as_view(), name='sales_report_by_category'),
+
+    path('reports/quotation/', QuotationReportView.as_view(), name='quotation_report'),
+    path('reports/invoice/', InvoiceReportView.as_view(), name='invoice_report'),
+    path('reports/receipt/', ReceiptReportView.as_view(), name='receipt_report'),
+    path('reports/sales-return/', SalesReturnReportView.as_view(), name='sales_return_report'),
 
     
     path('quotations/', QuotationOrderAPI.as_view(), name='quotation-items-detail'),

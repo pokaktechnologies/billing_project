@@ -688,7 +688,7 @@ class InvoiceItem(models.Model):
     # Product-based invoice item fields
     product = models.ForeignKey(Product, on_delete=models.PROTECT, null=True, blank=True)
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    unit_price = models.DecimalField(max_digits=10, decimal_places=5, default=0)
     sgst_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     cgst_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
 

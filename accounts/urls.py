@@ -3,6 +3,7 @@ from .views.views import *
 from accounts.views.user import  *
 
 from .views.SearchViews import *
+from .views.ReportView import *
 
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -93,6 +94,8 @@ urlpatterns = [
     #------------------
     # REPORTS APIS
     #------------------
+
+    #sales
     path('reports/sales-summary/',SalesReportSummaryView.as_view(), name='sales_report_summary'),
     path('reports/sales-by-client/',SalesReportByClientView.as_view(), name='sales_report_by_client'),
     path('reports/sales-by-items/',SalesReportByItemsView.as_view(), name='sales_report_by_items'),
@@ -103,6 +106,10 @@ urlpatterns = [
     path('reports/invoice/', InvoiceReportView.as_view(), name='invoice_report'),
     path('reports/receipt/', ReceiptReportView.as_view(), name='receipt_report'),
     path('reports/sales-return/', SalesReturnReportView.as_view(), name='sales_return_report'),
+
+    # Purchase 
+    path('reports/purchase-order/', PurchaseOrderReportView.as_view(), name='purchase_report'),
+
 
     
     path('quotations/', QuotationOrderAPI.as_view(), name='quotation-items-detail'),

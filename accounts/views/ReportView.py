@@ -1015,3 +1015,99 @@ class PurchaseOrderReportView(APIView):
             "Data": serializer.data
         })
 
+
+# Material Receive Report
+
+class MaterialReceiveReportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        supplier = request.query_params.get('supplier')
+        search = request.query_params.get('search')
+
+        material_receives = MaterialReceive.objects.select_related(
+            "supplier",
+            "purchase_order"
+        ).prefetch_related(
+            "items__product"
+        ).order_by('-id')
+
+        if start_date and end_date:
+            material_receives = material_receives.filter(
+                received_date__range=[start_date, end_date]
+            )
+
+        if supplier:
+            material_receives = material_receives.filter(supplier_id=supplier)
+
+        if search:
+            material_receives = material_receives.filter(
+                Q(supplier__first_name__icontains=search) |
+                Q(supplier__last_name__icontains=search) |
+                Q(material_receive_number__icontains=search)
+            )
+
+        paginator = Pagination()
+        paginated_queryset = paginator.paginate_queryset(material_receives, request)
+
+        if paginated_queryset is not None:
+            serializer = MaterialReceiveReportSerializer(paginated_queryset, many=True)
+            return paginator.get_paginated_response(serializer.data)
+
+        serializer = MaterialReceiveReportSerializer(material_receives, many=True)
+
+        return Response({
+            "Status": "1",
+            "Message": "Success",
+            "Count": material_receives.count(),
+            "Data": serializer.data
+        })
+
+# Supplier Report
+class SupplierReportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        supplier_type = request.query_params.get('supplier_type')
+        search = request.query_params.get('search')
+
+        suppliers = Supplier.objects.order_by('-id')
+
+        if start_date and end_date:
+            suppliers = suppliers.filter(
+                created_at__range=[start_date, end_date]
+            )
+
+        if supplier_type:
+            suppliers = suppliers.filter(supplier_type=supplier_type)
+
+        if search:
+            suppliers = suppliers.filter(
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search) |
+                Q(email__icontains=search) |
+                Q(phone__icontains=search) |
+                Q(supplier_number__icontains=search)
+            )
+
+        paginator = Pagination()
+        paginated_suppliers = paginator.paginate_queryset(suppliers, request)
+
+        if paginated_suppliers is not None:
+            serializer = SupplierDetailSerializer(paginated_suppliers, many=True)
+            return paginator.get_paginated_response(serializer.data)
+
+        serializer = SupplierDetailSerializer(suppliers, many=True)
+
+        return Response({
+            "Status": "1",
+            "Message": "Success",
+            "Count": suppliers.count(),
+            "Data": serializer.data
+        })

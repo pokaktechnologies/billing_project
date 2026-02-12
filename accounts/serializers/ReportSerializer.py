@@ -26,7 +26,7 @@ from decimal import Decimal
 from finance.utils import round_decimal
 from .serializers import *
 
-
+# Invoice Report
 class InvoiceReportSerializer(serializers.ModelSerializer):
 
     client_name = serializers.SerializerMethodField()
@@ -92,7 +92,7 @@ class InvoiceReportSerializer(serializers.ModelSerializer):
             )
         return Decimal("0.00")
     
-
+# Purchase Order Report
 class PurchaseOrderReportSerializer(serializers.ModelSerializer):
     supplier_name = serializers.SerializerMethodField()
     terms_and_conditions_id = serializers.IntegerField(source='terms_and_conditions.id', read_only=True)
@@ -126,4 +126,32 @@ class PurchaseOrderReportSerializer(serializers.ModelSerializer):
             return TermsAndConditionsPointSerializer(points, many=True).data
         return []
     
+    
+# Material Receive Report
+
+class MaterialReceiveReportSerializer(serializers.ModelSerializer):
+    supplier_name = serializers.SerializerMethodField()
+    purchase_order_number = serializers.CharField(
+        source='purchase_order.purchase_order_number',
+        read_only=True
+    )
+    items = MaterialReceiveItemSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = MaterialReceive
+        fields = [
+            'id',
+            'material_receive_number',
+            'received_date',
+            'supplier',
+            'supplier_name',
+            'purchase_order',
+            'purchase_order_number',
+            'grand_total',
+            'remark',
+            'items'
+        ]
+
+    def get_supplier_name(self, obj):
+        return f"{obj.supplier.first_name} {obj.supplier.last_name}"
 

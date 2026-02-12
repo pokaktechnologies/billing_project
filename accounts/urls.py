@@ -109,7 +109,8 @@ urlpatterns = [
 
     # Purchase 
     path('reports/purchase-order/', PurchaseOrderReportView.as_view(), name='purchase_report'),
-
+    path('reports/material-receive/', MaterialReceiveReportView.as_view(), name='material_receive_report'),
+    path('reports/supplier/', SupplierReportView.as_view(), name='supplier_report'),
 
     
     path('quotations/', QuotationOrderAPI.as_view(), name='quotation-items-detail'),

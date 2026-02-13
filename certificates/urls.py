@@ -16,4 +16,8 @@ urlpatterns = [
     # Management Staff Signature 
     path("management-signatures/", views.ManagementSignatureListView.as_view()),
 
+    #Reports
+    path("reports/certificate/", views.CertificateReportView.as_view(),name="certificate-report"),
+    
+
 ]

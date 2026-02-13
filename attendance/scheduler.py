@@ -1,9 +1,11 @@
+import logging
 from apscheduler.schedulers.background import BackgroundScheduler
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from django.db import close_old_connections
 from django.utils import timezone
 
+logger = logging.getLogger('scheduler')
 
 def is_sunday():
     return timezone.localdate().weekday() == 6
@@ -21,9 +23,9 @@ def create_daily_attendance_records():
     now = timezone.localtime()
     today = timezone.localdate()
     if is_sunday() or Holiday.objects.filter(date=today).exists():
-        print("🛑 Sunday or Holiday detected — skipping attendance creation. ")
+        logger.info("🛑 Sunday or Holiday detected — skipping attendance creation. ")
         return
-    print(f"⏰ Creating daily attendance for {today}")
+    logger.info(f"⏰ Creating daily attendance for {today}")
 
     session_times = {
         "session1": ("09:00:00", "12:00:00"),
@@ -36,11 +38,11 @@ def create_daily_attendance_records():
         tokens = OutstandingToken.objects.all()
         for t in tokens:
             BlacklistedToken.objects.get_or_create(token=t)
-        print(f"✅ Blacklisted {len(tokens)} outstanding tokens, logged out all users.")
+        logger.info(f"✅ Blacklisted {len(tokens)} outstanding tokens, logged out all users.")
 
         CustomUser.objects.filter(is_active=True).update(force_logout_time=now)
     except OperationalError:
-        print("⚠️ Database not ready yet, skipping this run.")
+        logger.warning("⚠️ Database not ready yet, skipping this run.")
         return
 
     staffs = StaffProfile.objects.filter(job_detail__status__in=["active", "probation"])
@@ -76,9 +78,9 @@ def create_daily_attendance_records():
                 )
 
     if created_count:
-        print(f"✅ Created daily attendance records for {created_count} staff members.")
+        logger.info(f"✅ Created daily attendance records for {created_count} staff members.")
     else:
-        print("ℹ️ Daily attendance records already exist for all staff today.")
+        logger.info("ℹ️ Daily attendance records already exist for all staff today.")
 
 
 def send_group_notification(message: str):
@@ -104,13 +106,13 @@ def pre_session_notification(session_name: str):
         "session3": "Evening (3:00 PM - 6:00 PM)",
     }
     if is_sunday():
-        print(f"🛑 Sunday detected — skipping pre-session notification for {session_name}.")
+        logger.info(f"🛑 Sunday detected — skipping pre-session notification for {session_name}.")
         return
     friendly_session = session_labels.get(session_name, session_name)
     message = f"⏳ Reminder: {friendly_session} will end in 10 minutes."
 
     send_group_notification(message)
-    print(f"📢 Pre-session notification sent for {session_name} at {now}")
+    logger.info(f"📢 Pre-session notification sent for {session_name} at {now}")
 
 
 def auto_logout_job(session_name: str):
@@ -125,9 +127,9 @@ def auto_logout_job(session_name: str):
     now = timezone.localtime()
     today = now.date()
     if is_sunday():
-        print(f"🛑 Sunday detected — skipping auto logout for {session_name}.")
+        logger.info(f"🛑 Sunday detected — skipping auto logout for {session_name}.")
         return
-    print(f"⏰ Auto logout job running at {now} for {session_name}")
+    logger.info(f"⏰ Auto logout job running at {now} for {session_name}")
 
     # 1️⃣ Blacklist all outstanding tokens
     try:
@@ -136,11 +138,11 @@ def auto_logout_job(session_name: str):
         )
         for t in tokens:
             BlacklistedToken.objects.get_or_create(token=t)
-        print(f"✅ Blacklisted {len(tokens)} outstanding tokens, logged out all users.")
+        logger.info(f"✅ Blacklisted {len(tokens)} outstanding tokens, logged out all users.")
 
         CustomUser.objects.filter(is_active=True,is_superuser=False).update(force_logout_time=now)
     except OperationalError:
-        print("⚠️ Database not ready yet, skipping this run.")
+        logger.warning("⚠️ Database not ready yet, skipping this run.")
         return
 
     # 2️⃣ Update attendance session records
@@ -156,7 +158,7 @@ def auto_logout_job(session_name: str):
             if session.logout_time is None:
                 session.logout_time = now
         session.save()
-        print(f"{session.daily_attendance.staff.user.email} | login: {session.login_time} | logout: {session.logout_time}")
+        logger.info(f"{session.daily_attendance.staff.user.email} | login: {session.login_time} | logout: {session.logout_time}")
 
     # 3️⃣ Update main daily attendance
     daily_records = DailyAttendance.objects.filter(date=today)
@@ -174,7 +176,7 @@ def auto_logout_job(session_name: str):
                 daily_attendance.status = "leave"
 
             daily_attendance.save()
-            print(f"{daily_attendance.staff.user.email} | Total Hours: {total_hours:.2f} | Status: {daily_attendance.status}")
+            logger.info(f"{daily_attendance.staff.user.email} | Total Hours: {total_hours:.2f} | Status: {daily_attendance.status}")
 
     # 4️⃣ Send session-end notification
     session_labels = {
@@ -182,12 +184,6 @@ def auto_logout_job(session_name: str):
         "session2": "Afternoon (12:00 PM - 3:00 PM)",
         "session3": "Evening (3:00 PM - 6:00 PM)",
     }
-    friendly_session = session_labels.get(session_name, session_name)
-    message = f"✅ {friendly_session} has ended. Your session attendance is recorded."
-    send_group_notification(message)
-
-
-
     friendly_session = session_labels.get(session_name, session_name)
     message = f"✅ {friendly_session} has ended. Your session attendance is recorded."
     send_group_notification(message)

@@ -1,4 +1,7 @@
+import logging
 from apscheduler.schedulers.background import BackgroundScheduler
+
+logger = logging.getLogger('scheduler')
 
 def start():
     """
@@ -37,4 +40,4 @@ def start():
 
     # --- Start the Engine ---
     scheduler.start()
-    print("⏱ Central Scheduler started successfully with all app jobs.")
+    logger.info("⏱ Central Scheduler started successfully with all app jobs.")

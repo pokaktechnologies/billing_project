@@ -117,7 +117,7 @@ def process_payroll_for_month(target_month, current_date=None):
 
     # 2. Validate Status
     period, created = PayrollPeriod.objects.get_or_create(month=target_month)
-    if period.status != "Open":
+    if period.status != "open":
         return {"success": False, "error": "Payroll already generated or locked."}
 
     # Create Attendance Summary Snapshot and Payroll Records for each active staff
@@ -143,7 +143,7 @@ def process_payroll_for_month(target_month, current_date=None):
             generated_count += 1
             
         # 5. Update PayrollMonth
-        period.status = "Generated"
+        period.status = "generated"
         period.generated_at = timezone.now()
         period.save()
         
@@ -179,7 +179,7 @@ def process_bulk_staff_payroll(staff_ids, period_id, current_date=None):
         return {"success": False, "error": "Payroll cannot be generated before month ends."}
 
     # 2. Validate Status
-    if period.status == "Locked":
+    if period.status == "locked":
         return {"success": False, "error": "Payroll month is locked."}
 
     results = []
@@ -226,8 +226,8 @@ def process_bulk_staff_payroll(staff_ids, period_id, current_date=None):
             not_found = [{"staff_id": sid, "reason": "Staff ID not found."} for sid in not_found_ids]
 
             # 5. Update PayrollMonth status (if not already GENERATED or LOCKED)
-            if period.status == "Open" and results:
-                period.status = "Generated"
+            if period.status == "open" and results:
+                period.status = "generated"
                 period.generated_at = timezone.now()
                 period.save()
         
@@ -254,7 +254,7 @@ def reset_staff_payroll(staff_id, period_id):
     except PayrollPeriod.DoesNotExist:
         return {"success": False, "error": "Invalid PayrollPeriod ID."}
 
-    if period.status == "Locked":
+    if period.status == "locked":
         return {"success": False, "error": "Cannot reset payroll for a locked period."}
 
     try:

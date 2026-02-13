@@ -876,7 +876,10 @@ class ProductListCreateAPIView(APIView):
         products = Product.objects.all()
 
         if search:
-            products = products.filter(name__icontains=search)
+            products = products.filter(
+                Q(name__icontains=search) |
+                Q(code__icontains=search)
+            )
 
         if category:
             products = products.filter(category_id=category)
@@ -1114,6 +1117,7 @@ class QuotationOrderAPI(APIView):
                 item_list.append({
                     "id": item.id,
                     "name": item.product.name,
+                    "code": item.product.code,
                     "product_id": item.product.pk,
                     "quantity": item.quantity,
                     "unit_price": item.unit_price or item.product.unit_price,
@@ -2533,7 +2537,8 @@ class OrderNumberGeneratorView(APIView):
             order_number = self.generate_next_number(Lead, "lead_number", "LD", 6)
         elif order_type == "EMP":
             order_number = self.generate_next_number(JobDetail, "employee_id", "EMP", 6)
-            
+        elif order_type == "PR":
+            order_number = self.generate_next_number(Product, "code", "PC", 6)
 
         else:
             return Response({

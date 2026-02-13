@@ -381,7 +381,8 @@ class QuotationItemSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
     product_description = serializers.CharField(source='product.product_description', read_only=True)
     quantity = serializers.SerializerMethodField()
-
+    code = serializers.CharField(source='product.code', read_only=True)
+    
     class Meta:
         model = QuotationItem
         fields = "__all__"   
@@ -1178,6 +1179,9 @@ class ProductSerializer(serializers.ModelSerializer):
     cgst = serializers.SerializerMethodField()
     total_tax_percentage = serializers.IntegerField(source='tax_setting.rate', read_only=True)
 
+    code = serializers.CharField(required=True)
+    is_active = serializers.BooleanField(required=True)
+
     class Meta:
         model = Product
         fields = "__all__"
@@ -1202,6 +1206,10 @@ class ProductSerializer(serializers.ModelSerializer):
         except Unit.DoesNotExist:
             raise serializers.ValidationError(f"Unit '{value}' does not exist.")
 
+    def validate_code(self, value):
+        if Product.objects.filter(code=value).exists():
+            raise serializers.ValidationError(f"Product code '{value}' already exists.")
+        return value
     def validate_category(self, value):
         try:
             if value.isdigit():
@@ -1580,6 +1588,10 @@ class InvoiceItemSerializer(serializers.ModelSerializer):
 
     product_description = serializers.CharField(
         source='product.product_description',
+        read_only=True
+    )
+    code = serializers.CharField(
+        source='product.code',
         read_only=True
     )
 

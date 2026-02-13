@@ -155,3 +155,23 @@ class MaterialReceiveReportSerializer(serializers.ModelSerializer):
     def get_supplier_name(self, obj):
         return f"{obj.supplier.first_name} {obj.supplier.last_name}"
 
+class PurchaseSummaryReportSerializer(serializers.Serializer):
+    month = serializers.CharField()
+    total_orders = serializers.IntegerField()
+    total_suppliers = serializers.IntegerField()
+    total_amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    avg_order_value = serializers.DecimalField(max_digits=12, decimal_places=2)
+
+class SalesSummaryReportSerializer(serializers.Serializer):
+    period = serializers.CharField()
+    total_sales = serializers.DecimalField(max_digits=12, decimal_places=2)
+    total_orders = serializers.IntegerField()
+    avg_order_value = serializers.DecimalField(max_digits=12, decimal_places=2)
+    total_returns = serializers.DecimalField(max_digits=12, decimal_places=2)
+    net_sales = serializers.DecimalField(max_digits=12, decimal_places=2)
+
+
+class SalesSummaryYtdSerializer(serializers.Serializer):
+    total_sales_ytd = serializers.DecimalField(max_digits=12, decimal_places=2)
+    total_returns_ytd = serializers.DecimalField(max_digits=12, decimal_places=2)
+    net_sales_ytd = serializers.DecimalField(max_digits=12, decimal_places=2)

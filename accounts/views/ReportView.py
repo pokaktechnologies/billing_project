@@ -37,7 +37,27 @@ class Pagination(PageNumberPagination):
         if page_size is None:
             return None 
         return int(page_size)
+    
 
+# Generate from_month, to_month_start, and to_month_end
+def get_month_range(from_date, to_date):
+    from_month = from_date.replace(day=1)
+
+    to_month_start = to_date.replace(day=1)
+    to_month_end = to_month_start + relativedelta(months=1) - timedelta(days=1)
+
+    return from_month, to_month_start, to_month_end
+
+# Generate a list of months between from_month and to_month
+def generate_months(from_month, to_month_start):
+    months = []
+    current = to_month_start
+
+    while current >= from_month:
+        months.append(current)
+        current -= relativedelta(months=1)
+
+    return months
 
 
 
@@ -47,158 +67,132 @@ class SalesReportSummaryView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+
         from_date = request.query_params.get('from_date')
         to_date = request.query_params.get('to_date')
 
-        invoice_qs = InvoiceModel.objects.all()
-        return_qs = SalesReturnModel.objects.all()
+        # DATE HANDLING
+        try:
+            if from_date and to_date:
+                from_date_obj = datetime.strptime(from_date, "%Y-%m-%d").date()
+                to_date_obj = datetime.strptime(to_date, "%Y-%m-%d").date()
+            else:
+                to_date_obj = date.today()
+                from_date_obj = to_date_obj - timedelta(days=365)
+        except ValueError:
+            return Response({
+                "Status": "0",
+                "Message": "Invalid date format"
+            }, status=status.HTTP_400_BAD_REQUEST)
 
-        months_list = []
+        # MONTH RANGE
+        from_month, to_month_start, to_month_end = get_month_range(from_date_obj, to_date_obj)
 
-        # =====================================================
-        # DATE VALIDATION & MONTH GENERATION
-        # =====================================================
-
-        if from_date and to_date:
-            try:
-                from_date_obj = datetime.strptime(from_date, "%Y-%m-%d")
-                to_date_obj = datetime.strptime(to_date, "%Y-%m-%d")
-            except ValueError:
-                return Response({
-                    "Status": "0",
-                    "Message": "Invalid date format. Use YYYY-MM-DD."
-                }, status=status.HTTP_400_BAD_REQUEST)
-
-            if from_date_obj > to_date_obj:
-                return Response({
-                    "Status": "0",
-                    "Message": "from_date must be before or equal to to_date."
-                }, status=status.HTTP_400_BAD_REQUEST)
-
-            from_month = from_date_obj.replace(day=1)
-            to_month = to_date_obj.replace(day=1)
-
-            end_of_month = to_month + relativedelta(months=1) - timedelta(days=1)
-
-            invoice_qs = invoice_qs.filter(
-                invoice_date__gte=from_month,
-                invoice_date__lte=end_of_month
-            )
-
-            return_qs = return_qs.filter(
-                return_date__gte=from_month,
-                return_date__lte=end_of_month
-            )
-
-            current = to_month
-            while current >= from_month:
-                months_list.append(current.replace(day=1))
-                current -= relativedelta(months=1)
-
-        else:
-            # Default last 12 months
-            today = datetime.today().replace(day=1)
-
-            for i in range(12):
-                month = today - relativedelta(months=i)
-                months_list.append(month.replace(day=1))
-
-        # =====================================================
-        # MONTHLY AGGREGATION
-        # =====================================================
-
-        sales_data = (
-            invoice_qs
-            .annotate(month=TruncMonth('invoice_date'))
-            .values('month')
-            .annotate(
-                total_sales=Sum('invoice_grand_total'),
-                total_orders=Count('id'),
-                avg_order_value=Avg('invoice_grand_total')
-            )
+        # -------------------------
+        # QUERYSETS
+        # -------------------------
+        invoice_qs = InvoiceModel.objects.filter(
+            invoice_date__gte=from_month,
+            invoice_date__lte=to_month_end
         )
 
-        return_data = (
-            return_qs
-            .annotate(month=TruncMonth('return_date'))
-            .values('month')
-            .annotate(
-                total_returns=Sum('grand_total')
-            )
+        return_qs = SalesReturnModel.objects.filter(
+            return_date__gte=from_month,
+            return_date__lte=to_month_end
         )
+
+        # -------------------------
+        # GROUP BY MONTH
+        # -------------------------
+        sales_data = invoice_qs.annotate(
+            month=TruncMonth('invoice_date')
+        ).values('month').annotate(
+            total_sales=Sum('invoice_grand_total'),
+            total_orders=Count('id'),
+            avg_order_value=Avg('invoice_grand_total')
+        ).order_by('month')
+
+        return_data = return_qs.annotate(
+            month=TruncMonth('return_date')
+        ).values('month').annotate(
+            total_returns=Sum('grand_total')
+        ).order_by('month')
 
         sales_dict = {
             item['month'].strftime("%Y-%m"): item
-            for item in sales_data if item['month']
+            for item in sales_data
         }
 
         return_dict = {
             item['month'].strftime("%Y-%m"): item['total_returns']
-            for item in return_data if item['month']
+            for item in return_data
         }
 
+        # -------------------------
+        # MONTH LIST
+        # -------------------------
+        months_list = generate_months(from_month, to_month_start)
 
-        # =====================================================
-        # BUILD FINAL MONTHLY DATA
-        # =====================================================
-
+        # -------------------------
+        # FINAL DATA
+        # -------------------------
         final_data = []
 
         for month in months_list:
-            month_key = month.strftime("%Y-%m")
+            key = month.strftime("%Y-%m")
 
-            sales_info = sales_dict.get(month_key)
+            sales_info = sales_dict.get(key)
 
             total_sales = sales_info['total_sales'] if sales_info else 0
             total_orders = sales_info['total_orders'] if sales_info else 0
             avg_order_value = sales_info['avg_order_value'] if sales_info else 0
-            total_returns = return_dict.get(month_key, 0)
+            total_returns = return_dict.get(key, 0)
 
-            net_sales = total_sales - total_returns
-
+            net_sales = (total_sales or 0) - (total_returns or 0)
 
             final_data.append({
                 "period": month.strftime("%b %Y"),
-                "total_sales": total_sales or 0,
+                "total_sales": total_sales or Decimal("0.00"),
                 "total_orders": total_orders or 0,
-                "avg_order_value": avg_order_value or 0,
+                "avg_order_value": round(avg_order_value or 0, 2),
                 "total_returns": total_returns or 0,
                 "net_sales": net_sales
             })
 
-        # =====================================================
-        # YTD SUMMARY CALCULATION
-        # =====================================================
+        # -------------------------
+        # YTD SUMMARY (FIXED)
+        # -------------------------
+        year = to_date_obj.year
 
-        start_of_year = date(datetime.today().year, 1, 1)
+        start_of_year = date(year, 1, 1)
         today_date = date.today()
 
         total_sales_ytd = InvoiceModel.objects.filter(
             invoice_date__gte=start_of_year,
             invoice_date__lte=today_date
-        ).aggregate(
-            total=Sum('invoice_grand_total')
-        )['total'] or 0
+        ).aggregate(total=Sum('invoice_grand_total'))['total'] or 0
 
         total_returns_ytd = SalesReturnModel.objects.filter(
             return_date__gte=start_of_year,
             return_date__lte=today_date
-        ).aggregate(
-            total=Sum('grand_total')
-        )['total'] or 0
+        ).aggregate(total=Sum('grand_total'))['total'] or 0
 
         net_sales_ytd = total_sales_ytd - total_returns_ytd
 
-        # FINAL RESPONSE
-        return Response({
-            "Status": "1",
-            "Message": "Success",
-            "Data": final_data,
-            "Summary": {
+        summary_data = {
                 "total_sales_ytd": total_sales_ytd,
                 "total_returns_ytd": total_returns_ytd,
                 "net_sales_ytd": net_sales_ytd
             }
+
+        monthly_serializer = SalesSummaryReportSerializer(final_data, many=True)
+        summary_serializer = SalesSummaryYtdSerializer(summary_data)
+
+        return Response({
+            "Status": "1",
+            "Message": "Success",
+            "Data": monthly_serializer.data,
+            "Summary": summary_serializer.data
         }, status=status.HTTP_200_OK)
 
 
@@ -1109,5 +1103,90 @@ class SupplierReportView(APIView):
             "Status": "1",
             "Message": "Success",
             "Count": suppliers.count(),
+            "Data": serializer.data
+        })
+    
+# Purchase Summary
+class PurchaseSummaryReportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        from_date = request.query_params.get('from_date')
+        to_date = request.query_params.get('to_date')
+
+        # -------------------------
+        # DATE HANDLING
+        # -------------------------
+        try:
+            if from_date and to_date:
+                from_date_obj = datetime.strptime(from_date, "%Y-%m-%d").date()
+                to_date_obj = datetime.strptime(to_date, "%Y-%m-%d").date()
+            else:
+                to_date_obj = date.today()
+                from_date_obj = to_date_obj - timedelta(days=365)
+        except ValueError:
+            return Response({
+                "Status": "0",
+                "Message": "Invalid date format (YYYY-MM-DD)"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # -------------------------
+        # MONTH RANGE
+        # -------------------------
+        from_month, to_month_start, to_month_end = get_month_range(from_date_obj, to_date_obj)
+
+        # -------------------------
+        # QUERYSET
+        # -------------------------
+        qs = PurchaseOrder.objects.filter(
+            purchase_order_date__gte=from_month,
+            purchase_order_date__lte=to_month_end
+        )
+
+        # -------------------------
+        # GROUP BY MONTH
+        # -------------------------
+        data = qs.annotate(
+            month=TruncMonth('purchase_order_date')
+        ).values('month').annotate(
+            total_orders=Count('id'),
+            total_amount=Sum('grand_total'),
+            avg_order_value=Avg('grand_total'),
+            total_suppliers=Count('supplier', distinct=True)
+        ).order_by('month')
+
+        data_dict = {
+            item['month'].strftime("%Y-%m"): item
+            for item in data
+        }
+
+        # -------------------------
+        # MONTH LIST
+        # -------------------------
+        months_list = generate_months(from_month, to_month_start)
+
+        # -------------------------
+        # FINAL DATA
+        # -------------------------
+        result = []
+
+        for month in months_list:
+            key = month.strftime("%Y-%m")
+            item = data_dict.get(key)
+
+            result.append({
+                "month": month.strftime("%B %Y"),
+                "total_orders": item['total_orders'] if item else 0,
+                "total_suppliers": item['total_suppliers'] if item else 0,
+                "total_amount": item['total_amount'] if item and item['total_amount'] else 0,
+                "avg_order_value": round(item['avg_order_value'] or 0, 2) if item else 0
+            })
+
+        serializer = PurchaseSummaryReportSerializer(result, many=True)
+
+        return Response({
+            "Status": "1",
+            "Message": "Success",
             "Data": serializer.data
         })

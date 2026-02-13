@@ -56,7 +56,7 @@ urlpatterns = [
     path('task/<int:project_member_id>/project_members/search/', TaskSearchByProjectMembersView.as_view(), name='task_search_by_project_members'),
     path('task/<int:member_id>/members/search/', TaskSearchByMembersView.as_view(), name='task_search_by_members'),
 
-    # Report
+    # Employee Report
     path('report/', ReportView.as_view(), name='project_report'),
     path('report/<int:id>/', ReportView.as_view(), name='project_report_detail'), # RETRIVE/CREATE/UPDATE
     
@@ -69,4 +69,9 @@ urlpatterns = [
 
     #Dashaboard
     path('dashboard/', ProjectManagerDashboardView.as_view(), name='dashboard'),
+
+    # Reports
+    path('reports/project/', ProjectReportView.as_view(), name='project_report'),
+    path('reports/project-timeline/', ProjectTimelineReportView.as_view(), name='project_report_timeline'),
+    path('reports/contract/', ContractReportView.as_view(), name='project_contract_report'),
 ]

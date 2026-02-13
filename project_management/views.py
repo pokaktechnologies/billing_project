@@ -21,7 +21,19 @@ from django_filters.rest_framework import DjangoFilterBackend
 
 
 
+#------------
+#  pagination class
+#--------------
+from rest_framework.pagination import PageNumberPagination
+class ReportPagination(PageNumberPagination):
+    page_size_query_param = 'page_size'
 
+    def get_page_size(self, request):
+        page_size = request.query_params.get('page_size')
+        if page_size is None:
+            return None 
+        return int(page_size)
+    
 
 
 
@@ -675,19 +687,17 @@ def get_project_progress_data(project):
         completed=Count('id', filter=Q(status='completed')),
     )
 
-    POINTS = {
-        "not_started": 0,
-        "in_progress": 1,
-        "completed": 2,
-    }
+    total_tasks = task_counts["total_tasks"] or 0
+    not_started = task_counts["not_started"] or 0
+    in_progress = task_counts["in_progress"] or 0
+    completed = task_counts["completed"] or 0
 
-    total_tasks = task_counts["total_tasks"]
     total_tasks_point = total_tasks * 2
 
     total_point = (
-        task_counts["not_started"] * POINTS["not_started"] +
-        task_counts["in_progress"] * POINTS["in_progress"] +
-        task_counts["completed"] * POINTS["completed"]
+        not_started * 0 +
+        in_progress * 1 +
+        completed * 2
     )
 
     progression_percentage = (
@@ -697,12 +707,11 @@ def get_project_progress_data(project):
 
     return {
         "total_tasks": total_tasks,
-        "not_started_tasks": task_counts["not_started"],
-        "in_progress_tasks": task_counts["in_progress"],
-        "completed_tasks": task_counts["completed"],
+        "not_started_tasks": not_started,
+        "in_progress_tasks": in_progress,
+        "completed_tasks": completed,
         "progression_percentage": round(progression_percentage, 2),
     }
-
 
 class MyProjectsView(APIView):
     authentication_classes = [JWTAuthentication]
@@ -2099,5 +2108,191 @@ class ProjectProgressionView(APIView):
                 "message": "success",
                 "data": get_project_progress_data(project)
             },
+            status=status.HTTP_200_OK
+        )
+
+
+#------------------------------
+# Reports Views
+#----------------------
+
+class ProjectReportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        projects = ProjectManagement.objects.select_related('contract').prefetch_related('task_set').order_by('-created_at')
+
+        # FILTER PARAMETERS
+        from_date = request.query_params.get('from_date')
+        to_date = request.query_params.get('to_date')
+        status = request.query_params.get('status')
+        search = request.query_params.get('search')
+
+        # DATE FILTER (ACTIVE PROJECTS)
+        if from_date and to_date:
+            try:
+                from_date = datetime.strptime(from_date, "%Y-%m-%d").date()
+                to_date = datetime.strptime(to_date, "%Y-%m-%d").date()
+
+                projects = projects.filter(
+                    start_date__lte=to_date,
+                    end_date__gte=from_date
+                )
+
+            except ValueError:
+                return Response({
+                    "Status": "0",
+                    "Message": "Invalid date format. Use YYYY-MM-DD"
+                })
+
+        # STATUS FILTER
+        if status:
+            projects = projects.filter(status=status)
+
+        # SEARCH FILTER
+        if search:
+            projects = projects.filter(
+                project_name__icontains=search
+            )
+
+
+        # PAGINATION
+        paginator = ReportPagination()
+        paginated_qs = paginator.paginate_queryset(projects, request)
+
+        if paginated_qs is not None:
+            serializer = ProjectManagementSerializer(paginated_qs, many=True)
+            data = serializer.data
+
+            for i, project in enumerate(paginated_qs):
+                data[i]["progress"] = get_project_progress_data(project)
+
+            return paginator.get_paginated_response({
+                "Status": "1",
+                "Message": "Success",
+                "Data": data
+            })
+
+        # If no pagination
+        serializer = ProjectManagementSerializer(projects, many=True)
+        data = serializer.data
+
+        for i, project in enumerate(projects):
+            data[i]["progress"] = get_project_progress_data(project)
+
+        return Response({
+            "Status": "1",
+            "Message": "Success",
+            "Data": data
+        })
+    
+# Project Timeline reports
+
+class ProjectTimelineReportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        project_qs = ProjectManagement.objects.select_related(
+            'contract__client'
+        ).order_by('-created_at')
+
+        from_date = request.query_params.get('from_date')
+        to_date = request.query_params.get('to_date')
+        status = request.query_params.get('status')
+        search = request.query_params.get('search')
+
+        # DATE FILTER
+        if from_date and to_date:
+            try:
+                from_date = datetime.strptime(from_date, "%Y-%m-%d").date()
+                to_date = datetime.strptime(to_date, "%Y-%m-%d").date()
+
+                project_qs = project_qs.filter(
+                    start_date__lte=to_date,
+                    end_date__gte=from_date
+                )
+            except ValueError:
+                return Response({
+                    "Status": "0",
+                    "Message": "Invalid date format. Use YYYY-MM-DD"
+                })
+
+        # STATUS FILTER
+        if status:
+            project_qs = project_qs.filter(status=status)
+
+        # SEARCH FILTER
+        if search:
+            project_qs = project_qs.filter(project_name__icontains=search)
+
+        # PAGINATION
+        paginator = ReportPagination()
+        paginated_qs = paginator.paginate_queryset(project_qs, request)
+        if paginated_qs is not None:
+            serializer = ProjectTimelineSerializer(paginated_qs, many=True)
+
+            return paginator.get_paginated_response({
+                "Status": "1",
+                "Message": "Success",
+                "Data": serializer.data
+            })
+
+        serializer = ProjectTimelineSerializer(project_qs, many=True)
+
+        return Response({
+            "Status": "1",
+            "Message": "Success",
+            "Data": serializer.data
+        })
+
+# Contract Reports
+class ContractReportView(APIView):
+    def get(self, request):
+
+        contract_date_from = request.query_params.get('contract_date_from')
+        contract_date_to = request.query_params.get('contract_date_to')
+        search = request.query_params.get('search')
+
+        contracts = ClientContract.objects.select_related(
+            'client'
+        ).order_by('-created_at')
+
+        # SEARCH FILTER
+        if search:
+            contracts = contracts.filter(
+                Q(client__first_name__icontains=search) |
+                Q(client__last_name__icontains=search) |
+                Q(contract_name__icontains=search)
+            )
+
+        # DATE FILTER
+        if contract_date_from and contract_date_to:
+            try:
+                contract_date_from = datetime.strptime(contract_date_from, "%Y-%m-%d").date()
+                contract_date_to = datetime.strptime(contract_date_to, "%Y-%m-%d").date()
+
+                contracts = contracts.filter(
+                    contract_date__range=[contract_date_from, contract_date_to]
+                )
+
+            except ValueError:
+                return Response({
+                    "status": "0",
+                    "message": "Invalid date format. Use YYYY-MM-DD"
+                })
+        paginator = ReportPagination()
+        paginated_qs = paginator.paginate_queryset(contracts, request)
+        if paginated_qs is not None:
+            serializer = ClientContractSerializer(paginated_qs, many=True)
+            return paginator.get_paginated_response({
+                "status": "1",
+                "message": "success",
+                "data": serializer.data
+            })
+
+        serializer = ClientContractSerializer(contracts, many=True)
+        return Response(
+            {"status": "1", "message": "success", "data": serializer.data},
             status=status.HTTP_200_OK
         )

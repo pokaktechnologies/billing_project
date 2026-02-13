@@ -496,17 +496,20 @@ class StaffPersonalAttendanceView(APIView):
         user = request.user
         if user.is_staff:
             # validation check start_date <= end_date
-            if start_date and end_date:
-                start = parse_date(start_date)
-                end = parse_date(end_date)  
-                if start > end:
-                    raise ValidationError("Start date cannot be after end date.")
+            start = parse_date(start_date) if start_date else None
+            end = parse_date(end_date) if end_date else None
+
+            if start and end and start > end:
+                return Response(
+                    {"status": "0", "message": "Start date cannot be after end date."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
                 
             queryset = DailyAttendance.objects.filter(staff__id=user.staff_profile.id).order_by('-date')
 
-            if start_date:
+            if start:
                 queryset = queryset.filter(date__gte=start)
-            if end_date:
+            if end:
                 queryset = queryset.filter(date__lte=end)
             # Get staff start date from JobDetail
             start_date_str = StaffPersonalInfoSerializer(user).data.get('profile', {}).get('job_detail', {}).get('start_date')

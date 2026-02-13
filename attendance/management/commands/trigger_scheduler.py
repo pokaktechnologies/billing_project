@@ -40,6 +40,20 @@ class Command(BaseCommand):
             create_monthly_payroll_period()
             self.stdout.write(self.style.SUCCESS("Payroll job triggered."))
             
+        elif job == 'status':
+            self.stdout.write("--- Scheduler Configuration Status ---")
+            from core.scheduler import start
+            # We can't easily access the running server's scheduler instance, 
+            # but we can show what IS configured to run.
+            self.stdout.write("Listing configured jobs:")
+            self.stdout.write("- Daily Attendance: 08:00 AM (Asia/Kolkata)")
+            self.stdout.write("- Session 1 Logout: 12:00 PM (Asia/Kolkata)")
+            self.stdout.write("- Session 2 Logout: 03:00 PM (Asia/Kolkata)")
+            self.stdout.write("- Session 3 Logout: 06:00 PM (Asia/Kolkata)")
+            self.stdout.write("- Monthly Payroll: Day 1, 00:00 AM")
+            self.stdout.write("\nTo confirm if the LIVE scheduler is currently running, check the log file:")
+            self.stdout.write(self.style.NOTICE("Get-Content scheduler.log -Tail 10"))
+
         else:
             self.stdout.write("Running all standard jobs (Attendance)...")
             create_daily_attendance_records()

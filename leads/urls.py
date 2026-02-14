@@ -57,6 +57,8 @@ urlpatterns = [
 
     #lead report
     path("reports/leads/", LeadReportAPIView.as_view(), name="lead-report"),
+    path("reports/lead-peformance/",LeadPerformanceAPIView.as_view(),name="lead-report-performance"),
+    path("reports/lead-source-report/",LeadSourceReportAPIView.as_view(),name="lead-report-performance"),
 
     # salesperson leads management
     path('admin/salesperson/lead-stats/', SalespersonLeadStatsView.as_view(), name='salesperson_lead_stats'),

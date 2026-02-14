@@ -1301,3 +1301,257 @@ class LeadReportAPIView(APIView):
             "count": leads.count(),
             "results": serializer.data
         })
+    
+
+
+
+from django.db.models import Count, Q, F, Value
+from django.db.models.functions import Concat
+
+class LeadPerformanceAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        # -------------------------
+        # START BASE QUERYSET
+        # -------------------------
+        leads = Lead.objects.all()
+
+        # Optional: Restrict non-admin users
+        if not request.user.is_staff:
+            leads = leads.filter(CustomUser=request.user)
+
+        # -------------------------
+        # GET FILTER PARAMETERS
+        # -------------------------
+        lead_status = request.GET.get("lead_status")
+        lead_source = request.GET.get("lead_source")
+        salesperson = request.GET.get("salesperson")
+        location = request.GET.get("location")
+        lead_type = request.GET.get("lead_type")
+        client_name = request.GET.get("client_name")
+        company = request.GET.get("company")
+        phone = request.GET.get("phone")
+        email = request.GET.get("email")
+        created_by = request.GET.get("created_by")
+        search = request.GET.get("search")
+
+        from_date = request.GET.get("from_date")
+        to_date = request.GET.get("to_date")
+
+        # -------------------------
+        # DATE FILTER
+        # -------------------------
+        if from_date:
+            leads = leads.filter(created_at__date__gte=parse_date(from_date))
+
+        if to_date:
+            leads = leads.filter(created_at__date__lte=parse_date(to_date))
+
+        # -------------------------
+        # FIELD FILTERS
+        # -------------------------
+        if lead_status:
+            leads = leads.filter(lead_status=lead_status)
+
+        if lead_source:
+            leads = leads.filter(lead_source_id=lead_source)
+
+        if salesperson:
+            leads = leads.filter(salesperson_id=salesperson)
+
+        if location:
+            leads = leads.filter(location_id=location)
+
+        if lead_type:
+            leads = leads.filter(lead_type=lead_type)
+
+        if client_name:
+            leads = leads.filter(name__icontains=client_name)
+
+        if company:
+            leads = leads.filter(company__icontains=company)
+
+        if phone:
+            leads = leads.filter(phone__icontains=phone)
+
+        if email:
+            leads = leads.filter(email__icontains=email)
+
+        if created_by:
+            leads = leads.filter(CustomUser_id=created_by)
+
+        # -------------------------
+        # GLOBAL SEARCH
+        # -------------------------
+        if search:
+            leads = leads.filter(
+                Q(name__icontains=search) |
+                Q(company__icontains=search) |
+                Q(phone__icontains=search) |
+                Q(email__icontains=search) |
+                Q(lead_number__icontains=search)
+            )
+
+        # -------------------------
+        # KPI CALCULATIONS
+        # -------------------------
+        total_leads = leads.count()
+        converted = leads.filter(lead_status='converted').count()
+        lost = leads.filter(lead_status='lost').count()
+        new = leads.filter(lead_status='new').count()
+        in_progress = leads.filter(lead_status='in_progress').count()
+
+        conversion_rate = 0
+        if total_leads > 0:
+            conversion_rate = (converted / total_leads) * 100
+
+        # -------------------------
+        # FOLLOW UP STATS
+        # -------------------------
+        followups = FollowUp.objects.filter(lead__in=leads)
+
+        pending_followups = followups.filter(status='new').count()
+        completed_followups = followups.filter(status='completed').count()
+
+        # -------------------------
+        # SALESPERSON PERFORMANCE
+        # -------------------------
+        salesperson_data = leads.filter(
+            salesperson__isnull=False
+        ).annotate(
+            full_name=Concat(
+                F('salesperson__first_name'),
+                Value(' '),
+                F('salesperson__last_name')
+            )
+        ).values(
+            'salesperson_id',
+            'full_name'
+        ).annotate(
+            total=Count('id'),
+            converted=Count('id', filter=Q(lead_status='converted'))
+        )
+
+        # Add conversion rate per salesperson
+        salesperson_list = list(salesperson_data)
+
+        for sp in salesperson_list:
+            if sp["total"] > 0:
+                sp["conversion_rate"] = round(
+                    (sp["converted"] / sp["total"]) * 100, 2
+                )
+            else:
+                sp["conversion_rate"] = 0
+
+        # -------------------------
+        # FINAL RESPONSE
+        # -------------------------
+        return Response({
+            "total_leads": total_leads,
+            "converted_leads": converted,
+            "lost_leads": lost,
+            "conversion_rate": round(conversion_rate, 2),
+            "new_leads": new,
+            "in_progress_leads": in_progress,
+            "follow_up_pending": pending_followups,
+            "follow_up_completed": completed_followups,
+            "salesperson_performance": salesperson_list
+        })
+    
+
+
+
+
+class LeadSourceReportAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        # -------------------------
+        # BASE QUERYSET
+        # -------------------------
+        leads = Lead.objects.all()
+
+        # Restrict non-admin users
+        if not request.user.is_staff:
+            leads = leads.filter(CustomUser=request.user)
+
+        # -------------------------
+        # FILTERS
+        # -------------------------
+        from_date = request.GET.get("from_date")
+        to_date = request.GET.get("to_date")
+        location = request.GET.get("location")
+        salesperson = request.GET.get("salesperson")
+        lead_status = request.GET.get("lead_status")
+        lead_source = request.GET.get("lead_source")
+
+
+        if from_date:
+            leads = leads.filter(created_at__date__gte=parse_date(from_date))
+
+        if to_date:
+            leads = leads.filter(created_at__date__lte=parse_date(to_date))
+
+        if location:
+            leads = leads.filter(location_id=location)
+
+        if salesperson:
+            leads = leads.filter(salesperson_id=salesperson)
+
+        if lead_status:
+            leads = leads.filter(lead_status=lead_status)
+        
+        if lead_source:
+            leads = leads.filter(lead_source_id=lead_source)
+
+
+        # -------------------------
+        # GROUP BY LEAD SOURCE
+        # -------------------------
+        source_data = leads.filter(
+            lead_source__isnull=False
+        ).values(
+            'lead_source_id',
+            'lead_source__name'
+        ).annotate(
+            total=Count('id'),
+            converted=Count('id', filter=Q(lead_status='converted')),
+            lost=Count('id', filter=Q(lead_status='lost')),
+            new=Count('id', filter=Q(lead_status='new')),
+            in_progress=Count('id', filter=Q(lead_status='in_progress'))
+        ).order_by('-total')
+
+        # Convert queryset to list and calculate conversion %
+        source_list = list(source_data)
+
+        for source in source_list:
+            if source["total"] > 0:
+                source["conversion_rate"] = round(
+                    (source["converted"] / source["total"]) * 100, 2
+                )
+            else:
+                source["conversion_rate"] = 0
+
+        # -------------------------
+        # OVERALL TOTALS (OPTIONAL)
+        # -------------------------
+        overall_total = leads.count()
+        overall_converted = leads.filter(lead_status='converted').count()
+
+        overall_conversion_rate = 0
+        if overall_total > 0:
+            overall_conversion_rate = round(
+                (overall_converted / overall_total) * 100, 2
+            )
+
+        # -------------------------
+        # RESPONSE
+        # -------------------------
+        return Response({
+            "overall_total_leads": overall_total,
+            "overall_conversion_rate": overall_conversion_rate,
+            "source_performance": source_list
+        })

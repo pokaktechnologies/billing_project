@@ -4,14 +4,30 @@ from rest_framework import status
 from django.utils import timezone
 from django.core.mail import EmailMessage
 from django.http import HttpResponse
+from rest_framework.permissions import IsAuthenticated
 from .models import Certificate
 from .serializers import CertificateSerializer, ManagementStaffSignatureSerializer
 from accounts.permissions import HasModulePermission
 from accounts.models import JobDetail, StaffProfile, CustomUser  # Import here to avoid circular imports
 import base64
 import logging
+from django.db.models import Q
 
 logger = logging.getLogger(__name__)
+
+#------------
+#  pagination class
+#--------------
+from rest_framework.pagination import PageNumberPagination
+class Pagination(PageNumberPagination):
+    page_size_query_param = 'page_size'
+
+    def get_page_size(self, request):
+        page_size = request.query_params.get('page_size')
+        if page_size is None:
+            return None 
+        return int(page_size)
+    
 
 class CertificateListCreateView(generics.ListCreateAPIView):
     serializer_class = CertificateSerializer
@@ -241,3 +257,36 @@ class ManagementSignatureListView(views.APIView):
 
         serializer = ManagementStaffSignatureSerializer(staffs, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+    
+# Reports 
+
+class CertificateReportView(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        certificates = Certificate.objects.all()
+
+        category = request.query_params.get('category')
+        status = request.query_params.get('status')
+        search = request.query_params.get('search')
+
+        if search:
+            certificates = certificates.filter(
+                (Q(full_name__icontains=search) | Q(email__icontains=search))
+            )
+
+        if status:
+            certificates = certificates.filter(status=status)
+
+        if category:
+            certificates = certificates.filter(category=category)
+
+        paginator = Pagination()
+        result_page = paginator.paginate_queryset(certificates, request)
+
+        if result_page is not None:
+            serializer = CertificateSerializer(result_page, many=True)
+            return paginator.get_paginated_response(serializer.data)
+
+        serializer = CertificateSerializer(certificates, many=True)
+        return Response(serializer.data)

@@ -14,6 +14,7 @@ class PayrollFilter(django_filters.FilterSet):
     
     # Period filters
     period_month = django_filters.CharFilter(field_name='period__month')
+    period_id = django_filters.NumberFilter(field_name='period_id')
     
     # Date range filters
     start_date = django_filters.DateFilter(field_name='created_at', lookup_expr='gte')
@@ -22,7 +23,6 @@ class PayrollFilter(django_filters.FilterSet):
     # Salary range filters
     min_salary = django_filters.NumberFilter(field_name='net_salary', lookup_expr='gte')
     max_salary = django_filters.NumberFilter(field_name='net_salary', lookup_expr='lte')
-
     class Meta:
         model = Payroll
         fields = ['staff', 'period', 'status', 'month']

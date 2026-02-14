@@ -1190,3 +1190,91 @@ class PurchaseSummaryReportView(APIView):
             "Message": "Success",
             "Data": serializer.data
         })
+
+class EmployeeReportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        search = request.query_params.get('search')
+        gender = request.query_params.get('gender')
+        department = request.query_params.get('department')
+        job_type = request.query_params.get('job_type')
+
+        employees = (
+            StaffProfile.objects
+            .select_related('job_detail', 'user')
+            .filter(job_detail__isnull=False)
+            .order_by('-id')
+        )
+
+        if search:
+            employees = employees.filter(
+                Q(user__first_name__icontains=search) |
+                Q(user__last_name__icontains=search) |
+                Q(staff_email__icontains=search) |
+                Q(phone_number__icontains=search) |
+                Q(job_detail__employee_id__icontains=search)
+            )
+
+        if gender:
+            employees = employees.filter(user__gender__iexact=gender)
+
+        if department:
+            employees = employees.filter(job_detail__department_id=department)
+
+        if job_type:
+            employees = employees.filter(job_detail__job_type=job_type)
+
+        paginator = Pagination()
+        paginated_employees = paginator.paginate_queryset(employees, request)
+
+        if paginated_employees is not None:
+            serializer = EmployeeReportSerializer(paginated_employees, many=True)
+            return paginator.get_paginated_response(serializer.data)
+
+        serializer = EmployeeReportSerializer(employees, many=True)
+
+        return Response({
+            "Status": "1",
+            "Message": "Success",
+            "Count": employees.count(),
+            "Data": serializer.data
+        })
+
+
+# Department Report
+class DepartmentReportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        search = request.query_params.get('search')
+
+        departments = Department.objects.all()
+
+        if search:
+            departments = departments.filter(name__icontains=search)
+
+        departments = departments.annotate(
+            employee_count=Count('jobdetail'),
+            full_day=Count('jobdetail', filter=Q(jobdetail__job_type='full_day')),
+            part_time=Count('jobdetail', filter=Q(jobdetail__job_type='part_time')),
+            contract=Count('jobdetail', filter=Q(jobdetail__job_type='contract')),
+            internship=Count('jobdetail', filter=Q(jobdetail__job_type='internship')),
+            avg_salary=Avg('jobdetail__salary')
+        ).order_by('-id')
+
+        paginator = Pagination()
+        paginated_departments = paginator.paginate_queryset(departments, request)
+
+        if paginated_departments is not None:
+            serializer = DepartmentReportSerializer(paginated_departments, many=True)
+            return paginator.get_paginated_response(serializer.data)
+
+        serializer = DepartmentReportSerializer(departments, many=True)
+
+        return Response({
+            "Status": "1",
+            "Message": "Success",
+            "Count": departments.count(),
+            "Data": serializer.data
+        })

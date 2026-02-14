@@ -20,11 +20,12 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.utils import timezone
 from datetime import datetime, time as dt_time
 from attendance.models import DailyAttendance, AttendanceSession
-from django.db.models import Sum, F, DecimalField, ExpressionWrapper
+from django.db.models import Sum,Avg
 from django.db.models.functions import Coalesce
 from decimal import Decimal
 from finance.utils import round_decimal
 from .serializers import *
+from .user import *
 
 # Invoice Report
 class InvoiceReportSerializer(serializers.ModelSerializer):
@@ -175,3 +176,53 @@ class SalesSummaryYtdSerializer(serializers.Serializer):
     total_sales_ytd = serializers.DecimalField(max_digits=12, decimal_places=2)
     total_returns_ytd = serializers.DecimalField(max_digits=12, decimal_places=2)
     net_sales_ytd = serializers.DecimalField(max_digits=12, decimal_places=2)
+
+
+class EmployeeReportSerializer(serializers.ModelSerializer):
+    job_detail = JobDetailSerializer(read_only=True)
+    # documents = StaffDocumentSerializer(many=True, read_only=True)
+    name = serializers.SerializerMethodField()
+    gender  = serializers.CharField(source='user.gender', read_only=True)
+    
+
+
+    class Meta:
+        model = StaffProfile
+        fields =[
+            'id',
+            'name',
+            'phone_number',
+            'qulification',
+            'staff_email',
+            'profile_image',
+            'gender',
+            'date_of_birth',
+            'address',
+            'job_detail',
+            # 'documents'
+        ]
+
+    def get_name(self, obj):
+        return f"{obj.user.first_name} {obj.user.last_name}"
+    
+
+class DepartmentReportSerializer(serializers.ModelSerializer):
+    employee_count = serializers.IntegerField(read_only=True)
+    full_day = serializers.IntegerField(read_only=True)
+    part_time = serializers.IntegerField(read_only=True)
+    contract = serializers.IntegerField(read_only=True)
+    internship = serializers.IntegerField(read_only=True)
+    avg_salary = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = Department
+        fields = [
+            'id',
+            'name',
+            'employee_count',
+            'full_day',
+            'part_time',
+            'contract',
+            'internship',
+            'avg_salary',
+        ]

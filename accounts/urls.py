@@ -113,6 +113,11 @@ urlpatterns = [
     path('reports/supplier/', SupplierReportView.as_view(), name='supplier_report'),
     path('reports/purchase-summary/', PurchaseSummaryReportView.as_view(), name='purchase_summary_report'),
 
+    # Hr Reports
+    path('reports/employee/',EmployeeReportView.as_view(), name='employee_report'),
+    path('reports/department/',DepartmentReportView.as_view(), name='department_report'),
+    
+
     
     path('quotations/', QuotationOrderAPI.as_view(), name='quotation-items-detail'),
     path('quotations/<int:qid>/', QuotationOrderAPI.as_view(), name='quotation-items-detail'),

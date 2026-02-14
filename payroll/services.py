@@ -274,3 +274,60 @@ def reset_staff_payroll(staff_id, period_id):
             }
     except Exception as e:
         return {"success": False, "error": f"Error during payroll reset: {str(e)}"}
+
+def bulk_mark_payroll_as_paid(payroll_ids):
+    """
+    Marks multiple payroll records as 'Paid'.
+    Only records in 'Draft' status and associated with a 'Locked' period are updated.
+    """
+    try:
+        with transaction.atomic():
+            payrolls = Payroll.objects.select_for_update().filter(id__in=payroll_ids)
+            
+            found_ids = set(payrolls.values_list('id', flat=True))
+            not_found_ids = set(payroll_ids) - found_ids
+            
+            # Filter for Draft status AND Locked period
+            updatable_payrolls = payrolls.filter(status='Draft', period__status='locked')
+            
+            # Identify reasons for skipping
+            already_paid_ids = set(payrolls.filter(status='Paid').values_list('id', flat=True))
+            unlocked_period_payrolls = payrolls.filter(status='Draft').exclude(period__status='locked')
+            unlocked_period_ids = set(unlocked_period_payrolls.values_list('id', flat=True))
+            
+            updated_count = updatable_payrolls.update(status='Paid')
+            
+            # Prepare summary and details
+            total_processed = len(payroll_ids)
+            skipped_count = len(already_paid_ids) + len(unlocked_period_ids)
+            
+            results = {
+                "success": True,
+                "message": f"Successfully processed {total_processed} payroll records. {updated_count} updated, {skipped_count} skipped.",
+                "summary": {
+                    "updated": updated_count,
+                    "already_paid": len(already_paid_ids),
+                    "skipped_unlocked_period": len(unlocked_period_ids),
+                    "not_found": len(not_found_ids)
+                },
+                "details": {
+                    "already_paid_ids": list(already_paid_ids),
+                    "unlocked_period_ids": list(unlocked_period_ids),
+                    "not_found_ids": list(not_found_ids)
+                }
+            }
+            
+            if updated_count == 0:
+                if not_found_ids and not already_paid_ids and not unlocked_period_ids:
+                    results["success"] = False
+                    results["error"] = "None of the provided payroll IDs were found."
+                    results["message"] = "No payroll records were found."
+                elif unlocked_period_ids and not already_paid_ids:
+                    results["message"] = f"Processed {total_processed} records. None were updated because their periods are not locked."
+                else:
+                    results["message"] = f"Processed {total_processed} records. No updatable records found (already paid or unlocked periods)."
+            
+            return results
+            
+    except Exception as e:
+        return {"success": False, "error": f"Error during bulk mark as paid: {str(e)}"}

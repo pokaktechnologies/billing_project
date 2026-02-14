@@ -1,9 +1,12 @@
-from rest_framework import generics, filters
+from rest_framework import generics, filters, status
+from rest_framework.views import APIView
+from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from ..models import Payroll
 from ..serializers.payroll import PayrollListSerializer, PayrollDetailSerializer
 from ..filters import PayrollFilter
 from ..pagination import OptionalPagination
+from ..services import bulk_mark_payroll_as_paid
 
 class PayrollListView(generics.ListAPIView):
     """
@@ -45,3 +48,22 @@ class MyPayrollListView(generics.ListAPIView):
         return Payroll.objects.filter(staff__user=self.request.user).select_related(
             'staff__user', 'staff__job_detail', 'period'
         ).order_by('-created_at')
+
+class BulkPayrollPayView(APIView):
+    """
+    POST → Bulk mark multiple payroll records as Paid.
+    Body: {"payroll_ids": [1, 2, 3]}
+    """
+    def post(self, request, *args, **kwargs):
+        payroll_ids = request.data.get('payroll_ids', [])
+        if not payroll_ids or not isinstance(payroll_ids, list):
+            return Response(
+                {"success": False, "error": "A list of payroll_ids is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        result = bulk_mark_payroll_as_paid(payroll_ids)
+        if not result.get('success', False):
+            return Response(result, status=status.HTTP_400_BAD_REQUEST)
+            
+        return Response(result, status=status.HTTP_200_OK)

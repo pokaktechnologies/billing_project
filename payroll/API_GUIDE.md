@@ -118,7 +118,36 @@ Returns full details for a specific payroll record.
 
 ---
 
-## 4. Automation & Scheduling
+## 5. Reports & Payslips
+
+### Retrieve Employee Payslip
+
+Returns a comprehensive, single-month payslip for a specific employee. Includes staff details, attendance breakdown, and financial summary.
+
+- **URL**: `/payslip/`
+- **Method**: `GET`
+- **Query Parameters**:
+  - `staff_id` (int, Required): The ID of the staff member.
+  - `period_id` (int, Optional): The ID of the `PayrollPeriod`.
+  - `month` (string, Optional): Month in `YYYY-MM` format (Use if `period_id` is not known).
+- **Note**: Either `period_id` or `month` is required.
+
+### List Salary Statements
+
+Returns a list of salary statements for a specific employee with advanced duration and range filtering.
+
+- **URL**: `/salary-statement/<int:staff_id>/`
+- **Method**: `GET`
+- **Filtering Options**:
+  - `duration` (string): Predefined periods (`1m`, `3m`, `6m`, `9m`, `12m`).
+  - `start_month` (string): Start of range in `YYYY-MM` format.
+  - `end_month` (string): End of range in `YYYY-MM` format.
+  - Supports standard `PayrollFilter` parameters (status, etc.).
+- **Isolation**: Strictly returns records only for the `staff_id` specified in the URL.
+
+---
+
+## 6. Automation & Scheduling
 
 The payroll system integrates with the project's central scheduler (`core/scheduler.py`).
 

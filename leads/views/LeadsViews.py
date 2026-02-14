@@ -1245,6 +1245,8 @@ class BDEDashboardView(SalesPersonBaseView, APIView):
 
 from rest_framework.permissions import IsAuthenticated
 
+from rest_framework.permissions import IsAuthenticated
+
 class LeadReportAPIView(APIView):
     permission_classes = [IsAuthenticated]   # ✅ Only logged-in users
 
@@ -1305,6 +1307,12 @@ class LeadReportAPIView(APIView):
 
 
 
+
+
+
+
+from django.db.models import Count, Q, F, Value, Avg, ExpressionWrapper, DurationField
+
 from django.db.models import Count, Q, F, Value
 from django.db.models.functions import Concat
 
@@ -1313,80 +1321,50 @@ class LeadPerformanceAPIView(APIView):
 
     def get(self, request):
 
-        # -------------------------
-        # START BASE QUERYSET
-        # -------------------------
-        leads = Lead.objects.all()
+        leads = Lead.objects.select_related(
+            "salesperson",
+            "lead_source",
+            "location"
+        ).all()
 
-        # Optional: Restrict non-admin users
+        # -------------------------
+        # Restrict non-admin users
+        # -------------------------
         if not request.user.is_staff:
             leads = leads.filter(CustomUser=request.user)
 
         # -------------------------
-        # GET FILTER PARAMETERS
+        # Filters
         # -------------------------
-        lead_status = request.GET.get("lead_status")
-        lead_source = request.GET.get("lead_source")
-        salesperson = request.GET.get("salesperson")
-        location = request.GET.get("location")
-        lead_type = request.GET.get("lead_type")
-        client_name = request.GET.get("client_name")
-        company = request.GET.get("company")
-        phone = request.GET.get("phone")
-        email = request.GET.get("email")
-        created_by = request.GET.get("created_by")
-        search = request.GET.get("search")
+        filters = Q()
 
         from_date = request.GET.get("from_date")
         to_date = request.GET.get("to_date")
+        search = request.GET.get("search")
 
-        # -------------------------
-        # DATE FILTER
-        # -------------------------
         if from_date:
-            leads = leads.filter(created_at__date__gte=parse_date(from_date))
+            filters &= Q(created_at__date__gte=parse_date(from_date))
 
         if to_date:
-            leads = leads.filter(created_at__date__lte=parse_date(to_date))
+            filters &= Q(created_at__date__lte=parse_date(to_date))
 
-        # -------------------------
-        # FIELD FILTERS
-        # -------------------------
-        if lead_status:
-            leads = leads.filter(lead_status=lead_status)
+        if request.GET.get("lead_status"):
+            filters &= Q(lead_status=request.GET.get("lead_status"))
 
-        if lead_source:
-            leads = leads.filter(lead_source_id=lead_source)
+        if request.GET.get("lead_source"):
+            filters &= Q(lead_source_id=request.GET.get("lead_source"))
 
-        if salesperson:
-            leads = leads.filter(salesperson_id=salesperson)
+        if request.GET.get("salesperson"):
+            filters &= Q(salesperson_id=request.GET.get("salesperson"))
 
-        if location:
-            leads = leads.filter(location_id=location)
+        if request.GET.get("location"):
+            filters &= Q(location_id=request.GET.get("location"))
 
-        if lead_type:
-            leads = leads.filter(lead_type=lead_type)
+        if request.GET.get("lead_type"):
+            filters &= Q(lead_type=request.GET.get("lead_type"))
 
-        if client_name:
-            leads = leads.filter(name__icontains=client_name)
-
-        if company:
-            leads = leads.filter(company__icontains=company)
-
-        if phone:
-            leads = leads.filter(phone__icontains=phone)
-
-        if email:
-            leads = leads.filter(email__icontains=email)
-
-        if created_by:
-            leads = leads.filter(CustomUser_id=created_by)
-
-        # -------------------------
-        # GLOBAL SEARCH
-        # -------------------------
         if search:
-            leads = leads.filter(
+            filters &= (
                 Q(name__icontains=search) |
                 Q(company__icontains=search) |
                 Q(phone__icontains=search) |
@@ -1394,73 +1372,99 @@ class LeadPerformanceAPIView(APIView):
                 Q(lead_number__icontains=search)
             )
 
-        # -------------------------
-        # KPI CALCULATIONS
-        # -------------------------
-        total_leads = leads.count()
-        converted = leads.filter(lead_status='converted').count()
-        lost = leads.filter(lead_status='lost').count()
-        new = leads.filter(lead_status='new').count()
-        in_progress = leads.filter(lead_status='in_progress').count()
+        leads = leads.filter(filters)
 
-        conversion_rate = 0
-        if total_leads > 0:
-            conversion_rate = (converted / total_leads) * 100
+        # =========================
+        # KPI Aggregation (Single Query)
+        # =========================
+        kpi = leads.aggregate(
+            total=Count("id"),
+            converted=Count("id", filter=Q(lead_status="converted")),
+            lost=Count("id", filter=Q(lead_status="lost")),
+            new=Count("id", filter=Q(lead_status="new")),
+            in_progress=Count("id", filter=Q(lead_status="in_progress")),
+            contacted=Count("id", filter=Q(lead_status="contacted")),
+            qualified=Count("id", filter=Q(lead_status="created")),
+        )
 
-        # -------------------------
-        # FOLLOW UP STATS
-        # -------------------------
+        total_leads = kpi["total"] or 0
+        converted = kpi["converted"] or 0
+
+        conversion_rate = round(
+            (converted / total_leads) * 100, 2
+        ) if total_leads else 0
+
+        # =========================
+        # Followup Stats
+        # =========================
         followups = FollowUp.objects.filter(lead__in=leads)
 
-        pending_followups = followups.filter(status='new').count()
-        completed_followups = followups.filter(status='completed').count()
+        followup_stats = followups.aggregate(
+            pending=Count("id", filter=Q(status="new")),
+            completed=Count("id", filter=Q(status="completed")),
+        )
 
-        # -------------------------
-        # SALESPERSON PERFORMANCE
-        # -------------------------
+        # =========================
+        # Avg Response Time
+        # =========================
+        response_time = followups.annotate(
+            response_duration=ExpressionWrapper(
+                F("created_at") - F("lead__created_at"),
+                output_field=DurationField()
+            )
+        ).aggregate(avg_time=Avg("response_duration"))
+
+        avg_response = response_time["avg_time"]
+
+        avg_hours = round(
+            avg_response.total_seconds() / 3600, 2
+        ) if avg_response else 0
+
+        # =========================
+        # Salesperson Performance
+        # =========================
         salesperson_data = leads.filter(
             salesperson__isnull=False
         ).annotate(
             full_name=Concat(
-                F('salesperson__first_name'),
-                Value(' '),
-                F('salesperson__last_name')
+                F("salesperson__first_name"),
+                Value(" "),
+                F("salesperson__last_name")
             )
         ).values(
-            'salesperson_id',
-            'full_name'
+            "salesperson_id",
+            "full_name"
         ).annotate(
-            total=Count('id'),
-            converted=Count('id', filter=Q(lead_status='converted'))
-        )
+            total=Count("id"),
+            contacted=Count("id", filter=Q(lead_status="contacted")),
+            qualified=Count("id", filter=Q(lead_status="created")),
+            converted=Count("id", filter=Q(lead_status="converted")),
+        ).order_by("-total")
 
-        # Add conversion rate per salesperson
         salesperson_list = list(salesperson_data)
 
         for sp in salesperson_list:
-            if sp["total"] > 0:
-                sp["conversion_rate"] = round(
-                    (sp["converted"] / sp["total"]) * 100, 2
-                )
-            else:
-                sp["conversion_rate"] = 0
+            sp["conversion_rate"] = round(
+                (sp["converted"] / sp["total"]) * 100, 2
+            ) if sp["total"] else 0
 
-        # -------------------------
-        # FINAL RESPONSE
-        # -------------------------
+        # =========================
+        # Final Response
+        # =========================
         return Response({
             "total_leads": total_leads,
+            "contacted": kpi["contacted"],
+            "qualified": kpi["qualified"],
             "converted_leads": converted,
-            "lost_leads": lost,
-            "conversion_rate": round(conversion_rate, 2),
-            "new_leads": new,
-            "in_progress_leads": in_progress,
-            "follow_up_pending": pending_followups,
-            "follow_up_completed": completed_followups,
+            "lost_leads": kpi["lost"],
+            "new_leads": kpi["new"],
+            "in_progress_leads": kpi["in_progress"],
+            "conversion_rate": conversion_rate,
+            "follow_up_pending": followup_stats["pending"],
+            "follow_up_completed": followup_stats["completed"],
+            "avg_response_time_hours": avg_hours,
             "salesperson_performance": salesperson_list
         })
-    
-
 
 
 
@@ -1488,12 +1492,15 @@ class LeadSourceReportAPIView(APIView):
         lead_status = request.GET.get("lead_status")
         lead_source = request.GET.get("lead_source")
 
-
         if from_date:
-            leads = leads.filter(created_at__date__gte=parse_date(from_date))
+            parsed_from = parse_date(from_date)
+            if parsed_from:
+                leads = leads.filter(created_at__date__gte=parsed_from)
 
         if to_date:
-            leads = leads.filter(created_at__date__lte=parse_date(to_date))
+            parsed_to = parse_date(to_date)
+            if parsed_to:
+                leads = leads.filter(created_at__date__lte=parsed_to)
 
         if location:
             leads = leads.filter(location_id=location)
@@ -1503,55 +1510,344 @@ class LeadSourceReportAPIView(APIView):
 
         if lead_status:
             leads = leads.filter(lead_status=lead_status)
-        
+
         if lead_source:
             leads = leads.filter(lead_source_id=lead_source)
-
 
         # -------------------------
         # GROUP BY LEAD SOURCE
         # -------------------------
-        source_data = leads.filter(
-            lead_source__isnull=False
-        ).values(
-            'lead_source_id',
-            'lead_source__name'
-        ).annotate(
-            total=Count('id'),
-            converted=Count('id', filter=Q(lead_status='converted')),
-            lost=Count('id', filter=Q(lead_status='lost')),
-            new=Count('id', filter=Q(lead_status='new')),
-            in_progress=Count('id', filter=Q(lead_status='in_progress'))
-        ).order_by('-total')
-
-        # Convert queryset to list and calculate conversion %
-        source_list = list(source_data)
-
-        for source in source_list:
-            if source["total"] > 0:
-                source["conversion_rate"] = round(
-                    (source["converted"] / source["total"]) * 100, 2
-                )
-            else:
-                source["conversion_rate"] = 0
-
-        # -------------------------
-        # OVERALL TOTALS (OPTIONAL)
-        # -------------------------
-        overall_total = leads.count()
-        overall_converted = leads.filter(lead_status='converted').count()
-
-        overall_conversion_rate = 0
-        if overall_total > 0:
-            overall_conversion_rate = round(
-                (overall_converted / overall_total) * 100, 2
+        source_data = (
+            leads
+            .filter(lead_source__isnull=False)
+            .values(
+                "lead_source_id",
+                "lead_source__name"
             )
+            .annotate(
+                total_leads=Count("id"),
+                converted=Count("id", filter=Q(lead_status="converted")),
+                lost=Count("id", filter=Q(lead_status="lost")),
+                new=Count("id", filter=Q(lead_status="new")),
+                in_progress=Count("id", filter=Q(lead_status="in_progress")),
+            )
+            .order_by("-total_leads")
+        )
+
+        source_list = []
+
+        for item in source_data:
+            total = item["total_leads"]
+            converted = item["converted"]
+
+            conversion_rate = round((converted / total) * 100, 2) if total > 0 else 0
+
+            source_list.append({
+                "source_id": item["lead_source_id"],
+                "source_name": item["lead_source__name"],
+                "total_leads": total,
+                "converted": converted,
+                "lost": item["lost"],
+                "new": item["new"],
+                "in_progress": item["in_progress"],
+                "conversion_rate": conversion_rate,
+            })
+
+        # -------------------------
+        # OVERALL STATS (Optimized)
+        # -------------------------
+        overall_stats = leads.aggregate(
+            total_leads=Count("id"),
+            total_converted=Count("id", filter=Q(lead_status="converted")),
+        )
+
+        overall_total = overall_stats["total_leads"] or 0
+        overall_converted = overall_stats["total_converted"] or 0
+
+        overall_conversion_rate = (
+            round((overall_converted / overall_total) * 100, 2)
+            if overall_total > 0 else 0
+        )
 
         # -------------------------
         # RESPONSE
         # -------------------------
         return Response({
-            "overall_total_leads": overall_total,
-            "overall_conversion_rate": overall_conversion_rate,
+            "overall": {
+                "total_leads": overall_total,
+                "converted": overall_converted,
+                "conversion_rate": overall_conversion_rate,
+            },
             "source_performance": source_list
         })
+    
+
+
+from hr_section.models import Enquiry
+from django.db.models.functions import TruncMonth
+
+class EnquiryReportAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        enquiries = Enquiry.objects.all()
+
+        # -------------------------
+        # FILTER PARAMETERS
+        # -------------------------
+        from_date = request.GET.get("from_date")
+        to_date = request.GET.get("to_date")
+        status = request.GET.get("status")
+        search = request.GET.get("search")
+
+        # -------------------------
+        # DATE FILTER
+        # -------------------------
+        if from_date:
+            parsed_from = parse_date(from_date)
+            if parsed_from:
+                enquiries = enquiries.filter(
+                    created_at__date__gte=parsed_from
+                )
+
+        if to_date:
+            parsed_to = parse_date(to_date)
+            if parsed_to:
+                enquiries = enquiries.filter(
+                    created_at__date__lte=parsed_to
+                )
+
+        # -------------------------
+        # STATUS FILTER
+        # -------------------------
+        if status:
+            enquiries = enquiries.filter(status=status)
+
+        # -------------------------
+        # GLOBAL SEARCH
+        # -------------------------
+        if search:
+            enquiries = enquiries.filter(
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search) |
+                Q(email__icontains=search) |
+                Q(phone__icontains=search) |
+                Q(message__icontains=search)
+            )
+
+        enquiries = enquiries.order_by("-created_at")
+
+        # -------------------------
+        # FORMAT RESPONSE (ONLY TABLE DATA)
+        # -------------------------
+        enquiry_list = []
+
+        for enquiry in enquiries:
+            enquiry_list.append({
+                "enquiry_id": enquiry.id,  # Normal ID
+                "date": enquiry.created_at.date(),
+                "client_name": f"{enquiry.first_name} {enquiry.last_name or ''}".strip(),
+                "email": enquiry.email,
+                "phone": enquiry.phone,
+                "message": enquiry.message,
+                "status": enquiry.status,
+            })
+
+        return Response({
+            "total_records": enquiries.count(),
+            "enquiries": enquiry_list
+        })
+    
+
+
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from django.db.models import Q, F, Value
+from django.db.models.functions import Concat
+from django.utils.dateparse import parse_date
+
+class FollowUpReportAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        followups = FollowUp.objects.select_related(
+            "lead",
+            "lead__salesperson"
+        )
+
+        # 🔒 Restrict non-admin users
+        if not request.user.is_staff:
+            followups = followups.filter(lead__CustomUser=request.user)
+
+        # -------------------------
+        # FILTER PARAMETERS
+        # -------------------------
+        from_date = request.GET.get("from_date")
+        to_date = request.GET.get("to_date")
+        status = request.GET.get("status")
+        salesperson = request.GET.get("salesperson")
+        lead = request.GET.get("lead")
+        search = request.GET.get("search")
+
+        # -------------------------
+        # DATE FILTER
+        # -------------------------
+        if from_date:
+            followups = followups.filter(date__gte=parse_date(from_date))
+
+        if to_date:
+            followups = followups.filter(date__lte=parse_date(to_date))
+
+        # -------------------------
+        # FIELD FILTERS
+        # -------------------------
+        if status:
+            followups = followups.filter(status=status)
+
+        if salesperson:
+            followups = followups.filter(lead__salesperson_id=salesperson)
+
+        if lead:
+            followups = followups.filter(lead_id=lead)
+
+        # -------------------------
+        # GLOBAL SEARCH
+        # -------------------------
+        if search:
+            followups = followups.filter(
+                Q(lead__name__icontains=search) |
+                Q(lead__lead_number__icontains=search) |
+                Q(notes__icontains=search) |
+                Q(title__icontains=search)
+            )
+
+        # -------------------------
+        # RESPONSE DATA FORMAT
+        # -------------------------
+        data = followups.annotate(
+            lead_display=Concat(
+                F("lead__lead_number"),
+                Value(" - "),
+                F("lead__name")
+            ),
+            salesperson_name=Concat(
+                F("lead__salesperson__first_name"),
+                Value(" "),
+                F("lead__salesperson__last_name")
+            )
+        ).values(
+            "id",
+            "lead_display",
+            "title",
+            "date",
+            "time",
+            "status",
+            "notes",
+            "salesperson_name"
+        ).order_by("-date", "-time")
+
+        return Response({
+            "total_followups": followups.count(),
+            "completed": followups.filter(status="completed").count(),
+            "pending": followups.filter(status="new").count(),
+            "results": data
+        })
+
+
+
+class SalespersonLeadReportAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        leads = Lead.objects.select_related("salesperson")
+
+        # -----------------------------------
+        # RESTRICT NON-ADMIN USERS
+        # -----------------------------------
+        if not request.user.is_staff:
+            leads = leads.filter(CustomUser=request.user)
+
+        # -----------------------------------
+        # FILTER PARAMETERS
+        # -----------------------------------
+        salesperson_id = request.GET.get("salesperson_id")
+        salesperson_name = request.GET.get("salesperson_name")
+        lead_status = request.GET.get("lead_status")
+        lead_source = request.GET.get("lead_source")
+        location = request.GET.get("location")
+        from_date = request.GET.get("from_date")
+        to_date = request.GET.get("to_date")
+
+        # -----------------------------------
+        # APPLY FILTERS
+        # -----------------------------------
+
+        if salesperson_id:
+            leads = leads.filter(salesperson_id=salesperson_id)
+
+        if salesperson_name:
+            leads = leads.filter(
+                Q(salesperson__first_name__icontains=salesperson_name) |
+                Q(salesperson__last_name__icontains=salesperson_name)
+            )
+
+        if lead_status:
+            leads = leads.filter(lead_status=lead_status)
+
+        if lead_source:
+            leads = leads.filter(lead_source_id=lead_source)
+
+        if location:
+            leads = leads.filter(location_id=location)
+
+        if from_date:
+            leads = leads.filter(created_at__date__gte=parse_date(from_date))
+
+        if to_date:
+            leads = leads.filter(created_at__date__lte=parse_date(to_date))
+
+        # -----------------------------------
+        # GROUP BY SALESPERSON
+        # -----------------------------------
+        report = leads.filter(
+            salesperson__isnull=False
+        ).annotate(
+            full_name=Concat(
+                F("salesperson__first_name"),
+                Value(" "),
+                F("salesperson__last_name")
+            )
+        ).values(
+            "salesperson_id",
+            "full_name"
+        ).annotate(
+            total_leads=Count("id"),
+            new=Count("id", filter=Q(lead_status="new")),
+            contacted=Count("id", filter=Q(lead_status="contacted")),
+            follow_up=Count("id", filter=Q(lead_status="follow_up")),
+            in_progress=Count("id", filter=Q(lead_status="in_progress")),
+            converted=Count("id", filter=Q(lead_status="converted")),
+            lost=Count("id", filter=Q(lead_status="lost")),
+        ).order_by("-total_leads")
+
+        result = []
+
+        for row in report:
+            result.append({
+                "salesperson_id": row["salesperson_id"],
+                "salesperson": row["full_name"].strip(),
+                "total_leads": row["total_leads"],
+                "new": row["new"],
+                "contacted": row["contacted"],
+                "follow_up": row["follow_up"],
+                "in_progress": row["in_progress"],
+                "converted": row["converted"],
+                "lost": row["lost"],
+            })
+
+        return Response(result)

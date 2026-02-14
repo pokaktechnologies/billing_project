@@ -116,6 +116,7 @@ urlpatterns = [
     # Hr Reports
     path('reports/employee/',EmployeeReportView.as_view(), name='employee_report'),
     path('reports/department/',DepartmentReportView.as_view(), name='department_report'),
+    path('reports/attendance/', AttendanceReportView.as_view(), name='attendance-report-list'),
     
 
     

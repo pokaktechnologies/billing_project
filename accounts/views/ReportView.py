@@ -23,6 +23,9 @@ from django.db.models.functions import TruncMonth
 from datetime import timedelta, datetime, date, time
 
 from finance.models import *
+from attendance.serializers import DailyAttendanceSerializer
+from attendance.models import DailyAttendance
+
 
 
 #------------
@@ -1276,5 +1279,60 @@ class DepartmentReportView(APIView):
             "Status": "1",
             "Message": "Success",
             "Count": departments.count(),
+            "Data": serializer.data
+        })
+
+
+# Attendance Report
+class AttendanceReportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        search = request.query_params.get('search')
+        department = request.query_params.get('department')
+        date = request.query_params.get('date')
+        status = request.query_params.get('status')
+
+        attendances = (
+            DailyAttendance.objects
+            .select_related('staff__user', 'staff__job_detail__department')
+            .prefetch_related('sessions')
+            .filter(staff__job_detail__isnull=False)
+            .order_by('-date', '-id')
+        )
+
+        if search:
+            attendances = attendances.filter(
+                Q(staff__user__first_name__icontains=search) |
+                Q(staff__user__last_name__icontains=search) |
+                Q(staff__job_detail__employee_id__icontains=search) |
+                Q(staff__user__email__icontains=search)
+            )
+
+        if department:
+            attendances = attendances.filter(staff__job_detail__department_id=department)
+
+        if date:
+            attendances = attendances.filter(date=date)
+        else:
+            today = timezone.localdate()
+            attendances = attendances.filter(date=today)
+
+        if status:
+            attendances = attendances.filter(status=status)
+
+        paginator = Pagination()
+        paginated_attendances = paginator.paginate_queryset(attendances, request)
+
+        if paginated_attendances is not None:
+            serializer = DailyAttendanceSerializer(paginated_attendances, many=True)
+            return paginator.get_paginated_response(serializer.data)
+
+        serializer = DailyAttendanceSerializer(attendances, many=True)
+
+        return Response({
+            "Status": "1",
+            "Message": "Success",
+            "Count": attendances.count(),
             "Data": serializer.data
         })

@@ -54,6 +54,10 @@ urlpatterns = [
     path('admin/lead-activity-log/<int:lead_id>/', LeadActivityLogView.as_view(), name='lead_activity_log_view'),
     path('admin/lead-activity-counts/<int:lead_id>/', LeadActivityCountsView.as_view(), name='lead_activity_counts_view'),
 
+
+    #lead report
+    path("reports/leads/", LeadReportAPIView.as_view(), name="lead-report"),
+
     # salesperson leads management
     path('admin/salesperson/lead-stats/', SalespersonLeadStatsView.as_view(), name='salesperson_lead_stats'),
 

@@ -181,3 +181,33 @@ class RemindersGetSerializer(serializers.ModelSerializer):
         fields = ['id', 'lead', 'lead_id', 'title', 'type', 'date', 'time', 'description', 'status', 'salesperson_name', 'salesperson_phone',
                   'salesperson_email', 'salesperson_lead_status', 'salesperson_company']
     
+
+
+from rest_framework import serializers
+from leads.models import Lead
+
+class LeadReportSerializer(serializers.ModelSerializer):
+    source = serializers.CharField(source="lead_source.name", default=None)
+    salesperson_name = serializers.SerializerMethodField()
+    location_name = serializers.CharField(source="location.name", default=None)
+
+    class Meta:
+        model = Lead
+        fields = [
+            "id",
+            "lead_number",
+            "name",
+            "phone",
+            "company",
+            "source",
+            "salesperson_name",
+            "location_name",
+            "lead_status",
+            "lead_type",
+            "created_at",
+        ]
+
+    def get_salesperson_name(self, obj):
+        if obj.salesperson:
+            return f"{obj.salesperson.first_name} {obj.salesperson.last_name}"
+        return None

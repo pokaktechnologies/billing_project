@@ -1242,3 +1242,62 @@ class BDEDashboardView(SalesPersonBaseView, APIView):
         })
 
 
+
+from rest_framework.permissions import IsAuthenticated
+
+class LeadReportAPIView(APIView):
+    permission_classes = [IsAuthenticated]   # ✅ Only logged-in users
+
+    def get(self, request):
+        leads = Lead.objects.select_related(
+            "lead_source",
+            "salesperson",
+            "location"
+        ).all()
+
+        # -------- FILTERS --------
+        from_date = request.GET.get("from_date")
+        to_date = request.GET.get("to_date")
+        lead_status = request.GET.get("lead_status")
+        lead_source = request.GET.get("lead_source")
+        salesperson = request.GET.get("salesperson")
+        location = request.GET.get("location")
+        lead_type = request.GET.get("lead_type")
+        ordering = request.GET.get("ordering")
+        client_name = request.GET.get("client_name")
+
+        if client_name:
+            leads = leads.filter(name__icontains=client_name)
+
+        if from_date:
+            leads = leads.filter(created_at__date__gte=parse_date(from_date))
+
+        if to_date:
+            leads = leads.filter(created_at__date__lte=parse_date(to_date))
+
+        if lead_status:
+            leads = leads.filter(lead_status=lead_status)
+
+        if lead_source:
+            leads = leads.filter(lead_source_id=lead_source)
+
+        if salesperson:
+            leads = leads.filter(salesperson_id=salesperson)
+
+        if location:
+            leads = leads.filter(location__name__icontains=location)
+
+        if lead_type:
+            leads = leads.filter(lead_type=lead_type)
+
+        if ordering == "oldest":
+            leads = leads.order_by("created_at")
+        else:
+            leads = leads.order_by("-created_at")
+
+        serializer = LeadReportSerializer(leads, many=True)
+
+        return Response({
+            "count": leads.count(),
+            "results": serializer.data
+        })

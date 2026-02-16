@@ -358,6 +358,7 @@ class QuotationOrderSerializer(serializers.ModelSerializer):
     quotation_date_display = serializers.SerializerMethodField()
     client_firstname = serializers.CharField(source='client.first_name', read_only=True)
     client_lastname = serializers.CharField(source='client.last_name', read_only=True)
+    client_number = serializers.CharField(source='client.customer_number', read_only=True)
     lead_number = serializers.CharField(source='lead.lead_number', read_only=True)
     lead_date = serializers.DateTimeField(source='lead.created_at', read_only=True)
     salesperson_first_name = serializers.CharField(source='client.salesperson.first_name', read_only=True, default=None)
@@ -748,6 +749,7 @@ class ReceiptSerializer(serializers.ModelSerializer):
     # termsandconditions_title = serializers.CharField(source='termsandconditions.title', read_only=True)
     client_firstname = serializers.CharField(source='client.first_name', read_only=True)
     client_lastname = serializers.CharField(source='client.last_name', read_only=True)
+    client_number = serializers.CharField(source='client.customer_number', read_only=True)
     invoice_number = serializers.SerializerMethodField()
     tax_amount = serializers.SerializerMethodField()
     total_amount_without_tax = serializers.SerializerMethodField()
@@ -1635,6 +1637,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
 class InvoiceListSerializer(serializers.ModelSerializer):
     client_name = serializers.SerializerMethodField()
     intern_name = serializers.SerializerMethodField()
+    client_number = serializers.CharField(source='client.customer_number', read_only=True)
     pending_amount = serializers.SerializerMethodField()
     effective_tax_rate = serializers.SerializerMethodField()
     tax_rate = serializers.SerializerMethodField()
@@ -1649,6 +1652,7 @@ class InvoiceListSerializer(serializers.ModelSerializer):
             "invoice_date",
             "invoice_grand_total",
             "client_name",
+            "client_number",
             "intern_name",
             "invoice_grand_total",
             "pending_amount",

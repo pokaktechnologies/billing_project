@@ -1137,6 +1137,7 @@ class QuotationOrderAPI(APIView):
                     "id": quotation.id,
                     "client_name": f"{quotation.client.first_name} {quotation.client.last_name}" if quotation.client else "",
                     "client_id": quotation.client.id if quotation.client else None,
+                    "client_number":quotation.client.customer_number,
                     "address": quotation.delivery_address,
                     "lead": quotation.lead.id if quotation.lead else None,
                     "lead_number": quotation.lead.lead_number if quotation.lead else "",
@@ -2539,6 +2540,8 @@ class OrderNumberGeneratorView(APIView):
             order_number = self.generate_next_number(JobDetail, "employee_id", "EMP", 6)
         elif order_type == "PC":
             order_number = self.generate_next_number(Product, "code", "PC", 4)
+        elif order_number == "CL":
+            order_number = self.generate_next_number(Customer, "customer_number", "CL", 6)
 
         else:
             return Response({

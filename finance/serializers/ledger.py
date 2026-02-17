@@ -125,3 +125,14 @@ class JournalLineListSerializer(serializers.ModelSerializer):
 class JournalLineDetailSerializer(JournalLineListSerializer):
     # Reusing logic from JournalLineListSerializer
     pass
+
+class LedgerReportSerializer(serializers.ModelSerializer):
+    account_name = serializers.CharField(source='account.name', read_only=True)
+    date = serializers.DateTimeField(source='journal.date', format="%Y-%m-%d", read_only=True)
+    narration = serializers.CharField(source='journal.narration', read_only=True)
+    voucher_no = serializers.CharField(source='journal.type_number', read_only=True)
+    balance = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = JournalLine
+        fields = ['account', 'account_name', 'date', 'narration', 'voucher_no', 'debit', 'credit', 'balance']

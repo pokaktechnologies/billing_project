@@ -1,11 +1,12 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from ..models import JournalEntry
-from ..serializers.ledger import JournalEntrySerializer
-from django.db.models import Q
+from ..models import JournalEntry, JournalLine, Account
+from ..serializers.ledger import JournalEntrySerializer, JournalLineListSerializer, LedgerReportSerializer
+from django.db.models import Q, Sum, Value, DecimalField
+from django.db.models.functions import Coalesce
 from datetime import datetime, time
-from ..models import Account
+from decimal import Decimal
 from ..serializers.accounts import AccountSerializer
 
 
@@ -113,4 +114,36 @@ class AccountReportView(APIView):
             return paginator.get_paginated_response(serializer.data)
 
         serializer = AccountSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+
+class LedgerReportView(APIView):
+    def get(self, request):
+        queryset = JournalLine.objects.select_related('journal', 'account').order_by('journal__date', 'created_at')
+
+        account = request.query_params.get('account_id')
+        from_date = request.query_params.get('from_date')
+        to_date = request.query_params.get('to_date')
+
+
+        if from_date:
+            from_date_obj = datetime.strptime(from_date, "%Y-%m-%d")
+            from_date_obj = datetime.combine(from_date_obj, time.min)
+            queryset = queryset.filter(journal__date__gte=from_date_obj)
+
+
+        if to_date:
+            to_date_obj = datetime.strptime(to_date, "%Y-%m-%d")
+            to_date_obj = datetime.combine(to_date_obj, time.max)
+            queryset = queryset.filter(journal__date__lte=to_date_obj)
+
+        if account: queryset = queryset.filter(account_id=account)
+
+        paginator = Pagination()
+        paginated_queryset = paginator.paginate_queryset(queryset, request)
+        if paginated_queryset is not None:
+            serializer = LedgerReportSerializer(paginated_queryset, many=True)
+            return paginator.get_paginated_response(serializer.data)
+
+        serializer = LedgerReportSerializer(queryset, many=True)
         return Response(serializer.data)

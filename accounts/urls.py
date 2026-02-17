@@ -119,6 +119,10 @@ urlpatterns = [
     path('reports/attendance/', AttendanceReportView.as_view(), name='attendance-report-list'),
     
 
+    # Inventory reports
+    path('report-product/', ProductReportAPIView.as_view(), name="product-report"),
+    path('reports-product-category/', ProductCategoryReportAPIView.as_view(), name='product-category-reports'),
+    path('report-stock-movement/', StockMovementReportAPIView.as_view(), name='stock-movement-reports'),
     
     path('quotations/', QuotationOrderAPI.as_view(), name='quotation-items-detail'),
     path('quotations/<int:qid>/', QuotationOrderAPI.as_view(), name='quotation-items-detail'),

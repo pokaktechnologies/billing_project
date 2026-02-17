@@ -1,4 +1,4 @@
-from rest_framework import viewsets,status
+from rest_framework import viewsets,status, generics
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.views import APIView
@@ -1336,3 +1336,121 @@ class AttendanceReportView(APIView):
             "Count": attendances.count(),
             "Data": serializer.data
         })
+
+
+# product report view
+class ProductReportAPIView(generics.ListAPIView):
+    serializer_class = ProductReportSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = Product.objects.select_related(
+            "category",
+            "unit"
+        ).all()
+        category = self.request.query_params.get("category")
+        if category and category.strip().lower() != "all":
+            queryset = queryset.filter(
+                category__name__icontains=category.strip()
+            )
+        status = self.request.query_params.get("status")
+        if status and status.strip().lower() != "all":
+            status_clean = status.strip().lower()
+            if status_clean == "in stock":
+                queryset = queryset.filter(stock__gt=200)
+            elif status_clean == "low stock":
+                queryset = queryset.filter(
+                    stock__gt=0,
+                    stock__lte=200
+                )
+            elif status_clean == "out of stock":
+                queryset = queryset.filter(stock=0)
+        return queryset.order_by("name")
+
+
+# producct category reports view
+class ProductCategoryReportAPIView(generics.ListAPIView):
+    serializer_class = ProductCategoryReportSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = Category.objects.all()
+        # Category filter
+        category = self.request.query_params.get("category")
+
+        if category and category.strip().lower() != "all":
+            queryset = queryset.filter(
+                name__icontains=category.strip()
+            )
+        return queryset.order_by("name")
+
+
+# stock movement reports view
+class StockMovementReportAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        date_filter = request.query_params.get("date")
+        transaction_type = request.query_params.get("transaction_type")
+        movements = []
+        # purchase stock in
+        purchases = MaterialReceiveItem.objects.select_related(
+            "product",
+            "material_receive"
+        )
+
+        if date_filter and date_filter.lower() != "all":
+            purchases = purchases.filter(
+                material_receive__received_date=date_filter
+            )
+        if not transaction_type or transaction_type.lower() in ["all", "purchase"]:
+            for item in purchases:
+                product = item.product
+                stock_after = product.stock
+                stock_before = stock_after - item.quantity
+                movements.append({
+                    "date": item.material_receive.received_date,
+                    "product": product.name,
+                    "transaction_type": "Purchase",
+                    "quantity": item.quantity,
+                    "unit_price": item.unit_price,
+                    "total_value": item.total,
+                    "stock_before": stock_before,
+                    "stock_after": stock_after,
+                })
+
+        # sales stockout
+        sales = InvoiceItem.objects.select_related(
+            "product",
+            "invoice"
+        )
+        if date_filter and date_filter.lower() != "all":
+            sales = sales.filter(
+                invoice__invoice_date=date_filter
+            )
+        if not transaction_type or transaction_type.lower() in ["all", "sale"]:
+            for item in sales:
+                product = item.product
+                quantity = int(item.quantity)
+                stock_after = product.stock
+                stock_before = stock_after + quantity
+                movements.append({
+                    "date": item.invoice.invoice_date,
+                    "product": product.name,
+                    "transaction_type": "Sale",
+                    "quantity": -quantity,
+                    "unit_price": item.unit_price,
+                    "total_value": item.sub_total,
+                    "stock_before": stock_before,
+                    "stock_after": stock_after,
+                })
+
+        movements.sort(
+            key=lambda x: x["date"],
+            reverse=True
+        )
+        serializer = StockMovementReportSerializer(
+            movements,
+            many=True
+        )
+        return Response(serializer.data)

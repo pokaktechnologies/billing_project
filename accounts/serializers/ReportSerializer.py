@@ -226,3 +226,102 @@ class DepartmentReportSerializer(serializers.ModelSerializer):
             'internship',
             'avg_salary',
         ]
+
+
+# product reports
+class ProductReportSerializer(serializers.ModelSerializer):
+    product_id = serializers.CharField(source="id")
+    product_name = serializers.CharField(source="name")
+    category = serializers.CharField(source="category.name")
+    unit = serializers.CharField(source="unit.name")
+    unit_price = serializers.DecimalField(max_digits=10, decimal_places=2)
+    stock = serializers.IntegerField()
+    status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Product
+        fields = [
+            "product_id",
+            "product_name",
+            "category",
+            "unit",
+            "unit_price",
+            "stock",
+            "status",
+        ]
+
+    def get_status(self, obj):
+        if obj.stock == 0:
+            return "Out of Stock"
+        elif obj.stock <= 200:
+            return "Low Stock"
+        else:
+            return "In Stock"
+
+
+# product category reports
+class ProductCategoryReportSerializer(serializers.ModelSerializer):
+    category = serializers.CharField(source="name")
+    total_products = serializers.SerializerMethodField()
+    total_stock_value = serializers.SerializerMethodField()
+    avg_price = serializers.SerializerMethodField()
+    top_product = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Category
+        fields = [
+            "category",
+            "total_products",
+            "total_stock_value",
+            "avg_price",
+            "top_product",
+        ]
+
+    def get_products(self, obj):
+        return Product.objects.filter(category=obj)
+
+    def get_total_products(self, obj):
+        return self.get_products(obj).count()
+
+    def get_total_stock_value(self, obj):
+
+        total = self.get_products(obj).aggregate(
+            total_value=Sum(
+                ExpressionWrapper(
+                    F("stock") * F("unit_price"),
+                    output_field=DecimalField()
+                )
+            )
+        )["total_value"]
+        return total or 0
+
+    def get_avg_price(self, obj):
+        avg = self.get_products(obj).aggregate(
+            avg_price=Avg("unit_price")
+        )["avg_price"]
+        return round(avg, 2) if avg else 0
+
+    def get_top_product(self, obj):
+        top = (
+            InvoiceItem.objects
+            .filter(product__category=obj)
+            .values("product__name")
+            .annotate(total_sold=Sum("quantity"))
+            .order_by("-total_sold")
+            .first()
+        )
+        if top:
+            return top["product__name"]
+        return "-"
+
+
+# stock movements reports
+class StockMovementReportSerializer(serializers.Serializer):
+    date = serializers.DateField()
+    product = serializers.CharField()
+    transaction_type = serializers.CharField()
+    quantity = serializers.IntegerField()
+    unit_price = serializers.DecimalField(max_digits=10, decimal_places=2)
+    total_value = serializers.DecimalField(max_digits=12, decimal_places=2)
+    stock_before = serializers.IntegerField()
+    stock_after = serializers.IntegerField()

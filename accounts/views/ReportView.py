@@ -1293,6 +1293,9 @@ class AttendanceReportView(APIView):
         date = request.query_params.get('date')
         status = request.query_params.get('status')
 
+        staff_id = request.query_params.get('staff_id')
+
+
         attendances = (
             DailyAttendance.objects
             .select_related('staff__user', 'staff__job_detail__department')
@@ -1312,7 +1315,9 @@ class AttendanceReportView(APIView):
         if department:
             attendances = attendances.filter(staff__job_detail__department_id=department)
 
-        if date:
+        if staff_id:
+            attendances = attendances.filter(staff_id=staff_id)
+        elif date:
             attendances = attendances.filter(date=date)
         else:
             today = timezone.localdate()

@@ -1,13 +1,14 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from ..models import JournalEntry, JournalLine, Account
+from ..models import JournalEntry, JournalLine, Account, DebitNote, CreditNote
 from ..serializers.ledger import JournalEntrySerializer, JournalLineListSerializer, LedgerReportSerializer
 from django.db.models import Q, Sum, Value, DecimalField
 from django.db.models.functions import Coalesce
 from datetime import datetime, time
 from decimal import Decimal
 from ..serializers.accounts import AccountSerializer
+from ..serializers.documents import DebitNoteSerializer, CreditNoteSerializer
 
 
 #------------
@@ -147,3 +148,45 @@ class LedgerReportView(APIView):
 
         serializer = LedgerReportSerializer(queryset, many=True)
         return Response(serializer.data)
+    
+class TransactionDebitNotReportView(APIView):
+    def get(self, request):
+        search = request.query_params.get('search')
+        date = request.query_params.get('date')
+
+        debit_note_qs = DebitNote.objects.all()
+
+        if search: debit_note_qs = debit_note_qs.filter(debit_note_number__icontains=search)
+
+        if date: debit_note_qs = debit_note_qs.filter(date=date)
+
+        paginator = Pagination()
+
+        paginated_qs = paginator.paginate_queryset(debit_note_qs, request)
+        if paginated_qs is not None:
+            serializer = DebitNoteSerializer(paginated_qs, many=True).data
+            return paginator.get_paginated_response(serializer)
+        serializer = DebitNoteSerializer(debit_note_qs, many=True).data
+        return Response(serializer)
+
+class TransactionCreditNotReportView(APIView):
+    def get(self, request):
+        search = request.query_params.get('search')
+        date = request.query_params.get('date')
+
+        credit_note_qs = CreditNote.objects.all()
+
+        if search: credit_note_qs = credit_note_qs.filter(credit_note_number__icontains=search)
+
+        if date: credit_note_qs = credit_note_qs.filter(date=date)
+
+        paginator = Pagination()
+
+        paginated_qs = paginator.paginate_queryset(credit_note_qs, request)
+        if paginated_qs is not None:
+            serializer = CreditNoteSerializer(paginated_qs, many=True).data
+            return paginator.get_paginated_response(serializer)
+        
+        serializer = CreditNoteSerializer(credit_note_qs, many=True).data
+        return Response(serializer)
+

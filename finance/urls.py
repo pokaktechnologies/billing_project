@@ -7,7 +7,7 @@ from .views.ledger import (
 from .views.documents import CreditNoteListCreateAPIView, CreditNoteRetrieveUpdateDestroyAPIView, DebitNoteListCreateAPIView, DebitNoteRetrieveUpdateDestroyAPIView
 from .views.settings import FinaceNumberGeneratorView, CashflowCategoryMappingListCreateView, CashflowCategoryMappingDetailView, TaxSettingsListCreateAPIView, TaxSettingsRetrieveUpdateDestroyAPIView
 from .views.reports import TrialBalanceView, ProfitAndLossView, BalanceSheetView, CashflowStatementView, AccountBalanceHierarchyView
-from .views.FinanceReport import JournalVoucherReportView, AccountReportView, LedgerReportView
+from .views.FinanceReport import JournalVoucherReportView, AccountReportView, LedgerReportView, TransactionDebitNotReportView, TransactionCreditNotReportView
 
 urlpatterns = [
     path('account/', AccountListCreateAPIView.as_view(), name='account'),
@@ -47,5 +47,7 @@ urlpatterns = [
     path('reports/journal-voucher/', JournalVoucherReportView.as_view(), name='journal-voucher-report'),
     path('reports/account/', AccountReportView.as_view(), name='account-report'),
     path('reports/ledger/', LedgerReportView.as_view(), name='ledger-report'),
+    path('reports/transaction/debit/', TransactionDebitNotReportView.as_view(), name='transaction-report-debit'),
+    path('reports/transaction/credit/', TransactionCreditNotReportView.as_view(), name='transaction-report-credit')
 ]
 

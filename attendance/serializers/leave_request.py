@@ -139,7 +139,7 @@ class HrLeaveRequestSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         request = self.context['request']
         validated_data['actioned_at'] = timezone.now()
-        validated_data['action_by'] = request.user.staff_profile
+        validated_data['action_by'] = getattr(request.user, 'staff_profile', None)
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
@@ -147,6 +147,6 @@ class HrLeaveRequestSerializer(serializers.ModelSerializer):
         # Auto-set actioned_at and action_by when status changes
         if 'status' in validated_data and validated_data['status'] != instance.status:
             validated_data['actioned_at'] = timezone.now()
-            validated_data['action_by'] = request.user.staff_profile
+            validated_data['action_by'] = getattr(request.user, 'staff_profile', None)
         return super().update(instance, validated_data)
 

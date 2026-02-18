@@ -1,3 +1,6 @@
+from datetime import timedelta
+
+from django.utils.timezone import now
 from rest_framework import generics
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -7,7 +10,8 @@ from django.db.models import Count, Q, F, Sum
 
 from accounts.models import StaffProfile
 from accounts.permissions import HasModulePermission
-from internship.models import Task, TaskSubmission, AssignedStaffCourse, TaskAssignment, CoursePayment
+from internship.models import Task, TaskSubmission, AssignedStaffCourse, TaskAssignment, CoursePayment, \
+    CourseInstallment
 from internship.serializers.report_serializers import TaskReportSerializer, InternTaskPerformanceReportSerializer, \
     TaskSubmissionReportSerializer, InternPaymentSummaryReportSerializer, InternSummaryReportSerializer, \
     EnrollmentReportSerializer
@@ -125,16 +129,15 @@ class InternPaymentSummaryReportAPIView(generics.ListAPIView):
             "staff__user",
             "course"
         )
-
         # Filter by course
         course = self.request.query_params.get("course")
         if course and course.strip().lower() != "all":
             queryset = queryset.filter(course_id=int(course))
-
         # Filter by payment status
         payment_status = self.request.query_params.get("payment_status")
         if payment_status and payment_status.strip().lower() != "all":
             filtered_ids = []
+            today = now().date()
             for obj in queryset:
                 total_fee = obj.course.total_fee
                 paid = CoursePayment.objects.filter(
@@ -142,11 +145,24 @@ class InternPaymentSummaryReportAPIView(generics.ListAPIView):
                     installment__course=obj.course
                 ).aggregate(total=Sum("amount_paid"))["total"] or 0
                 pending = total_fee - paid
+                installments = CourseInstallment.objects.filter(
+                    course=obj.course
+                ).order_by("due_days_after_enrollment")
+                is_overdue = False
+                has_future_due = False
+                for inst in installments:
+                    due_date = obj.assigned_date + timedelta(
+                        days=inst.due_days_after_enrollment
+                    )
+                    if due_date < today:
+                        is_overdue = True
+                    if due_date >= today:
+                        has_future_due = True
                 if payment_status.lower() == "fully paid" and pending <= 0:
                     filtered_ids.append(obj.id)
-                elif payment_status.lower() == "pending" and pending > 0:
+                elif payment_status.lower() == "pending" and pending > 0 and not is_overdue:
                     filtered_ids.append(obj.id)
-                elif payment_status.lower() == "overdue" and pending > 0:
+                elif payment_status.lower() == "overdue" and pending > 0 and is_overdue:
                     filtered_ids.append(obj.id)
             queryset = queryset.filter(id__in=filtered_ids)
         return queryset.order_by("-assigned_date")

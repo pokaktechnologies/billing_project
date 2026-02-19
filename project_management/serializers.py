@@ -581,56 +581,63 @@ class ReportUpdateSerializer(serializers.ModelSerializer):
         return instance
 
 
-from django.utils import timezone
-from rest_framework import serializers
-
 class ProjectTimelineSerializer(serializers.ModelSerializer):
-    status_display = serializers.SerializerMethodField()
-    members_count = serializers.SerializerMethodField()
-    client_first_name = serializers.CharField(source='contract.client.first_name', read_only=True)
-    client_last_name = serializers.CharField(source='contract.client.last_name', read_only=True)
-    delay_days = serializers.SerializerMethodField()
+    member_name = serializers.SerializerMethodField()
+    project_name = serializers.CharField(source='project.project_name', read_only=True)
+    stack_name = serializers.CharField(source='stack.name', read_only=True)
+    # duration = serializers.IntegerField(source='project.duration', read_only=True)
+
+    total_tasks = serializers.SerializerMethodField()
+    completed_tasks = serializers.SerializerMethodField()
+    pending_tasks = serializers.SerializerMethodField()
+
+    easy_tasks = serializers.SerializerMethodField()
+    medium_tasks = serializers.SerializerMethodField()
+    hard_tasks = serializers.SerializerMethodField()
 
     class Meta:
-        model = ProjectManagement
+        model = ProjectMember
         fields = [
             'id',
-            'contract',
-            'client_first_name',
-            'client_last_name',
+            'project',
             'project_name',
-            'project_description',
-            'start_date',
-            'end_date',
-            'duration',
-            'status',
-            'status_display',
+            # 'duration',
+            'member',
+            'member_name',
+            'stack',
+            'stack_name',
             'created_at',
-            'updated_at',
-            'delay_days',
-            'members_count',
+
+            'total_tasks',
+            'completed_tasks',
+            'pending_tasks',
+
+            'easy_tasks',
+            'medium_tasks',
+            'hard_tasks',
         ]
 
-    def get_status_display(self, obj):
-        return obj.get_status_display()
+    def get_member_name(self, obj):
+        return f"{obj.member.user.first_name} {obj.member.user.last_name}".strip()
 
-    def get_members_count(self, obj):
-        return obj.members.count() if hasattr(obj, 'members') else 0
+    def get_task_data(self, obj):
+        task_map = self.context.get('task_map', {})
+        return task_map.get(obj.id, {})
 
-    def validate(self, data):
-        start_date = data.get('start_date', getattr(self.instance, 'start_date', None))
-        end_date = data.get('end_date', getattr(self.instance, 'end_date', None))
+    def get_total_tasks(self, obj):
+        return self.get_task_data(obj).get('total_tasks', 0)
 
-        if start_date and end_date and start_date > end_date:
-            raise serializers.ValidationError("Start date cannot be after end date.")
+    def get_completed_tasks(self, obj):
+        return self.get_task_data(obj).get('completed_tasks', 0)
 
-        return data
+    def get_pending_tasks(self, obj):
+        return self.get_task_data(obj).get('pending_tasks', 0)
 
-    def get_delay_days(self, obj):
-        today = timezone.now().date()
+    def get_easy_tasks(self, obj):
+        return self.get_task_data(obj).get('easy_tasks', 0)
 
-        if obj.end_date:
-            diff = (obj.end_date - today).days
-            return abs(diff) if diff < 0 else 0
-        
-        return 0
+    def get_medium_tasks(self, obj):
+        return self.get_task_data(obj).get('medium_tasks', 0)
+
+    def get_hard_tasks(self, obj):
+        return self.get_task_data(obj).get('hard_tasks', 0)

@@ -1,6 +1,6 @@
 from datetime import timedelta
-
-from django.utils.timezone import now
+from datetime import datetime
+from django.utils.timezone import now, make_aware
 from rest_framework import generics
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -30,11 +30,21 @@ class TaskReportAPIView(generics.ListAPIView):
             "staff__user"
         ).order_by("-assigned_at")
 
+        # filter with intern_id
+        intern_id = self.request.query_params.get("intern_id")
+        if intern_id and intern_id.strip().lower() != "all":
+            queryset = queryset.filter(staff_id=int(intern_id))
+
         # Assigned Date filter
         assigned_date = self.request.query_params.get("assigned_date")
-        if assigned_date:
+        if assigned_date and assigned_date.strip().lower() != "all":
+            start = make_aware(
+                datetime.strptime(assigned_date.strip(), "%Y-%m-%d")
+            )
+            end = start + timedelta(days=1)
             queryset = queryset.filter(
-                assigned_at__date=assigned_date
+                assigned_at__gte=start,
+                assigned_at__lt=end
             )
 
         # Status filter
@@ -77,6 +87,13 @@ class InternTaskPerformanceReportView(generics.ListAPIView):
                 Q(staff__user__first_name__icontains=search) |
                 Q(staff__user__last_name__icontains=search)
             )
+        # filter by intern_id
+        intern_id = self.request.query_params.get("intern_id")
+
+        if intern_id and intern_id.strip().lower() not in ["", "all"]:
+            queryset = queryset.filter(
+                staff_id=int(intern_id)
+            )
 
         # Filter by course id
         course = self.request.query_params.get("course")
@@ -89,6 +106,7 @@ class InternTaskPerformanceReportView(generics.ListAPIView):
 class TaskSubmissionReportAPIView(generics.ListAPIView):
     serializer_class = TaskSubmissionReportSerializer
     permission_classes = [IsAuthenticated]
+
     def get_queryset(self):
         queryset = TaskSubmission.objects.select_related(
             "assignment",
@@ -97,13 +115,28 @@ class TaskSubmissionReportAPIView(generics.ListAPIView):
             "assignment__task",
             "assignment__task__course"
         )
-        submission_date = self.request.query_params.get("submission_date")
-        status = self.request.query_params.get("status")
 
-        if submission_date:
+        # filter with intern_id
+        intern_id = self.request.query_params.get("intern_id")
+        if intern_id and intern_id.strip().lower() not in ["", "all"]:
             queryset = queryset.filter(
-                submitted_at__date=submission_date
+                assignment__staff_id=int(intern_id)
             )
+
+        # filter with submission date
+        submission_date = self.request.query_params.get("submission_date")
+        if submission_date:
+            start = make_aware(
+                datetime.strptime(submission_date, "%Y-%m-%d")
+            )
+            end = start + timedelta(days=1)
+            queryset = queryset.filter(
+                submitted_at__gte=start,
+                submitted_at__lt=end
+            )
+
+        # filter with status
+        status = self.request.query_params.get("status")
         if status:
             status = status.strip().lower()
             if status == "approved":
@@ -129,6 +162,14 @@ class InternPaymentSummaryReportAPIView(generics.ListAPIView):
             "staff__user",
             "course"
         )
+        # filter by intern_id
+        intern_id = self.request.query_params.get("intern_id")
+        if intern_id and intern_id.strip().lower() not in ["", "all"]:
+
+            queryset = queryset.filter(
+                staff_id=int(intern_id)
+            )
+
         # Filter by course
         course = self.request.query_params.get("course")
         if course and course.strip().lower() != "all":
@@ -174,29 +215,42 @@ class InternSummaryReportAPIView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+
         queryset = AssignedStaffCourse.objects.select_related(
             "staff",
             "staff__user",
             "course"
         )
 
-        # Filter by course
-        course = self.request.query_params.get("course")
-        if course and course.strip().lower() != "all":
-            # support both ID and course name
-            if course.isdigit():
-                queryset = queryset.filter(course_id=int(course))
-            else:
-                queryset = queryset.filter(course__title__icontains=course)
+        # filter by intern id
+        intern_id = self.request.query_params.get("intern_id")
+        if intern_id and intern_id.strip().lower() != "all":
+            if intern_id.isdigit():
+                queryset = queryset.filter(
+                    staff_id=int(intern_id)
+                )
 
-        # Filter by intern name
+        # filter by intern name
         intern_name = self.request.query_params.get("intern_name")
         if intern_name and intern_name.strip().lower() != "all":
+            intern_clean = intern_name.strip()
             queryset = queryset.filter(
-                staff__user__first_name__icontains=intern_name
-            ) | queryset.filter(
-                staff__user__last_name__icontains=intern_name
+                Q(staff__user__first_name__icontains=intern_clean) |
+                Q(staff__user__last_name__icontains=intern_clean)
             )
+
+        # filter by course
+        course = self.request.query_params.get("course")
+        if course and course.strip().lower() != "all":
+            course_clean = course.strip()
+            if course_clean.isdigit():
+                queryset = queryset.filter(
+                    course_id=int(course_clean)
+                )
+            else:
+                queryset = queryset.filter(
+                    course__title__icontains=course_clean
+                )
         return queryset.order_by("-assigned_date")
 
 
@@ -213,6 +267,14 @@ class EnrollmentReportAPIView(generics.ListAPIView):
             "course"
         )
 
+        # filter with intern_id
+        intern_id = self.request.query_params.get("intern_id")
+        if intern_id and intern_id.strip().lower() != "all":
+            if intern_id.isdigit():
+                queryset = queryset.filter(
+                    staff_id=int(intern_id)
+                )
+
         # Enrollment Date Filter
         enrollment_date = self.request.query_params.get("enrollment_date")
         if enrollment_date and enrollment_date.strip().lower() != "all":
@@ -227,4 +289,12 @@ class EnrollmentReportAPIView(generics.ListAPIView):
                 staff__job_detail__status__iexact=status
             )
 
+        # filter with intern_name
+        intern_name = self.request.query_params.get("intern_name")
+        if intern_name and intern_name.strip().lower() != "all":
+            name_clean = intern_name.strip()
+            queryset = queryset.filter(
+                Q(staff__user__first_name__icontains=name_clean) |
+                Q(staff__user__last_name__icontains=name_clean)
+            )
         return queryset.order_by("-assigned_date")

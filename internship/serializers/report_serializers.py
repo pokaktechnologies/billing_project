@@ -10,6 +10,7 @@ from internship.models import TaskSubmission, AssignedStaffCourse, CoursePayment
 
 # report based on task
 class TaskReportSerializer(serializers.ModelSerializer):
+    intern_id = serializers.IntegerField(source="staff.id", read_only=True)
     task_id = serializers.IntegerField(source="task.id")
     task_title = serializers.CharField(source="task.title")
     description = serializers.CharField(source="task.description")
@@ -23,6 +24,7 @@ class TaskReportSerializer(serializers.ModelSerializer):
         model = TaskAssignment
 
         fields = [
+            "intern_id",
             "task_id",
             "task_title",
             "description",
@@ -117,6 +119,7 @@ class InternTaskPerformanceReportSerializer(serializers.ModelSerializer):
 
 # reports based on task submission reports
 class TaskSubmissionReportSerializer(serializers.ModelSerializer):
+    intern_id = serializers.IntegerField(source="assignment.staff.id", read_only=True)
     task_title = serializers.CharField(source="assignment.task.title", read_only=True)
     intern_name = serializers.SerializerMethodField()
     submission_date = serializers.DateTimeField(source="submitted_at", read_only=True)
@@ -129,6 +132,7 @@ class TaskSubmissionReportSerializer(serializers.ModelSerializer):
         model = TaskSubmission
 
         fields = [
+            "intern_id",
             "task_title",
             "intern_name",
             "submission_date",
@@ -145,6 +149,8 @@ class TaskSubmissionReportSerializer(serializers.ModelSerializer):
 
 # report based on intern payment details
 class InternPaymentSummaryReportSerializer(serializers.ModelSerializer):
+    intern_id = serializers.IntegerField(source="staff.id", read_only=True)
+    intern_name = serializers.SerializerMethodField()
     course_id = serializers.IntegerField(source="course.id")
     course_title = serializers.CharField(source="course.title")
     total_fee = serializers.DecimalField(source="course.total_fee", max_digits=10, decimal_places=2)
@@ -157,6 +163,8 @@ class InternPaymentSummaryReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = AssignedStaffCourse
         fields = [
+            "intern_id",
+            "intern_name",
             "course_id",
             "course_title",
             "total_fee",
@@ -166,6 +174,9 @@ class InternPaymentSummaryReportSerializer(serializers.ModelSerializer):
             "next_due_date",
             "overdue_days",
         ]
+    def get_intern_name(self, obj):
+
+        return f"{obj.staff.user.first_name} {obj.staff.user.last_name}"
 
     def get_paid_amount(self, obj):
 

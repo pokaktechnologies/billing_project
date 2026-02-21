@@ -1248,16 +1248,19 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.permissions import IsAuthenticated
 
 class LeadReportAPIView(APIView):
-    permission_classes = [IsAuthenticated]   # ✅ Only logged-in users
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
+
         leads = Lead.objects.select_related(
             "lead_source",
             "salesperson",
             "location"
         ).all()
 
-        # -------- FILTERS --------
+        # -----------------------------
+        # GET QUERY PARAMS
+        # -----------------------------
         from_date = request.GET.get("from_date")
         to_date = request.GET.get("to_date")
         lead_status = request.GET.get("lead_status")
@@ -1268,14 +1271,30 @@ class LeadReportAPIView(APIView):
         ordering = request.GET.get("ordering")
         client_name = request.GET.get("client_name")
 
-        if client_name:
-            leads = leads.filter(name__icontains=client_name)
-
+        # -----------------------------
+        # DATE FILTERING (SAFE WAY)
+        # -----------------------------
         if from_date:
-            leads = leads.filter(created_at__date__gte=parse_date(from_date))
+            parsed_from = parse_date(from_date)
+            if parsed_from:
+                start_datetime = make_aware(
+                    datetime.combine(parsed_from, datetime.min.time())
+                )
+                leads = leads.filter(created_at__gte=start_datetime)
 
         if to_date:
-            leads = leads.filter(created_at__date__lte=parse_date(to_date))
+            parsed_to = parse_date(to_date)
+            if parsed_to:
+                end_datetime = make_aware(
+                    datetime.combine(parsed_to, datetime.max.time())
+                )
+                leads = leads.filter(created_at__lte=end_datetime)
+
+        # -----------------------------
+        # OTHER FILTERS
+        # -----------------------------
+        if client_name:
+            leads = leads.filter(name__icontains=client_name)
 
         if lead_status:
             leads = leads.filter(lead_status=lead_status)
@@ -1292,6 +1311,9 @@ class LeadReportAPIView(APIView):
         if lead_type:
             leads = leads.filter(lead_type=lead_type)
 
+        # -----------------------------
+        # ORDERING
+        # -----------------------------
         if ordering == "oldest":
             leads = leads.order_by("created_at")
         else:
@@ -1327,44 +1349,56 @@ class LeadPerformanceAPIView(APIView):
             "location"
         ).all()
 
-        # -------------------------
-        # Restrict non-admin users
-        # -------------------------
+        # =========================
+        # ROLE RESTRICTION
+        # =========================
         if not request.user.is_staff:
             leads = leads.filter(CustomUser=request.user)
 
-        # -------------------------
-        # Filters
-        # -------------------------
-        filters = Q()
+        # =========================
+        # FILTERING
+        # =========================
 
         from_date = request.GET.get("from_date")
         to_date = request.GET.get("to_date")
         search = request.GET.get("search")
 
+        # ✅ SAFE DATE RANGE FILTER
         if from_date:
-            filters &= Q(created_at__date__gte=parse_date(from_date))
+            parsed_from = parse_date(from_date)
+            if parsed_from:
+                start_datetime = make_aware(
+                    datetime.combine(parsed_from, time.min)
+                )
+                leads = leads.filter(created_at__gte=start_datetime)
 
         if to_date:
-            filters &= Q(created_at__date__lte=parse_date(to_date))
+            parsed_to = parse_date(to_date)
+            if parsed_to:
+                end_datetime = make_aware(
+                    datetime.combine(parsed_to, time.max)
+                )
+                leads = leads.filter(created_at__lte=end_datetime)
 
+        # Other filters
         if request.GET.get("lead_status"):
-            filters &= Q(lead_status=request.GET.get("lead_status"))
+            leads = leads.filter(lead_status=request.GET.get("lead_status"))
 
         if request.GET.get("lead_source"):
-            filters &= Q(lead_source_id=request.GET.get("lead_source"))
+            leads = leads.filter(lead_source_id=request.GET.get("lead_source"))
 
         if request.GET.get("salesperson"):
-            filters &= Q(salesperson_id=request.GET.get("salesperson"))
+            leads = leads.filter(salesperson_id=request.GET.get("salesperson"))
 
         if request.GET.get("location"):
-            filters &= Q(location_id=request.GET.get("location"))
+            leads = leads.filter(location_id=request.GET.get("location"))
 
         if request.GET.get("lead_type"):
-            filters &= Q(lead_type=request.GET.get("lead_type"))
+            leads = leads.filter(lead_type=request.GET.get("lead_type"))
 
+        # Global Search
         if search:
-            filters &= (
+            leads = leads.filter(
                 Q(name__icontains=search) |
                 Q(company__icontains=search) |
                 Q(phone__icontains=search) |
@@ -1372,11 +1406,10 @@ class LeadPerformanceAPIView(APIView):
                 Q(lead_number__icontains=search)
             )
 
-        leads = leads.filter(filters)
+        # =========================
+        # KPI Aggregation
+        # =========================
 
-        # =========================
-        # KPI Aggregation (Single Query)
-        # =========================
         kpi = leads.aggregate(
             total=Count("id"),
             converted=Count("id", filter=Q(lead_status="converted")),
@@ -1395,8 +1428,9 @@ class LeadPerformanceAPIView(APIView):
         ) if total_leads else 0
 
         # =========================
-        # Followup Stats
+        # FOLLOW-UP STATS
         # =========================
+
         followups = FollowUp.objects.filter(lead__in=leads)
 
         followup_stats = followups.aggregate(
@@ -1405,8 +1439,9 @@ class LeadPerformanceAPIView(APIView):
         )
 
         # =========================
-        # Avg Response Time
+        # AVG RESPONSE TIME
         # =========================
+
         response_time = followups.annotate(
             response_duration=ExpressionWrapper(
                 F("created_at") - F("lead__created_at"),
@@ -1421,8 +1456,9 @@ class LeadPerformanceAPIView(APIView):
         ) if avg_response else 0
 
         # =========================
-        # Salesperson Performance
+        # SALESPERSON PERFORMANCE
         # =========================
+
         salesperson_data = leads.filter(
             salesperson__isnull=False
         ).annotate(
@@ -1449,8 +1485,9 @@ class LeadPerformanceAPIView(APIView):
             ) if sp["total"] else 0
 
         # =========================
-        # Final Response
+        # FINAL RESPONSE
         # =========================
+
         return Response({
             "total_leads": total_leads,
             "contacted": kpi["contacted"],
@@ -1478,8 +1515,7 @@ class LeadSourceReportAPIView(APIView):
         # -------------------------
         leads = Lead.objects.all()
 
-        # Restrict non-admin users
-        if not request.user.is_staff:
+        if not request.user.is_superuser:
             leads = leads.filter(CustomUser=request.user)
 
         # -------------------------
@@ -1495,12 +1531,14 @@ class LeadSourceReportAPIView(APIView):
         if from_date:
             parsed_from = parse_date(from_date)
             if parsed_from:
-                leads = leads.filter(created_at__date__gte=parsed_from)
+                start_datetime = make_aware(datetime.combine(parsed_from, datetime.min.time()))
+                leads = leads.filter(created_at__gte=start_datetime)
 
         if to_date:
             parsed_to = parse_date(to_date)
             if parsed_to:
-                leads = leads.filter(created_at__date__lte=parsed_to)
+                end_datetime = make_aware(datetime.combine(parsed_to, datetime.max.time()))
+                leads = leads.filter(created_at__lte=end_datetime)
 
         if location:
             leads = leads.filter(location_id=location)
@@ -1593,40 +1631,31 @@ class EnquiryReportAPIView(APIView):
 
         enquiries = Enquiry.objects.all()
 
-        # -------------------------
-        # FILTER PARAMETERS
-        # -------------------------
         from_date = request.GET.get("from_date")
         to_date = request.GET.get("to_date")
         status = request.GET.get("status")
         search = request.GET.get("search")
 
-        # -------------------------
-        # DATE FILTER
-        # -------------------------
+        # ✅ SAFE DATETIME RANGE FILTER
         if from_date:
             parsed_from = parse_date(from_date)
             if parsed_from:
-                enquiries = enquiries.filter(
-                    created_at__date__gte=parsed_from
+                start_datetime = make_aware(
+                    datetime.combine(parsed_from, time.min)
                 )
+                enquiries = enquiries.filter(created_at__gte=start_datetime)
 
         if to_date:
             parsed_to = parse_date(to_date)
             if parsed_to:
-                enquiries = enquiries.filter(
-                    created_at__date__lte=parsed_to
+                end_datetime = make_aware(
+                    datetime.combine(parsed_to, time.max)
                 )
+                enquiries = enquiries.filter(created_at__lte=end_datetime)
 
-        # -------------------------
-        # STATUS FILTER
-        # -------------------------
         if status:
             enquiries = enquiries.filter(status=status)
 
-        # -------------------------
-        # GLOBAL SEARCH
-        # -------------------------
         if search:
             enquiries = enquiries.filter(
                 Q(first_name__icontains=search) |
@@ -1638,28 +1667,23 @@ class EnquiryReportAPIView(APIView):
 
         enquiries = enquiries.order_by("-created_at")
 
-        # -------------------------
-        # FORMAT RESPONSE (ONLY TABLE DATA)
-        # -------------------------
-        enquiry_list = []
-
-        for enquiry in enquiries:
-            enquiry_list.append({
-                "enquiry_id": enquiry.id,  # Normal ID
+        enquiry_list = [
+            {
+                "enquiry_id": enquiry.id,
                 "date": enquiry.created_at.date(),
                 "client_name": f"{enquiry.first_name} {enquiry.last_name or ''}".strip(),
                 "email": enquiry.email,
                 "phone": enquiry.phone,
                 "message": enquiry.message,
                 "status": enquiry.status,
-            })
+            }
+            for enquiry in enquiries
+        ]
 
         return Response({
             "total_records": enquiries.count(),
             "enquiries": enquiry_list
         })
-    
-
 
 
 from rest_framework.views import APIView

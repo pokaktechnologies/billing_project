@@ -1122,7 +1122,7 @@ class CustomerSerializer(serializers.ModelSerializer):
             'id', 'customer_type', 'first_name', 'last_name',
             'salesperson_id', 'salesperson_name',
             'country', 'state', 'company_name', 'address',
-            'email', 'gst_number', 'phone', 'mobile'
+            'email', 'gst_number', 'phone', 'mobile',"customer_number"
         ]
     def get_salesperson_name(self, obj):
         if obj.salesperson:

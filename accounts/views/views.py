@@ -2514,7 +2514,10 @@ class OrderNumberGeneratorView(APIView):
         return f"{prefix}|{next_number:0{length}d}"
 
     def get(self, request):
-        order_type = request.query_params.get('type')
+        order_type = request.query_params.get('type') or request.query_params.get('type ')
+        if isinstance(order_type, str):
+            order_type = order_type.strip().upper()
+
 
         if order_type == "QU":
             order_number = self.generate_next_number(QuotationOrderModel, "quotation_number", "QU", 6)
@@ -2540,7 +2543,7 @@ class OrderNumberGeneratorView(APIView):
             order_number = self.generate_next_number(JobDetail, "employee_id", "EMP", 6)
         elif order_type == "PC":
             order_number = self.generate_next_number(Product, "code", "PC", 4)
-        elif order_number == "CL":
+        elif order_type == "CL":
             order_number = self.generate_next_number(Customer, "customer_number", "CL", 6)
 
         else:

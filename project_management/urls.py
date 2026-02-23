@@ -72,6 +72,6 @@ urlpatterns = [
 
     # Reports
     path('reports/project/', ProjectReportView.as_view(), name='project_report'),
-    path('reports/project-timeline/', ProjectTimelineReportView.as_view(), name='project_report_timeline'),
+    path('reports/project-timeline/<int:id>/', ProjectTimelineReportView.as_view(), name='project_report_timeline'),
     path('reports/contract/', ContractReportView.as_view(), name='project_contract_report'),
 ]

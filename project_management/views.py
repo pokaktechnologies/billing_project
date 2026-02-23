@@ -2189,62 +2189,71 @@ class ProjectReportView(APIView):
     
 # Project Timeline reports
 
+
+
+
 class ProjectTimelineReportView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request):
-        project_qs = ProjectManagement.objects.select_related(
-            'contract__client'
-        ).order_by('-created_at')
-
-        from_date = request.query_params.get('from_date')
-        to_date = request.query_params.get('to_date')
-        status = request.query_params.get('status')
+    def get(self, request, id):
         search = request.query_params.get('search')
 
-        # DATE FILTER
-        if from_date and to_date:
-            try:
-                from_date = datetime.strptime(from_date, "%Y-%m-%d").date()
-                to_date = datetime.strptime(to_date, "%Y-%m-%d").date()
+        project = ProjectManagement.objects.filter(id=id).first()
 
-                project_qs = project_qs.filter(
-                    start_date__lte=to_date,
-                    end_date__gte=from_date
-                )
-            except ValueError:
-                return Response({
-                    "Status": "0",
-                    "Message": "Invalid date format. Use YYYY-MM-DD"
-                })
+        if not project:
+            return Response(
+                {"status": "0", "message": "Project not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
-        # STATUS FILTER
-        if status:
-            project_qs = project_qs.filter(status=status)
+        project_members = ProjectMember.objects.filter(project_id=id) \
+            .select_related('member__user', 'project', 'stack')
 
-        # SEARCH FILTER
         if search:
-            project_qs = project_qs.filter(project_name__icontains=search)
+            project_members = project_members.filter(
+                Q(member__user__first_name__icontains=search) |
+                Q(member__user__last_name__icontains=search) |
+                Q(member__user__email__icontains=search)
+            )
+        
+        task_data = TaskAssign.objects.filter(
+            assigned_to__project_id=id
+        ).values('assigned_to').annotate(
+            total_tasks=Count('id'),
+            completed_tasks=Count('id', filter=Q(task__status='completed')),
+            pending_tasks=Count('id', filter=~Q(task__status='completed')),
+            easy_tasks=Count('id', filter=Q(task__difficulty='easy')),
+            medium_tasks=Count('id', filter=Q(task__difficulty='medium')),
+            hard_tasks=Count('id', filter=Q(task__difficulty='hard')),
+        )
 
-        # PAGINATION
-        paginator = ReportPagination()
-        paginated_qs = paginator.paginate_queryset(project_qs, request)
+        task_map = {item['assigned_to']: item for item in task_data}
+
+        pagination = ReportPagination()
+        paginated_qs = pagination.paginate_queryset(project_members, request)
         if paginated_qs is not None:
-            serializer = ProjectTimelineSerializer(paginated_qs, many=True)
+            # project_members = paginated_qs
+            serializer = ProjectTimelineSerializer(
+                paginated_qs,
+                many=True,
+                context={'task_map': task_map}
+            )
+            return pagination.get_paginated_response(serializer.data)
 
-            return paginator.get_paginated_response({
-                "Status": "1",
-                "Message": "Success",
-                "Data": serializer.data
-            })
 
-        serializer = ProjectTimelineSerializer(project_qs, many=True)
+
+        serializer = ProjectTimelineSerializer(
+            project_members,
+            many=True,
+            context={'task_map': task_map}
+        )
 
         return Response({
-            "Status": "1",
-            "Message": "Success",
-            "Data": serializer.data
-        })
+            "status": "1",
+            "message": "success",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
 
 # Contract Reports
 class ContractReportView(APIView):

@@ -1,5 +1,5 @@
 from xmlrpc import client
-from rest_framework import viewsets,status
+from rest_framework import viewsets,status, generics
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from rest_framework.response import Response
 from rest_framework.decorators import action
@@ -7,6 +7,8 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.generics import get_object_or_404
+
+from accounts.services.base_view import BaseAPIView
 from ..models import CustomUser, Feature
 from django.db.models import Q
 from django.db import transaction, IntegrityError
@@ -2729,7 +2731,7 @@ class CategoryListCreateAPIView(APIView):
         return Response({"Status": "1", "message": "Category deleted successfully."}, status=status.HTTP_200_OK)
     
 
-class UnitAPIView(APIView):
+class UnitAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'setup'
     # GET - Retrieve all units or a specific unit by ID

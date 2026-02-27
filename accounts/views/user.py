@@ -568,6 +568,14 @@ class UnassignedStaffListView(APIView):
         })
 
 
+# Activity Log List View
+
+class ActivityLogListView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    # required_module = 'activity_log'
+    serializer_class = ActivityLogSerializer
+    queryset = ActivityLog.objects.all().order_by('-timestamp')
+
 
 
 ## DASHBOARD ---------##

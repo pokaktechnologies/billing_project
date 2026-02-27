@@ -9,6 +9,9 @@ from decimal import Decimal
 from django.db import models
 from django.db.models import Sum
 
+# from .base_model import BaseModel
+from .services.base_model import BaseModel
+
 class CustomUserManager(BaseUserManager):
     def create_user(self, first_name, last_name, email, password=None, **extra_fields):
         if not email:
@@ -272,7 +275,7 @@ class Product(models.Model):
     
     def __str__(self):
         return self.name
-class Unit(models.Model):
+class Unit(BaseModel):
     name = models.CharField(max_length=50, unique=True)  # Unit name (e.g., kg, piece)
     description = models.TextField(blank=True)  # Optional description
 
@@ -980,6 +983,26 @@ class ContractPoint(models.Model):
     def __str__(self):
         return self.points[:50]
     
+
+
+
+class ActivityLog(models.Model):
+    ACTION_CHOICES = (
+        ('CREATE', 'Create'),
+        ('UPDATE', 'Update'),
+        ('DELETE', 'Delete'),
+    )
+
+    user = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True)
+    action = models.CharField(max_length=10, choices=ACTION_CHOICES)
+    model_name = models.CharField(max_length=100)
+    object_id = models.IntegerField(null=True, blank=True)
+    description = models.TextField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user} {self.action} {self.model_name}"
+
 
 
 # models.py

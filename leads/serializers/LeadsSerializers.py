@@ -8,6 +8,7 @@ from accounts.models import SalesPerson, StaffProfile
 
 class LeadSerializer(serializers.ModelSerializer):
     lead_status_display = serializers.SerializerMethodField()
+    lead_category_display = serializers.SerializerMethodField()
 
     class Meta:
         model = Lead
@@ -20,6 +21,8 @@ class LeadSerializer(serializers.ModelSerializer):
     def get_lead_status_display(self, obj):
         return obj.get_lead_status_display()
 
+    def get_lead_category_display(self, obj):
+        return obj.get_lead_category_display()
 
 
 class LeadSerializerListDisplay(serializers.ModelSerializer):

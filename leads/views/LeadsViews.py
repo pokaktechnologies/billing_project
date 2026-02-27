@@ -66,6 +66,11 @@ class StaffLeadView(APIView):
         end_date = request.query_params.get('end_date')      # yyyy-mm-dd
         name = request.query_params.get('name')
         lead_status = request.query_params.get('lead_status')
+        lead_category = request.query_params.get('lead_category')
+
+        
+        if lead_category:
+            leads = leads.filter(lead_category=lead_category)
 
         if name:
             leads = leads.filter(name__icontains=name)

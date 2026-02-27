@@ -14,6 +14,16 @@ class Lead(models.Model):
         ],
         default='my_lead'
     )
+
+    lead_category = models.CharField(
+        max_length=50,
+        choices=[
+            ('client', 'Client'),
+            ('internal', 'Internal'),
+        ],
+        default='client'
+    )
+    
     # -------------------
     # CUSTOMER DETAILS
     # -------------------

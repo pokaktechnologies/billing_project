@@ -1,7 +1,7 @@
 # core/base_view.py
 
 from rest_framework.views import APIView
-from .activity_log import set_current_user
+from .utils import set_current_user
 
 class BaseAPIView(APIView):
 

@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     'internship',
     'payroll',
     'core',
+    'activity_logs',
 
     
     "channels",

@@ -8,7 +8,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.generics import get_object_or_404
 
-from accounts.services.base_view import BaseAPIView
+from activity_logs.base_view import BaseAPIView
 from ..models import CustomUser, Feature
 from django.db.models import Q
 from django.db import transaction, IntegrityError

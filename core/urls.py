@@ -29,6 +29,7 @@ urlpatterns = [
     path('certificate/', include('certificates.urls')),
     path('attendance/', include('attendance.urls')),
     path('chat/', include('chat.urls')),
+    path('activity_log/', include('activity_logs.urls')),
 
     path('internship/', include('internship.urls')),
     path('payroll/', include('payroll.urls')),

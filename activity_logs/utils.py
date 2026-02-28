@@ -2,7 +2,7 @@
 # Activity Log Service
 
 def create_log(user, action, instance):
-    from ..models import ActivityLog
+    from .models import ActivityLog
 
     #  double safety
     if not user or not user.is_authenticated:

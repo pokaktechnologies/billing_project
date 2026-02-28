@@ -187,9 +187,6 @@ urlpatterns = [
 
     path('unassigned-staff/', UnassignedStaffListView.as_view(), name='unassigned-staff-list'),
 
-    # activity logs
-    path('activity-logs/', ActivityLogListView.as_view(), name='activity-log-list'),
-
     ## DASHBOARD URLS
     path('dashboard/developer/', DeveloperDashboardView.as_view(), name='developers-dashboard'),
     path('dashboard/designer/', GraphicDesignerDashboardView.as_view(), name='admin-dashboard'),

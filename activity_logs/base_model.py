@@ -1,7 +1,7 @@
 from django.db import models
 from django.conf import settings
 
-from .activity_log import create_log, get_current_user
+from .utils import create_log, get_current_user
 
 class BaseModel(models.Model):
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)

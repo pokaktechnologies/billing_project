@@ -2,12 +2,13 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from accounts.serializers.user import *
 from accounts.permissions import HasModulePermission, PARENT_MODULE_MAP
-from accounts.models import CustomUser, ModulePermission , Department ,StaffProfile, JobDetail, StaffDocument , SalesPerson
+from accounts.models import CustomUser, ModulePermission, Department, StaffProfile, JobDetail, StaffDocument, \
+    SalesPerson
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
-from rest_framework.parsers import MultiPartParser, FormParser ,JSONParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db import transaction
 from rest_framework import generics
 from django.core.mail import send_mail
@@ -23,10 +24,10 @@ from datetime import datetime
 from project_management.models import ProjectManagement, Task
 
 
-
 class DepartmentView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'hr_section'
+
     def get(self, request):
         """List all departments"""
         departments = Department.objects.all().order_by('-id')
@@ -74,7 +75,6 @@ class DepartmentView(APIView):
             status=status.HTTP_204_NO_CONTENT
         )
 
-    
 
 class ProfileAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -94,9 +94,12 @@ class AssignPermissionView(APIView):
             serializer.save()
             return Response({"message": "Permissions assigned successfully."})
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+
+
 from django.db import transaction, IntegrityError
 import traceback
+
+
 class CreateStaffWithPermissionsView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'hr_section'
@@ -272,20 +275,18 @@ class CreateStaffWithPermissionsView(APIView):
 
         return Response({"status": "1", "message": "success", "data": serializer.data})
 
-                   
-
-
     def delete(self, request, staff_id=None):
         if not staff_id:
-            return Response({"status": "0", "message": "Staff ID is required for deletion."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"status": "0", "message": "Staff ID is required for deletion."},
+                            status=status.HTTP_400_BAD_REQUEST)
 
         try:
             staff_user = CustomUser.objects.get(id=staff_id, is_staff=True, is_superuser=False)
             staff_user.delete()
-            return Response({"status": "1", "message": "Staff user deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+            return Response({"status": "1", "message": "Staff user deleted successfully."},
+                            status=status.HTTP_204_NO_CONTENT)
         except CustomUser.DoesNotExist:
             return Response({"status": "0", "message": "Staff user not found."}, status=status.HTTP_200_OK)
-
 
 
 #  update
@@ -303,22 +304,25 @@ class UpdateJobDetailView(generics.UpdateAPIView):
     required_module = 'hr_section'
     queryset = JobDetail.objects.all()
     serializer_class = JobDetailUpdateSerializer
-    lookup_field = "id"   
-
+    lookup_field = "id"
 
 # Add a new document
+
+
 class StaffDocumentCreateView(generics.CreateAPIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'hr_section'    
+    required_module = 'hr_section'
     serializer_class = StaffDocumentSerializer
     # permission_classes = [permissions.IsAuthenticated]
+
 
 class StaffDocumentUpdateView(generics.UpdateAPIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'hr_section'
     queryset = StaffDocument.objects.all()
     serializer_class = StaffDocumentSerializer
-    lookup_field = "id"   
+    lookup_field = "id"
+
 
 class StaffDocumentDeleteView(generics.DestroyAPIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
@@ -327,12 +331,39 @@ class StaffDocumentDeleteView(generics.DestroyAPIView):
     queryset = StaffDocument.objects.all()
     lookup_field = "id"
 
+
 class UserModulePermissionUpdateView(generics.GenericAPIView):
     serializer_class = ModulePermissionSerializer
 
     def patch(self, request, user_id):
         user = get_object_or_404(CustomUser, id=user_id)
         modules = request.data.get('modules', [])  # Expecting a list of module names
+        if not isinstance(modules, list):
+            return Response(
+                {"detail": "Modules must be a list."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Get allowed module keys from model choices
+        allowed_modules = {
+            choice[0] for choice in ModulePermission.MODULE_CHOICES
+        }
+
+        # Validate input
+        invalid_modules = [m for m in modules if m not in allowed_modules]
+
+        if invalid_modules:
+            return Response(
+                {
+                    "detail": "Invalid modules provided.",
+                    "invalid_modules": invalid_modules,
+                    "allowed_modules": list(allowed_modules),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Remove duplicates
+        modules = list(set(modules))
 
         # Delete existing permissions
         ModulePermission.objects.filter(user=user).delete()
@@ -348,7 +379,6 @@ class ChangePasswordView(APIView):
     # permission_classes = [IsAuthenticated]
 
     def patch(self, request):
-
         serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
 
@@ -358,7 +388,6 @@ class ChangePasswordView(APIView):
         user.save()
 
         return Response({"detail": f"Password updated successfully for {user.email}."}, status=200)
-
 
 
 class AdminForgotPasswordRequestView(APIView):
@@ -389,7 +418,8 @@ class AdminForgotPasswordRequestView(APIView):
             send_mail(subject, message, from_email, [user.email], fail_silently=False)
         except Exception:
             # If email sending fails, still return success with a message advising to check email backend
-            return Response({"detail": "OTP generated and stored. Failed to send email; check email backend."}, status=status.HTTP_200_OK)
+            return Response({"detail": "OTP generated and stored. Failed to send email; check email backend."},
+                            status=status.HTTP_200_OK)
 
         return Response({"detail": "OTP sent to admin email."}, status=status.HTTP_200_OK)
 
@@ -494,9 +524,11 @@ class ListStaffView(APIView):
                 return Response({"status": "1", "message": "success", "data": data})
             except CustomUser.DoesNotExist:
                 return Response({"status": "0", "message": "Staff user not found"}, status=status.HTTP_404_NOT_FOUND)
-        staff_users = CustomUser.objects.filter(is_staff=True, is_superuser=False).values('id', 'email', 'first_name', 'last_name')
+        staff_users = CustomUser.objects.filter(is_staff=True, is_superuser=False).values('id', 'email', 'first_name',
+                                                                                          'last_name')
         return Response({"status": "1", "message": "success", "data": list(staff_users)})
-    
+
+
 class StaffPersonalInfoView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -506,6 +538,7 @@ class StaffPersonalInfoView(APIView):
             serializer = StaffPersonalInfoSerializer(user)
             return Response({"status": "1", "message": "success", "data": serializer.data})
         return Response({"status": "0", "message": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+
 
 class StaffPersonalAttendanceView(APIView):
     permission_classes = [IsAuthenticated]
@@ -525,7 +558,7 @@ class StaffPersonalAttendanceView(APIView):
                     {"status": "0", "message": "Start date cannot be after end date."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-                
+
             queryset = DailyAttendance.objects.filter(staff__id=user.staff_profile.id).order_by('-date')
 
             if start:
@@ -533,8 +566,9 @@ class StaffPersonalAttendanceView(APIView):
             if end:
                 queryset = queryset.filter(date__lte=end)
             # Get staff start date from JobDetail
-            start_date_str = StaffPersonalInfoSerializer(user).data.get('profile', {}).get('job_detail', {}).get('start_date')
-            
+            start_date_str = StaffPersonalInfoSerializer(user).data.get('profile', {}).get('job_detail', {}).get(
+                'start_date')
+
             # Convert string to datetime object
             start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
             today = datetime.today().date()
@@ -548,14 +582,14 @@ class StaffPersonalAttendanceView(APIView):
             half_days = queryset.filter(status='half_day').count()
 
             days_count = {
-                    "total_days": total_days,
-                    "present_days": present_days,
-                    "half_days": half_days,
-                    "absent_days": absent_days,
+                "total_days": total_days,
+                "present_days": present_days,
+                "half_days": half_days,
+                "absent_days": absent_days,
             }
-                
+
             serializer = DailyAttendanceSessionDetailSerializer(queryset, many=True)
-            return Response({"days_count":days_count,"session_data": serializer.data}, status=200)
+            return Response({"days_count": days_count, "session_data": serializer.data}, status=200)
         return Response({"status": "0", "message": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
 
 
@@ -563,9 +597,7 @@ class StaffPersonalAttendanceView(APIView):
 class UnassignedStaffListView(APIView):
     permission_classes = [IsAuthenticated]
 
-
     def get(self, request):
-
         # 1️⃣ Get all staff IDs already assigned to a SalesPerson
         assigned_staff_ids = SalesPerson.objects.filter(
             assigned_staff__isnull=False
@@ -589,11 +621,11 @@ class UnassignedStaffListView(APIView):
         })
 
 
-
 ## DASHBOARD ---------##
 
 class DeveloperDashboardView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
+
     # required_module = 'development'
 
     def get(self, request):
@@ -623,8 +655,7 @@ class DeveloperDashboardView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-
-        ## Projects Detail 
+        ## Projects Detail
         projects = ProjectManagement.objects.filter(
             projectmember__member__user=user
         ).distinct()[:2]
@@ -662,7 +693,6 @@ class DeveloperDashboardView(APIView):
         on_hold_tasks_data = TaskListSerializer(on_hold_tasks, many=True).data
         cancelled_tasks_data = TaskListSerializer(cancelled_tasks, many=True).data
 
-
         serializers_projects = ProjectsDetailSerializer(projects, many=True)
 
         today = timezone.localdate()
@@ -674,7 +704,6 @@ class DeveloperDashboardView(APIView):
             attendance = DailyAttendanceSessionDetailSerializer(today_attendance).data
         else:
             attendance = None
-
 
         return Response({
             "status": "1",
@@ -702,8 +731,10 @@ class DeveloperDashboardView(APIView):
             }
         })
 
+
 class GraphicDesignerDashboardView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
+
     # required_module = 'design_section'
 
     def get(self, request):

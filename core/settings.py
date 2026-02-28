@@ -38,6 +38,9 @@ AUTH_USER_MODEL = 'accounts.CustomUser'
 # Application definition
 
 INSTALLED_APPS = [
+    "daphne",
+    "channels",
+
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -62,7 +65,6 @@ INSTALLED_APPS = [
     'activity_logs',
 
     
-    "channels",
     'import_export',
 ]
 

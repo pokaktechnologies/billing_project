@@ -26,6 +26,7 @@ from urllib.parse import parse_qs
 # Import your routing
 from chat import routing as chat_routing
 from attendance import routing as attendance_routing
+from activity_logs import routing as activity_logs_routing
 
 # JWT Auth Middleware
 @database_sync_to_async
@@ -60,7 +61,8 @@ application = ProtocolTypeRouter({
         AuthMiddlewareStack(
             URLRouter(
                 attendance_routing.websocket_urlpatterns +
-                chat_routing.websocket_urlpatterns
+                chat_routing.websocket_urlpatterns +
+                activity_logs_routing.websocket_urlpatterns
             )
         )
     ),

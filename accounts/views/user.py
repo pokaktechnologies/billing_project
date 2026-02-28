@@ -1,7 +1,7 @@
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from accounts.serializers.user import *
-from accounts.permissions import HasModulePermission
+from accounts.permissions import HasModulePermission, PARENT_MODULE_MAP
 from accounts.models import CustomUser, ModulePermission , Department ,StaffProfile, JobDetail, StaffDocument , SalesPerson
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -437,22 +437,43 @@ class StaffModulesView(APIView):
 
     def get(self, request):
         if request.user.is_superuser:
-            # Return all possible modules if user is admin
-            all_modules = [choice[0] for choice in ModulePermission.MODULE_CHOICES]
-            # all_modules.append("users")
-            return Response({"modules": all_modules})
+            user_parents = PARENT_MODULE_MAP.keys()
         else:
-            modules = ModulePermission.objects.filter(user=request.user).values_list('module_name', flat=True)
-            return Response({"modules": list(modules)})
+            user_parents = ModulePermission.objects.filter(
+                user=request.user
+            ).values_list("module_name", flat=True)
+        response_data = []
+
+        for parent in user_parents:
+            children = PARENT_MODULE_MAP.get(parent, [])
+
+            response_data.append({
+                "name": parent.capitalize(),
+                "modules": [
+                    {
+                        "key": child,
+                        "label": child.replace("_", " ").title()
+                    }
+                    for child in children
+                ]
+            })
+
+        return Response({"modules": response_data})
 
 
 class StaffModulesListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        all_modules = [choice[0] for choice in ModulePermission.MODULE_CHOICES]
-        # all_modules.append("users")
-        return Response({"modules": all_modules})
+        return Response({
+            "modules": [
+                {
+                    "key": key,
+                    "label": key.capitalize()
+                }
+                for key in PARENT_MODULE_MAP.keys()
+            ]
+        })
 
 
 class ListStaffView(APIView):

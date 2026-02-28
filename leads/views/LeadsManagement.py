@@ -27,6 +27,12 @@ class AdminLeadsView(APIView):
         end_date = request.query_params.get("end_date")               # YYYY-MM-DD
         name = request.query_params.get("name")                       # string search
         lead_status = request.query_params.get("status")
+        lead_category = request.query_params.get('lead_category')
+
+
+        # Filter by lead category
+        if lead_category:
+            leads = leads.filter(lead_category=lead_category)
 
         # Filter salesperson null or not null
         if salesperson_filter == "null":

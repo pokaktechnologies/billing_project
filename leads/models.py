@@ -19,7 +19,7 @@ class Lead(models.Model):
         max_length=50,
         choices=[
             ('client', 'Client'),
-            ('internal', 'Internal'),
+            ('intern', 'Intern'),
         ],
         default='client'
     )

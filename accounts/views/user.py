@@ -1,7 +1,7 @@
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from accounts.serializers.user import *
-from accounts.permissions import HasModulePermission, PARENT_MODULE_MAP
+from accounts.permissions import HasModulePermission
 from accounts.models import CustomUser, ModulePermission, Department, StaffProfile, JobDetail, StaffDocument, \
     SalesPerson
 from rest_framework.views import APIView
@@ -338,32 +338,32 @@ class UserModulePermissionUpdateView(generics.GenericAPIView):
     def patch(self, request, user_id):
         user = get_object_or_404(CustomUser, id=user_id)
         modules = request.data.get('modules', [])  # Expecting a list of module names
-        if not isinstance(modules, list):
-            return Response(
-                {"detail": "Modules must be a list."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Get allowed module keys from model choices
-        allowed_modules = {
-            choice[0] for choice in ModulePermission.MODULE_CHOICES
-        }
-
-        # Validate input
-        invalid_modules = [m for m in modules if m not in allowed_modules]
-
-        if invalid_modules:
-            return Response(
-                {
-                    "detail": "Invalid modules provided.",
-                    "invalid_modules": invalid_modules,
-                    "allowed_modules": list(allowed_modules),
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Remove duplicates
-        modules = list(set(modules))
+        # if not isinstance(modules, list):
+        #     return Response(
+        #         {"detail": "Modules must be a list."},
+        #         status=status.HTTP_400_BAD_REQUEST
+        #     )
+        #
+        # # Get allowed module keys from model choices
+        # allowed_modules = {
+        #     choice[0] for choice in ModulePermission.MODULE_CHOICES
+        # }
+        #
+        # # Validate input
+        # invalid_modules = [m for m in modules if m not in allowed_modules]
+        #
+        # if invalid_modules:
+        #     return Response(
+        #         {
+        #             "detail": "Invalid modules provided.",
+        #             "invalid_modules": invalid_modules,
+        #             "allowed_modules": list(allowed_modules),
+        #         },
+        #         status=status.HTTP_400_BAD_REQUEST,
+        #     )
+        #
+        # # Remove duplicates
+        # modules = list(set(modules))
 
         # Delete existing permissions
         ModulePermission.objects.filter(user=user).delete()
@@ -467,43 +467,22 @@ class StaffModulesView(APIView):
 
     def get(self, request):
         if request.user.is_superuser:
-            user_parents = PARENT_MODULE_MAP.keys()
+            # Return all possible modules if user is admin
+            all_modules = [choice[0] for choice in ModulePermission.MODULE_CHOICES]
+            # all_modules.append("users")
+            return Response({"modules": all_modules})
         else:
-            user_parents = ModulePermission.objects.filter(
-                user=request.user
-            ).values_list("module_name", flat=True)
-        response_data = []
-
-        for parent in user_parents:
-            children = PARENT_MODULE_MAP.get(parent, [])
-
-            response_data.append({
-                "name": parent.capitalize(),
-                "modules": [
-                    {
-                        "key": child,
-                        "label": child.replace("_", " ").title()
-                    }
-                    for child in children
-                ]
-            })
-
-        return Response({"modules": response_data})
+            modules = ModulePermission.objects.filter(user=request.user).values_list('module_name', flat=True)
+            return Response({"modules": list(modules)})
 
 
 class StaffModulesListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return Response({
-            "modules": [
-                {
-                    "key": key,
-                    "label": key.capitalize()
-                }
-                for key in PARENT_MODULE_MAP.keys()
-            ]
-        })
+        all_modules = [choice[0] for choice in ModulePermission.MODULE_CHOICES]
+        # all_modules.append("users")
+        return Response({"modules": all_modules})
 
 
 class ListStaffView(APIView):

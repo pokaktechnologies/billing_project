@@ -867,7 +867,7 @@ class UpdateDeliveryChallanAPI(APIView):
             }, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)    
 
-class ProductListCreateAPIView(APIView):
+class ProductListCreateAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -2680,7 +2680,7 @@ class CustomerListCreateAPIView(APIView):
         return Response({"Status": "1", "message": "Customer deleted successfully."},status=status.HTTP_200_OK)
 
 
-class CategoryListCreateAPIView(APIView):
+class CategoryListCreateAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'setup'
 
@@ -2787,7 +2787,7 @@ class UnitAPIView(BaseAPIView):
         return Response({"Status": "1", "message": "Unit deleted successfully."}, status=status.HTTP_200_OK)
     
 
-class BankAccountAPI(APIView):
+class BankAccountAPI(BaseAPIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'setup'
     def get(self, request, account_id=None):
@@ -2943,7 +2943,7 @@ class ListTermsandConditionsPointsAPI(APIView):
 #         return Response({"status": "0", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
 
-class PurchaseOrderAPIView(APIView):
+class PurchaseOrderAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'purchase'
     def get(self, request, pk=None, format=None):

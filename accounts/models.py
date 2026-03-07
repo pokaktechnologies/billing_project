@@ -148,7 +148,7 @@ class Quotation(models.Model):
 
 
     
-class BankAccount(models.Model):
+class BankAccount(BaseModel):
     customer = models.ForeignKey(
         "Customer", on_delete=models.CASCADE, related_name="bank_accounts"
     )  
@@ -220,7 +220,7 @@ class Feedback(models.Model):
         return f"{self.user} - {self.rating}"   
 
 
-class Product(models.Model):
+class Product(BaseModel):
 
     UNIT_CHOICES = [
         ('piece', 'Piece'),
@@ -854,7 +854,7 @@ class State(models.Model):
     def __str__(self):
         return self.name
     
-class Category(models.Model):
+class Category(BaseModel):
     name = models.CharField(max_length=255, unique=True)
     description = models.TextField(blank=True, null=True)
 
@@ -909,7 +909,7 @@ class TermsAndConditionsPoint(models.Model):
 
 
 
-class PurchaseOrder(models.Model):
+class PurchaseOrder(BaseModel):
     supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE)
     purchase_order_number = models.CharField(max_length=50, unique=True)
     purchase_order_date = models.DateField()

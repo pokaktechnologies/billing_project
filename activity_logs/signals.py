@@ -1,13 +1,23 @@
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from .utils import create_log, get_current_user
-from .models import ActivityLog
+
+IGNORE_MODELS = [
+    "ActivityLog",
+    "CustomUser",
+    "ModulePermission",
+    "Notification",
+    "UserSetting",
+    "Feedback",
+    
+]
 
 
 @receiver(post_save)
 def log_save(sender, instance, created, **kwargs):
 
-    if sender == ActivityLog:
+    # Ignore models
+    if sender.__name__ in IGNORE_MODELS:
         return
 
     user = get_current_user()
@@ -23,7 +33,7 @@ def log_save(sender, instance, created, **kwargs):
 @receiver(post_delete)
 def log_delete(sender, instance, **kwargs):
 
-    if sender == ActivityLog:
+    if sender.__name__ in IGNORE_MODELS:
         return
 
     user = get_current_user()

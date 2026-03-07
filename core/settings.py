@@ -62,9 +62,8 @@ INSTALLED_APPS = [
     'internship',
     'payroll',
     'core',
-    'activity_logs',
 
-    
+    'activity_logs.apps.ActivityLogsConfig',
     'import_export',
 ]
 

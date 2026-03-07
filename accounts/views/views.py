@@ -2587,7 +2587,7 @@ class StateView(APIView):
             'Data': serializer.data
         })
             
-class CustomerListCreateAPIView(APIView):
+class CustomerListCreateAPIView(BaseAPIView):
 
     def get(self, request, pk=None):
 

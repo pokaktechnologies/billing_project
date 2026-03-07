@@ -18,6 +18,7 @@ from django.utils import timezone
 from datetime import datetime, timedelta, date
 from rest_framework import generics
 from django_filters.rest_framework import DjangoFilterBackend
+from activity_logs.base_view import BaseAPIView
 
 
 
@@ -38,7 +39,7 @@ class ReportPagination(PageNumberPagination):
 
 
 #Client contract views
-class ClientContractView(APIView):
+class ClientContractView(BaseAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'project_management'

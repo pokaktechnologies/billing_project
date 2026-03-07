@@ -2593,6 +2593,7 @@ class CustomerListCreateAPIView(APIView):
 
         search = request.query_params.get('search')
         customer_type = request.query_params.get('customer_type')
+        module_type = request.query_params.get('module_type')
 
         if pk:
             customer = get_object_or_404(Customer, pk=pk)
@@ -2620,6 +2621,9 @@ class CustomerListCreateAPIView(APIView):
 
         if customer_type:
             queryset = queryset.filter(customer_type=customer_type)
+
+        if module_type:
+            queryset = queryset.filter(module_type=module_type)
 
         paginator = Pagination()
         paginated_queryset = paginator.paginate_queryset(queryset, request)

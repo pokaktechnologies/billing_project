@@ -866,8 +866,12 @@ class Customer(models.Model):
         ('individual', 'Individual'),
         ('business', 'Business'),
     ]
-
+    MODULE_TYPES = [
+        ('lead', 'Lead'),
+        ('client', 'Client')
+    ]
     customer_type = models.CharField(max_length=10, choices=CUSTOMER_TYPES, default='individual')
+    module_type = models.CharField(max_length=10, choices=MODULE_TYPES, default='client')
     customer_number = models.CharField(max_length=100, unique=True,blank=True, null=True)
     first_name = models.CharField(max_length=100, blank=True, null=True)
     last_name = models.CharField(max_length=100, blank=True, null=True)

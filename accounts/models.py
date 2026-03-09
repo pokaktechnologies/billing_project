@@ -997,35 +997,99 @@ class ModulePermission(models.Model):
         # ("finance", "Finance"),
         # ("crm", "CRM"),
         # ("hr", "HR"),
+        #
+        # ("quotation", "Quotation"),
+        # ("sales_order", "Sales Order"),
+        # ("delivery", "Delivery"),
+        # ("client", "Client"),
+        # ("sales_person", "Sales Person"),
+        # ("setup", "Setup"),
+        # ("leads", "Leads"),
+        # ("leads_management", "Leads Management"),
+        # ("project_management", "Project Management"),
+        # ("supplier", "Supplier"),
+        # ("purchase", "Purchase"),
+        # ("material_receive", "Material Receive"),
+        # ("invoice", "Invoice"),
+        # ("receipt", "Receipt"),
+        # # ("sales_return", "Sales Return"),
+        # # ("stock", "Stock"),
+        # # ("expense", "Expense"),
+        # ("reports", "Reports"),
+        # ("sales_returns", "Sales Returns"),
+        # ("accounts", "Accounts"),
+        # # ("payments", "Payments"),
+        # ("products", "Products"),
+        # ('hr_section', "HR Section"),
+        # ('marketing', "Marketing"),
+        # ('certificate', "Certificate"),
+        #
+        # ('instructor', "Instructor"),
+        # ('intern', "Intern"),
 
+        # SALES
         ("quotation", "Quotation"),
-        ("sales_order", "Sales Order"),
-        ("delivery", "Delivery"),
-        ("client", "Client"),
-        ("sales_person", "Sales Person"),
-        ("setup", "Setup"),
-        ("leads", "Leads"),
-        ("leads_management", "Leads Management"),
-        ("project_management", "Project Management"),
-        ("supplier", "Supplier"),
-        ("purchase", "Purchase"),
-        ("material_receive", "Material Receive"),
         ("invoice", "Invoice"),
         ("receipt", "Receipt"),
-        # ("sales_return", "Sales Return"),
-        # ("stock", "Stock"),
-        # ("expense", "Expense"),
-        ("reports", "Reports"),
         ("sales_returns", "Sales Returns"),
-        ("accounts", "Accounts"),
-        # ("payments", "Payments"),
-        ("products", "Products"),
-        ('hr_section', "HR Section"),
-        ('marketing', "Marketing"),
-        ('certificate', "Certificate"),
+        ("sales_reports", "Sales Reports"),
 
-        ('instructor', "Instructor"),
-        ('intern', "Intern"),
+        # PURCHASE
+        ("purchase_order", "Purchase Order"),
+        ("material_receive", "Material Receive"),
+        ("supplier", "Supplier"),
+        ("purchase_reports", "Purchase Reports"),
+
+        # MARKETING
+        ("marketing_data", "Marketing Data"),
+        ("marketing_leads", "Marketing Leads"),
+        ("marketing_report", "Marketing Report"),
+
+        # CRM
+        ("leads_management", "Leads Management"),
+        ("crm_reports", "CRM Reports"),
+
+        # HR
+        ("hr_enquiries", "HR Enquiries"),
+        ("hr_staff_management", "HR Staff Management"),
+        ("hr_attendance", "HR Attendance"),
+        ("hr_holidays", "HR Holidays"),
+        ("hr_leaves", "HR Leaves"),
+        ("hr_payroll", "HR Payroll"),
+        ("hr_salary_statements", "HR Salary Statements"),
+
+        # TASK
+        ("task_all", "All Tasks"),
+        ("task_study_material", "Study Material"),
+        ("task_interns", "Interns"),
+        ("task_submissions", "Task Submissions"),
+        ("task_payments", "Task Payments"),
+
+        # INTERN
+        ("intern_all_task", "Intern Tasks"),
+        ("intern_study_materials", "Intern Study Materials"),
+        ("intern_payments", "Intern Payments"),
+
+        # ACCOUNTS
+        ("journal_entries", "Journal Entries"),
+        ("journal_voucher", "Journal Voucher"),
+        ("chart_of_accounts", "Chart of Accounts"),
+        ("tax_settings", "Tax Settings"),
+        ("finance_reports", "Finance Reports"),
+        ("transactions", "Transactions"),
+
+        # PROJECT
+        ("project", "Project"),
+        ("project_timeline", "Project Timeline"),
+        ("project_reports", "Project Reports"),
+
+        # CERTIFICATE
+        ("certificate", "Certificate"),
+
+        # REPORTS
+        ("hr_reports", "HR Reports"),
+        ("internship_reports", "Internship Reports"),
+        ("inventory_reports", "Inventory Reports"),
     ]
 
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="module_permissions")

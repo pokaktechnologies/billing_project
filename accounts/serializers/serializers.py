@@ -1119,7 +1119,7 @@ class CustomerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Customer
         fields = [
-            'id', 'customer_type', 'module_type', 'lead', 'lead_contact', 'first_name', 'last_name',
+            'id', 'customer_type', 'module_type', 'lead',  'first_name', 'last_name',
             'salesperson_id', 'salesperson_name',
             'country', 'state', 'company_name', 'address',
             'email', 'gst_number', 'phone', 'mobile',"customer_number"

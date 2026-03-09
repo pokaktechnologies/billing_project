@@ -24,6 +24,8 @@ class Lead(models.Model):
         default='client'
     )
     
+    lead_contact = models.BooleanField(default=False)
+    
     # -------------------
     # CUSTOMER DETAILS
     # -------------------

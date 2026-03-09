@@ -2594,7 +2594,6 @@ class CustomerListCreateAPIView(BaseAPIView):
         search = request.query_params.get('search')
         customer_type = request.query_params.get('customer_type')
         module_type = request.query_params.get('module_type')
-        lead_contact = request.query_params.get('lead_contact')
 
         if pk:
             customer = get_object_or_404(Customer, pk=pk)
@@ -2626,12 +2625,6 @@ class CustomerListCreateAPIView(BaseAPIView):
         if module_type:
             queryset = queryset.filter(module_type=module_type)
 
-        if lead_contact is not None:
-            if lead_contact.lower() == "true":
-                queryset = queryset.filter(lead_contact=True)
-            elif lead_contact.lower() == "false":
-                queryset = queryset.filter(lead_contact=False)
-
         paginator = Pagination()
         paginated_queryset = paginator.paginate_queryset(queryset, request)
 
@@ -2658,6 +2651,7 @@ class CustomerListCreateAPIView(BaseAPIView):
 
         data = request.data.copy()
         module_type = str(data.get('module_type', 'client')).strip().lower()
+        lead = None
 
         if module_type == "lead":
             lead_id = data.get('lead')
@@ -2668,22 +2662,34 @@ class CustomerListCreateAPIView(BaseAPIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            if not Lead.objects.filter(id=lead_id).exists():
+            lead = Lead.objects.filter(id=lead_id).first()
+
+            if not lead:
                 return Response(
                     {"Status": "0", "message": "Lead not found."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            data["lead_contact"] = True
+            if lead.lead_contact:
+                return Response({
+                    "Status": "0",
+                    "message": "This lead is already converted to customer."
+                }, status=400)
 
         else:
             data["lead"] = None
-            data["lead_contact"] = False
 
         serializer = CustomerSerializer(data=data)
 
         if serializer.is_valid():
-            serializer.save()
+
+            customer = serializer.save()
+
+            # update lead only after success
+            if lead:
+                lead.lead_contact = True
+                lead.save(update_fields=["lead_contact"])
+
             return Response({
                 "Status": "1",
                 "message": "Customer created successfully.",

@@ -872,7 +872,6 @@ class Customer(models.Model):
     ]
     module_type = models.CharField(max_length=10, choices=MODULE_TYPES, default='client')
     lead = models.OneToOneField('leads.Lead', on_delete=models.SET_NULL, null=True, blank=True, related_name='customer')
-    lead_contact = models.BooleanField(default=False)
 
     customer_type = models.CharField(max_length=10, choices=CUSTOMER_TYPES, default='individual')
     customer_number = models.CharField(max_length=100, unique=True,blank=True, null=True)

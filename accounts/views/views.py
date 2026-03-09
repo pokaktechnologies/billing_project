@@ -2594,6 +2594,7 @@ class CustomerListCreateAPIView(BaseAPIView):
         search = request.query_params.get('search')
         customer_type = request.query_params.get('customer_type')
         module_type = request.query_params.get('module_type')
+        lead_contact = request.query_params.get('lead_contact')
 
         if pk:
             customer = get_object_or_404(Customer, pk=pk)
@@ -2625,6 +2626,12 @@ class CustomerListCreateAPIView(BaseAPIView):
         if module_type:
             queryset = queryset.filter(module_type=module_type)
 
+        if lead_contact is not None:
+            if lead_contact.lower() == "true":
+                queryset = queryset.filter(lead_contact=True)
+            elif lead_contact.lower() == "false":
+                queryset = queryset.filter(lead_contact=False)
+
         paginator = Pagination()
         paginated_queryset = paginator.paginate_queryset(queryset, request)
 
@@ -2648,16 +2655,47 @@ class CustomerListCreateAPIView(BaseAPIView):
 
     # POST - Create a new customer
     def post(self, request):
-        serializer = CustomerSerializer(data=request.data)
+
+        data = request.data.copy()
+        module_type = str(data.get('module_type', 'client')).strip().lower()
+
+        if module_type == "lead":
+            lead_id = data.get('lead')
+
+            if not lead_id:
+                return Response(
+                    {"Status": "0", "message": "Lead ID is required when module_type is 'lead'."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if not Lead.objects.filter(id=lead_id).exists():
+                return Response(
+                    {"Status": "0", "message": "Lead not found."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            data["lead_contact"] = True
+
+        else:
+            data["lead"] = None
+            data["lead_contact"] = False
+
+        serializer = CustomerSerializer(data=data)
+
         if serializer.is_valid():
             serializer.save()
-            response_data = {
+            return Response({
                 "Status": "1",
                 "message": "Customer created successfully.",
                 "Data": [serializer.data]
-            }
-            return Response(response_data, status=status.HTTP_201_CREATED)
-        return Response({"Status": "0", "message": "Error", "Errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+            }, status=status.HTTP_201_CREATED)
+
+        return Response({
+            "Status": "0",
+            "message": "Error",
+            "Errors": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
 
     # PATCH - Update customer (Partial Update)
     def patch(self, request, pk):

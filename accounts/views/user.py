@@ -1,7 +1,7 @@
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from accounts.serializers.user import *
-from accounts.permissions import HasModulePermission
+from accounts.permissions import HasModulePermission, PARENT_MODULE_MAP
 from accounts.models import CustomUser, ModulePermission, Department, StaffProfile, JobDetail, StaffDocument, \
     SalesPerson
 from rest_framework.views import APIView
@@ -337,41 +337,38 @@ class UserModulePermissionUpdateView(generics.GenericAPIView):
 
     def patch(self, request, user_id):
         user = get_object_or_404(CustomUser, id=user_id)
-        modules = request.data.get('modules', [])  # Expecting a list of module names
-        # if not isinstance(modules, list):
-        #     return Response(
-        #         {"detail": "Modules must be a list."},
-        #         status=status.HTTP_400_BAD_REQUEST
-        #     )
-        #
-        # # Get allowed module keys from model choices
-        # allowed_modules = {
-        #     choice[0] for choice in ModulePermission.MODULE_CHOICES
-        # }
-        #
-        # # Validate input
-        # invalid_modules = [m for m in modules if m not in allowed_modules]
-        #
-        # if invalid_modules:
-        #     return Response(
-        #         {
-        #             "detail": "Invalid modules provided.",
-        #             "invalid_modules": invalid_modules,
-        #             "allowed_modules": list(allowed_modules),
-        #         },
-        #         status=status.HTTP_400_BAD_REQUEST,
-        #     )
-        #
-        # # Remove duplicates
-        # modules = list(set(modules))
-
+        modules = request.data.get("modules", [])
+        # Ensure modules is a list
+        if not isinstance(modules, list):
+            return Response(
+                {"detail": "Modules must be a list."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        # Collect all valid submodules from MODULE_STRUCTURE
+        valid_modules = set()
+        for module in PARENT_MODULE_MAP:
+            if "submodules" in module:
+                valid_modules.update(module["submodules"])
+        # Check invalid modules
+        invalid_modules = [m for m in modules if m not in valid_modules]
+        if invalid_modules:
+            return Response(
+                {
+                    "detail": "Invalid modules provided.",
+                    "invalid_modules": invalid_modules
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        # Remove duplicates
+        modules = list(set(modules))
         # Delete existing permissions
         ModulePermission.objects.filter(user=user).delete()
-
         # Create new permissions
-        new_permissions = [ModulePermission(user=user, module_name=mod) for mod in modules]
+        new_permissions = [
+            ModulePermission(user=user, module_name=mod)
+            for mod in modules
+        ]
         ModulePermission.objects.bulk_create(new_permissions)
-
         return Response({"detail": "Permissions updated successfully."}, status=status.HTTP_200_OK)
 
 
@@ -466,23 +463,41 @@ class StaffModulesView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+
+        # Admin gets everything
         if request.user.is_superuser:
-            # Return all possible modules if user is admin
-            all_modules = [choice[0] for choice in ModulePermission.MODULE_CHOICES]
-            # all_modules.append("users")
-            return Response({"modules": all_modules})
-        else:
-            modules = ModulePermission.objects.filter(user=request.user).values_list('module_name', flat=True)
-            return Response({"modules": list(modules)})
+            return Response({"modules": PARENT_MODULE_MAP})
+
+        # Get user's allowed submodules
+        user_permissions = set(
+            ModulePermission.objects.filter(user=request.user)
+            .values_list("module_name", flat=True)
+        )
+        response_modules = []
+        for module in PARENT_MODULE_MAP:
+            if "submodules" not in module:
+                response_modules.append(module)
+                continue
+            allowed_submodules = [
+                sub for sub in module["submodules"]
+                if sub in user_permissions
+            ]
+            # Hide parent if no submodules allowed
+            if allowed_submodules:
+                response_modules.append({
+                    "name": module["name"],
+                    "submodules": allowed_submodules
+                })
+        return Response({"modules": response_modules})
 
 
 class StaffModulesListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        all_modules = [choice[0] for choice in ModulePermission.MODULE_CHOICES]
+        # all_modules = [choice[0] for choice in ModulePermission.MODULE_CHOICES]
         # all_modules.append("users")
-        return Response({"modules": all_modules})
+        return Response({"modules": PARENT_MODULE_MAP})
 
 
 class ListStaffView(APIView):

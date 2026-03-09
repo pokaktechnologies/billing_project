@@ -3,43 +3,126 @@ from rest_framework.permissions import BasePermission
 from accounts.models import ModulePermission
 
 
-# PARENT_MODULE_MAP = {
-#     "sales": [
-#         "quotation",
-#         "sales_order",
-#         "delivery",
-#         "invoice",
-#         "receipt",
-#         "sales_returns",
-#         "client",
-#         "sales_person",
-#         "reports"
-#     ],
-#     "purchase": [
-#         "purchase",
-#         "supplier",
-#         "material_receive",
-#         "reports"
-#     ],
-#     "finance": [
-#         "accounts",
-#         "receipt",
-#         "reports"
-#     ],
-#     "crm": [
-#         "leads",
-#         "leads_management",
-#         "project_management",
-#         "marketing",
-#         "reports"
-#     ],
-#     "hr": [
-#         "hr_section",
-#         "certificate",
-#         "instructor",
-#         "intern"
-#     ],
-# }
+PARENT_MODULE_MAP = [
+    {
+        "name": "home"
+    },
+
+    {
+        "name": "sales",
+        "submodules": [
+            "quotation",
+            "invoice",
+            "receipt",
+            "sales_returns",
+            "sales_reports"
+        ]
+    },
+
+    {
+        "name": "purchases",
+        "submodules": [
+            "purchase_order",
+            "material_receive",
+            "supplier",
+            "purchase_reports"
+        ]
+    },
+
+    {
+        "name": "marketing",
+        "submodules": [
+            "marketing_data",
+            "marketing_leads",
+            "marketing_report"
+        ]
+    },
+
+    {
+        "name": "leads_management",
+        "submodules": [
+            "leads_management",
+            "crm_reports"
+        ]
+    },
+
+    {
+        "name": "hr_controls",
+        "submodules": [
+            "hr_enquiries",
+            "hr_staff_management",
+            "hr_attendance",
+            "hr_holidays",
+            "hr_leaves",
+            "hr_payroll",
+            "hr_salary_statements"
+        ]
+    },
+
+    {
+        "name": "task_management",
+        "submodules": [
+            "task_all",
+            "task_study_material",
+            "task_interns",
+            "task_submissions",
+            "task_payments"
+        ]
+    },
+
+    {
+        "name": "internship_pro",
+        "submodules": [
+            "intern_all_task",
+            "intern_study_materials",
+            "intern_payments"
+        ]
+    },
+
+    {
+        "name": "accounts",
+        "submodules": [
+            "journal_entries",
+            "journal_voucher",
+            "chart_of_accounts",
+            "tax_settings",
+            "finance_reports",
+            "transactions"
+        ]
+    },
+
+    {
+        "name": "project_management",
+        "submodules": [
+            "project",
+            "project_timeline",
+            "project_reports"
+        ]
+    },
+
+    {
+        "name": "certificate",
+        "submodules": [
+            "certificate"
+        ]
+    },
+
+    {
+        "name": "reports",
+        "submodules": [
+            "sales_reports",
+            "purchase_reports",
+            "finance_reports",
+            "crm_reports",
+            "hr_reports",
+            "internship_reports",
+            "project_reports",
+            "inventory_reports"
+        ]
+    }
+
+]
+
 
 
 # class HasModulePermission(BasePermission):

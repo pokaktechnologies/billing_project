@@ -4,6 +4,7 @@ from accounts.models import ModulePermission
 
 
 PARENT_MODULE_MAP = [
+
     {
         "name": "home"
     },
@@ -55,7 +56,8 @@ PARENT_MODULE_MAP = [
             "hr_holidays",
             "hr_leaves",
             "hr_payroll",
-            "hr_salary_statements"
+            "hr_salary_statements",
+            "hr_reports"
         ]
     },
 
@@ -66,7 +68,8 @@ PARENT_MODULE_MAP = [
             "task_study_material",
             "task_interns",
             "task_submissions",
-            "task_payments"
+            "task_payments",
+            "internship_reports"
         ]
     },
 
@@ -108,6 +111,23 @@ PARENT_MODULE_MAP = [
     },
 
     {
+        "name": "products",
+        "submodules": [
+            "products",
+            "stock",
+            "inventory_reports"
+        ]
+    },
+
+    {
+        "name": "sales_person"
+    },
+
+    {
+        "name": "client"
+    },
+
+    {
         "name": "reports",
         "submodules": [
             "sales_reports",
@@ -119,6 +139,10 @@ PARENT_MODULE_MAP = [
             "project_reports",
             "inventory_reports"
         ]
+    },
+
+    {
+        "name": "setup"
     }
 
 ]

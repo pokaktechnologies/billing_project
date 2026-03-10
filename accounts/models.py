@@ -1034,6 +1034,12 @@ class ModulePermission(models.Model):
         ("sales_returns", "Sales Returns"),
         ("sales_reports", "Sales Reports"),
 
+        # PRODUCTS
+        ("products", "Products"),
+        ("stock", "Stock"),
+
+
+
         # PURCHASE
         ("purchase_order", "Purchase Order"),
         ("material_receive", "Material Receive"),
@@ -1085,6 +1091,12 @@ class ModulePermission(models.Model):
 
         # CERTIFICATE
         ("certificate", "Certificate"),
+
+        # extras
+        ("home", "Home"),
+        ("setup", "Set up"),
+        ("client", "Client"),
+        ("sales_person", "Sales Person"),
 
         # REPORTS
         ("hr_reports", "HR Reports"),

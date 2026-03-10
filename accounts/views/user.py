@@ -468,26 +468,36 @@ class StaffModulesView(APIView):
         if request.user.is_superuser:
             return Response({"modules": PARENT_MODULE_MAP})
 
-        # Get user's allowed submodules
+        # Get user permissions
         user_permissions = set(
             ModulePermission.objects.filter(user=request.user)
             .values_list("module_name", flat=True)
         )
+
         response_modules = []
+
         for module in PARENT_MODULE_MAP:
+
+            module_name = module["name"]
+
+            # Case 1: module without submodules
             if "submodules" not in module:
-                response_modules.append(module)
+                if module_name in user_permissions:
+                    response_modules.append(module)
                 continue
+
+            # Case 2: module with submodules
             allowed_submodules = [
                 sub for sub in module["submodules"]
                 if sub in user_permissions
             ]
-            # Hide parent if no submodules allowed
+
             if allowed_submodules:
                 response_modules.append({
-                    "name": module["name"],
+                    "name": module_name,
                     "submodules": allowed_submodules
                 })
+
         return Response({"modules": response_modules})
 
 

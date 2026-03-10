@@ -166,6 +166,8 @@ class AllStaffWiseAttendanceStats(APIView):
         end_date = request.query_params.get("end_date")
         department = request.query_params.get("department")
         job_type = request.query_params.get("job_type")
+        staff_status = request.query_params.get("staff_status")
+
         staff_ids = [sid for sid in request.query_params.getlist("staff") if sid.isdigit()]
 
         # -----------------------------
@@ -184,6 +186,11 @@ class AllStaffWiseAttendanceStats(APIView):
         # --- FILTER BY STAFF IDS ---
         if staff_ids:
             staff_qs = staff_qs.filter(id__in=staff_ids)
+
+
+        # --- FILTER BY staff_status ---
+        if staff_status:
+            staff_qs = staff_qs.filter(job_detail__status=staff_status)
 
         # -----------------------------
         # ATTENDANCE QUERY (CONSISTENT WITH STAFF FILTERS)

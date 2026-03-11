@@ -28,6 +28,7 @@ class AdminLeadsView(APIView):
         name = request.query_params.get("name")                       # string search
         lead_status = request.query_params.get("status")
         lead_category = request.query_params.get('lead_category')
+        lead_type = request.query_params.get('lead_type')  # my_lead / assigned_lead
 
 
         # Filter by lead category
@@ -53,6 +54,11 @@ class AdminLeadsView(APIView):
         # Filter by name (case-insensitive)
         if name:
             leads = leads.filter(name__icontains=name.strip())
+
+        # Filter by lead type
+        if lead_type:
+            leads = leads.filter(lead_type=lead_type)
+
 
         # Filter by date range
         if start_date:

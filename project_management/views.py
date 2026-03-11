@@ -41,8 +41,8 @@ class ReportPagination(PageNumberPagination):
 #Client contract views
 class ClientContractView(BaseAPIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request, format=None):
         contracts = ClientContract.objects.all().order_by('-created_at')
@@ -68,8 +68,8 @@ class ClientContractView(BaseAPIView):
     
 class ClientContractDetailView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+    
 
     def get_contract(self, pk, user):
         try:
@@ -129,8 +129,8 @@ class ClientContractDetailView(APIView):
 # Project management views
 class project_management(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request, format=None):
         projects = ProjectManagement.objects.all().order_by('-created_at')
@@ -201,8 +201,8 @@ class project_management(APIView):
 
 class project_management_detail(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+    
 
     def get_project(self, pk, user):
         try:
@@ -316,8 +316,8 @@ class project_management_detail(APIView):
 
 class MembersView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request):
         members = Member.objects.all().order_by('-created_at')
@@ -343,8 +343,8 @@ class MembersView(APIView):
 
 class MembersViewDetail(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+    
 
     def get_member(self, pk):
         try:
@@ -406,8 +406,8 @@ class MembersViewDetail(APIView):
 
 class StackView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request, format=None):
         stacks = Stack.objects.all().order_by('-created_at')
@@ -433,8 +433,8 @@ class StackView(APIView):
 
 class StackViewDetail(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+    
 
     def get_stack(self, pk):
         try:
@@ -498,8 +498,8 @@ class StackViewDetail(APIView):
 
 class ProjectMembersView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request):
         project_members = ProjectMember.objects.all().order_by('-created_at')
@@ -572,8 +572,8 @@ class ProjectMembersView(APIView):
 
 class ProjectMembersDetail(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+    
 
     def get_project_member(self, pk):
         try:
@@ -647,8 +647,8 @@ class ProjectMembersDetail(APIView):
 
 class ProjectMembersListByProjectView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request, project_id):
         project_members = ProjectMember.objects.filter(project__id=project_id).order_by('-created_at')
@@ -659,8 +659,7 @@ class ProjectMembersListByProjectView(APIView):
         )
 class ProjectMembersViewListByProjectView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    # required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, project_id):
         user = request.user
@@ -716,7 +715,7 @@ def get_project_progress_data(project):
 
 class MyProjectsView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user = request.user
@@ -743,7 +742,7 @@ class MyProjectsView(APIView):
 
 class MyProjectDetailView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, project_id):
         user = request.user
@@ -775,8 +774,8 @@ class MyProjectDetailView(APIView):
 #Create Board
 class CreateListBoard(generics.ListCreateAPIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+    
     queryset = TaskBoard.objects.all().order_by('-updated_at')
     serializer_class = TaskBoardSerializer
 
@@ -785,8 +784,8 @@ class CreateListBoard(generics.ListCreateAPIView):
 
 class ListBoardMember(generics.ListAPIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    # required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+
     serializer_class = TaskBoardSerializer
 
     def get_queryset(self):
@@ -799,8 +798,8 @@ class ListBoardMember(generics.ListAPIView):
 
 class DistroyUpdateBoard(generics.RetrieveUpdateDestroyAPIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+    
     queryset = TaskBoard.objects.all()
     serializer_class = TaskBoardSerializer
 
@@ -812,8 +811,8 @@ class DistroyUpdateBoard(generics.RetrieveUpdateDestroyAPIView):
 
 class CreateStatusColumn(generics.ListCreateAPIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+    
     serializer_class = StatusColumnWithTasksSerializer
 
     def get_queryset(self):
@@ -831,16 +830,16 @@ class CreateStatusColumn(generics.ListCreateAPIView):
 
 class DistroyUpdateStatusColumn(generics.RetrieveUpdateDestroyAPIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+    
     queryset = StatusColumns.objects.all()
     serializer_class = StatusColumnWithTasksSerializer
 
 
 class TaskListCreateView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request):
         project = request.query_params.get('project')
@@ -909,7 +908,7 @@ class TaskListCreateView(APIView):
 #MyProject Tasks
 class MyProjectTaskListView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, task_id=None):
         user = request.user
@@ -1015,8 +1014,8 @@ class MyProjectTaskListView(APIView):
 
 class TaskRetrieveUpdateDeleteView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+    
 
     # -------- RETRIEVE --------
     def get(self, request, pk):
@@ -1094,8 +1093,8 @@ class TaskRetrieveUpdateDeleteView(APIView):
 
 class TaskListByMembers(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request, member_id, format=None):
         tasks = Task.objects.filter(assignments__assigned_to__member__id=member_id).order_by('-created_at')
@@ -1118,8 +1117,8 @@ class TaskListByMembers(APIView):
 
 class TaskListByProjectMember(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request, project_member_id):
         project_member = ProjectMember.objects.filter(pk=project_member_id).first()
@@ -1147,8 +1146,8 @@ class TaskListByProjectMember(APIView):
 # search views
 
 class ProjectSearchView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request):
         project_name = request.query_params.get('name', '').strip()
@@ -1206,8 +1205,8 @@ class ProjectSearchView(APIView):
         )
 
 class ProjectMembersSearchView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request, project_id,format=None):
         member_name = request.query_params.get('name', '').strip()
@@ -1241,8 +1240,8 @@ class ProjectMembersSearchView(APIView):
 
 
 class MembersSearchView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request):
         search = request.query_params.get('search', '').strip()
@@ -1271,8 +1270,8 @@ class MembersSearchView(APIView):
 
 
 class TaskSearchByProjectMembersView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request, project_member_id, format=None):
         start_date_str = request.query_params.get('start_date')
@@ -1327,8 +1326,8 @@ class TaskSearchByProjectMembersView(APIView):
 
 
 class TaskSearchByMembersView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request, member_id, format=None):
         start_date_str = request.query_params.get('start_date')
@@ -1387,8 +1386,7 @@ class TaskSearchByMembersView(APIView):
 
 class ProjectManagerDashboardView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    # required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user = request.user
@@ -1499,8 +1497,7 @@ class Pagination(PageNumberPagination):
 
 class ReportView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    # required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
     
     def get(self, request, id=None):
         report_type = request.query_params.get('type')  # daily, weekly, monthly
@@ -1740,8 +1737,8 @@ class ReportView(APIView):
 
 class ReportListManagerView(generics.ListAPIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+    
     serializer_class = ReportSerializer
     queryset = Report.objects.all().select_related(
             'submitted_by',
@@ -1757,8 +1754,8 @@ class ReportListManagerView(generics.ListAPIView):
 
 class ReportManagerDetailView(generics.RetrieveAPIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+    
     serializer_class = ReportSerializer
     queryset = Report.objects.all().select_related(
             'submitted_by',
@@ -1773,8 +1770,8 @@ class ReportManagerDetailView(generics.RetrieveAPIView):
 
 class ManagerWeeklyReportSummaryView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request):
         project_id = request.query_params.get('project')
@@ -1914,8 +1911,8 @@ class ManagerWeeklyReportSummaryView(APIView):
 
 class ManagerMonthlyReportSummaryView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request):
         project_id = request.query_params.get('project')
@@ -2003,8 +2000,8 @@ class ManagerMonthlyReportSummaryView(APIView):
 
 class ManagerDailyReportSummaryView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'project_management'
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request):
         project_id = request.query_params.get('project')
@@ -2098,7 +2095,7 @@ class ManagerDailyReportSummaryView(APIView):
 
 class ProjectProgressionView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, HasModulePermission]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, project_id):
         project = get_object_or_404(ProjectManagement, id=project_id)

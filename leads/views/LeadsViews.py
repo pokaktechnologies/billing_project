@@ -41,8 +41,7 @@ class SalesPersonBaseView(APIView):
             return None
 
 class StaffLeadView(APIView):
-    permission_classes = [IsAuthenticated,HasModulePermission]
-    required_module = 'marketing'
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user = request.user
@@ -169,8 +168,7 @@ class StaffLeadView(APIView):
 
 
 class StaffLeadDetailView(SalesPersonBaseView, APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'marketing'
+    permission_classes = [IsAuthenticated]
 
     # -----------------------
     # OBJECT FETCHER
@@ -255,8 +253,7 @@ class StaffLeadDetailView(SalesPersonBaseView, APIView):
 # -----------------------
 
 class StaffFollowUpView(SalesPersonBaseView,APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'marketing'
+    permission_classes = [IsAuthenticated]
 
     # -----------------------
     # LIST FOLLOW-UPS
@@ -388,8 +385,7 @@ class StaffFollowUpView(SalesPersonBaseView,APIView):
 
 
 class StaffFollowUpDetailView(SalesPersonBaseView,APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'marketing'
+    permission_classes = [IsAuthenticated]
 
 
 
@@ -464,8 +460,7 @@ class LeadFollowUpView(SalesPersonBaseView,APIView):
     
 
 class LeadsWithoutQuotationView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'marketing'
+    permission_classes = [IsAuthenticated]
     def get(self, request):
         # Filter leads without quotation and select only required fields
         leads = Lead.objects.filter(quotation__isnull=True) \
@@ -474,8 +469,7 @@ class LeadsWithoutQuotationView(APIView):
         return Response(leads, status=status.HTTP_200_OK)
 
 class LeadSearchView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'marketing'
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         name = request.query_params.get('name', '').strip()
@@ -538,8 +532,7 @@ class LeadSearchView(APIView):
 
 
 class StaffFollowUpSummaryView(SalesPersonBaseView,APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'marketing'
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         salesperson = self.get_salesperson(request.user)
@@ -575,8 +568,7 @@ class StaffFollowUpSummaryView(SalesPersonBaseView,APIView):
 # -----------------------
 
 class MeetingsView(SalesPersonBaseView, APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'marketing'
+    permission_classes = [IsAuthenticated]
 
     # LIST MEETINGS
     def get(self, request):
@@ -660,8 +652,8 @@ class MeetingsView(SalesPersonBaseView, APIView):
 
 
 class MeetingDetailView(SalesPersonBaseView, APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'marketing'
+    permission_classes = [IsAuthenticated]
+
 
     def get_object(self, pk, user):
         salesperson = self.get_salesperson(user)
@@ -719,8 +711,7 @@ class MeetingDetailView(SalesPersonBaseView, APIView):
         return Response({"status": "1", "message": "Meeting deleted successfully"}, status=200)
 
 class MeetingSummaryView(SalesPersonBaseView, APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'marketing'
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         salesperson = self.get_salesperson(request.user)
@@ -751,8 +742,7 @@ class MeetingSummaryView(SalesPersonBaseView, APIView):
     
 
 class LeadMeetingView(SalesPersonBaseView, APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'marketing'
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, lead_id):
         meetings = Meeting.objects.filter(lead__id=lead_id, lead__salesperson=self.get_salesperson(request.user)).order_by('-created_at')
@@ -767,8 +757,8 @@ class LeadMeetingView(SalesPersonBaseView, APIView):
 
 #display all Todays meetings 
 class MeetingRemiderView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'marketing'
+    permission_classes = [IsAuthenticated]
+
 
     def get(self, request):
         today = date.today()
@@ -850,8 +840,7 @@ class ManualActivityLogDetailView(SalesPersonBaseView, APIView):
 
 
 class RemindersView(SalesPersonBaseView, APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'marketing'
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         salesperson = self.get_salesperson(request.user)
@@ -944,8 +933,8 @@ class RemindersView(SalesPersonBaseView, APIView):
 
 
 class RemindersDetailView(SalesPersonBaseView, APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'marketing'
+    permission_classes = [IsAuthenticated]
+
 
     def get_object(self, pk, salesperson):
         try:
@@ -995,8 +984,8 @@ class RemindersDetailView(SalesPersonBaseView, APIView):
 
 # list all reminders for a lead
 class LeadRemindersView(SalesPersonBaseView, APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'marketing'
+    permission_classes = [IsAuthenticated]
+
 
     def get(self, request, lead_id):
         reminders = Reminders.objects.filter(lead__id=lead_id, lead__salesperson=self.get_salesperson(request.user)).order_by('-date')
@@ -1005,8 +994,8 @@ class LeadRemindersView(SalesPersonBaseView, APIView):
 
 
 class RemindersSummaryView(SalesPersonBaseView, APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'marketing'
+    permission_classes = [IsAuthenticated]
+
 
     def get(self, request):
         salesperson = self.get_salesperson(request.user)
@@ -1043,8 +1032,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 
 class BDEDashboardView(SalesPersonBaseView, APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    # required_module = 'marketing'
+    permission_classes = [IsAuthenticated]
+
 
     def get(self, request):
         salesperson = self.get_salesperson(request.user)

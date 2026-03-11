@@ -10,8 +10,8 @@ from ..utils import log_activity
 
 
 class AdminLeadsView(APIView):
-    permission_classes = [IsAuthenticated,HasModulePermission]
-    required_module = 'leads_management'
+    permission_classes = [IsAuthenticated]
+
 
     def get(self, request):
 
@@ -108,8 +108,8 @@ class AdminLeadsView(APIView):
         }, status=status.HTTP_400_BAD_REQUEST)
 
 class AdminLeadDetailView(APIView):
-    permission_classes = [IsAuthenticated,HasModulePermission]
-    required_module = 'leads_management'
+    permission_classes = [IsAuthenticated]
+
 
     def get_object(self, pk):
         try:
@@ -158,8 +158,8 @@ class AdminLeadDetailView(APIView):
 
 # multiple assign leads to a salesperson
 class AssignLeadsToSalespersonView(APIView):
-    permission_classes = [IsAuthenticated,HasModulePermission]
-    required_module = 'leads_management'
+    permission_classes = [IsAuthenticated]
+
 
     def post(self, request):
         lead_ids = request.data.get("lead_ids", [])
@@ -190,8 +190,8 @@ class AssignLeadsToSalespersonView(APIView):
 
 # multiple delete leads
 class DeleteMultipleLeadsView(APIView):
-    permission_classes = [IsAuthenticated,HasModulePermission]
-    required_module = 'leads_management'
+    permission_classes = [IsAuthenticated]
+
 
     def post(self, request):
         lead_ids = request.data.get("lead_ids", [])
@@ -293,8 +293,7 @@ class LeadActivityLogView(APIView):
         }, status=status.HTTP_400_BAD_REQUEST)
 
 class AdminLeadDetailView(APIView):
-    permission_classes = [IsAuthenticated,HasModulePermission]
-    required_module = 'leads_management'
+    permission_classes = [IsAuthenticated]
 
     def get_object(self, pk):
         try:
@@ -343,8 +342,7 @@ class AdminLeadDetailView(APIView):
 
 # multiple assign leads to a salesperson
 class AssignLeadsToSalespersonView(APIView):
-    permission_classes = [IsAuthenticated,HasModulePermission]
-    required_module = 'leads_management'
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         lead_ids = request.data.get("lead_ids", [])
@@ -375,8 +373,8 @@ class AssignLeadsToSalespersonView(APIView):
 
 # multiple delete leads
 class DeleteMultipleLeadsView(APIView):
-    permission_classes = [IsAuthenticated,HasModulePermission]
-    required_module = 'leads_management'
+    permission_classes = [IsAuthenticated]
+
 
     def post(self, request):
         lead_ids = request.data.get("lead_ids", [])
@@ -476,8 +474,7 @@ class LeadActivityCountsView(APIView):
 
 # list all salespersons with their assigned lead counts,converted lead counts,rate 
 class SalespersonLeadStatsView(APIView):
-    permission_classes = [IsAuthenticated,HasModulePermission]
-    required_module = 'leads_management'
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         salespersons = SalesPerson.objects.all()

@@ -140,8 +140,8 @@ class SourceDetailView(APIView):
 
 
 class CategoryAPIView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'marketing'
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
         categories = Category.objects.all()
         serializer = CategorySerializer(categories, many=True)
@@ -155,8 +155,8 @@ class CategoryAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class CategoryDetailAPIView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'marketing'
+    permission_classes = [IsAuthenticated]
+
     def get_object(self, pk):
         try:
             return Category.objects.get(pk=pk)
@@ -204,8 +204,8 @@ class CategoryDetailAPIView(APIView):
 
 
 class MarketingReportAPIView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'marketing'
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
         # Query parameters
         source_id = request.query_params.get('source', None)
@@ -279,8 +279,8 @@ class MarketingReportAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class MarketingReportDetailAPIView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'marketing'
+    permission_classes = [IsAuthenticated]
+
     def get_object(self, pk):
         try:
             return MarketingReport.objects.get(pk=pk)

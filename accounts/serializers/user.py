@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import authenticate
 from ..models import *
 from project_management.models import ProjectManagement, Task
-
+from ..permissions import PARENT_MODULE_MAP
 
 
 class DepartmentSerializer(serializers.ModelSerializer):
@@ -126,7 +126,30 @@ class StaffUserSerializer(serializers.ModelSerializer):
         fields = ['id', 'email', 'first_name', 'last_name', 'gender', 'emergency_contact', 'country', 'modules', 'profile']
 
     def get_modules(self, obj):
-        return list(obj.module_permissions.values_list('module_name', flat=True))
+
+        user_permissions = set(
+            obj.module_permissions.values_list("module_name", flat=True)
+        )
+
+        response_modules = []
+
+        for module in PARENT_MODULE_MAP:
+
+            if "submodules" not in module:
+                continue
+
+            allowed_submodules = [
+                sub for sub in module["submodules"]
+                if sub in user_permissions
+            ]
+
+            if allowed_submodules:
+                response_modules.append({
+                    "name": module["name"],
+                    "submodules": allowed_submodules
+                })
+
+        return response_modules
 
 
 

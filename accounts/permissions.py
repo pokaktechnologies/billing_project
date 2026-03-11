@@ -6,7 +6,10 @@ from accounts.models import ModulePermission
 PARENT_MODULE_MAP = [
 
     {
-        "name": "home"
+        "name": "home",
+        "submodules": [
+            "home"
+        ]
     },
 
     {
@@ -120,11 +123,17 @@ PARENT_MODULE_MAP = [
     },
 
     {
-        "name": "sales_person"
+        "name": "sales_person",
+        "submodules": [
+            "sales_person"
+        ]
     },
 
     {
-        "name": "client"
+        "name": "client",
+        "submodules": [
+            "client"
+        ]
     },
 
     {
@@ -142,7 +151,10 @@ PARENT_MODULE_MAP = [
     },
 
     {
-        "name": "setup"
+        "name": "setup",
+        "submodules": [
+            "setup"
+        ]
     }
 
 ]

@@ -102,7 +102,7 @@ import traceback
 
 class CreateStaffWithPermissionsView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'hr_section'
+    # required_module = 'hr_section'
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):
@@ -292,7 +292,7 @@ class CreateStaffWithPermissionsView(APIView):
 #  update
 class UpdateStaffUserView(generics.UpdateAPIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'hr_section'
+    # required_module = 'hr_section'
     queryset = CustomUser.objects.filter(is_staff=True, is_superuser=False)
     serializer_class = StaffUserUpdateSerializer
     lookup_field = "id"
@@ -468,36 +468,26 @@ class StaffModulesView(APIView):
         if request.user.is_superuser:
             return Response({"modules": PARENT_MODULE_MAP})
 
-        # Get user permissions
+        # Get user's allowed submodules
         user_permissions = set(
             ModulePermission.objects.filter(user=request.user)
             .values_list("module_name", flat=True)
         )
-
         response_modules = []
-
         for module in PARENT_MODULE_MAP:
-
-            module_name = module["name"]
-
-            # Case 1: module without submodules
             if "submodules" not in module:
-                if module_name in user_permissions:
-                    response_modules.append(module)
+                response_modules.append(module)
                 continue
-
-            # Case 2: module with submodules
             allowed_submodules = [
                 sub for sub in module["submodules"]
                 if sub in user_permissions
             ]
-
+            # Hide parent if no submodules allowed
             if allowed_submodules:
                 response_modules.append({
-                    "name": module_name,
+                    "name": module["name"],
                     "submodules": allowed_submodules
                 })
-
         return Response({"modules": response_modules})
 
 

@@ -5,6 +5,7 @@ from accounts.permissions import HasModulePermission, PARENT_MODULE_MAP
 from accounts.models import CustomUser, ModulePermission, Department, StaffProfile, JobDetail, StaffDocument, \
     SalesPerson
 from rest_framework.views import APIView
+from activity_logs.base_view import BaseAPIView, BaseGenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
@@ -24,7 +25,7 @@ from datetime import datetime
 from project_management.models import ProjectManagement, Task
 
 
-class DepartmentView(APIView):
+class DepartmentView(BaseAPIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'hr_section'
 
@@ -100,7 +101,7 @@ from django.db import transaction, IntegrityError
 import traceback
 
 
-class CreateStaffWithPermissionsView(APIView):
+class CreateStaffWithPermissionsView(BaseAPIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'hr_section'
     parser_classes = [MultiPartParser, FormParser]
@@ -290,7 +291,7 @@ class CreateStaffWithPermissionsView(APIView):
 
 
 #  update
-class UpdateStaffUserView(generics.UpdateAPIView):
+class UpdateStaffUserView(BaseGenericAPIView, generics.UpdateAPIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'hr_section'
     queryset = CustomUser.objects.filter(is_staff=True, is_superuser=False)
@@ -299,7 +300,7 @@ class UpdateStaffUserView(generics.UpdateAPIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
 
-class UpdateJobDetailView(generics.UpdateAPIView):
+class UpdateJobDetailView(BaseGenericAPIView, generics.UpdateAPIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'hr_section'
     queryset = JobDetail.objects.all()
@@ -309,14 +310,14 @@ class UpdateJobDetailView(generics.UpdateAPIView):
 # Add a new document
 
 
-class StaffDocumentCreateView(generics.CreateAPIView):
+class StaffDocumentCreateView(BaseGenericAPIView, generics.CreateAPIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'hr_section'
     serializer_class = StaffDocumentSerializer
     # permission_classes = [permissions.IsAuthenticated]
 
 
-class StaffDocumentUpdateView(generics.UpdateAPIView):
+class StaffDocumentUpdateView(BaseGenericAPIView, generics.UpdateAPIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'hr_section'
     queryset = StaffDocument.objects.all()
@@ -324,7 +325,7 @@ class StaffDocumentUpdateView(generics.UpdateAPIView):
     lookup_field = "id"
 
 
-class StaffDocumentDeleteView(generics.DestroyAPIView):
+class StaffDocumentDeleteView(BaseGenericAPIView, generics.DestroyAPIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'hr_section'
     serializer_class = StaffDocumentSerializer
@@ -332,7 +333,7 @@ class StaffDocumentDeleteView(generics.DestroyAPIView):
     lookup_field = "id"
 
 
-class UserModulePermissionUpdateView(generics.GenericAPIView):
+class UserModulePermissionUpdateView(BaseGenericAPIView, generics.GenericAPIView):
     serializer_class = ModulePermissionSerializer
 
     def patch(self, request, user_id):
@@ -372,7 +373,7 @@ class UserModulePermissionUpdateView(generics.GenericAPIView):
         return Response({"detail": "Permissions updated successfully."}, status=status.HTTP_200_OK)
 
 
-class ChangePasswordView(APIView):
+class ChangePasswordView(BaseAPIView):
     # permission_classes = [IsAuthenticated]
 
     def patch(self, request):

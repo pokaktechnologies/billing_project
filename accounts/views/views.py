@@ -121,7 +121,7 @@ class SuperuserTokenObtainPairView(TokenObtainPairView):
     """Token view that only issues tokens for superusers."""
     serializer_class = CustomSuperuserTokenObtainPairSerializer
 
-class SignupView(APIView):
+class SignupView(BaseAPIView):
     """
     API view for user signup with first_name, last_name, and email. An OTP will be sent to the email.
     """
@@ -776,7 +776,7 @@ class DeliveryOrderListAPI(APIView):
 #         }, status=status.HTTP_200_OK)    
     
 
-class SupplierAPIView(APIView):
+class SupplierAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'supplier'
     def get(self, request,pk=None):
@@ -826,7 +826,7 @@ class SupplierAPIView(APIView):
            
     
 
-class CreateDeliveryChallanAPI(APIView):
+class CreateDeliveryChallanAPI(BaseAPIView):
     def post(self, request):
         data = request.data
         delivery_challan = DeliveryChallan.objects.create(
@@ -851,7 +851,7 @@ class DeliveryChallanListAPI(APIView):
             "Data": serializer.data
         })
     
-class UpdateDeliveryChallanAPI(APIView):
+class UpdateDeliveryChallanAPI(BaseAPIView):
     def patch(self, request, pk):
         try:
             delivery_challan = DeliveryChallan.objects.get(pk=pk)
@@ -972,7 +972,7 @@ class ProductDetailAPI(APIView):
 
 
 
-class SalesPersonListCreateAPIView(APIView):
+class SalesPersonListCreateAPIView(BaseAPIView):
     required_module = 'sales_person'
 
     def get_permissions(self):
@@ -1074,7 +1074,7 @@ class SalesPersonListCreateAPIView(APIView):
         )
 
 from leads.models import Lead
-class QuotationOrderAPI(APIView):
+class QuotationOrderAPI(BaseAPIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'quotation'
 
@@ -1548,7 +1548,7 @@ class  PrintQuotationAPI(APIView):
         }, status=status.HTTP_200_OK)
 
 
-class SalesOrderAPI(APIView):
+class SalesOrderAPI(BaseAPIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'sales_order'
     def post(self, request, *args, **kwargs):
@@ -2172,7 +2172,7 @@ class DelivaryOrderItemsList(APIView):
 
 
 
-class ReceiptView(APIView):
+class ReceiptView(BaseAPIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'receipt'
 
@@ -2315,7 +2315,7 @@ class PrintReceiptView(APIView):
 from django.utils import timezone
 
 # views.py
-class SalesReturnAPI(APIView):
+class SalesReturnAPI(BaseAPIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'sales_returns'
     
@@ -2869,7 +2869,7 @@ class BankAccountAPI(BaseAPIView):
         return Response({"status": "1", "message": "Bank account deleted successfully"}, status=status.HTTP_200_OK)    
 
 
-class TermsAndConditionsAPI(APIView):
+class TermsAndConditionsAPI(BaseAPIView):
     required_module = 'setup'
 
     def get_permissions(self):
@@ -2908,7 +2908,7 @@ class TermsAndConditionsAPI(APIView):
         return Response({"status": "1", "message": "Term deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
 
 
-class TermsAndConditionsPointAPI(APIView):
+class TermsAndConditionsPointAPI(BaseAPIView):
     required_module = 'setup'
 
     def get_permissions(self):
@@ -3063,7 +3063,7 @@ class PurchaseOrderAPIView(BaseAPIView):
 
 
 
-class MaterialReceiveAPIView(APIView):
+class MaterialReceiveAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'material_receive'
     def get(self, request, pk=None, format=None):
@@ -3140,7 +3140,7 @@ class MaterialReceiveAPIView(APIView):
 
 
 
-class ContractListCreateAPIView(APIView):
+class ContractListCreateAPIView(BaseAPIView):
     required_module = 'setup'
 
     def get_permissions(self):
@@ -3195,7 +3195,7 @@ class ContractDetailViewApiView(APIView):
 
 
 # Section
-class ContractSectionListCreateAPIView(APIView):
+class ContractSectionListCreateAPIView(BaseAPIView):
     required_module = 'setup'
 
     def get_permissions(self):
@@ -3237,7 +3237,7 @@ class ContractSectionListCreateAPIView(APIView):
 
 
 # Point
-class ContractPointListCreateAPIView(APIView):
+class ContractPointListCreateAPIView(BaseAPIView):
     required_module = 'setup'
 
     def get_permissions(self):
@@ -3303,7 +3303,7 @@ class ContractPointListCreateAPIView(APIView):
 # New invoice
 
 
-class InvoiceAPI(APIView):
+class InvoiceAPI(BaseAPIView):
     permission_classes = [IsAuthenticated,HasModulePermission]
     required_module = 'invoice'
 

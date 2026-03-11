@@ -19,6 +19,7 @@ from datetime import datetime, timedelta, date
 from rest_framework import generics
 from django_filters.rest_framework import DjangoFilterBackend
 from activity_logs.base_view import BaseAPIView
+from rest_framework.parsers import MultiPartParser, FormParser
 
 
 
@@ -1494,10 +1495,12 @@ class Pagination(PageNumberPagination):
 #---------------
 # Reporting Module Views
 #---------------
+import json
 
 class ReportView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
     
     def get(self, request, id=None):
         report_type = request.query_params.get('type')  # daily, weekly, monthly
@@ -1542,7 +1545,7 @@ class ReportView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
 
-            serializer = ReportSerializer(report)
+            serializer = ReportResponseSerializer(report)
             return Response(
                 {"status": "1", "message": "success", "data": serializer.data},
                 status=status.HTTP_200_OK
@@ -1655,54 +1658,83 @@ class ReportView(APIView):
         )
     
 
+    @transaction.atomic
     def post(self, request):
-        user = request.user
 
-        #Get member profile
-        member = Member.objects.filter(user=user).first()
-        if not member:
-            return Response(
-                {"status": "0", "message": "User is not a project member"},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
-        #Get project from request
-        project_id = request.data.get('project')
-        if not project_id:
-            return Response(
-                {"status": "0", "message": "Project is required"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        #Check membership for this project
-        is_member = ProjectMember.objects.filter(
-            project_id=project_id,
-            member=member
-        ).exists()
+        data = request.data
 
-        if not is_member:
+        # Convert JSON strings
+        import json
+        try:
+            tasks = json.loads(data.get("tasks", "[]"))
+            challenges = json.loads(data.get("challenges", "[]"))
+            links = json.loads(data.get("links", "[]"))
+        except ValueError:
             return Response(
-                {
-                    "status": "0",
-                    "message": "You are not a member of this project"
-                },
-                status=status.HTTP_403_FORBIDDEN
+                {"status": "0", "message": "Invalid JSON format"},
+                status=400
             )
-        
-        serializer = ReportSerializer(data=request.data,
-                                          context={'request': request})
-        if serializer.is_valid():
-            serializer.save(submitted_by = user)
-            return Response(
-                {"status":"1", "message":"Report Created successfully",},
-                status = status.HTTP_201_CREATED
-            )
-        return Response(
-            {"status":"0","message":"Report Created Failed","errors":serializer.errors},
-            status =status.HTTP_400_BAD_REQUEST
+
+        serializer = ReportSerializer(
+            data=data,
+            context={'request': request}
         )
 
+        if serializer.is_valid():
+
+            validated = serializer.validated_data
+
+            # Remove nested data before creating report
+            attachments = validated.pop("attachments", [])
+            validated.pop("tasks", None)
+            validated.pop("challenges", None)
+            validated.pop("links", None)
+
+            # Create main report
+            report = Report.objects.create(
+                **validated,
+                submitted_by=request.user
+            )
+
+            # Create Tasks
+            ReportingTask.objects.bulk_create([
+                ReportingTask(report=report, **task)
+                for task in tasks
+            ])
+
+            # Create Challenges
+            ChallengeResolution.objects.bulk_create([
+                ChallengeResolution(report=report, **challenge)
+                for challenge in challenges
+            ])
+
+            # Create Links
+            ReportLink.objects.bulk_create([
+                ReportLink(report=report, **link)
+                for link in links
+            ])
+
+            # Create Attachments
+            ReportAttachment.objects.bulk_create([
+                ReportAttachment(report=report, file=file)
+                for file in attachments
+            ])
+
+            return Response({
+                "status": "1",
+                "message": "Report created successfully",
+                "report_id": report.id
+            }, status=status.HTTP_201_CREATED)
+
+        return Response({
+            "status": "0",
+            "errors": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+    @transaction.atomic
     def patch(self, request, id):
+
         try:
             report = Report.objects.get(
                 id=id,
@@ -1714,32 +1746,89 @@ class ReportView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+        data = request.data
+
+        import json
+        from json import JSONDecodeError
+
+        try:
+            tasks = json.loads(data.get("tasks", "[]"))
+            challenges = json.loads(data.get("challenges", "[]"))
+            links = json.loads(data.get("links", "[]"))
+        except JSONDecodeError:
+            return Response(
+                {"status": "0", "message": "Invalid JSON format"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         serializer = ReportUpdateSerializer(
             report,
-            data=request.data,
+            data=data,
             partial=True,
             context={'request': request}
         )
 
         if serializer.is_valid():
-            serializer.save()
-            return Response(
-                {"status": "1", "message": "Report updated successfully"},
-                status=status.HTTP_200_OK
-            )
 
-        return Response(
-            {"status": "0", "errors": serializer.errors},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+            validated = serializer.validated_data
 
+            attachments = validated.pop("attachments", None)
+            validated.pop("tasks", None)
+            validated.pop("challenges", None)
+            validated.pop("links", None)
 
+            # update main report fields
+            for attr, value in validated.items():
+                setattr(report, attr, value)
 
+            report.save()
+
+            # Replace tasks
+            if tasks:
+                report.tasks.all().delete()
+                ReportingTask.objects.bulk_create([
+                    ReportingTask(report=report, **task)
+                    for task in tasks
+                ])
+
+            # Replace challenges
+            if challenges:
+                report.challenges.all().delete()
+                ChallengeResolution.objects.bulk_create([
+                    ChallengeResolution(report=report, **c)
+                    for c in challenges
+                ])
+
+            # Replace links
+            if links:
+                report.links.all().delete()
+                ReportLink.objects.bulk_create([
+                    ReportLink(report=report, **l)
+                    for l in links
+                ])
+
+            # Replace attachments
+            if attachments is not None:
+                report.attachments.all().delete()
+                ReportAttachment.objects.bulk_create([
+                    ReportAttachment(report=report, file=file)
+                    for file in attachments
+                ])
+
+            return Response({
+                "status": "1",
+                "message": "Report updated successfully"
+            }, status=status.HTTP_200_OK)
+
+        return Response({
+            "status": "0",
+            "errors": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
 class ReportListManagerView(generics.ListAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     
-    serializer_class = ReportSerializer
+    serializer_class = ReportResponseSerializer
     queryset = Report.objects.all().select_related(
             'submitted_by',
             'submitted_by__staff_profile',
@@ -1756,7 +1845,7 @@ class ReportManagerDetailView(generics.RetrieveAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     
-    serializer_class = ReportSerializer
+    serializer_class = ReportResponseSerializer
     queryset = Report.objects.all().select_related(
             'submitted_by',
             'submitted_by__staff_profile',

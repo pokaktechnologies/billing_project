@@ -1,3 +1,5 @@
+from urllib import request
+
 from rest_framework import serializers
 from .models import ChallengeResolution, ProjectManagement, Member, Report, ReportAttachment, ReportLink, ReportingTask, Stack, ProjectMember, StatusColumns, Task,ClientContract, TaskAssign, TaskBoard
 from accounts.models import CustomUser
@@ -340,63 +342,177 @@ from .models import Report, ReportingTask, ChallengeResolution, ReportAttachment
 
 
 class ReportSerializer(serializers.ModelSerializer):
-    tasks = ReportingTaskSerializer(many=True, write_only=True)
-    challenges = ChallengeResolutionSerializer(many=True, write_only=True)
-    task_list = ReportingTaskSerializer(source='tasks', many=True, read_only=True)
-    challenge_list = ChallengeResolutionSerializer(source='challenges', many=True, read_only=True)
 
-    attachments = ReportAttachmentSerializer(many=True, write_only=True, required=False)
-    links = ReportLinkSerializer(many=True, write_only=True, required=False)
+    tasks = serializers.ListField(write_only=True)
+    challenges = serializers.ListField(write_only=True)
+    links = serializers.ListField(write_only=True)
 
-    attachment_list = ReportAttachmentSerializer(source='attachments', many=True, read_only=True)
-    link_list = ReportLinkSerializer(source='links', many=True, read_only=True)
+    attachments = serializers.ListField(
+        child=serializers.FileField(),
+        write_only=True,
+        required=False
+    )
+
+    class Meta:
+        model = Report
+        fields = [
+            'project',
+            'report_type',
+            'executive_summary',
+            'next_period_plan',
+            'report_date',
+            'week_start',
+            'week_end',
+            'month',
+            'year',
+            'tasks',
+            'challenges',
+            'links',
+            'attachments'
+        ]
+
+
+    # -------------------------
+    # VALIDATION
+    # -------------------------
+    def validate(self, data):
+
+        report_type = data.get('report_type')
+        request = self.context.get('request')
+        user = request.user if request else None
+        project = data.get('project')
+
+        if report_type == 'daily':
+
+            if not data.get('report_date'):
+                raise serializers.ValidationError(
+                    "report_date is required for daily reports"
+                )
+
+            if Report.objects.filter(
+                project=project,
+                submitted_by=user,
+                report_type='daily',
+                report_date=data['report_date']
+            ).exists():
+                raise serializers.ValidationError(
+                    "Daily report already submitted"
+                )
+
+        if report_type == 'weekly':
+
+            if not data.get('week_start') or not data.get('week_end'):
+                raise serializers.ValidationError(
+                    "week_start and week_end required"
+                )
+
+        if report_type == 'monthly':
+
+            if not data.get('month') or not data.get('year'):
+                raise serializers.ValidationError(
+                    "month and year required"
+                )
+
+        if not data.get("tasks"):
+            raise serializers.ValidationError({"tasks": "This field is required."})
+
+        if not data.get("challenges"):
+            raise serializers.ValidationError({"challenges": "This field is required."})
+
+        if not data.get("links"):
+            raise serializers.ValidationError({"links": "This field is required."})
+
+        return data    
+
+
+
+class ReportUpdateSerializer(serializers.ModelSerializer):
+
+    tasks = serializers.ListField(write_only=True, required=False)
+    challenges = serializers.ListField(write_only=True, required=False)
+    links = serializers.ListField(write_only=True, required=False)
+
+    attachments = serializers.ListField(
+        child=serializers.FileField(),
+        write_only=True,
+        required=False
+    )
+
+    class Meta:
+        model = Report
+        fields = [
+            'executive_summary',
+            'next_period_plan',
+            'report_date',
+            'week_start',
+            'week_end',
+            'month',
+            'year',
+            'tasks',
+            'challenges',
+            'links',
+            'attachments'
+        ]
+
+    def validate(self, data):
+
+        report_type = self.instance.report_type
+        request = self.context.get("request")
+        user = request.user if request else None
+
+        if report_type == "daily":
+
+            if data.get("report_date"):
+
+                if Report.objects.filter(
+                    project=self.instance.project,
+                    submitted_by=user,
+                    report_type="daily",
+                    report_date=data["report_date"]
+                ).exclude(id=self.instance.id).exists():
+
+                    raise serializers.ValidationError(
+                        "Daily report already submitted"
+                    )
+
+        return data
+
+class ReportResponseSerializer(serializers.ModelSerializer):
+
+    tasks = ReportingTaskSerializer(many=True, read_only=True)
+    challenges = ChallengeResolutionSerializer(many=True, read_only=True)
+    attachments = ReportAttachmentSerializer(many=True, read_only=True)
+    links = ReportLinkSerializer(many=True, read_only=True)
 
     total_worked_hours = serializers.SerializerMethodField()
-    submitted_by = serializers.SerializerMethodField(read_only=True)
+    submitted_by = serializers.SerializerMethodField()
     job_title = serializers.SerializerMethodField()
     staff_email = serializers.SerializerMethodField()
 
     class Meta:
         model = Report
-        read_only_fields = ['submitted_by', 'submitted_at']
         fields = [
             'id',
             'project',
             'report_type',
             'executive_summary',
             'next_period_plan',
-
-            # DAILY
             'report_date',
-
-            # WEEKLY
             'week_start',
             'week_end',
-
-            # MONTHLY
             'month',
             'year',
-
-            'attachments',
-            'links',
-            'attachment_list',
-            'link_list',
-
             'submitted_by',
             'job_title',
             'staff_email',
             'submitted_at',
-
             'tasks',
             'challenges',
-            'task_list',
-            'challenge_list',
+            'attachments',
+            'links',
             'total_worked_hours',
         ]
 
-    # -------------------------
-    # READ HELPERS
-    # -------------------------
     def get_total_worked_hours(self, obj):
         return obj.total_worked_hours
 
@@ -416,169 +532,7 @@ class ReportSerializer(serializers.ModelSerializer):
             return None
         staff_profile = getattr(user, 'staff_profile', None)
         return staff_profile.staff_email if staff_profile else user.email
-
-    # -------------------------
-    # VALIDATION
-    # -------------------------
-    def validate(self, data):
-        report_type = data.get('report_type')
-        request = self.context.get('request')
-        user = request.user if request else None
-        project = data.get('project')
-
-        # DAILY VALIDATION
-        if report_type == 'daily':
-            report_date = data.get('report_date')
-
-            if not report_date:
-                raise serializers.ValidationError(
-                    "report_date is required for daily reports"
-                )
-
-            if user and Report.objects.filter(
-                project=project,
-                submitted_by=user,
-                report_type='daily',
-                report_date=report_date
-            ).exists():
-                raise serializers.ValidationError(
-                    "Daily report already submitted"
-                )
-
-        # WEEKLY VALIDATION
-        if report_type == 'weekly':
-            week_start = data.get('week_start')
-            week_end = data.get('week_end')
-
-            if not week_start or not week_end:
-                raise serializers.ValidationError(
-                    "week_start and week_end required for weekly reports"
-                )
-
-            if user and Report.objects.filter(
-                project=project,
-                submitted_by=user,
-                report_type='weekly',
-                week_start=week_start,
-                week_end=week_end
-            ).exists():
-                raise serializers.ValidationError(
-                    "Weekly report already submitted"
-                )
-
-        # MONTHLY VALIDATION
-        if report_type == 'monthly':
-            month = data.get('month')
-            year = data.get('year')
-
-            if not month or not year:
-                raise serializers.ValidationError(
-                    "month and year required for monthly reports"
-                )
-
-            if user and Report.objects.filter(
-                project=project,
-                submitted_by=user,
-                report_type='monthly',
-                month=month,
-                year=year
-            ).exists():
-                raise serializers.ValidationError(
-                    "Monthly report already submitted"
-                )
-
-        return data
-
-    # -------------------------
-    # CREATE
-    # -------------------------
-    @transaction.atomic
-    def create(self, validated_data):
-        tasks = validated_data.pop('tasks', [])
-        challenges = validated_data.pop('challenges', [])
-        attachments = validated_data.pop('attachments', [])
-        links = validated_data.pop('links', [])
-
-        report = Report.objects.create(**validated_data)
-
-        ReportingTask.objects.bulk_create([
-            ReportingTask(report=report, **t) for t in tasks
-        ])
-
-        ChallengeResolution.objects.bulk_create([
-            ChallengeResolution(report=report, **c) for c in challenges
-        ])
-
-        ReportAttachment.objects.bulk_create([
-            ReportAttachment(report=report, **a) for a in attachments
-        ])
-
-        ReportLink.objects.bulk_create([
-            ReportLink(report=report, **l) for l in links
-        ])
-
-        return report
-
-class ReportUpdateSerializer(serializers.ModelSerializer):
-    tasks = ReportingTaskSerializer(many=True, write_only=True, required=False)
-    challenges = ChallengeResolutionSerializer(many=True, write_only=True, required=False)
-    attachments = ReportAttachmentSerializer(many=True, write_only=True, required=False)
-    links = ReportLinkSerializer(many=True, write_only=True, required=False)
-
-    class Meta:
-        model = Report
-        fields = [
-            'executive_summary',
-            'next_period_plan',
-            'report_date',
-            'week_start',
-            'week_end',
-            'month',
-            'year',
-            'tasks',
-            'challenges',
-            'attachments',
-            'links',
-        ]
-
-    @transaction.atomic
-    def update(self, instance, validated_data):
-        tasks = validated_data.pop('tasks', None)
-        challenges = validated_data.pop('challenges', None)
-        attachments = validated_data.pop('attachments', None)
-        links = validated_data.pop('links', None)
-
-        # update main fields
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-
-        # replace nested data
-        if tasks is not None:
-            instance.tasks.all().delete()
-            ReportingTask.objects.bulk_create(
-                [ReportingTask(report=instance, **t) for t in tasks]
-            )
-
-        if challenges is not None:
-            instance.challenges.all().delete()
-            ChallengeResolution.objects.bulk_create(
-                [ChallengeResolution(report=instance, **c) for c in challenges]
-            )
-
-        if attachments is not None:
-            instance.attachments.all().delete()
-            ReportAttachment.objects.bulk_create(
-                [ReportAttachment(report=instance, **a) for a in attachments]
-            )
-
-        if links is not None:
-            instance.links.all().delete()
-            ReportLink.objects.bulk_create(
-                [ReportLink(report=instance, **l) for l in links]
-            )
-
-        return instance
+    
 
 
 class ProjectTimelineSerializer(serializers.ModelSerializer):

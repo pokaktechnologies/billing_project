@@ -654,8 +654,8 @@ class CreateDeliveryOrderAPI(APIView):
         
         
 class DeliveryOrderListAPI(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'delivery'
+    permission_classes = [IsAuthenticated]
+    
     def get(self, request):
         from_date = request.query_params.get('from_date')
         to_date = request.query_params.get('to_date')
@@ -777,8 +777,8 @@ class DeliveryOrderListAPI(APIView):
     
 
 class SupplierAPIView(BaseAPIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'supplier'
+    permission_classes = [IsAuthenticated]
+    
     def get(self, request,pk=None):
         if pk:
             supplier = get_object_or_404(Supplier, pk=pk)
@@ -973,11 +973,11 @@ class ProductDetailAPI(APIView):
 
 
 class SalesPersonListCreateAPIView(BaseAPIView):
-    required_module = 'sales_person'
+    
 
     def get_permissions(self):
         if self.request.method in ['POST', 'PATCH', 'DELETE']:
-            permission_classes = [IsAuthenticated, HasModulePermission]
+            permission_classes = [IsAuthenticated]
         else:  # GET request
             permission_classes = [IsAuthenticated]
         return [permission() for permission in permission_classes]
@@ -1075,8 +1075,8 @@ class SalesPersonListCreateAPIView(BaseAPIView):
 
 from leads.models import Lead
 class QuotationOrderAPI(BaseAPIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'quotation'
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request, qid=None, pid=None):
         if qid:
@@ -1535,8 +1535,8 @@ class QuotationOrderAPI(BaseAPIView):
 #         }, status=status.HTTP_200_OK)
 
 class  PrintQuotationAPI(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'quotation'
+    permission_classes = [IsAuthenticated]
+    
     def get(self, request, qid=None):
         qoutation = get_object_or_404(QuotationOrderModel, id=qid)
         serializer = PrintQuotationOrderSerializer(qoutation)
@@ -1549,8 +1549,8 @@ class  PrintQuotationAPI(APIView):
 
 
 class SalesOrderAPI(BaseAPIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'sales_order'
+    permission_classes = [IsAuthenticated]
+    
     def post(self, request, *args, **kwargs):
         data = request.data
         try:
@@ -1756,8 +1756,8 @@ class SalesOrderAPI(BaseAPIView):
 
 
 class  PrintSalesOrderAPI(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'sales_order'
+    permission_classes = [IsAuthenticated]
+    
     def get(self, request, sid=None):
         sales_order = get_object_or_404(SalesOrderModel, id=sid)
         serializer = PrintSalesOrderSerializer(sales_order)
@@ -1769,8 +1769,8 @@ class  PrintSalesOrderAPI(APIView):
         }, status=status.HTTP_200_OK)
 
 class SalesOrderItemsList(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'sales_order'
+    permission_classes = [IsAuthenticated]
+    
     def get(self, request, sid=None):
         sales_order = get_object_or_404(SalesOrderModel, id=sid)
         items = SalesOrderItem.objects.filter(sales_order=sales_order,is_item_delivered=False)
@@ -1778,8 +1778,8 @@ class SalesOrderItemsList(APIView):
         return Response({"status": "1", "data": serializer.data}, status=status.HTTP_200_OK)
 
 class SalesOrderByNotDelivered(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'sales_order'
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request,customer_id=None):
         sales_orders = SalesOrderModel.objects.filter(is_delivered=False,customer=customer_id)
@@ -1830,8 +1830,8 @@ class SalesOrderByInvoiced(APIView):
 
 
 class DeliveryFormAPI(APIView): 
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'delivery'
+    permission_classes = [IsAuthenticated]
+    
     def get(self, request, did=None):
         if did:
             delivery = get_object_or_404(DeliveryFormModel, id=did)
@@ -2089,8 +2089,8 @@ class DeliveryFormAPI(APIView):
 
 
 class PrintDeliveryOrderAPI(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'delivery'
+    permission_classes = [IsAuthenticated]
+    
     def get(self, request, did=None):
         delivery = get_object_or_404(DeliveryFormModel, id=did)
         serializer = PrintDeliverySerializer(delivery)
@@ -2173,8 +2173,8 @@ class DelivaryOrderItemsList(APIView):
 
 
 class ReceiptView(BaseAPIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'receipt'
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request, rec_id=None):
         if rec_id:
@@ -2276,8 +2276,8 @@ class ReceiptView(BaseAPIView):
 
     
 class PrintReceiptView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'receipt'
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request, rec_id=None):
         receipt = get_object_or_404(ReceiptModel, id=rec_id)
@@ -2316,8 +2316,8 @@ from django.utils import timezone
 
 # views.py
 class SalesReturnAPI(BaseAPIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'sales_returns'
+    permission_classes = [IsAuthenticated]
+    
     
     def post(self, request):
         """Create new sales return"""
@@ -2354,8 +2354,7 @@ class SalesReturnAPI(BaseAPIView):
         }, status=status.HTTP_200_OK)
 
 class SalesReturnDetailAPI(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'sales_returns'
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, return_id):
         sales_return = get_object_or_404(
@@ -2436,8 +2435,8 @@ class SalesReturnDetailAPI(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class SalesReturnPrint(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'sales_returns'
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request, return_id):
         sales_return = get_object_or_404(
@@ -2725,8 +2724,8 @@ class CustomerListCreateAPIView(BaseAPIView):
 
 
 class CategoryListCreateAPIView(BaseAPIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'setup'
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request, pk=None):
         if pk:
@@ -2780,8 +2779,8 @@ class CategoryListCreateAPIView(BaseAPIView):
     
 
 class UnitAPIView(BaseAPIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'setup'
+    permission_classes = [IsAuthenticated]
+    
     # GET - Retrieve all units or a specific unit by ID
     def get(self, request, pk=None):
         if pk:
@@ -2832,8 +2831,8 @@ class UnitAPIView(BaseAPIView):
     
 
 class BankAccountAPI(BaseAPIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'setup'
+    permission_classes = [IsAuthenticated]
+    
     def get(self, request, account_id=None):
         """Fetch a single or all bank accounts."""
         if account_id:
@@ -2870,12 +2869,12 @@ class BankAccountAPI(BaseAPIView):
 
 
 class TermsAndConditionsAPI(BaseAPIView):
-    required_module = 'setup'
+    
 
     def get_permissions(self):
         if self.request.method == 'GET':
             return [AllowAny()] 
-        return [IsAuthenticated(), HasModulePermission()]
+        return [IsAuthenticated()]
         
     def get(self, request, pk=None):
         if pk:
@@ -2909,12 +2908,12 @@ class TermsAndConditionsAPI(BaseAPIView):
 
 
 class TermsAndConditionsPointAPI(BaseAPIView):
-    required_module = 'setup'
+    
 
     def get_permissions(self):
         if self.request.method == 'GET':
             return [AllowAny()] 
-        return [IsAuthenticated(), HasModulePermission()]
+        return [IsAuthenticated()]
         
     def get(self, request, pk=None):
         if pk:
@@ -2947,12 +2946,12 @@ class TermsAndConditionsPointAPI(BaseAPIView):
         return Response({"status": "1", "message": "Point deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
 
 class ListTermsandConditionsPointsAPI(APIView):
-    required_module = 'setup'
+    
 
     def get_permissions(self):
         if self.request.method == 'GET':
             return [AllowAny()] 
-        return [IsAuthenticated(), HasModulePermission()]
+        return [IsAuthenticated()]
         
     def get(self, request, term_id=None):
         if term_id is None:
@@ -2988,8 +2987,8 @@ class ListTermsandConditionsPointsAPI(APIView):
 
 
 class PurchaseOrderAPIView(BaseAPIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'purchase'
+    permission_classes = [IsAuthenticated]
+    
     def get(self, request, pk=None, format=None):
         if pk:
             try:
@@ -3064,8 +3063,8 @@ class PurchaseOrderAPIView(BaseAPIView):
 
 
 class MaterialReceiveAPIView(BaseAPIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'material_receive'
+    permission_classes = [IsAuthenticated]
+    
     def get(self, request, pk=None, format=None):
         if pk:
             try:
@@ -3141,12 +3140,12 @@ class MaterialReceiveAPIView(BaseAPIView):
 
 
 class ContractListCreateAPIView(BaseAPIView):
-    required_module = 'setup'
+    
 
     def get_permissions(self):
         if self.request.method == 'GET':
             return [AllowAny()] 
-        return [IsAuthenticated(), HasModulePermission()]
+        return [IsAuthenticated()]
 
     def get(self, request, contract_id=None):
         if contract_id:
@@ -3180,12 +3179,12 @@ class ContractListCreateAPIView(BaseAPIView):
 
 
 class ContractDetailViewApiView(APIView):
-    required_module = 'setup'
+    
 
     def get_permissions(self):
         if self.request.method == 'GET':
             return [AllowAny()]   
-        return [IsAuthenticated(), HasModulePermission()]
+        return [IsAuthenticated()]
 
     def get(self, request, contract_id):
         contract = get_object_or_404(Contract, id=contract_id, is_template=True)
@@ -3196,12 +3195,12 @@ class ContractDetailViewApiView(APIView):
 
 # Section
 class ContractSectionListCreateAPIView(BaseAPIView):
-    required_module = 'setup'
+    
 
     def get_permissions(self):
         if self.request.method == 'GET':
             return [AllowAny()]   
-        return [IsAuthenticated(), HasModulePermission()]
+        return [IsAuthenticated()]
         
     def get(self, request, contract_id, section_id=None):
         if section_id:
@@ -3238,12 +3237,12 @@ class ContractSectionListCreateAPIView(BaseAPIView):
 
 # Point
 class ContractPointListCreateAPIView(BaseAPIView):
-    required_module = 'setup'
+    
 
     def get_permissions(self):
         if self.request.method == 'GET':
             return [AllowAny()]   
-        return [IsAuthenticated(), HasModulePermission()]
+        return [IsAuthenticated()]
         
     def get(self, request, contract_id, section_id, point_id=None):
         if point_id:
@@ -3305,7 +3304,7 @@ class ContractPointListCreateAPIView(BaseAPIView):
 
 class InvoiceAPI(BaseAPIView):
     permission_classes = [IsAuthenticated,HasModulePermission]
-    required_module = 'invoice'
+    
 
     def get(self, request):
         if request.user.is_superuser:
@@ -3339,7 +3338,7 @@ class InvoiceAPI(BaseAPIView):
 
 class InvoiceDetailAPI(APIView):
     permission_classes = [IsAuthenticated,HasModulePermission]
-    required_module = 'invoice'
+    
 
     def get(self, request, ioid):
         if request.user.is_superuser:
@@ -3400,8 +3399,8 @@ class PendingInvoiceListView(APIView):
         return Response(serializer.data)
 
 class InvoicesByClientAPI(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'invoice'
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request, client_id=None):
         if not client_id:
@@ -3429,8 +3428,8 @@ class InvoicesByClientAPI(APIView):
 
 
 class InvoicesByInternAPI(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'invoice'
+    permission_classes = [IsAuthenticated]
+    
     def get(self, request, intern_id=None):
         if not intern_id:
             return Response({

@@ -19,8 +19,8 @@ from datetime import timedelta
 class InstructorCourseListCreateAPIView(generics.ListCreateAPIView):
     queryset = Course.objects.prefetch_related("installments", "department").order_by('-created_at')
     serializer_class = CourseSerializer
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = "instructor"
+    permission_classes = [IsAuthenticated]
+    
 
 
 class InstructorCourseRetrieveUpdateDestroyAPIView(
@@ -28,14 +28,14 @@ class InstructorCourseRetrieveUpdateDestroyAPIView(
 ):
     queryset = Course.objects.prefetch_related("installments", "department")
     serializer_class = CourseSerializer
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = "instructor"
+    permission_classes = [IsAuthenticated]
+    
 
 
 class InstallmentListAPIView(generics.ListAPIView):
     serializer_class = CourseInstallmentSerializer
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = "instructor"
+    permission_classes = [IsAuthenticated]
+    
 
     def get_queryset(self):
         course_id = self.kwargs.get("course_id")
@@ -48,8 +48,8 @@ class CoursePaymentListCreateAPIView(generics.ListCreateAPIView):
         "installment__course"
     )
     serializer_class = CoursePaymentSerializer
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = "instructor"
+    permission_classes = [IsAuthenticated]
+    
 
 
 class CoursePaymentRetrieveAPIView(generics.RetrieveAPIView):
@@ -59,8 +59,8 @@ class CoursePaymentRetrieveAPIView(generics.RetrieveAPIView):
         "installment__course"
     )
     serializer_class = CoursePaymentSerializer
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = "instructor"
+    permission_classes = [IsAuthenticated]
+    
 
 # class CoursePaymentListAPIView(generics.ListAPIView):
 #     queryset = CoursePayment.objects.select_related(
@@ -69,8 +69,8 @@ class CoursePaymentRetrieveAPIView(generics.RetrieveAPIView):
 #         "installment__course"
 #     )
 #     serializer_class = CoursePaymentListSerializer
-#     permission_classes = [IsAuthenticated, HasModulePermission]
-#     required_module = "instructor"
+#     permission_classes = [IsAuthenticated]
+#     
 
 #     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
 #     filterset_fields = {
@@ -80,8 +80,8 @@ class CoursePaymentRetrieveAPIView(generics.RetrieveAPIView):
 
 
 class CoursePaymentListAPIView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = "instructor"
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request):
 
@@ -156,8 +156,8 @@ class CoursePaymentListAPIView(APIView):
 
 
 class CoursePaymentDetailAPIView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = "instructor"
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request, pk):
 
@@ -191,15 +191,15 @@ class CoursePaymentDetailAPIView(APIView):
 class CoursePaymentDestroyAPIView(generics.DestroyAPIView):
     queryset = CoursePayment.objects.all()
     serializer_class = CoursePaymentSerializer
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = "instructor"
+    permission_classes = [IsAuthenticated]
+    
 
 
 
 class InstructorAssignedStaffCourseListCreateAPIView(generics.ListCreateAPIView):
     queryset = AssignedStaffCourse.objects.select_related("staff", "course").order_by("-assigned_date")
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = "instructor"
+    permission_classes = [IsAuthenticated]
+    
 
     def get_serializer_class(self):
         if self.request.method == "POST":
@@ -221,14 +221,14 @@ class InstructorAssignedStaffCourseRetrieveUpdateDestroyAPIView(
 ):
     queryset = AssignedStaffCourse.objects.select_related("staff", "course")
     serializer_class = AssignedStaffCourseDetailSerializer
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = "instructor"
+    permission_classes = [IsAuthenticated]
+    
 
 
 #list staff inter by course id (Enrolled Students(count))
 class CourseEnrolledStudentsListAPIView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = "instructor"
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request, course_id):
 
@@ -271,8 +271,8 @@ class CourseEnrolledStudentsListAPIView(APIView):
 # ===== Intern Views ======
 
 class InternListAPIView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = "instructor"
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request):
         department_id = request.query_params.get("department")    # int
@@ -306,14 +306,14 @@ class InternListAPIView(APIView):
         return Response(serializer.data)
 
 class InternProfileInfoAPIView(generics.RetrieveAPIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = "instructor"
+    permission_classes = [IsAuthenticated]
+    
     serializer_class = InternProfileSerializer
     queryset = StaffProfile.objects.all().select_related("user", "job_detail", "job_detail__department")
 
 class InternsStatsAPIView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = "instructor"
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request, *args, **kwargs):
         # interns = job_detail rows where job_type == internship
@@ -337,21 +337,21 @@ class InternsStatsAPIView(APIView):
 class StudyMaterialAPIView(generics.ListCreateAPIView):
     queryset = StudyMaterial.objects.all()
     serializer_class = StudyMaterialSerializer
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = "instructor"
+    permission_classes = [IsAuthenticated]
+    
 
 class StudyMaterialDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
     queryset = StudyMaterial.objects.all()
     serializer_class = StudyMaterialSerializer
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = "instructor"
+    permission_classes = [IsAuthenticated]
+    
 
 
 # list study materials by course
 class CourseStudyMaterialListAPIView(generics.ListAPIView):
     serializer_class = StudyMaterialSerializer
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = "instructor"
+    permission_classes = [IsAuthenticated]
+    
 
     def get_queryset(self):
         course_id = self.kwargs.get("course_id")
@@ -479,8 +479,8 @@ class TaskStatsAPIView(APIView):
 
 
 class StaffPerformanceStatsAPIView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = "instructor"
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request, staff_id):
         qs = TaskAssignment.objects.filter(staff_id=staff_id)

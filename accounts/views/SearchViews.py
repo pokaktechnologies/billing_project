@@ -12,7 +12,7 @@ from django.db.models import Q
 
 class QuatationSearchView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'quotation'
+
 
     def get(self, request, format=None):
         start_date = request.query_params.get('start_date')

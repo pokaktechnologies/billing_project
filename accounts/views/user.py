@@ -26,8 +26,8 @@ from project_management.models import ProjectManagement, Task
 
 
 class DepartmentView(BaseAPIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'hr_section'
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request):
         """List all departments"""
@@ -102,8 +102,8 @@ import traceback
 
 
 class CreateStaffWithPermissionsView(BaseAPIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    # required_module = 'hr_section'
+    permission_classes = [IsAuthenticated]
+    # 
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):
@@ -292,8 +292,8 @@ class CreateStaffWithPermissionsView(BaseAPIView):
 
 #  update
 class UpdateStaffUserView(BaseGenericAPIView, generics.UpdateAPIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    # required_module = 'hr_section'
+    permission_classes = [IsAuthenticated]
+    # 
     queryset = CustomUser.objects.filter(is_staff=True, is_superuser=False)
     serializer_class = StaffUserUpdateSerializer
     lookup_field = "id"
@@ -301,8 +301,8 @@ class UpdateStaffUserView(BaseGenericAPIView, generics.UpdateAPIView):
 
 
 class UpdateJobDetailView(BaseGenericAPIView, generics.UpdateAPIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'hr_section'
+    permission_classes = [IsAuthenticated]
+    
     queryset = JobDetail.objects.all()
     serializer_class = JobDetailUpdateSerializer
     lookup_field = "id"
@@ -311,23 +311,23 @@ class UpdateJobDetailView(BaseGenericAPIView, generics.UpdateAPIView):
 
 
 class StaffDocumentCreateView(BaseGenericAPIView, generics.CreateAPIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'hr_section'
+    permission_classes = [IsAuthenticated]
+    
     serializer_class = StaffDocumentSerializer
     # permission_classes = [permissions.IsAuthenticated]
 
 
 class StaffDocumentUpdateView(BaseGenericAPIView, generics.UpdateAPIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'hr_section'
+    permission_classes = [IsAuthenticated]
+    
     queryset = StaffDocument.objects.all()
     serializer_class = StaffDocumentSerializer
     lookup_field = "id"
 
 
 class StaffDocumentDeleteView(BaseGenericAPIView, generics.DestroyAPIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'hr_section'
+    permission_classes = [IsAuthenticated]
+    
     serializer_class = StaffDocumentSerializer
     queryset = StaffDocument.objects.all()
     lookup_field = "id"
@@ -619,9 +619,8 @@ class UnassignedStaffListView(APIView):
 ## DASHBOARD ---------##
 
 class DeveloperDashboardView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
+    permission_classes = [IsAuthenticated]
 
-    # required_module = 'development'
 
     def get(self, request):
         user = request.user
@@ -728,9 +727,9 @@ class DeveloperDashboardView(APIView):
 
 
 class GraphicDesignerDashboardView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
+    permission_classes = [IsAuthenticated]
 
-    # required_module = 'design_section'
+
 
     def get(self, request):
         user = request.user

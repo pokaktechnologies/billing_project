@@ -35,7 +35,7 @@ class Pagination(PageNumberPagination):
 # ========== Views for Enquiry ==========
 
 class EnquiryCreateView(APIView):
-    required_module = 'hr_section'
+    
 
     def get_permissions(self):
         if self.request.method == 'POST':
@@ -59,7 +59,7 @@ class EnquiryCreateView(APIView):
 
 class EnquiryDetailView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'hr_section'
+    
 
     def get_object(self, pk):
         try:
@@ -77,7 +77,7 @@ class EnquiryDetailView(APIView):
 
 class EnquiryStatusUpdateView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'hr_section'
+    
 
     def get_object(self, pk):
         try:
@@ -100,7 +100,7 @@ class EnquiryStatusUpdateView(APIView):
 
 class EnquiryStatisticsView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'hr_section'
+    
 
     def get(self, request):
         now = timezone.now()
@@ -149,7 +149,7 @@ class EnquiryStatisticsView(APIView):
 
 class SearchEnquiryView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'hr_section'
+    
 
     def get(self, request):
         client_name = request.query_params.get('client_name', '')
@@ -189,7 +189,7 @@ class SearchEnquiryView(APIView):
 # ========== Views for Designation ==========
 
 class DesignationView(APIView):
-    required_module = 'hr_section'
+    
 
     def get_permissions(self):
         if self.request.method == 'GET':
@@ -213,7 +213,7 @@ class DesignationView(APIView):
 
 class DesignationDetailView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'hr_section'
+    
 
     def get_object(self, pk):
         return get_object_or_404(Designation, pk=pk)
@@ -242,7 +242,7 @@ class DesignationDetailView(APIView):
 
 class JobPostingView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'hr_section'
+    
 
     def get(self, request):
         job_postings = JobPosting.objects.all().order_by('-created_at')
@@ -260,7 +260,7 @@ class JobPostingView(APIView):
 
 class JobPostingDetailView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'hr_section'
+    
 
     def get_object(self, pk):
         return get_object_or_404(JobPosting, pk=pk)
@@ -354,7 +354,7 @@ class JobApplicationPagination(PageNumberPagination):
 
 class JobApplicationListView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'hr_section'
+    
     def get(self, request):
         applications = JobApplication.objects.all().order_by('-applied_at')
         
@@ -373,7 +373,7 @@ class JobApplicationListView(APIView):
 
 class JobApplicationDetailView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'hr_section'
+    
     def get(self, request, application_id):
         application = get_object_or_404(JobApplication, id=application_id)
         serializer = JobApplicationDisplaySerializer(application)
@@ -383,7 +383,7 @@ class JobApplicationDetailView(APIView):
 
 class JobApplicationStatusUpdateView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'hr_section'
+    
     def patch(self, request, application_id):
         application = get_object_or_404(JobApplication, id=application_id)
         serializer = JobApplicationStatusUpdateSerializer(application, data=request.data, partial=True)
@@ -395,7 +395,7 @@ class JobApplicationStatusUpdateView(APIView):
 
 class JobApplicationSearchView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'hr_section'
+    
     
     def get(self, request):
         name = request.query_params.get('name', '')
@@ -473,7 +473,7 @@ class JobApplicationStatsAPIView(APIView):
     """
 
     permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = 'hr_section'
+    
 
     def get(self, request):
         try:
@@ -574,7 +574,7 @@ class JobApplicationStatsAPIView(APIView):
 
 class HrDashaboardView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
-    # required_module = 'hr_section'
+    # 
 
     def get(self, request):
         enquiries = Enquiry.objects.all()

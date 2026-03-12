@@ -23,8 +23,8 @@ from django.utils.timezone import now
 # === Course Views ===
 
 class MyCourseView(APIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = "intern"
+    permission_classes = [IsAuthenticated]
+    
 
     def get(self, request):
         staff_profile = getattr(request.user, "staff_profile", None)
@@ -54,16 +54,16 @@ class MyCourseView(APIView):
 
 
 class MyCourseDetailView(generics.RetrieveAPIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = "intern"
+    permission_classes = [IsAuthenticated]
+    
     serializer_class = CourseSerializer
     queryset = Course.objects.all()
 
 
 
 class MyCourseStudyMaterialListAPIView(generics.ListAPIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = "intern"
+    permission_classes = [IsAuthenticated]
+    
     serializer_class = StudyMaterialSerializer
 
     def get_queryset(self):
@@ -97,8 +97,8 @@ class MyCourseStudyMaterialListAPIView(generics.ListAPIView):
     
 # path('study-material/<int:pk>/', intern.MyStudyMaterialDetailView.as_view(), name='intern-study-material-detail'),
 class MyStudyMaterialDetailView(generics.RetrieveAPIView):
-    permission_classes = [IsAuthenticated, HasModulePermission]
-    required_module = "intern"
+    permission_classes = [IsAuthenticated]
+    
     serializer_class = StudyMaterialSerializer
     queryset = StudyMaterial.objects.filter(is_public=True)
 

@@ -344,8 +344,8 @@ from .models import Report, ReportingTask, ChallengeResolution, ReportAttachment
 class ReportSerializer(serializers.ModelSerializer):
 
     tasks = serializers.ListField(write_only=True)
-    challenges = serializers.ListField(write_only=True)
-    links = serializers.ListField(write_only=True)
+    challenges = serializers.ListField(write_only=True, required=False, allow_empty=True)
+    links = serializers.ListField(write_only=True, required=False, allow_empty=True)
 
     attachments = serializers.ListField(
         child=serializers.FileField(),
@@ -414,13 +414,13 @@ class ReportSerializer(serializers.ModelSerializer):
                 )
 
         if not data.get("tasks"):
-            raise serializers.ValidationError({"tasks": "This field is required."})
+            raise serializers.ValidationError({"tasks": "Tasks cannot be empty."})
 
-        if not data.get("challenges"):
-            raise serializers.ValidationError({"challenges": "This field is required."})
+        # if not data.get("challenges"):
+        #     raise serializers.ValidationError({"challenges": "This field is required."})
 
-        if not data.get("links"):
-            raise serializers.ValidationError({"links": "This field is required."})
+        # if not data.get("links"):
+        #     raise serializers.ValidationError({"links": "This field is required."})
 
         return data    
 
@@ -475,6 +475,8 @@ class ReportUpdateSerializer(serializers.ModelSerializer):
                         "Daily report already submitted"
                     )
 
+        if not data.get("tasks"):
+            raise serializers.ValidationError({"tasks": "Tasks cannot be empty."})
         return data
 
 class ReportResponseSerializer(serializers.ModelSerializer):

@@ -150,6 +150,12 @@ class CustomSuperuserTokenObtainPairSerializer(TokenObtainPairSerializer):
             raise serializers.ValidationError({
                 "detail": "Only superuser may obtain token from this endpoint."
             })
+
+        # Add extra fields to response
+        data["user_id"] = user.id
+        data["email"] = user.email
+        data["is_superuser"] = user.is_superuser
+
         return data
 
 # Serializer for user registration

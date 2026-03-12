@@ -85,6 +85,8 @@ class FollowUp(models.Model):
     )
     types = JSONField(default=list)  
     notes = models.TextField(blank=True, null=True)
+    additional_notes = models.TextField(blank=True, null=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -128,6 +130,7 @@ class Meeting(models.Model):
         null=True,
         help_text="Address for in-person or URL for online meetings"
     )
+    additional_notes = models.TextField(blank=True, null=True)
 
     description = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -198,6 +201,8 @@ class Reminders(models.Model):
         ('scheduled', 'Scheduled'),
         ('completed', 'Completed'),
     ], default='scheduled')
+
+    additional_notes = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return f"Reminder for {self.lead.name} on {self.date} at {self.time}"

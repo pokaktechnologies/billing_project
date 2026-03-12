@@ -83,7 +83,7 @@ class MeetingSerializer(serializers.ModelSerializer):
         model = Meeting
         fields = [
             'id', 'lead', 'title', 'meeting_type', 'meeting_place',
-            'description', 'status', 'date', 'time',
+            'description', 'additional_notes', 'status', 'date', 'time',
         ]
 
 
@@ -100,7 +100,7 @@ class MeetingSerializerDisplay(serializers.ModelSerializer):
         model = Meeting
         fields = [
             'id', 'lead_name', 'lead_id', 'title', 'meeting_type',
-            'meeting_place', 'description', 'date', 'time',
+            'meeting_place', 'description','additional_notes', 'date', 'time',
             'status', 'phone', 'lead_email', 'lead_company'
         ]
 
@@ -136,7 +136,7 @@ class RemindersSerializer(serializers.ModelSerializer):
     lead = serializers.PrimaryKeyRelatedField(queryset=Lead.objects.all())
     class Meta:
         model = Reminders
-        fields = ['id', 'lead', 'title', 'type', 'date', 'time', 'description', 'status']
+        fields = ['id', 'lead', 'title', 'type', 'date', 'time', 'description', 'additional_notes',  'status']
 
 
     def validate_type(self, value):
@@ -151,14 +151,15 @@ class RemindersSerializer(serializers.ModelSerializer):
         time_val = data.get('time')
 
         # Required fields
-        if not data.get('title'):
-            raise serializers.ValidationError({"title": "Title is required."})
-        if not data.get('type'):
-            raise serializers.ValidationError({"type": "Type is required."})
-        if date_val is None:
-            raise serializers.ValidationError({"date": "Date is required."})
-        if time_val is None:
-            raise serializers.ValidationError({"time": "Time is required."})
+        if not self.partial:
+            if not data.get('title'):
+                raise serializers.ValidationError({"title": "Title is required."})
+            if not data.get('type'):
+                raise serializers.ValidationError({"type": "Type is required."})
+            if date_val is None:
+                raise serializers.ValidationError({"date": "Date is required."})
+            if time_val is None:
+                raise serializers.ValidationError({"time": "Time is required."})
 
         # Ownership check: ensure the requester can create/update reminders for this lead
         request = self.context.get('request')
@@ -181,7 +182,7 @@ class RemindersGetSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Reminders
-        fields = ['id', 'lead', 'lead_id', 'title', 'type', 'date', 'time', 'description', 'status', 'salesperson_name', 'salesperson_phone',
+        fields = ['id', 'lead', 'lead_id', 'title', 'type', 'date', 'time', 'description', 'additional_notes', 'status', 'salesperson_name', 'salesperson_phone',
                   'salesperson_email', 'salesperson_lead_status', 'salesperson_company']
     
 

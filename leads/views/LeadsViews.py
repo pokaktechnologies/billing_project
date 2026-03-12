@@ -1869,3 +1869,106 @@ class SalespersonLeadReportAPIView(APIView):
             })
 
         return Response(result)
+
+
+    # Today activity followups
+
+class TodayFollowUpsView(SalesPersonBaseView, APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        salesperson = self.get_salesperson(request.user)
+        if not salesperson:
+            return Response(
+                {"status": "0", "message": "No salesperson assigned"},
+                status=400
+            )
+
+        to_date = request.query_params.get("date")
+
+        if to_date:
+            to_date = parse_date(to_date)
+            if not to_date:
+                return Response(
+                    {"status": "0", "message": "Invalid date format. Use YYYY-MM-DD."},
+                    status=400
+                )
+        else:
+            to_date = date.today()
+
+        followups = FollowUp.objects.filter(
+            lead__salesperson=salesperson,
+            date=to_date
+        ).select_related("lead").order_by("time")
+
+        serializer = FollowUpSerializer(followups, many=True)
+
+        return Response({
+            "status": "1",
+            "message": "success",
+            "data": serializer.data
+        })
+
+class TodayMeetingView(SalesPersonBaseView, APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        salesperson = self.get_salesperson(request.user)
+        if not salesperson:
+            return Response(
+                {"status": "0", "message": "No salesperson assigned"},
+                status=400
+            )
+        to_date = request.query_params.get("date")
+
+        if to_date:
+            to_date = parse_date(to_date)
+            if not to_date:
+                return Response(
+                    {"status": "0", "message": "Invalid date format. Use YYYY-MM-DD."},
+                    status=400
+                )
+        else:
+            to_date = date.today()
+
+        followups = Meeting.objects.filter(
+            lead__salesperson=salesperson,
+            date=to_date
+        ).select_related('lead').order_by('time')
+
+        data = MeetingSerializerDisplay(followups, many=True).data
+
+        return Response({"status": "1", "message": "success", "data": data})
+
+
+class TodayRemindersView(SalesPersonBaseView, APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        salesperson = self.get_salesperson(request.user)
+        if not salesperson:
+            return Response(
+                {"status": "0", "message": "No salesperson assigned"},
+                status=400
+            )
+
+        to_date = request.query_params.get("date")
+
+        if to_date:
+            to_date = parse_date(to_date)
+            if not to_date:
+                return Response(
+                    {"status": "0", "message": "Invalid date format. Use YYYY-MM-DD."},
+                    status=400
+                )
+        else:
+            to_date = date.today()
+
+        followups = Reminders.objects.filter(
+            lead__salesperson=salesperson,
+            date=to_date
+        ).select_related('lead').order_by('time')
+
+        data = RemindersGetSerializer(followups, many=True).data
+
+        return Response({"status": "1", "message": "success", "data": data})

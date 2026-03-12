@@ -42,6 +42,12 @@ urlpatterns = [
     path('staff/<int:lead_id>/reminders/', LeadRemindersView.as_view(), name='staff-lead-reminders'),
     path('staff/reminders/summary/', RemindersSummaryView.as_view(), name='staff-reminders-summary'),
 
+    # Today activity followups
+    path('followups/today/', TodayFollowUpsView.as_view(), name='today-followups'),
+    path('meetings/today/', TodayMeetingView.as_view(), name='today-meetings'),
+    path('reminders/today/', TodayRemindersView.as_view(), name='today-reminders'),
+
+
     path("activity/manual/", ManualActivityLogView.as_view()),
     path("activity/manual/<int:pk>/", ManualActivityLogDetailView.as_view()),
 

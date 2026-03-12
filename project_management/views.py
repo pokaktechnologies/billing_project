@@ -1652,7 +1652,7 @@ class ReportView(APIView):
         paginator = Pagination()
         page = paginator.paginate_queryset(reports, request)
 
-        serializer = ReportSerializer(page, many=True)
+        serializer = ReportResponseSerializer(page, many=True)
         return paginator.get_paginated_response(
             {"status":"1", "message":"success", "data":serializer.data},
         )

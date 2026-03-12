@@ -1871,12 +1871,14 @@ class SalespersonLeadReportAPIView(APIView):
         return Response(result)
 
 
-    # Today activity followups
+    # Today activity shedule
 
-class TodayFollowUpsView(SalesPersonBaseView, APIView):
+
+class DailyActivityView(SalesPersonBaseView, APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+
         salesperson = self.get_salesperson(request.user)
         if not salesperson:
             return Response(
@@ -1885,6 +1887,10 @@ class TodayFollowUpsView(SalesPersonBaseView, APIView):
             )
 
         to_date = request.query_params.get("date")
+        status_filter = request.query_params.get("status")
+        search = request.query_params.get("search")
+
+        # -------- Date Handling --------
 
         if to_date:
             to_date = parse_date(to_date)
@@ -1896,79 +1902,121 @@ class TodayFollowUpsView(SalesPersonBaseView, APIView):
         else:
             to_date = date.today()
 
-        followups = FollowUp.objects.filter(
+        today = date.today()
+
+        # -------- Base Querysets (Used for counts) --------
+
+        base_followups = FollowUp.objects.filter(
             lead__salesperson=salesperson,
             date=to_date
-        ).select_related("lead").order_by("time")
+        )
 
-        serializer = FollowUpSerializer(followups, many=True)
+        base_meetings = Meeting.objects.filter(
+            lead__salesperson=salesperson,
+            date=to_date
+        )
+
+        base_reminders = Reminders.objects.filter(
+            lead__salesperson=salesperson,
+            date=to_date
+        )
+
+        # -------- Search Filter --------
+
+        if search:
+            base_followups = base_followups.filter(
+                Q(lead__name__icontains=search)
+            )
+
+            base_meetings = base_meetings.filter(
+                Q(lead__name__icontains=search)
+            )
+
+            base_reminders = base_reminders.filter(
+                Q(lead__name__icontains=search)
+            )
+
+        # -------- Activity Counts --------
+
+        calls_count = base_followups.filter(types__contains=["call"]).count()
+
+        mails_count = base_reminders.filter(type="email").count()
+
+        meetings_count = base_meetings.count()
+
+        completed_count = (
+            base_followups.filter(status="completed").count()
+            + base_meetings.filter(status="completed").count()
+            + base_reminders.filter(status="completed").count()
+        )
+
+        overdue_count = (
+            FollowUp.objects.filter(
+                lead__salesperson=salesperson,
+                date__lt=today
+            ).exclude(status="completed").count()
+            +
+            Reminders.objects.filter(
+                lead__salesperson=salesperson,
+                date__lt=today
+            ).exclude(status="completed").count()
+        )
+
+        all_activity = (
+            base_followups.count()
+            + base_meetings.count()
+            + base_reminders.count()
+        )
+
+        # -------- Filtered Querysets (for response list) --------
+
+        followups = base_followups
+        meetings = base_meetings
+        reminders = base_reminders
+
+        if status_filter == "completed":
+            followups = followups.filter(status="completed")
+            meetings = meetings.filter(status="completed")
+            reminders = reminders.filter(status="completed")
+
+        elif status_filter == "overdue":
+            followups = FollowUp.objects.filter(
+                lead__salesperson=salesperson,
+                date__lt=today
+            ).exclude(status="completed")
+
+            meetings = Meeting.objects.filter(
+                lead__salesperson=salesperson,
+                date__lt=today
+            ).exclude(status="completed")
+
+            reminders = Reminders.objects.filter(
+                lead__salesperson=salesperson,
+                date__lt=today
+            ).exclude(status="completed")
+
+        # -------- Serializers --------
+
+        followup_serializer = FollowUpSerializer(followups.order_by("time"), many=True)
+        meeting_serializer = MeetingSerializerDisplay(meetings.order_by("time"), many=True)
+        reminder_serializer = RemindersGetSerializer(reminders.order_by("time"), many=True)
+
+        # -------- Response --------
 
         return Response({
             "status": "1",
             "message": "success",
-            "data": serializer.data
+            "activity_counts": {
+                "all_activity": all_activity,
+                "calls": calls_count,
+                "meetings": meetings_count,
+                "mails": mails_count,
+                "completed": completed_count,
+                "overdue": overdue_count
+            },
+            "data": {
+                "followups": followup_serializer.data,
+                "meetings": meeting_serializer.data,
+                "reminders": reminder_serializer.data
+            }
         })
-
-class TodayMeetingView(SalesPersonBaseView, APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        salesperson = self.get_salesperson(request.user)
-        if not salesperson:
-            return Response(
-                {"status": "0", "message": "No salesperson assigned"},
-                status=400
-            )
-        to_date = request.query_params.get("date")
-
-        if to_date:
-            to_date = parse_date(to_date)
-            if not to_date:
-                return Response(
-                    {"status": "0", "message": "Invalid date format. Use YYYY-MM-DD."},
-                    status=400
-                )
-        else:
-            to_date = date.today()
-
-        followups = Meeting.objects.filter(
-            lead__salesperson=salesperson,
-            date=to_date
-        ).select_related('lead').order_by('time')
-
-        data = MeetingSerializerDisplay(followups, many=True).data
-
-        return Response({"status": "1", "message": "success", "data": data})
-
-
-class TodayRemindersView(SalesPersonBaseView, APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        salesperson = self.get_salesperson(request.user)
-        if not salesperson:
-            return Response(
-                {"status": "0", "message": "No salesperson assigned"},
-                status=400
-            )
-
-        to_date = request.query_params.get("date")
-
-        if to_date:
-            to_date = parse_date(to_date)
-            if not to_date:
-                return Response(
-                    {"status": "0", "message": "Invalid date format. Use YYYY-MM-DD."},
-                    status=400
-                )
-        else:
-            to_date = date.today()
-
-        followups = Reminders.objects.filter(
-            lead__salesperson=salesperson,
-            date=to_date
-        ).select_related('lead').order_by('time')
-
-        data = RemindersGetSerializer(followups, many=True).data
-
-        return Response({"status": "1", "message": "success", "data": data})

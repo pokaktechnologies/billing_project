@@ -13,6 +13,7 @@ from rest_framework.permissions import IsAuthenticated
 from datetime import timedelta
 
 from accounts.serializers.user import StaffProfileSerializer
+from activity_logs.base_view import BaseAPIView
 from attendance.models import DailyAttendance
 
 from .models import *
@@ -34,7 +35,7 @@ class Pagination(PageNumberPagination):
 
 # ========== Views for Enquiry ==========
 
-class EnquiryCreateView(APIView):
+class EnquiryCreateView(BaseAPIView):
     
 
     def get_permissions(self):
@@ -75,7 +76,7 @@ class EnquiryDetailView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-class EnquiryStatusUpdateView(APIView):
+class EnquiryStatusUpdateView(BaseAPIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     
 
@@ -188,7 +189,7 @@ class SearchEnquiryView(APIView):
 
 # ========== Views for Designation ==========
 
-class DesignationView(APIView):
+class DesignationView(BaseAPIView):
     
 
     def get_permissions(self):
@@ -211,7 +212,7 @@ class DesignationView(APIView):
 
 
 
-class DesignationDetailView(APIView):
+class DesignationDetailView(BaseAPIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     
 
@@ -240,7 +241,7 @@ class DesignationDetailView(APIView):
         )
 
 
-class JobPostingView(APIView):
+class JobPostingView(BaseAPIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     
 
@@ -317,7 +318,7 @@ class JobPostingStats(APIView):
         })
 
 
-class JobApplicationView(APIView):
+class JobApplicationView(BaseAPIView):
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request, job_id):
@@ -332,7 +333,7 @@ class JobApplicationView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class JobApplicationWithoutJob(APIView):
+class JobApplicationWithoutJob(BaseAPIView):
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):
@@ -381,7 +382,7 @@ class JobApplicationDetailView(APIView):
 
 
 
-class JobApplicationStatusUpdateView(APIView):
+class JobApplicationStatusUpdateView(BaseAPIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     
     def patch(self, request, application_id):

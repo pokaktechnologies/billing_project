@@ -3,12 +3,14 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django_filters.rest_framework import DjangoFilterBackend
+
+from activity_logs.base_view import BaseGenericAPIView
 from ..models import Account
 from ..serializers.accounts import AccountSerializer
 from ..filters import AccountFilter
 
 
-class AccountListCreateAPIView(generics.ListCreateAPIView):
+class AccountListCreateAPIView(BaseGenericAPIView, generics.ListCreateAPIView):
     queryset = Account.objects.all().order_by('-created_at')
     serializer_class = AccountSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -40,7 +42,7 @@ class AccountTypeListView(APIView):
         return Response(types, status=status.HTTP_200_OK)
 
 
-class AccountRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
+class AccountRetrieveUpdateDestroyAPIView(BaseGenericAPIView, generics.RetrieveUpdateDestroyAPIView):
     queryset = Account.objects.all()
     serializer_class = AccountSerializer
 

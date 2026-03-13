@@ -1,11 +1,13 @@
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+
+from activity_logs.base_view import BaseGenericAPIView
 from ..models import CashflowCategoryMapping, TaxSettings
 from ..serializers.settings import CashflowCategoryMappingSerializer, TaxSettingsSerializer
 from ..services.numbering import get_next_finance_number
 
-class CashflowCategoryMappingListCreateView(generics.ListCreateAPIView):
+class CashflowCategoryMappingListCreateView(BaseGenericAPIView, generics.ListCreateAPIView):
     serializer_class = CashflowCategoryMappingSerializer
     def get_queryset(self):
         queryset = CashflowCategoryMapping.objects.all()
@@ -17,7 +19,7 @@ class CashflowCategoryMappingListCreateView(generics.ListCreateAPIView):
             queryset = queryset.filter(sub_category__icontains=sub_category)
         return queryset
 
-class CashflowCategoryMappingDetailView(generics.RetrieveUpdateDestroyAPIView):
+class CashflowCategoryMappingDetailView(BaseGenericAPIView, generics.RetrieveUpdateDestroyAPIView):
     queryset = CashflowCategoryMapping.objects.all()
     serializer_class = CashflowCategoryMappingSerializer
 
@@ -29,7 +31,7 @@ class FinaceNumberGeneratorView(APIView):
             return Response({'status': '0', 'message': 'Invalid order type'}, status=status.HTTP_400_BAD_REQUEST)
         return Response({'status': '1', 'message': 'Success', 'number': number}, status=status.HTTP_200_OK)
 
-class TaxSettingsListCreateAPIView(generics.ListCreateAPIView):
+class TaxSettingsListCreateAPIView(BaseGenericAPIView, generics.ListCreateAPIView):
     serializer_class = TaxSettingsSerializer
     def get_queryset(self):
         queryset = TaxSettings.objects.all()
@@ -43,6 +45,6 @@ class TaxSettingsListCreateAPIView(generics.ListCreateAPIView):
         if rate_max: queryset = queryset.filter(rate__lte=rate_max)
         return queryset
 
-class TaxSettingsRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
+class TaxSettingsRetrieveUpdateDestroyAPIView(BaseGenericAPIView, generics.RetrieveUpdateDestroyAPIView):
     queryset = TaxSettings.objects.all()
     serializer_class = TaxSettingsSerializer

@@ -2,12 +2,14 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+
+from activity_logs.base_view import BaseAPIView
 from ..models import LeaveRequest
 from ..serializers import LeaveRequestSerializer, HrLeaveRequestSerializer
 from accounts.models import StaffProfile
 from django.utils import timezone
 
-class EmployeeLeaveRequestView(APIView):
+class EmployeeLeaveRequestView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -33,7 +35,7 @@ class EmployeeLeaveRequestView(APIView):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-class EmployeeLeaveRequestDetailView(APIView):
+class EmployeeLeaveRequestDetailView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_object(self, pk, staff_profile):
@@ -90,7 +92,7 @@ class EmployeeLeaveRequestDetailView(APIView):
 
 # ─── HR / Admin Leave Report ───────────────────────────────────────────────
 
-class HrLeaveRequestListCreateView(APIView):
+class HrLeaveRequestListCreateView(BaseAPIView):
     """Admin-side: list all leave requests, create on behalf of any staff."""
     permission_classes = [IsAuthenticated]
 
@@ -125,7 +127,7 @@ class HrLeaveRequestListCreateView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class HrLeaveRequestDetailView(APIView):
+class HrLeaveRequestDetailView(BaseAPIView):
     """Admin-side: retrieve, update, or delete any leave request."""
     permission_classes = [IsAuthenticated]
 

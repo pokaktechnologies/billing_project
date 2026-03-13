@@ -5,6 +5,8 @@ from django.utils import timezone
 from django.core.mail import EmailMessage
 from django.http import HttpResponse
 from rest_framework.permissions import IsAuthenticated
+
+from activity_logs.base_view import BaseAPIView, BaseGenericAPIView
 from .models import Certificate
 from .serializers import CertificateSerializer, ManagementStaffSignatureSerializer
 from accounts.permissions import HasModulePermission
@@ -29,7 +31,7 @@ class Pagination(PageNumberPagination):
         return int(page_size)
     
 
-class CertificateListCreateView(generics.ListCreateAPIView):
+class CertificateListCreateView(BaseGenericAPIView, generics.ListCreateAPIView):
     serializer_class = CertificateSerializer
     permission_classes = [HasModulePermission]
 
@@ -63,7 +65,7 @@ class CertificateListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         serializer.save()
 
-class CertificateDetailView(generics.RetrieveUpdateDestroyAPIView):
+class CertificateDetailView(BaseGenericAPIView, generics.RetrieveUpdateDestroyAPIView):
     queryset = Certificate.objects.all()
     serializer_class = CertificateSerializer
     permission_classes = [HasModulePermission]
@@ -77,7 +79,7 @@ class CertificateDetailView(generics.RetrieveUpdateDestroyAPIView):
             logger.error(f"Error in partial_update for certificate {kwargs.get('pk')}: {str(e)}")
             raise
 
-class CertificateProofView(views.APIView):
+class CertificateProofView(BaseAPIView):
     permission_classes = [HasModulePermission]
     required_module = 'certificate'
 
@@ -113,7 +115,7 @@ class CertificateDataView(views.APIView):
         except Certificate.DoesNotExist:
             return Response({"error": "Certificate not found"}, status=status.HTTP_404_NOT_FOUND)
 
-class CertificateSendView(views.APIView):
+class CertificateSendView(BaseAPIView):
     permission_classes = [HasModulePermission]
     required_module = 'certificate'
 
@@ -144,7 +146,7 @@ class CertificateSendView(views.APIView):
             logger.error(f"Error sending certificate {pk}: {str(e)}")
             return Response({"error": f"Failed to send email: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-class CertificateDownloadView(views.APIView):
+class CertificateDownloadView(BaseAPIView):
     permission_classes = [HasModulePermission]
     required_module = 'certificate'
 
@@ -211,7 +213,7 @@ class StaffDetailView(views.APIView):
         except (CustomUser.DoesNotExist, StaffProfile.DoesNotExist, JobDetail.DoesNotExist):
             return Response({"error": "Staff details not found"}, status=status.HTTP_404_NOT_FOUND)
 
-class EmployeeCertificateCreateView(views.APIView):
+class EmployeeCertificateCreateView(BaseAPIView):
     permission_classes = [HasModulePermission]
     required_module = 'certificate'
 

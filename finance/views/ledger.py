@@ -1,6 +1,8 @@
 from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
+
+from activity_logs.base_view import BaseGenericAPIView
 from ..models import JournalEntry, JournalLine
 from ..serializers.ledger import JournalEntrySerializer, JournalLineListSerializer, JournalLineDetailSerializer
 from ..filters import JournalLineFlatFilter, JournalEntryFilter
@@ -10,12 +12,12 @@ from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from collections import OrderedDict
 
-class JournalEntryListCreateView(generics.ListCreateAPIView):
+class JournalEntryListCreateView(BaseGenericAPIView, generics.ListCreateAPIView):
     queryset = JournalEntry.objects.all().order_by('-created_at')
     serializer_class = JournalEntrySerializer
     permission_classes = [IsAuthenticated]
 
-class JournalEntryDetailView(generics.RetrieveUpdateDestroyAPIView):
+class JournalEntryDetailView(BaseGenericAPIView, generics.RetrieveUpdateDestroyAPIView):
     queryset = JournalEntry.objects.all()
     serializer_class = JournalEntrySerializer
     permission_classes = [IsAuthenticated]

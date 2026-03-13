@@ -1860,11 +1860,11 @@ class ReportManagerDetailView(generics.RetrieveAPIView):
 class ManagerWeeklyReportSummaryView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
-    
 
     def get(self, request):
-        project_id = request.query_params.get('project')
-        month_str = request.query_params.get('month')  # optional
+
+        project_id = request.query_params.get("project")
+        month_str = request.query_params.get("month")
 
         if not project_id:
             return Response(
@@ -1874,17 +1874,16 @@ class ManagerWeeklyReportSummaryView(APIView):
 
         project = get_object_or_404(ProjectManagement, id=project_id)
 
-        # -----------------------------
-        # DEFAULT = CURRENT MONTH
-        # -----------------------------
         today = timezone.now().date()
 
+        # -----------------------------
+        # MONTH HANDLING
+        # -----------------------------
         if not month_str:
-            year = today.year
-            month = today.month
+            year, month = today.year, today.month
         else:
             try:
-                year, month = map(int, month_str.split('-'))
+                year, month = map(int, month_str.split("-"))
             except:
                 return Response(
                     {"status": "0", "message": "Invalid month format YYYY-MM"},
@@ -1901,50 +1900,75 @@ class ManagerWeeklyReportSummaryView(APIView):
         start_date = project.start_date
         end_date = min(project.end_date, today)
 
-        members = ProjectMember.objects.filter(
+        # -----------------------------
+        # PRELOAD MEMBERS
+        # -----------------------------
+        all_members = ProjectMember.objects.filter(
             project=project
-        ).select_related('member', 'member__user')
+        ).select_related(
+            "member__user",
+            "member__user__staff_profile__job_detail"
+        )
+
+        # -----------------------------
+        # PRELOAD REPORTS
+        # -----------------------------
+        reports = Report.objects.filter(
+            project=project,
+            report_type="weekly"
+        )
+
+        report_map = {
+            (r.submitted_by_id, r.week_start, r.week_end): r
+            for r in reports
+        }
 
         weeks = []
-        current = start_date
+
+        # align start to monday
+        current = start_date - timedelta(days=start_date.weekday())
 
         # -----------------------------
         # LOOP WEEKS
         # -----------------------------
         while current <= end_date:
 
-            week_start = current - timedelta(days=current.weekday())
-            week_end = week_start + timedelta(days=6)
+            week_start = current
+            week_end = current + timedelta(days=6)
 
-            # Skip weeks not touching selected month
+            # skip weeks outside month
             if week_end < month_start or week_start > month_end:
-                current = week_end + timedelta(days=1)
+                current += timedelta(days=7)
                 continue
 
             deadline = timezone.make_aware(
                 datetime.combine(week_end, datetime.max.time())
             )
 
-            reports = Report.objects.filter(
-                project=project,
-                report_type='weekly',
-                week_start__lte=week_end,
-                week_end__gte=week_start
-            )
-
-            report_map = {r.submitted_by_id: r for r in reports}
-
             submitted = 0
             late = 0
             pending = 0
             employees = []
 
+            # filter members who joined before this week
+            members = [
+                m for m in all_members
+                if m.created_at and m.created_at.date() <= week_end
+            ]
+
             for pm in members:
+
                 user = pm.member.user
-                report = report_map.get(user.id)
+
+                report = report_map.get(
+                    (user.id, week_start, week_end)
+                )
 
                 if report:
-                    submitted_on = report.submitted_at.date()
+
+                    submitted_on = timezone.localtime(
+                        report.submitted_at
+                    ).date()
 
                     if report.submitted_at > deadline:
                         status_text = "Late"
@@ -1952,15 +1976,20 @@ class ManagerWeeklyReportSummaryView(APIView):
                     else:
                         status_text = "Submitted"
                         submitted += 1
+
                 else:
-                    status_text = "Not Submitted"
+
+                    if timezone.now() <= deadline:
+                        status_text = "Pending"
+                    else:
+                        status_text = "Not Submitted"
+
                     submitted_on = None
                     pending += 1
 
-                # safe role lookup
                 role = ""
-                if hasattr(user, 'staff_profile') and user.staff_profile:
-                    jd = getattr(user.staff_profile, 'job_detail', None)
+                if hasattr(user, "staff_profile") and user.staff_profile:
+                    jd = getattr(user.staff_profile, "job_detail", None)
                     if jd:
                         role = jd.role
 
@@ -1981,10 +2010,10 @@ class ManagerWeeklyReportSummaryView(APIView):
                 "employees": employees
             })
 
-            current = week_end + timedelta(days=1)
+            current += timedelta(days=7)
 
-        # latest week first
         weeks = sorted(weeks, key=lambda x: x["week_start"], reverse=True)
+
         for w in weeks:
             w.pop("week_start")
 
@@ -1997,7 +2026,6 @@ class ManagerWeeklyReportSummaryView(APIView):
             },
             status=status.HTTP_200_OK
         )
-
 class ManagerMonthlyReportSummaryView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]

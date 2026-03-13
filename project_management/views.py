@@ -2026,15 +2026,16 @@ class ManagerWeeklyReportSummaryView(APIView):
             },
             status=status.HTTP_200_OK
         )
+    
 class ManagerMonthlyReportSummaryView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
-    
 
     def get(self, request):
-        project_id = request.query_params.get('project')
-        month_param = request.query_params.get('month')
-        year_param = request.query_params.get('year')
+
+        project_id = request.query_params.get("project")
+        month_param = request.query_params.get("month")
+        year_param = request.query_params.get("year")
 
         if not project_id:
             return Response(
@@ -2046,17 +2047,37 @@ class ManagerMonthlyReportSummaryView(APIView):
 
         today = timezone.now().date()
 
-        # default = current month/year
+        # -----------------------------
+        # MONTH & YEAR
+        # -----------------------------
         month = int(month_param) if month_param else today.month
         year = int(year_param) if year_param else today.year
 
-        members = ProjectMember.objects.filter(
-            project=project
-        ).select_related('member', 'member__user')
+        last_day = monthrange(year, month)[1]
+        month_end = date(year, month, last_day)
 
+        # timezone-safe datetime
+        month_end_datetime = timezone.make_aware(
+            datetime.combine(month_end, datetime.max.time())
+        )
+
+        # -----------------------------
+        # MEMBERS (joined before month end)
+        # -----------------------------
+        members = ProjectMember.objects.filter(
+            project=project,
+            created_at__lte=month_end_datetime
+        ).select_related(
+            "member__user",
+            "member__user__staff_profile__job_detail"
+        )
+
+        # -----------------------------
+        # REPORTS
+        # -----------------------------
         reports = Report.objects.filter(
             project=project,
-            report_type='monthly',
+            report_type="monthly",
             month=month,
             year=year
         )
@@ -2064,21 +2085,30 @@ class ManagerMonthlyReportSummaryView(APIView):
         report_map = {r.submitted_by_id: r for r in reports}
 
         submitted = 0
-        pending = 0
         late = 0
+        pending = 0
         employees = []
 
-        last_day = monthrange(year, month)[1]
+        # -----------------------------
+        # DEADLINE
+        # -----------------------------
         deadline = timezone.make_aware(
             datetime(year, month, last_day, 23, 59, 59)
         )
 
+        # -----------------------------
+        # LOOP MEMBERS
+        # -----------------------------
         for pm in members:
+
             user = pm.member.user
             report = report_map.get(user.id)
 
             if report:
-                submitted_on = report.submitted_at.date()
+
+                submitted_on = timezone.localtime(
+                    report.submitted_at
+                ).date()
 
                 if report.submitted_at > deadline:
                     status_text = "Late"
@@ -2086,14 +2116,20 @@ class ManagerMonthlyReportSummaryView(APIView):
                 else:
                     status_text = "Submitted"
                     submitted += 1
+
             else:
-                status_text = "Not Submitted"
+
+                if timezone.now() <= deadline:
+                    status_text = "Pending"
+                else:
+                    status_text = "Not Submitted"
+
                 submitted_on = None
                 pending += 1
 
             role = ""
-            if hasattr(user, 'staff_profile') and user.staff_profile:
-                jd = getattr(user.staff_profile, 'job_detail', None)
+            if hasattr(user, "staff_profile") and user.staff_profile:
+                jd = getattr(user.staff_profile, "job_detail", None)
                 if jd:
                     role = jd.role
 
@@ -2105,24 +2141,28 @@ class ManagerMonthlyReportSummaryView(APIView):
                 "report_id": report.id if report else None
             })
 
-        return Response({
-            "status": "1",
-            "message": "success",
-            "month": f"{year}-{str(month).zfill(2)}",
-            "submitted": submitted,
-            "late": late,
-            "pending": pending,
-            "employees": employees
-        })
+        return Response(
+            {
+                "status": "1",
+                "message": "success",
+                "month": f"{year}-{str(month).zfill(2)}",
+                "submitted": submitted,
+                "late": late,
+                "pending": pending,
+                "employees": employees
+            },
+            status=status.HTTP_200_OK
+        )
+
 
 class ManagerDailyReportSummaryView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
-    
 
     def get(self, request):
-        project_id = request.query_params.get('project')
-        date_param = request.query_params.get('date')
+
+        project_id = request.query_params.get("project")
+        date_param = request.query_params.get("date")
 
         if not project_id:
             return Response(
@@ -2132,7 +2172,9 @@ class ManagerDailyReportSummaryView(APIView):
 
         project = get_object_or_404(ProjectManagement, id=project_id)
 
-        #  selected date or today
+        # -----------------------------
+        # SELECTED DATE
+        # -----------------------------
         if date_param:
             try:
                 selected_date = datetime.strptime(date_param, "%Y-%m-%d").date()
@@ -2144,35 +2186,53 @@ class ManagerDailyReportSummaryView(APIView):
         else:
             selected_date = timezone.now().date()
 
-        members = ProjectMember.objects.filter(
-            project=project
-        ).select_related('member', 'member__user')
+        # timezone-safe datetime
+        day_end = timezone.make_aware(
+            datetime.combine(selected_date, datetime.max.time())
+        )
 
-        #  filter by report_date
+        # -----------------------------
+        # MEMBERS (joined before this day)
+        # -----------------------------
+        members = ProjectMember.objects.filter(
+            project=project,
+            created_at__lte=day_end
+        ).select_related(
+            "member__user",
+            "member__user__staff_profile__job_detail"
+        )
+
+        # -----------------------------
+        # REPORTS
+        # -----------------------------
         reports = Report.objects.filter(
             project=project,
-            report_type='daily',
+            report_type="daily",
             report_date=selected_date
         )
 
         report_map = {r.submitted_by_id: r for r in reports}
 
         submitted = 0
-        pending = 0
         late = 0
+        pending = 0
         employees = []
 
-        # deadline = end of selected date
-        deadline = timezone.make_aware(
-            datetime.combine(selected_date, datetime.max.time())
-        )
+        deadline = day_end
 
+        # -----------------------------
+        # LOOP MEMBERS
+        # -----------------------------
         for pm in members:
+
             user = pm.member.user
             report = report_map.get(user.id)
 
             if report:
-                submitted_on = report.submitted_at.date()
+
+                submitted_on = timezone.localtime(
+                    report.submitted_at
+                ).date()
 
                 if report.submitted_at > deadline:
                     status_text = "Late"
@@ -2180,14 +2240,20 @@ class ManagerDailyReportSummaryView(APIView):
                 else:
                     status_text = "Submitted"
                     submitted += 1
+
             else:
-                status_text = "Not Submitted"
+
+                if timezone.now() <= deadline:
+                    status_text = "Pending"
+                else:
+                    status_text = "Not Submitted"
+
                 submitted_on = None
                 pending += 1
 
             role = ""
-            if hasattr(user, 'staff_profile') and user.staff_profile:
-                jd = getattr(user.staff_profile, 'job_detail', None)
+            if hasattr(user, "staff_profile") and user.staff_profile:
+                jd = getattr(user.staff_profile, "job_detail", None)
                 if jd:
                     role = jd.role
 
@@ -2199,17 +2265,18 @@ class ManagerDailyReportSummaryView(APIView):
                 "report_id": report.id if report else None
             })
 
-        return Response({
-            "status": "1",
-            "message": "success",
-            "date": str(selected_date),
-            "submitted": submitted,
-            "late": late,
-            "pending": pending,
-            "employees": employees
-        })
-
-
+        return Response(
+            {
+                "status": "1",
+                "message": "success",
+                "date": str(selected_date),
+                "submitted": submitted,
+                "late": late,
+                "pending": pending,
+                "employees": employees
+            },
+            status=status.HTTP_200_OK
+        )
 class ProjectProgressionView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]

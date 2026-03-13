@@ -406,11 +406,33 @@ class ReportSerializer(serializers.ModelSerializer):
                     "week_start and week_end required"
                 )
 
+            if Report.objects.filter(
+                project=project,
+                submitted_by=user,
+                report_type='weekly',
+                week_start=data['week_start'],
+                week_end=data['week_end']
+            ).exists():
+                raise serializers.ValidationError(
+                    "Weekly report already submitted"
+                )
+
         if report_type == 'monthly':
 
             if not data.get('month') or not data.get('year'):
                 raise serializers.ValidationError(
                     "month and year required"
+                )
+            
+            if Report.objects.filter(
+                project=project,
+                submitted_by=user,
+                report_type='monthly',
+                month=data['month'],
+                year=data['year']
+            ).exists():
+                raise serializers.ValidationError(
+                    "Monthly report already submitted"
                 )
 
         if not data.get("tasks"):

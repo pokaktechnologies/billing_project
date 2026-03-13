@@ -18,7 +18,7 @@ from django.utils import timezone
 from datetime import datetime, timedelta, date
 from rest_framework import generics
 from django_filters.rest_framework import DjangoFilterBackend
-from activity_logs.base_view import BaseAPIView
+from activity_logs.base_view import BaseAPIView, BaseGenericAPIView
 from rest_framework.parsers import MultiPartParser, FormParser
 
 
@@ -67,7 +67,7 @@ class ClientContractView(BaseAPIView):
             status=status.HTTP_400_BAD_REQUEST
         )
     
-class ClientContractDetailView(APIView):
+class ClientContractDetailView(BaseAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     
@@ -128,7 +128,7 @@ class ClientContractDetailView(APIView):
         )
 
 # Project management views
-class project_management(APIView):
+class project_management(BaseAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     
@@ -200,7 +200,7 @@ class project_management(APIView):
 
 
 
-class project_management_detail(APIView):
+class project_management_detail(BaseAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     
@@ -315,7 +315,7 @@ class project_management_detail(APIView):
 
 # Members views
 
-class MembersView(APIView):
+class MembersView(BaseAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     
@@ -342,7 +342,7 @@ class MembersView(APIView):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-class MembersViewDetail(APIView):
+class MembersViewDetail(BaseAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     
@@ -405,7 +405,7 @@ class MembersViewDetail(APIView):
 
 # Stack views
 
-class StackView(APIView):
+class StackView(BaseAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     
@@ -432,7 +432,7 @@ class StackView(APIView):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-class StackViewDetail(APIView):
+class StackViewDetail(BaseAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     
@@ -497,7 +497,7 @@ class StackViewDetail(APIView):
 
 # Project members views
 
-class ProjectMembersView(APIView):
+class ProjectMembersView(BaseAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     
@@ -571,7 +571,7 @@ class ProjectMembersView(APIView):
 
 
 
-class ProjectMembersDetail(APIView):
+class ProjectMembersDetail(BaseAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     
@@ -773,7 +773,7 @@ class MyProjectDetailView(APIView):
 
 
 #Create Board
-class CreateListBoard(generics.ListCreateAPIView):
+class CreateListBoard(BaseGenericAPIView, generics.ListCreateAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     
@@ -797,7 +797,7 @@ class ListBoardMember(generics.ListAPIView):
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['project']
 
-class DistroyUpdateBoard(generics.RetrieveUpdateDestroyAPIView):
+class DistroyUpdateBoard(BaseGenericAPIView, generics.RetrieveUpdateDestroyAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     
@@ -810,7 +810,7 @@ class DistroyUpdateBoard(generics.RetrieveUpdateDestroyAPIView):
         Task.objects.filter(board=instance).update(board=None)
         return super().destroy(request, *args, **kwargs)
 
-class CreateStatusColumn(generics.ListCreateAPIView):
+class CreateStatusColumn(BaseGenericAPIView, generics.ListCreateAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     
@@ -829,7 +829,7 @@ class CreateStatusColumn(generics.ListCreateAPIView):
         return qs
 
 
-class DistroyUpdateStatusColumn(generics.RetrieveUpdateDestroyAPIView):
+class DistroyUpdateStatusColumn(BaseGenericAPIView, generics.RetrieveUpdateDestroyAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     
@@ -837,7 +837,7 @@ class DistroyUpdateStatusColumn(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = StatusColumnWithTasksSerializer
 
 
-class TaskListCreateView(APIView):
+class TaskListCreateView(BaseAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     
@@ -907,7 +907,7 @@ class TaskListCreateView(APIView):
         )
     
 #MyProject Tasks
-class MyProjectTaskListView(APIView):
+class MyProjectTaskListView(BaseAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
 
@@ -1013,7 +1013,7 @@ class MyProjectTaskListView(APIView):
 
 
 
-class TaskRetrieveUpdateDeleteView(APIView):
+class TaskRetrieveUpdateDeleteView(BaseAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     
@@ -1497,7 +1497,7 @@ class Pagination(PageNumberPagination):
 #---------------
 import json
 
-class ReportView(APIView):
+class ReportView(BaseAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]

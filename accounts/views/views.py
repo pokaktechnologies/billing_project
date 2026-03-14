@@ -35,6 +35,7 @@ from dateutil.relativedelta import relativedelta
 from django.db.models import Sum, Count, Avg
 from django.db.models.functions import TruncMonth
 from datetime import timedelta, datetime, date, time
+from accounts.services.pagination import paginate_response
 
 
 # from .serializers import CustomUserCreateSerializer, OTPSerializer, GettingStartedSerializer,HelpLinkSerializer,NotificationSerializer, UserSettingSerializer, FeedbackSerializer,QuotationOrderSerializer,InvoiceOrderSerializer,DeliveryOrderSerializer,SupplierPurchaseSerializer,SupplierSerializer,DeliveryChallanSerializer
@@ -875,8 +876,10 @@ class ProductListCreateAPIView(BaseAPIView):
         category = request.query_params.get('category')
         unit = request.query_params.get('unit')
 
-        products = Product.objects.all()
-
+        products = Product.objects.select_related(
+            'unit', 'category', 'tax_setting'
+        ).all()
+        
         if search:
             products = products.filter(
                 Q(name__icontains=search) |
@@ -889,29 +892,10 @@ class ProductListCreateAPIView(BaseAPIView):
         if unit:
             products = products.filter(unit_id=unit)
 
-        products = products.select_related(
-            'unit', 'category', 'tax_setting'
-        )
 
-        #pagination
-        paginator = Pagination()
+        # optional pagination with response
+        return paginate_response(products, request, ProductSerializer)
 
-        paginated_products = paginator.paginate_queryset(products, request)
-
-        if paginated_products is not None:
-            serializer = ProductSerializer(paginated_products, many=True)
-            return paginator.get_paginated_response({
-                "Status": "1",
-                "message": "Success",
-                "Data": serializer.data
-            })
-
-        serializer = ProductSerializer(products, many=True)
-        return Response({
-            "Status": "1",
-            "message": "Success",
-            "Data": serializer.data
-        })
 
     def post(self, request):
         serializer = ProductSerializer(data=request.data)

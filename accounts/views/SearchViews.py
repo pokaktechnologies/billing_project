@@ -9,6 +9,7 @@ from rest_framework import status
 from accounts.models import *
 from accounts.serializers.serializers import *
 from django.db.models import Q
+from accounts.services.pagination import paginate_response
 
 class QuatationSearchView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
@@ -41,11 +42,13 @@ class QuatationSearchView(APIView):
                 Q(client__last_name__icontains=search) |
                 Q(project_name__icontains=search)
             )
+        #optional pagination response
+        return paginate_response(quotations, request, QuotationOrderSerializer)
 
-        serializer = QuotationOrderSerializer(quotations, many=True)
+        # serializer = QuotationOrderSerializer(quotations, many=True)
 
-        return Response({
-            "status": "1",
-            "message": "Quotations fetched successfully.",
-            "data": serializer.data
-        }, status=status.HTTP_200_OK)
+        # return Response({
+        #     "status": "1",
+        #     "message": "Quotations fetched successfully.",
+        #     "data": serializer.data
+        # }, status=status.HTTP_200_OK)

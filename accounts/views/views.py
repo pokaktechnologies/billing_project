@@ -48,19 +48,6 @@ from finance.models import *
 
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-#------------
-#  pagination class
-#--------------
-from rest_framework.pagination import PageNumberPagination
-class Pagination(PageNumberPagination):
-    page_size_query_param = 'page_size'
-
-    def get_page_size(self, request):
-        page_size = request.query_params.get('page_size')
-        if page_size is None:
-            return None 
-        return int(page_size)
-
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
@@ -787,8 +774,8 @@ class SupplierAPIView(BaseAPIView):
             return Response({"Status": "1", "message": "Success", "Data": [serializer.data]}, status=status.HTTP_200_OK)
         else:
             suppliers = Supplier.objects.all().order_by('-created_at')
-            serializer = SupplierSerializer(suppliers, many=True)
-            return Response({"Status": "1", "message": "Success", "Data": serializer.data}, status=status.HTTP_200_OK)
+            # optional pagination response
+            return paginate_response(suppliers, request, SupplierSerializer)
         
     def post(self, request):
         serializer = SupplierSerializer(data=request.data)
@@ -967,50 +954,35 @@ class SalesPersonListCreateAPIView(BaseAPIView):
         return [permission() for permission in permission_classes]
     
     def get(self, request, pk=None):
-        
-        #search 
+
+        # search
         search = request.query_params.get('search')
 
+        # -------- Single Record --------
         if pk:
             queryset = SalesPerson.objects.filter(pk=pk)
             salesperson = get_object_or_404(queryset)
+
             serializer = SalesPersonSerializer(salesperson)
-            data = [serializer.data]
-            return Response(
-                {"Status": "1", "message": "Success", "Data": data},
-                status=status.HTTP_200_OK
-            )
-        else:
-            queryset = SalesPerson.objects.all()
-
-            if search:
-                queryset = queryset.filter(
-                    Q(first_name__icontains=search) |
-                    Q(last_name__icontains=search) |
-                    Q(email__icontains=search) |
-                    Q(phone__icontains=search)
-                )
-            
-            #pagination
-            paginator = Pagination()
-            paginated_queryset = paginator.paginate_queryset(queryset, request)
-
-            if paginated_queryset is not None:
-                serializer = SalesPersonSerializer(paginated_queryset, many=True)
-                data = serializer.data
-
-                return paginator.get_paginated_response(
-                    {"Status": "1", "message": "Success", "Data": data},
-                )
-
-            serializer = SalesPersonSerializer(queryset, many=True)
-            data = serializer.data
 
             return Response(
-                {"Status": "1", "message": "Success", "Data": data},
+                {"Status": "1", "message": "Success", "Data": [serializer.data]},
                 status=status.HTTP_200_OK
             )
 
+        # -------- List --------
+        queryset = SalesPerson.objects.all()
+
+        if search:
+            queryset = queryset.filter(
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search) |
+                Q(email__icontains=search) |
+                Q(phone__icontains=search)
+            )
+
+        # optional pagination
+        return paginate_response(queryset, request, SalesPersonSerializer)
 
     def post(self, request):
         serializer = SalesPersonSerializer(data=request.data)
@@ -2177,13 +2149,8 @@ class ReceiptView(BaseAPIView):
                 receipts = ReceiptModel.objects.all().order_by('-created_at')
             else:
                 receipts = ReceiptModel.objects.filter(user=request.user).order_by('-created_at')   
-            serializer = ReceiptSerializer(receipts, many=True)
-
-        return Response({
-            'Status': '1',
-            'Message': 'Success',
-            'Data': serializer.data
-        })
+            # optional pagination
+            return paginate_response(receipts, request, ReceiptSerializer)
 
     def post(self, request):
         serializer = ReceiptCreateSerializer(data=request.data)
@@ -2331,11 +2298,14 @@ class SalesReturnAPI(BaseAPIView):
     def get(self, request):
         """List all sales returns for the authenticated user"""
         sales_returns = SalesReturnModel.objects.all().order_by('-created_at')
-        serializer = SalesReturnListSerializer(sales_returns, many=True)
-        return Response({
-            "status": "1",
-            "data": serializer.data
-        }, status=status.HTTP_200_OK)
+        # optional pagination
+        return paginate_response(sales_returns, request, SalesReturnListSerializer)
+
+        # serializer = SalesReturnListSerializer(sales_returns, many=True)
+        # return Response({
+        #     "status": "1",
+        #     "data": serializer.data
+        # }, status=status.HTTP_200_OK)
 
 class SalesReturnDetailAPI(APIView):
     permission_classes = [IsAuthenticated]
@@ -2607,27 +2577,9 @@ class CustomerListCreateAPIView(BaseAPIView):
 
         if module_type:
             queryset = queryset.filter(module_type=module_type)
-
-        paginator = Pagination()
-        paginated_queryset = paginator.paginate_queryset(queryset, request)
-
-        if paginated_queryset is not None:
-            serializer = CustomerSerializer(paginated_queryset, many=True)
-            return paginator.get_paginated_response({
-                "Status": "1",
-                "message": "Success",
-                "Data": serializer.data
-            })
-        serializer = CustomerSerializer(queryset, many=True)
-        return Response(
-            {
-                "Status": "1",
-                "message": "Success",
-                "Data": serializer.data
-            },
-            status=status.HTTP_200_OK
-        )
-
+        
+        # optional pagination
+        return paginate_response(queryset, request, CustomerSerializer)
 
     # POST - Create a new customer
     def post(self, request):
@@ -2998,9 +2950,10 @@ class PurchaseOrderAPIView(BaseAPIView):
                     purchase_order_date__gte=start_date,
                     purchase_order_date__lte=end_date
                 )
+            
+            # optional pagination response
+            return paginate_response(purchase_orders, request, PurchaseOrderListSerializer)
 
-            serializer = PurchaseOrderListSerializer(purchase_orders, many=True)
-            return Response({"status": "1", "message": "success", "data": serializer.data})
 
     def post(self, request, format=None):
         serializer = PurchaseOrderSerializer(data=request.data)
@@ -3295,7 +3248,9 @@ class InvoiceAPI(BaseAPIView):
             qs = InvoiceModel.objects.all()
         else:
             qs = InvoiceModel.objects.filter(user=request.user)
-        return Response({"status": 1, "data": InvoiceListSerializer(qs, many=True).data})
+
+        #optional pagination response
+        return paginate_response(qs, request, InvoiceListSerializer)
 
     def post(self, request):
         serializer = InvoiceCreateSerializer(data=request.data)

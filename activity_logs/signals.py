@@ -9,6 +9,10 @@ IGNORE_MODELS = [
     "Notification",
     "UserSetting",
     "Feedback",
+    "ReportingTask",
+    "ChallengeResolution",
+    "ReportLink",
+    "ReportAttachment"
     
 ]
 

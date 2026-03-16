@@ -1934,7 +1934,7 @@ class ManagerWeeklyReportSummaryView(APIView):
         while current <= end_date:
 
             week_start = current
-            week_end = current + timedelta(days=6)
+            week_end = current + timedelta(days=5)
 
             # skip weeks outside month
             if week_end < month_start or week_start > month_end:

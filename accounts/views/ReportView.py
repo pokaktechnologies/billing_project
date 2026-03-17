@@ -1461,3 +1461,116 @@ class StockMovementReportAPIView(APIView):
             many=True
         )
         return Response(serializer.data)
+    
+class ClientStatementReportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        client_id = request.query_params.get('client_id')
+        date_from = request.query_params.get('date_from')
+        date_to = request.query_params.get('date_to')
+
+
+        invoices = InvoiceModel.objects.select_related('client').filter(
+            invoice_type='client').annotate(
+            receipt_total_amount=Coalesce(
+                Sum('receipts__total_amount'),
+                Value(0, output_field=DecimalField())
+            ),
+            balance=F('invoice_grand_total') - Coalesce(
+                Sum('receipts__total_amount'),
+                Value(0, output_field=DecimalField())
+            )
+            ).order_by('-invoice_date')
+
+        if date_from and date_to:
+            invoices = invoices.filter(invoice_date__range=[date_from, date_to])
+        elif date_from:
+            invoices = invoices.filter(invoice_date__gte=date_from)
+        elif date_to:
+            invoices = invoices.filter(invoice_date__lte=date_to)
+
+        if  client_id:
+
+            try:
+                client = Customer.objects.get(id=client_id)
+            except Customer.DoesNotExist:
+                return Response({
+                    "Status": "0",
+                    "Message": "Client not found."
+                }, status=404)
+
+            invoices = invoices.filter(client=client)
+
+            invoice_serializer = ClientStatementReportSerializer(invoices, many=True)
+
+            return Response({
+                "Status": "1",
+                "Message": "Success",
+                "Invoices": invoice_serializer.data,
+            })
+        
+        invoice_serializer = ClientStatementReportSerializer(invoices, many=True)
+        return Response({
+            "Status": "1",
+            "Message": "Success",
+            "Invoices": invoice_serializer.data,
+        })
+        
+class InternStatementReportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        intern_id = request.query_params.get('intern_id')
+        date_from = request.query_params.get('date_from')
+        date_to = request.query_params.get('date_to')
+
+
+        invoices = InvoiceModel.objects.select_related('intern__user', 'intern__job_detail').filter(
+            invoice_type='intern').annotate(
+            receipt_total_amount=Coalesce(
+                Sum('receipts__total_amount'),
+                Value(0, output_field=DecimalField())
+            ),
+            balance=F('invoice_grand_total') - Coalesce(
+                Sum('receipts__total_amount'),
+                Value(0, output_field=DecimalField())
+            )
+            ).order_by('-invoice_date')
+
+        if date_from and date_to:
+            invoices = invoices.filter(invoice_date__range=[date_from, date_to])
+        elif date_from:
+            invoices = invoices.filter(invoice_date__gte=date_from)
+        elif date_to:
+            invoices = invoices.filter(invoice_date__lte=date_to)
+
+        if  intern_id:
+
+            try:
+                intern = StaffProfile.objects.filter(job_detail__job_type='internship').get(id=intern_id)
+            except StaffProfile.DoesNotExist:
+                return Response({
+                    "Status": "0",
+                    "Message": "Intern not found."
+                }, status=404)
+
+            invoices = invoices.filter(intern=intern)
+
+            invoice_serializer = InternStatementReportSerializer(invoices, many=True)
+
+            return Response({
+                "Status": "1",
+                "Message": "Success",
+                "Invoices": invoice_serializer.data,
+            })
+        
+        invoice_serializer = InternStatementReportSerializer(invoices, many=True)
+        return Response({
+            "Status": "1",
+            "Message": "Success",
+            "Invoices": invoice_serializer.data,
+        })
+        

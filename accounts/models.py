@@ -89,6 +89,9 @@ class StaffProfile(models.Model):
     date_of_birth = models.DateField(blank=True, null=True)
     address = models.TextField(blank=True, null=True)
 
+    def get_full_name(self):
+        return f"{self.user.first_name} {self.user.last_name}"
+
     def __str__(self):
         return f"{self.id} - {self.user.email} - ({self.user.first_name} {self.user.last_name})"
 
@@ -736,7 +739,7 @@ class ReceiptModel(models.Model):
     receipt_date = models.DateField()
     tax_rate = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     client = models.ForeignKey('Customer', on_delete=models.PROTECT,null=True, blank=True)
-    invoice = models.ForeignKey(InvoiceModel, on_delete=models.PROTECT, null=True, blank=True)
+    invoice = models.ForeignKey(InvoiceModel, on_delete=models.PROTECT, null=True, blank=True, related_name="receipts")
     # termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.SET_NULL, null=True, blank=True)
     remark = models.CharField(max_length=255, blank=True)
     description = models.TextField(blank=True, null=True)

@@ -325,3 +325,82 @@ class StockMovementReportSerializer(serializers.Serializer):
     total_value = serializers.DecimalField(max_digits=12, decimal_places=2)
     stock_before = serializers.IntegerField()
     stock_after = serializers.IntegerField()
+
+
+class ClientStatementReportSerializer(serializers.ModelSerializer):
+    receipt_total_amount = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    balance = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    client_name = serializers.SerializerMethodField()
+    client_id = serializers.SerializerMethodField()
+    customer_number = serializers.SerializerMethodField()
+
+
+    class Meta:
+        model = InvoiceModel
+        fields = [
+            'id',
+            'customer_number',
+            'client_name',
+            'client_id',
+            'invoice_date',
+            'invoice_number',
+            'description',
+            'invoice_grand_total',
+            'receipt_total_amount',
+            'balance'
+        ]
+
+    def get_client_name(self, obj):
+        if obj.client:
+            return f"{obj.client.first_name} {obj.client.last_name}"
+        return None
+
+    
+    def get_client_id(self, obj):
+        if obj.client:
+            return obj.client.id
+        return None
+    
+    
+    def get_customer_number(self, obj):
+        if obj.client:
+            return obj.client.customer_number
+        return None
+    
+class InternStatementReportSerializer(serializers.ModelSerializer):
+    receipt_total_amount = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    balance = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    intern_name = serializers.SerializerMethodField()
+    intern_id = serializers.SerializerMethodField()
+    employee_id = serializers.SerializerMethodField()
+
+
+    class Meta:
+        model = InvoiceModel
+        fields = [
+            'id',
+            'intern_name',
+            'intern_id',
+            'employee_id',
+            'invoice_date',
+            'invoice_number',
+            'description',
+            'invoice_grand_total',
+            'receipt_total_amount',
+            'balance'
+        ]
+
+    def get_intern_name(self, obj):
+        intern = obj.intern
+        if intern and intern.user:
+            return f"{intern.user.first_name} {intern.user.last_name}"
+        return None
+
+    def get_intern_id(self, obj):
+        return obj.intern.id if obj.intern else None
+
+    def get_employee_id(self, obj):
+        intern = obj.intern
+        if intern and intern.job_detail:
+            return intern.job_detail.employee_id
+        return None

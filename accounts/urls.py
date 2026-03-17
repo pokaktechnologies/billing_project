@@ -107,6 +107,9 @@ urlpatterns = [
     path('reports/receipt/', ReceiptReportView.as_view(), name='receipt_report'),
     path('reports/sales-return/', SalesReturnReportView.as_view(), name='sales_return_report'),
 
+    path('reports/client-statement/', ClientStatementReportView.as_view(), name='client_statement_report'),
+    path('reports/intern-statement/', InternStatementReportView.as_view(),  name='intern_statement_report'),
+
     # Purchase 
     path('reports/purchase-order/', PurchaseOrderReportView.as_view(), name='purchase_report'),
     path('reports/material-receive/', MaterialReceiveReportView.as_view(), name='material_receive_report'),

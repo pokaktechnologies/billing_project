@@ -1,3 +1,5 @@
+from .views.CommunicationViews import InitiateCommunicationAPIView, SubmitCallSummaryAPIView, \
+    CommunicationHistoryAPIView, ManualCommunicationAPIView
 from .views.LeadsViews import *
 from .views.MarketingViews import *
 from .views.ChartViews import *
@@ -68,7 +70,12 @@ urlpatterns = [
     path("reports/sales-person-lead-report/", SalespersonLeadReportAPIView.as_view(), name="followup-report"),
 
 
-    
+    # Communication
+    path('initiate/', InitiateCommunicationAPIView.as_view(), name='initiate-communication'),
+    path('call-summary/<int:communication_id>/', SubmitCallSummaryAPIView.as_view(), name='call-summary'),
+    path('history/<int:lead_id>/', CommunicationHistoryAPIView.as_view(), name='communication-history'),
+    path('manual/', ManualCommunicationAPIView.as_view(), name='manual-communication'),
+
 
     # salesperson leads management
     path('admin/salesperson/lead-stats/', SalespersonLeadStatsView.as_view(), name='salesperson_lead_stats'),

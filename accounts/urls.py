@@ -78,11 +78,11 @@ urlpatterns = [
     path('invoice/pending/', PendingInvoiceListView.as_view()),
     path('invoice/client/<int:client_id>/', InvoicesByClientAPI.as_view()),
     path('invoice/intern/<int:intern_id>/', InvoicesByInternAPI.as_view()),
+    path('invoice/items/', InvoiceItemsList.as_view(), name='invoice_items_list'),
     
     path('receipts/', ReceiptView.as_view(), name='receipt'),
     path('receipts/<int:rec_id>/', ReceiptView.as_view(), name='receipt'),
     path('print-receipts/<int:rec_id>/', PrintReceiptView.as_view(), name='print_receipt'),
-
     path('sales-returns/',SalesReturnAPI.as_view(), name='sales-returns-list'),
     path('sales-returns/<int:return_id>/',SalesReturnDetailAPI.as_view(),name='sales-returns-detail'),
     path('print-sales-returns/<int:return_id>/', SalesReturnPrint.as_view(), name='print_sales_return'),

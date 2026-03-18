@@ -2264,6 +2264,7 @@ class PrintReceiptView(APIView):
 
 
 from django.utils import timezone
+from django.core.exceptions import ValidationError as DjangoValidationError
 
 # views.py
 class SalesReturnAPI(BaseAPIView):
@@ -2277,27 +2278,35 @@ class SalesReturnAPI(BaseAPIView):
             context={'request': request}
         )
         if serializer.is_valid():
-            # Auto-generate return number if not provided
-            if not serializer.validated_data.get('sales_return_number'):
-                last_return = SalesReturnModel.objects.order_by('-id').first()
-                new_num = last_return.id + 1 if last_return else 1
-                serializer.validated_data['sales_return_number'] = f"SR-{new_num:06d}"
-            
-            serializer.save(user=request.user)
-            return Response({
-                "status": "1",
-                "message": "Sales return created successfully",
-                "sales_return_number": serializer.data['sales_return_number'],
-                "sales_return_id": serializer.data['id']
-            }, status=status.HTTP_201_CREATED)
+            try:
+                if not serializer.validated_data.get('sales_return_number'):
+                    last_return = SalesReturnModel.objects.order_by('-id').first()
+                    new_num = last_return.id + 1 if last_return else 1
+                    serializer.validated_data['sales_return_number'] = f"SR-{new_num:06d}"
+
+                serializer.save(user=request.user)
+
+                return Response({
+                    "status": "1",
+                    "message": "Sales return created successfully",
+                    "sales_return_number": serializer.data['sales_return_number'],
+                    "sales_return_id": serializer.data['id']
+                }, status=status.HTTP_201_CREATED)
+
+            except DjangoValidationError as e:
+                return Response({
+                    "status": "0",
+                    "errors": e.messages
+                }, status=status.HTTP_400_BAD_REQUEST)
+
         return Response({
             "status": "0",
             "errors": serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
-    
+
     def get(self, request):
         """List all sales returns for the authenticated user"""
-        sales_returns = SalesReturnModel.objects.all().order_by('-created_at')
+        sales_returns = SalesReturnModel.objects.filter(user=request.user).order_by('-created_at')
         # optional pagination
         return paginate_response(sales_returns, request, SalesReturnListSerializer)
 
@@ -2314,6 +2323,7 @@ class SalesReturnDetailAPI(APIView):
         sales_return = get_object_or_404(
             SalesReturnModel, 
             id=return_id,
+            user=request.user
         )
         serializer = SalesReturnDetailDisplaySerializer(sales_return)
         return Response({
@@ -2322,34 +2332,41 @@ class SalesReturnDetailAPI(APIView):
         })
     
     def patch(self, request, return_id):
-        """Update existing sales return"""
         sales_return = get_object_or_404(
-            SalesReturnModel, 
+            SalesReturnModel,
             id=return_id,
             user=request.user
         )
-        
-        # Prevent updates on returns older than 7 days
+
         if (timezone.now() - sales_return.created_at).days > 7:
             return Response({
                 "status": "0",
                 "error": "Returns older than 7 days cannot be modified"
             }, status=status.HTTP_403_FORBIDDEN)
-        
+
         serializer = SalesReturnSerializer(
             sales_return,
             data=request.data,
             partial=True,
             context={'request': request}
         )
-        
+
         if serializer.is_valid():
-            serializer.save()
-            return Response({
-                "status": "1",
-                "message": "Sales return updated",
-                "data": serializer.data
-            })
+            try:
+                serializer.save()
+
+                return Response({
+                    "status": "1",
+                    "message": "Sales return updated",
+                    "data": serializer.data
+                })
+
+            except DjangoValidationError as e:
+                return Response({
+                    "status": "0",
+                    "errors": e.messages
+                }, status=status.HTTP_400_BAD_REQUEST)
+
         return Response({
             "status": "0",
             "errors": serializer.errors
@@ -2388,6 +2405,54 @@ class SalesReturnDetailAPI(APIView):
                 "error": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+class InvoiceItemsList(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        ids = request.query_params.get('ids')
+
+        if not ids:
+            return Response(
+                {"status": "0", "message": "No invoice IDs provided."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            invoice_ids = [int(id.strip()) for id in ids.split(',')]
+        except ValueError:
+            return Response(
+                {"status": "0", "message": "Invalid invoice ID format."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        invoices = InvoiceModel.objects.filter(id__in=invoice_ids)
+
+        if not invoices.exists():
+            return Response(
+                {"status": "0", "message": "No invoices found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        result = []
+
+        for invoice in invoices:
+            items = invoice.items.all()
+
+            serializer = InvoiceItemListSerializer(items, many=True)
+
+            result.append({
+                "invoice_id": invoice.id,
+                "invoice_number": invoice.invoice_number,
+                "grand_total": float(invoice.invoice_grand_total),
+                "items": serializer.data
+            })
+
+        return Response(
+            {"status": "1", "data": result},
+            status=status.HTTP_200_OK
+        )
+    
+
 class SalesReturnPrint(APIView):
     permission_classes = [IsAuthenticated]
     
@@ -2396,6 +2461,7 @@ class SalesReturnPrint(APIView):
         sales_return = get_object_or_404(
             SalesReturnModel, 
             id=return_id,
+            user=request.user
         )
         serializer = SalesReturnPrintSerializer(sales_return)
         return Response({

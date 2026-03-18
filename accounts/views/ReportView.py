@@ -908,7 +908,7 @@ class SalesReturnReportView(APIView):
 
         sales_returns = SalesReturnModel.objects.select_related(
             "client",
-            "sales_order",
+            "invoice",
             "termsandconditions"
         ).prefetch_related(
             "items"
@@ -927,7 +927,7 @@ class SalesReturnReportView(APIView):
                 Q(client__first_name__icontains=search) |
                 Q(client__last_name__icontains=search) |
                 Q(sales_return_number__icontains=search) |
-                Q(sales_order__sales_order_number__icontains=search)
+                Q(invoice__invoice_number__icontains=search)
             )
 
         paginator = Pagination()

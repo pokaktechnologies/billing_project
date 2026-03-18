@@ -1,0 +1,75 @@
+name: Billing  DEV 
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy Billing Backend DEV to Server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            set -e
+
+            # Go to dev backend directory
+            cd /var/www/billing/dev_billing
+
+            # Set correct repository
+            git remote set-url origin https://abinxnazer:${{ secrets.GH_TOKEN }}@github.com/pokaktechnologies/billing_project.git
+
+            echo "📥 Fetching latest dev code..."
+            git fetch origin dev
+            PREV_COMMIT=$(git rev-parse HEAD)
+
+            git checkout dev
+            git pull origin dev
+
+            echo "Previous commit: $PREV_COMMIT"
+            echo "Current commit: $(git rev-parse HEAD)"
+
+            echo "🚀 Building backend image..."
+            docker compose build backend || { docker compose logs backend; exit 1; }
+
+            echo "🔍 Checking migrations..."
+            docker compose run --rm backend python manage.py makemigrations --check --dry-run || exit 1
+
+            echo "🔍 Validating Django project..."
+            docker compose run --rm backend python manage.py check || exit 1
+
+            echo "📝 Running migrations..."
+            docker compose run --rm backend python manage.py migrate --noinput || exit 1
+
+            echo "📦 Collecting static files..."
+            docker compose run --rm backend python manage.py collectstatic --noinput || exit 1
+
+            echo "🚀 Restarting backend container..."
+            docker compose up -d backend
+
+            sleep 5
+
+            if ! docker compose ps | grep -q "backend.*Up"; then
+              echo "❌ Backend container crashed"
+              docker compose logs backend
+              exit 1
+            fi
+
+            echo "🩺 Health check..."
+            if ! curl -f http://93.127.167.39:8001/ > /dev/null 2>&1; then
+              echo "❌ Health check failed"
+              docker compose logs backend
+              exit 1
+            fi
+
+            echo "📄 Backend logs:"
+            docker compose logs --tail=50 backend
+
+            echo "✅ DEV deployment completed successfully"

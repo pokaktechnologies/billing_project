@@ -1,3 +1,4 @@
+from django.contrib.auth.models import User
 from django.db import models
 # Create your models here.
 from accounts.models import  CustomUser,SalesPerson
@@ -239,3 +240,77 @@ class ActivityLog(models.Model):
 
     def __str__(self):
         return f"{self.lead.name} - {self.activity_type} @ {self.timestamp}"
+
+
+class CommunicationLog(models.Model):
+
+    COMM_TYPE_CHOICES = [
+        ('call', 'Call'),
+        ('email', 'Email'),
+        ('whatsapp', 'WhatsApp'),
+    ]
+
+    DIRECTION_CHOICES = [
+        ('outgoing', 'Outgoing'),
+        ('incoming', 'Incoming'),
+    ]
+
+    STATUS_CHOICES = [
+        ('initiated', 'Initiated'),
+        ('completed', 'Completed'),
+        ('missed', 'Missed'),
+        ('failed', 'Failed'),
+    ]
+    lead = models.ForeignKey('Lead', on_delete=models.CASCADE, related_name='communications')
+    communication_type = models.CharField(max_length=20, choices=COMM_TYPE_CHOICES)
+    direction = models.CharField(max_length=20, choices=DIRECTION_CHOICES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='initiated')
+    notes = models.TextField(blank=True, null=True)
+
+    created_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.lead.name} - {self.communication_type} - {self.status}"
+
+
+class CallDetail(models.Model):
+
+    CALL_STATUS_CHOICES = [
+        ('answered', 'Answered'),
+        ('no_answer', 'No Answer'),
+        ('busy', 'Busy'),
+        ('wrong_number', 'Wrong Number'),
+    ]
+
+    communication = models.OneToOneField(CommunicationLog, on_delete=models.CASCADE, related_name='call_detail')
+    phone_number = models.CharField(max_length=20)
+    call_status = models.CharField(max_length=50, choices=CALL_STATUS_CHOICES, blank=True, null=True)
+    duration = models.IntegerField( help_text="Duration in seconds", blank=True, null=True)
+    summary = models.TextField(blank=True, null=True)
+    follow_up_required = models.BooleanField(default=False)
+    follow_up_date = models.DateTimeField(blank=True, null=True)
+
+    def __str__(self):
+        return f"Call with {self.phone_number}"
+
+
+class EmailDetail(models.Model):
+    communication = models.OneToOneField( CommunicationLog, on_delete=models.CASCADE, related_name='email_detail')
+    to_email = models.EmailField()
+    subject = models.CharField(max_length=255)
+    body = models.TextField()
+    is_read = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.subject
+
+
+class WhatsAppDetail(models.Model):
+    communication = models.OneToOneField( CommunicationLog, on_delete=models.CASCADE, related_name='whatsapp_detail')
+    phone_number = models.CharField(max_length=20)
+    message = models.TextField()
+
+    def __str__(self):
+        return f"WhatsApp to {self.phone_number}"

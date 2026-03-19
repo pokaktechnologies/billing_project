@@ -1,5 +1,5 @@
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
-from django.db import models
+from django.db import models, transaction
 from django.utils.timezone import now
 from decimal import Decimal
 from django_countries.fields import CountryField
@@ -707,6 +707,11 @@ class InvoiceItem(models.Model):
 
     # Keep delivery link for backward compatibility (optional)
     delivary = models.ManyToManyField(DeliveryFormModel, blank=True)
+    returned_quantity = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    @property
+    def available_quantity(self):
+        return max(0, self.quantity - self.returned_quantity)
 
     def save(self, *args, **kwargs):
         self.total = self.quantity * self.unit_price
@@ -759,7 +764,8 @@ class SalesReturnModel(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.PROTECT, null=True, blank=True)
     client = models.ForeignKey('Customer', on_delete=models.PROTECT)
     sales_return_number = models.CharField(max_length=50, unique=True)
-    sales_order = models.ForeignKey(SalesOrderModel, on_delete=models.PROTECT)
+    # sales_order = models.ForeignKey(SalesOrderModel, on_delete=models.PROTECT)
+    invoice = models.ForeignKey(InvoiceModel, on_delete=models.SET_NULL, null=True, blank=True, related_name="sales_returns")
     return_date = models.DateField()
     termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.SET_NULL, null=True, blank=True)
     reason = models.TextField()
@@ -776,7 +782,8 @@ class SalesReturnModel(models.Model):
 
 class SalesReturnItem(models.Model):
     sales_return = models.ForeignKey(SalesReturnModel, on_delete=models.CASCADE, related_name='items')
-    delivery_item = models.ForeignKey(DeliveryItem, on_delete=models.PROTECT) 
+    # delivery_item = models.ForeignKey(DeliveryItem, on_delete=models.PROTECT) 
+    invoice_item = models.ForeignKey(InvoiceItem, on_delete=models.PROTECT)
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     
     # Financial fields (auto-populated)
@@ -790,57 +797,160 @@ class SalesReturnItem(models.Model):
     cgst = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
     sub_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
 
-    def clean(self):
-        """Validate return quantity doesn't exceed available quantity"""
-        if self.quantity > self.delivery_item.net_quantity:
+    @staticmethod
+    def _to_stock_units(quantity, *, allow_negative=False):
+        qty = Decimal(str(quantity))
+        if qty != qty.to_integral_value():
             raise ValidationError(
-                f"Cannot return {self.quantity}. Only {self.delivery_item.net_quantity} available"
+                f"Quantity {quantity} is not supported for integer stock products."
             )
-            
-        if not self.delivery_item.delivery_form.is_invoiced:
-            raise ValidationError("Cannot return from uninvoiced delivery")
 
-    def save(self, *args, **kwargs):
-        # Auto-populate from delivery item
-        if not self.pk:  # Only on creation
-            self.unit_price = self.delivery_item.unit_price
-            self.sgst_percentage = self.delivery_item.sgst_percentage
-            self.cgst_percentage = self.delivery_item.cgst_percentage
-        
-        # Calculate financials
-        self.total = self.unit_price * self.quantity
-        self.sgst = (self.sgst_percentage * self.total) / 100
-        self.cgst = (self.cgst_percentage * self.total) / 100
-        self.sub_total = self.total + self.sgst + self.cgst
-        
-        # Update delivery item's returned quantity
+        units = int(qty)
+        if not allow_negative and units < 0:
+            raise ValidationError("Quantity cannot be negative.")
+        return units
+
+    def clean(self):
+        if not self.invoice_item:
+            raise ValidationError("Invoice item is required")
+        if self.quantity <= 0:
+            raise ValidationError("Quantity must be greater than zero")
+
         if self.pk:
-            old = SalesReturnItem.objects.get(pk=self.pk)
-            delta = self.quantity - old.quantity
-            self.delivery_item.returned_quantity += delta
+            old = SalesReturnItem.objects.select_related("invoice_item").get(pk=self.pk)
+            if old.invoice_item_id == self.invoice_item_id:
+                delta = self.quantity - old.quantity
+                if delta > self.invoice_item.available_quantity:
+                    raise ValidationError(
+                        f"Only {self.invoice_item.available_quantity} available for return"
+                    )
+            elif self.quantity > self.invoice_item.available_quantity:
+                raise ValidationError(
+                    f"Only {self.invoice_item.available_quantity} available for return"
+                )
         else:
-            self.delivery_item.returned_quantity += self.quantity
-        
-        self.delivery_item.save()
-        
-        # Update inventory based on condition
-        # self.delivery_item.product.quantity_in_stock += self.quantity
-        # self.delivery_item.product.save()
-        
-        super().save(*args, **kwargs)
-        self.sales_return.update_grand_total()
+            if self.quantity > self.invoice_item.available_quantity:
+                raise ValidationError(
+                    f"Only {self.invoice_item.available_quantity} available for return"
+                )
+             
+    def save(self, *args, **kwargs):
+        with transaction.atomic():
+            old = None
+            if self.pk:
+                old = SalesReturnItem.objects.select_related("invoice_item").get(pk=self.pk)
+
+            old_product_id = old.invoice_item.product_id if old else None
+            new_product_id = self.invoice_item.product_id
+            product_ids = {
+                product_id for product_id in [old_product_id, new_product_id]
+                if product_id
+            }
+            locked_products = {
+                product.id: product
+                for product in Product.objects.select_for_update().filter(id__in=product_ids)
+            }
+
+            # Keep pricing/tax synced when creating or when target invoice item changes.
+            if not old or old.invoice_item_id != self.invoice_item_id:
+                self.unit_price = self.invoice_item.unit_price
+                self.sgst_percentage = self.invoice_item.sgst_percentage
+                self.cgst_percentage = self.invoice_item.cgst_percentage
+
+            if old and old.invoice_item_id != self.invoice_item_id:
+                if self.quantity > self.invoice_item.available_quantity:
+                    raise ValidationError(
+                        f"Only {self.invoice_item.available_quantity} available"
+                    )
+
+                old_invoice_item = old.invoice_item
+                old_invoice_item.returned_quantity = max(
+                    Decimal("0"),
+                    old_invoice_item.returned_quantity - old.quantity
+                )
+                old_invoice_item.save(update_fields=["returned_quantity"])
+
+                self.invoice_item.returned_quantity += self.quantity
+                self.invoice_item.save(update_fields=["returned_quantity"])
+
+                if old_product_id:
+                    old_product = locked_products.get(old_product_id)
+                    if old_product:
+                        old_units = self._to_stock_units(old.quantity)
+                        if old_product.stock < old_units:
+                            raise ValidationError(
+                                f"Insufficient stock to revert return for {old_product.name}."
+                            )
+                        old_product.stock -= old_units
+                        old_product.save(update_fields=["stock"])
+
+                if new_product_id:
+                    new_product = locked_products.get(new_product_id)
+                    if new_product:
+                        new_units = self._to_stock_units(self.quantity)
+                        new_product.stock += new_units
+                        new_product.save(update_fields=["stock"])
+            else:
+                delta = self.quantity if not old else self.quantity - old.quantity
+                if delta > self.invoice_item.available_quantity:
+                    raise ValidationError(
+                        f"Only {self.invoice_item.available_quantity} available"
+                    )
+
+                self.invoice_item.returned_quantity = max(
+                    Decimal("0"),
+                    self.invoice_item.returned_quantity + delta
+                )
+                self.invoice_item.save(update_fields=["returned_quantity"])
+
+                if new_product_id and delta != 0:
+                    product = locked_products.get(new_product_id)
+                    if product:
+                        delta_units = self._to_stock_units(delta, allow_negative=True)
+                        new_stock = product.stock + delta_units
+                        if new_stock < 0:
+                            raise ValidationError(
+                                f"Insufficient stock to reduce return quantity for {product.name}."
+                            )
+                        product.stock = new_stock
+                        product.save(update_fields=["stock"])
+
+            self.total = self.unit_price * self.quantity
+            self.sgst = (self.sgst_percentage * self.total) / 100
+            self.cgst = (self.cgst_percentage * self.total) / 100
+            self.sub_total = self.total + self.sgst + self.cgst
+
+            super().save(*args, **kwargs)
+            self.sales_return.update_grand_total()
 
     def delete(self, *args, **kwargs):
-        self.delivery_item.returned_quantity -= self.quantity
-        self.delivery_item.save()
-        print(f"Deleted Sales Return Item: {self.delivery_item.product.name} - {self.quantity}")
-        super().delete(*args, **kwargs)
-        self.sales_return.update_grand_total()
-    
+        with transaction.atomic():
+            product_id = self.invoice_item.product_id
+            if product_id:
+                product = Product.objects.select_for_update().get(id=product_id)
+                qty_units = self._to_stock_units(self.quantity)
+
+                # Deleting a return means stock should go back down.
+                if product.stock < qty_units:
+                    raise ValidationError(
+                        f"Insufficient stock to delete this return for {product.name}."
+                    )
+                product.stock -= qty_units
+                product.save(update_fields=["stock"])
+
+            self.invoice_item.returned_quantity = max(
+                Decimal("0"),
+                self.invoice_item.returned_quantity - self.quantity
+            )
+            self.invoice_item.save(update_fields=["returned_quantity"])
+
+            super().delete(*args, **kwargs)
+            self.sales_return.update_grand_total()
+        
     def __str__(self):
-        return f"{self.quantity} x {self.delivery_item.product.name}"
-
-
+        if self.invoice_item and self.invoice_item.product:
+            return f"{self.quantity} x {self.invoice_item.product.name}"
+        return f"{self.quantity} x Unknown Product"
 
 
 class Country(models.Model):

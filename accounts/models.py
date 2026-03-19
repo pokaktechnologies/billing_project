@@ -783,7 +783,7 @@ class SalesReturnModel(models.Model):
 class SalesReturnItem(models.Model):
     sales_return = models.ForeignKey(SalesReturnModel, on_delete=models.CASCADE, related_name='items')
     # delivery_item = models.ForeignKey(DeliveryItem, on_delete=models.PROTECT) 
-    invoice_item = models.ForeignKey(InvoiceItem, on_delete=models.PROTECT)
+    invoice_item = models.ForeignKey(InvoiceItem, on_delete=models.PROTECT, null=True, blank=True)
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     
     # Financial fields (auto-populated)

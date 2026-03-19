@@ -2133,6 +2133,8 @@ class ReceiptView(BaseAPIView):
     
 
     def get(self, request, rec_id=None):
+        receipt_type = request.query_params.get('type')
+
         if rec_id:
             if request.user.is_superuser:
                 receipt = get_object_or_404(ReceiptModel, id=rec_id)
@@ -2148,7 +2150,11 @@ class ReceiptView(BaseAPIView):
             if request.user.is_superuser:
                 receipts = ReceiptModel.objects.all().order_by('-created_at')
             else:
-                receipts = ReceiptModel.objects.filter(user=request.user).order_by('-created_at')   
+                receipts = ReceiptModel.objects.filter(user=request.user).order_by('-created_at')
+
+            if receipt_type:
+                receipts = receipts.filter(receipt_type=receipt_type)
+            
             # optional pagination
             return paginate_response(receipts, request, ReceiptSerializer)
 
@@ -3310,10 +3316,16 @@ class InvoiceAPI(BaseAPIView):
     
 
     def get(self, request):
+        invoice_type = request.query_params.get('type')
+        
+
         if request.user.is_superuser:
             qs = InvoiceModel.objects.all()
         else:
             qs = InvoiceModel.objects.filter(user=request.user)
+
+        if invoice_type:
+            qs = qs.filter(invoice_type=invoice_type)
 
         #optional pagination response
         return paginate_response(qs, request, InvoiceListSerializer)

@@ -1,13 +1,71 @@
 from decimal import Decimal
+from collections import defaultdict
 from django.db import transaction
+from django.db.models import F
 from django.shortcuts import get_object_or_404
 from internship.models import Course
 from finance.models import JournalEntry, JournalLine, Account
 from finance.utils import JOURNAL_ACCOUNT_MAPPING
-from accounts.models import InvoiceModel, InvoiceItem,Customer,StaffProfile,TermsAndConditions
+from rest_framework.exceptions import ValidationError
+from accounts.models import InvoiceModel, InvoiceItem, Customer, StaffProfile, TermsAndConditions, Product
 
 from .tax_service import InvoiceItemCalculator
 from .helpers import update_invoice_header
+
+
+def _to_stock_units(quantity, *, allow_negative=False):
+    qty = Decimal(str(quantity))
+    if qty != qty.to_integral_value():
+        raise ValidationError(
+            f"Quantity {quantity} is not supported for integer stock products."
+        )
+
+    units = int(qty)
+    if not allow_negative and units < 0:
+        raise ValidationError("Quantity cannot be negative.")
+    return units
+
+
+def _aggregate_item_quantities(items):
+    quantities = defaultdict(int)
+    for item in items:
+        product_id = item.get("product")
+        if not product_id:
+            continue
+        quantities[int(product_id)] += _to_stock_units(item["quantity"])
+    return quantities
+
+
+def _apply_stock_deltas(stock_deltas):
+    """
+    stock_deltas:
+      delta < 0 => reduce stock (sales)
+      delta > 0 => increase stock (revert/restock)
+    """
+    if not stock_deltas:
+        return
+
+    product_ids = list(stock_deltas.keys())
+    products = Product.objects.select_for_update().filter(id__in=product_ids)
+    product_map = {product.id: product for product in products}
+
+    missing = [pid for pid in product_ids if pid not in product_map]
+    if missing:
+        raise ValidationError(f"Invalid product id(s): {missing}")
+
+    for product_id, delta in stock_deltas.items():
+        if delta == 0:
+            continue
+
+        product = product_map[product_id]
+        new_stock = product.stock + delta
+        if new_stock < 0:
+            raise ValidationError(
+                f"Insufficient stock for {product.name}. "
+                f"Available: {product.stock}, required: {abs(delta)}"
+            )
+
+        Product.objects.filter(id=product_id).update(stock=F("stock") + delta)
 
 class ClientInvoiceService:
 
@@ -17,6 +75,13 @@ class ClientInvoiceService:
         terms = get_object_or_404(TermsAndConditions, id=data["termsandconditions"])
 
         with transaction.atomic():
+            requested_qty = _aggregate_item_quantities(data["items"])
+            stock_deltas = {
+                product_id: -qty
+                for product_id, qty in requested_qty.items()
+            }
+            _apply_stock_deltas(stock_deltas)
+
             invoice = InvoiceModel.objects.create(
                 invoice_type="client",
                 client=customer,
@@ -161,7 +226,6 @@ class InternInvoiceService:
 
 
  
-from rest_framework.exceptions import ValidationError
 
 class ClientInvoiceUpdater:
 
@@ -172,6 +236,20 @@ class ClientInvoiceUpdater:
         with transaction.atomic():
             # ✅ 1. Update main invoice table
             update_invoice_header(invoice, data)
+
+            old_items = [
+                {"product": item.product_id, "quantity": item.quantity}
+                for item in invoice.items.all()
+            ]
+            old_qty = _aggregate_item_quantities(old_items)
+            new_qty = _aggregate_item_quantities(data["items"])
+
+            impacted_product_ids = set(old_qty) | set(new_qty)
+            stock_deltas = {
+                product_id: old_qty.get(product_id, 0) - new_qty.get(product_id, 0)
+                for product_id in impacted_product_ids
+            }
+            _apply_stock_deltas(stock_deltas)
 
             # ✅ 2. Replace items completely
             invoice.items.all().delete()
@@ -249,3 +327,4 @@ class InternInvoiceUpdater:
             invoice.recalculate_total()
 
         return invoice
+

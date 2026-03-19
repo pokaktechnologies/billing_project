@@ -108,6 +108,7 @@ urlpatterns = [
     path('reports/sales-return/', SalesReturnReportView.as_view(), name='sales_return_report'),
 
     path('reports/client-statement/', ClientStatementReportView.as_view(), name='client_statement_report'),
+    path('reports/client-statement/<int:client_id>/', ClientStatementDetailReportView.as_view(), name='client_statement_detail_report'),
     path('reports/intern-statement/', InternStatementReportView.as_view(),  name='intern_statement_report'),
 
     # Purchase 

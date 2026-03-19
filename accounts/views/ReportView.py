@@ -1517,7 +1517,107 @@ class ClientStatementReportView(APIView):
             "Message": "Success",
             "Invoices": invoice_serializer.data,
         })
-        
+
+class ClientStatementDetailReportView(APIView):
+
+    def get(self, request, client_id):
+
+        # Get query params
+        date_from = request.query_params.get('date_from')
+        date_to = request.query_params.get('date_to')
+
+        # Validate client
+        try:
+            client = Customer.objects.get(id=client_id)
+        except Customer.DoesNotExist:
+            return Response({
+                "Status": "0",
+                "Message": "Client not found."
+            }, status=404)
+
+        # Base queryset
+        invoices = InvoiceModel.objects.filter(
+            invoice_type='client',
+            client=client
+        )
+
+        receipts = ReceiptModel.objects.filter(
+            receipt_type='client',
+            client=client
+        )
+
+        # Apply date filters
+        if date_from:
+            invoices = invoices.filter(invoice_date__gte=date_from)
+            receipts = receipts.filter(receipt_date__gte=date_from)
+
+        if date_to:
+            invoices = invoices.filter(invoice_date__lte=date_to)
+            receipts = receipts.filter(receipt_date__lte=date_to)
+
+        data = []
+
+        # Invoices (Debit)
+        for inv in invoices:
+            data.append({
+                "date": inv.invoice_date,
+                "invoice_number": inv.invoice_number,
+                "description": inv.description,
+                "ref": f"Invoice[{inv.invoice_number}]",
+                "debit": Decimal(inv.invoice_grand_total or 0),
+                "credit": Decimal(0)
+            })
+
+        # Receipts (Credit)
+        for rec in receipts:
+            data.append({
+                "date": rec.receipt_date,
+                "receipt_number": rec.receipt_number,
+                "description": rec.description,
+                "ref": f"Receipt/{rec.receipt_number}",
+                "debit": Decimal(0),
+                "credit": Decimal(rec.total_amount or 0)
+            })
+
+        # Sort by date
+        data = sorted(data, key=lambda x: x['date'] or datetime.min.date())
+
+        # Running balance
+        balance = Decimal(0)
+
+        for row in data:
+            balance += row["debit"]
+            balance -= row["credit"]
+            row["balance"] = balance
+
+        # Totals
+        total_debit = sum([row["debit"] for row in data], Decimal(0))
+        total_credit = sum([row["credit"] for row in data], Decimal(0))
+        final_balance = balance
+
+        data.append({
+            "date": None,
+            "ref": "Total",
+            "debit": total_debit,
+            "credit": total_credit,
+            "balance": final_balance
+        })
+
+        return Response({
+            "Status": "1",
+            "Message": "Success",
+            "client_name": f"{client.first_name or ''} {client.last_name or ''}".strip(),
+            "client_id": client.id,
+            "client_number": client.customer_number,
+            "summary": {
+                "total_debit": total_debit,
+                "total_credit": total_credit,
+                "final_balance": final_balance
+            },
+            "Data": data
+        })
+    
+
 class InternStatementReportView(APIView):
     permission_classes = [IsAuthenticated]
 

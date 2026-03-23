@@ -1526,6 +1526,18 @@ class ClientStatementDetailReportView(APIView):
         date_from = request.query_params.get('date_from')
         date_to = request.query_params.get('date_to')
 
+        # Convert to date objects safely
+        try:
+            if date_from:
+                date_from = datetime.strptime(date_from, "%Y-%m-%d").date()
+            if date_to:
+                date_to = datetime.strptime(date_to, "%Y-%m-%d").date()
+        except ValueError:
+            return Response({
+                "Status": "0",
+                "Message": "Invalid date format. Use YYYY-MM-DD"
+            }, status=400)
+
         # Validate client
         try:
             client = Customer.objects.get(id=client_id)
@@ -1561,9 +1573,9 @@ class ClientStatementDetailReportView(APIView):
         for inv in invoices:
             data.append({
                 "date": inv.invoice_date,
+                "created_at": inv.created_at or datetime.min,
                 "invoice_number": inv.invoice_number,
-                "description": inv.description,
-                "ref": f"Invoice[{inv.invoice_number}]",
+                "ref": f"Invoice[{inv.invoice_number}]{inv.invoice_date}",
                 "debit": Decimal(inv.invoice_grand_total or 0),
                 "credit": Decimal(0)
             })
@@ -1572,6 +1584,7 @@ class ClientStatementDetailReportView(APIView):
         for rec in receipts:
             data.append({
                 "date": rec.receipt_date,
+                "created_at": rec.created_at or datetime.min,
                 "receipt_number": rec.receipt_number,
                 "description": rec.description,
                 "ref": f"Receipt/{rec.receipt_number}",
@@ -1579,8 +1592,12 @@ class ClientStatementDetailReportView(APIView):
                 "credit": Decimal(rec.total_amount or 0)
             })
 
-        # Sort by date
-        data = sorted(data, key=lambda x: x['date'] or datetime.min.date())
+        # Sort by created_at (safe)
+        data = sorted(data, key=lambda x: x['created_at'])
+
+        # Remove created_at from response (internal field)
+        for row in data:
+            row.pop("created_at", None)
 
         # Running balance
         balance = Decimal(0)
@@ -1591,8 +1608,8 @@ class ClientStatementDetailReportView(APIView):
             row["balance"] = balance
 
         # Totals
-        total_debit = sum([row["debit"] for row in data], Decimal(0))
-        total_credit = sum([row["credit"] for row in data], Decimal(0))
+        total_debit = sum((row["debit"] for row in data), Decimal(0))
+        total_credit = sum((row["credit"] for row in data), Decimal(0))
         final_balance = balance
 
         data.append({

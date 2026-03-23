@@ -333,7 +333,8 @@ class ClientStatementReportSerializer(serializers.ModelSerializer):
     client_name = serializers.SerializerMethodField()
     client_id = serializers.SerializerMethodField()
     customer_number = serializers.SerializerMethodField()
-
+    salesperson_id = serializers.CharField(source='client.salesperson.id', read_only=True)
+    salesperson = serializers.SerializerMethodField()
 
     class Meta:
         model = InvoiceModel
@@ -347,7 +348,9 @@ class ClientStatementReportSerializer(serializers.ModelSerializer):
             'description',
             'invoice_grand_total',
             'receipt_total_amount',
-            'balance'
+            'balance',
+            'salesperson_id',
+            'salesperson'
         ]
 
     def get_client_name(self, obj):
@@ -365,6 +368,11 @@ class ClientStatementReportSerializer(serializers.ModelSerializer):
     def get_customer_number(self, obj):
         if obj.client:
             return obj.client.customer_number
+        return None
+    
+    def get_salesperson(self, obj):
+        if obj.client and obj.client.salesperson:
+            return f"{obj.client.salesperson.first_name} {obj.client.salesperson.last_name}"
         return None
     
 class InternStatementReportSerializer(serializers.ModelSerializer):

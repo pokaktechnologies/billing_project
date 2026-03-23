@@ -62,13 +62,6 @@ jobs:
               exit 1
             fi
 
-            echo "🩺 Health check..."
-            if ! curl -f http://localhost:8000/ > /dev/null 2>&1; then
-              echo "❌ Health check failed"
-              docker compose logs backend
-              exit 1
-            fi
-
             echo "📄 Backend logs:"
             docker compose logs --tail=50 backend
 

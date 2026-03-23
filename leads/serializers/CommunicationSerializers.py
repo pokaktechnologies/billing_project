@@ -105,3 +105,14 @@ class WhatsAppSerializer(serializers.ModelSerializer):
         fields = ['phone_number', 'message']
 
 
+class EmailUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EmailDetail
+        fields = ['subject', 'body']
+
+
+class WhatsAppUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WhatsAppDetail
+        fields = ['message']
+

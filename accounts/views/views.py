@@ -3312,12 +3312,11 @@ class ContractPointListCreateAPIView(BaseAPIView):
 
 
 class InvoiceAPI(BaseAPIView):
-    permission_classes = [IsAuthenticated,HasModulePermission]
-    
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         invoice_type = request.query_params.get('type')
-        
+        client_id = request.query_params.get('client_id')
 
         if request.user.is_superuser:
             qs = InvoiceModel.objects.all()
@@ -3327,7 +3326,9 @@ class InvoiceAPI(BaseAPIView):
         if invoice_type:
             qs = qs.filter(invoice_type=invoice_type)
 
-        #optional pagination response
+        if client_id:
+            qs = qs.filter(client_id=client_id)
+
         return paginate_response(qs, request, InvoiceListSerializer)
 
     def post(self, request):

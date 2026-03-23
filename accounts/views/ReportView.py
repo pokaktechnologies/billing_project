@@ -1571,10 +1571,26 @@ class ClientStatementDetailReportView(APIView):
 
         # Invoices (Debit)
         for inv in invoices:
+
+            # terms_data = None
+
+            # if inv.termsandconditions:
+            #     terms_obj = inv.termsandconditions
+
+            #     points = TermsAndConditionsPoint.objects.filter(
+            #         terms_and_conditions=terms_obj
+            #     ).values_list('point', flat=True)
+
+            #     terms_data = {
+            #         "title": terms_obj.title,
+            #         "points": list(points)
+            #     }
+
             data.append({
                 "date": inv.invoice_date,
                 "created_at": inv.created_at or datetime.min,
                 "invoice_number": inv.invoice_number,
+                # "terms_and_conditions": terms_data,
                 "ref": f"Invoice[{inv.invoice_number}]{inv.invoice_date}",
                 "debit": Decimal(inv.invoice_grand_total or 0),
                 "credit": Decimal(0)
@@ -1626,6 +1642,11 @@ class ClientStatementDetailReportView(APIView):
             "client_name": f"{client.first_name or ''} {client.last_name or ''}".strip(),
             "client_id": client.id,
             "client_number": client.customer_number,
+            "salesperson": (
+                f"{client.salesperson.first_name or ''} {client.salesperson.last_name or ''}".strip()
+                if client.salesperson else None
+            ),
+            "salesperson_id": client.salesperson.id if client.salesperson else None,
             "summary": {
                 "total_debit": total_debit,
                 "total_credit": total_credit,

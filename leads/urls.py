@@ -1,4 +1,4 @@
-from .views.CommunicationViews import InitiateCommunicationAPIView, SubmitCallSummaryAPIView, \
+from .views.CommunicationViews import InitiateCommunicationAPIView, SubmitCommunicationSummaryAPIView, \
     CommunicationHistoryAPIView, ManualCommunicationAPIView
 from .views.LeadsViews import *
 from .views.MarketingViews import *
@@ -72,7 +72,7 @@ urlpatterns = [
 
     # Communication
     path('initiate/', InitiateCommunicationAPIView.as_view(), name='initiate-communication'),
-    path('call-summary/<int:communication_id>/', SubmitCallSummaryAPIView.as_view(), name='call-summary'),
+    path('call-summary/<int:communication_id>/', SubmitCommunicationSummaryAPIView.as_view(), name='call-summary'),
     path('history/<int:lead_id>/', CommunicationHistoryAPIView.as_view(), name='communication-history'),
     path('manual/', ManualCommunicationAPIView.as_view(), name='manual-communication'),
 

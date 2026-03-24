@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
+from accounts.services.pagination import paginate_response
 
 from django.db.models import Q
 
@@ -18,7 +19,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from dateutil.relativedelta import relativedelta
-from django.db.models import Sum, Count, Avg
+from django.db.models import Sum, Count, Avg, OuterRef, Subquery, F, DecimalField, ExpressionWrapper
 from django.db.models.functions import TruncMonth
 from datetime import timedelta, datetime, date, time
 
@@ -1712,3 +1713,377 @@ class InternStatementReportView(APIView):
             "Invoices": invoice_serializer.data,
         })
         
+
+class PendingInvoiceReportView(APIView):
+    def get(self, request, id):
+
+        try:
+            client = Customer.objects.select_related('salesperson').get(id=id)
+        except Customer.DoesNotExist:
+            return Response({
+                "status": "0",
+                "message": "Client not found."
+            }, status=404)
+
+        invoices = InvoiceModel.objects.filter(
+            client=client,
+            invoice_type='client',
+        ).annotate(
+            total_receipt=Coalesce(
+                Sum('receipts__total_amount', distinct=True),
+                Value(Decimal("0.00"), output_field=DecimalField())
+            ),
+            total_return=Coalesce(
+                Sum('sales_returns__grand_total', distinct=True),
+                Value(Decimal("0.00"), output_field=DecimalField())
+            ),
+        ).annotate(
+            pending_amount=ExpressionWrapper(
+                F('invoice_grand_total') - F('total_receipt') - F('total_return'),
+                output_field=DecimalField(max_digits=12, decimal_places=2)
+            )
+        ).filter(pending_amount__gt=0).order_by('-created_at')
+
+        data = [
+            {
+                "invoice_id": inv.id,
+                "invoice_number": inv.invoice_number,
+                "invoice_date": inv.invoice_date,
+                "total": inv.invoice_grand_total,
+                "paid": inv.total_receipt,
+                "returned": inv.total_return,
+                "pending": inv.pending_amount
+            }
+            for inv in invoices
+        ]
+
+        totals = invoices.aggregate(
+            total_invoice_amount=Coalesce(
+                Sum('invoice_grand_total'),
+                Value(Decimal("0.00"), output_field=DecimalField())
+            ),
+            total_paid_amount=Coalesce(
+                Sum('total_receipt'),
+                Value(Decimal("0.00"), output_field=DecimalField())
+            ),
+            total_return_amount=Coalesce(
+                Sum('total_return'),
+                Value(Decimal("0.00"), output_field=DecimalField())
+            ),
+            total_pending_amount=Coalesce(
+                Sum('pending_amount'),
+                Value(Decimal("0.00"), output_field=DecimalField())
+            ),
+        )
+
+        client_name = f"{client.first_name or ''} {client.last_name or ''}".strip() or client.company_name
+
+        return Response({
+            "status": "1",
+            "message": "Success",
+            "client": {
+                "id": client.id,
+                "name": client_name,
+                "customer_number": client.customer_number,
+                "company_name": client.company_name or '',
+                "salesperson": {
+                    "id": client.salesperson.id if client.salesperson else None,
+                    "name": (
+                        f"{client.salesperson.first_name or ''} {client.salesperson.last_name or ''}".strip()
+                        if client.salesperson else None
+                    )
+                }
+            },
+            "total_invoice_amount": totals["total_invoice_amount"],
+            "total_return_amount": totals["total_return_amount"],
+            "total_pending_amount": totals["total_pending_amount"],
+            "total_paid_amount": totals["total_paid_amount"],
+            "invoices": data
+        })
+    
+
+from decimal import Decimal, InvalidOperation
+
+class ClientOutstandingReportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        # Query params
+        search = request.query_params.get('search')
+        min_pending = request.query_params.get('min_pending')
+        max_pending = request.query_params.get('max_pending')
+        ordering = request.query_params.get('ordering')  # ex: asc, desc, total_pending_amount, -total_pending_amount
+
+        # Validate Decimal inputs
+        try:
+            min_pending = Decimal(min_pending) if min_pending else None
+        except InvalidOperation:
+            return Response({"status": "0", "message": "Invalid min_pending"}, status=400)
+
+        try:
+            max_pending = Decimal(max_pending) if max_pending else None
+        except InvalidOperation:
+            return Response({"status": "0", "message": "Invalid max_pending"}, status=400)
+
+        # Base Query
+        invoices = InvoiceModel.objects.filter(
+            invoice_type='client'
+        ).values(
+            'client',
+            'client__first_name',
+            'client__last_name',
+            'client__company_name',
+            'client__customer_number'
+        ).annotate(
+            total_invoice=Coalesce(
+                Sum('invoice_grand_total'),
+                Value(Decimal("0.00"), output_field=DecimalField())
+            ),
+            total_paid_amount=Coalesce(
+                Sum('receipts__total_amount', distinct=True),
+                Value(Decimal("0.00"), output_field=DecimalField())
+            ),
+            total_return_amount=Coalesce(
+                Sum('sales_returns__grand_total', distinct=True),
+                Value(Decimal("0.00"), output_field=DecimalField())
+            ),
+        ).annotate(
+            total_pending_amount=ExpressionWrapper(
+                F('total_invoice') - F('total_paid_amount') - F('total_return_amount'),
+                output_field=DecimalField(max_digits=12, decimal_places=2)
+            )
+        )
+
+        # Search
+        if search:
+            invoices = invoices.filter(
+                Q(client__first_name__icontains=search) |
+                Q(client__last_name__icontains=search) |
+                Q(client__company_name__icontains=search) |
+                Q(client__customer_number__icontains=search)
+            )
+
+        # Pending filters
+        if min_pending is not None:
+            invoices = invoices.filter(total_pending_amount__gte=min_pending)
+
+        if max_pending is not None:
+            invoices = invoices.filter(total_pending_amount__lte=max_pending)
+
+        # Only pending > 0
+        invoices = invoices.filter(total_pending_amount__gt=0)
+
+        # Ordering (SAFE)
+        allowed_fields = ['total_pending_amount', 'total_invoice']
+
+        if ordering:
+            if ordering in ["asc", "desc"]:
+                invoices = invoices.order_by(
+                    'total_pending_amount' if ordering == "asc" else '-total_pending_amount'
+                )
+            else:
+                field = ordering.lstrip('-')
+                if field not in allowed_fields:
+                    return Response(
+                        {"status": "0", "message": "Invalid ordering field"},
+                        status=400
+                    )
+                invoices = invoices.order_by(ordering)
+        else:
+            invoices = invoices.order_by('-total_pending_amount')
+
+        # Total before pagination
+        totals = invoices.aggregate(
+            grand_total_pending=Coalesce(
+                Sum('total_pending_amount'),
+                Value(Decimal("0.00"), output_field=DecimalField())
+            )
+        )
+
+        # Use your optional pagination
+        response = paginate_response(
+            queryset=invoices,
+            request=request,
+            serializer_class=ClientOutstandingSerializer
+        )
+
+        # Inject grand total
+        response.data["grand_total_pending"] = totals["grand_total_pending"]
+
+        return response
+
+
+
+
+class ClientMonthlyAgingReportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            search = (request.query_params.get("search") or "").strip()
+
+            date_from = request.query_params.get("date_from")
+            date_to = request.query_params.get("date_to")
+            client_id = request.query_params.get("client")
+            try:
+                month_count = int(request.query_params.get("month_count") or 12)
+
+                # limit range
+                if month_count <= 0:
+                    month_count = 12
+
+                if month_count > 12:  #  limit (you can choose 12/24/36)
+                    month_count = 12
+
+            except ValueError:
+                return Response({
+                    "status": "0",
+                    "message": "Invalid month_count. Must be a number"
+                }, status=400)
+
+            # Date Handling (SAFE)
+            today = datetime.today().date().replace(day=1)
+
+            try:
+                if date_from:
+                    start_date = datetime.strptime(date_from, "%Y-%m-%d").date().replace(day=1)
+                else:
+                    start_date = today - relativedelta(months=month_count - 1)
+
+                if date_to:
+                    end_date = datetime.strptime(date_to, "%Y-%m-%d").date().replace(day=1) + relativedelta(months=1)
+                else:
+                    end_date = today + relativedelta(months=1)
+
+            except ValueError:
+                return Response({
+                    "status": "0",
+                    "message": "Invalid date format. Use YYYY-MM-DD"
+                }, status=400)
+            
+            # Dynamic Months List (LATEST FIRST)
+            months_list = []
+            temp = start_date
+
+            while temp < end_date:
+                months_list.append(temp.strftime("%Y-%m"))
+                temp += relativedelta(months=1)
+
+            months_list = list(reversed(months_list))  # latest first
+
+            # Fields
+            money = DecimalField(max_digits=14, decimal_places=2)
+            zero = Value(Decimal("0.00"), output_field=money)
+
+            # Subqueries
+            receipt_sq = (
+                ReceiptModel.objects.filter(invoice_id=OuterRef("pk"))
+                .values("invoice_id")
+                .annotate(total=Coalesce(Sum("total_amount"), zero))
+                .values("total")
+            )
+
+            return_sq = (
+                SalesReturnModel.objects.filter(invoice_id=OuterRef("pk"))
+                .values("invoice_id")
+                .annotate(total=Coalesce(Sum("grand_total"), zero))
+                .values("total")
+            )
+
+            # Base Query
+            invoices = InvoiceModel.objects.filter(
+                invoice_type="client",
+                client__isnull=False,
+                invoice_date__gte=start_date,
+                invoice_date__lt=end_date,
+            )
+
+            # Search
+            if search:
+                invoices = invoices.filter(
+                    Q(client__first_name__icontains=search) |
+                    Q(client__last_name__icontains=search) |
+                    Q(client__company_name__icontains=search)
+                )
+
+            if client_id:
+                if not Customer.objects.filter(id=client_id).exists():
+                    return Response({
+                        "status": "0",
+                        "message": "Client not found."
+                    }, status=404)
+                
+                invoices = invoices.filter(client=client_id)
+
+            # Annotate
+            invoices = invoices.annotate(
+                month=TruncMonth("invoice_date"),
+                total_receipt=Coalesce(Subquery(receipt_sq, output_field=money), zero),
+                total_return=Coalesce(Subquery(return_sq, output_field=money), zero),
+            ).annotate(
+                pending=ExpressionWrapper(
+                    F("invoice_grand_total") - F("total_receipt") - F("total_return"),
+                    output_field=money,
+                )
+            ).filter(pending__gt=0)
+
+            # Group
+            rows = invoices.values(
+                "client_id",
+                "client__first_name",
+                "client__last_name",
+                "client__company_name",
+                "month"
+            ).annotate(
+                amount=Coalesce(Sum("pending"), zero)
+            ).order_by("client_id", "-month")  # latest first
+
+            # Build Response
+            data_map = {}
+
+            for r in rows:
+                cid = r["client_id"]
+
+                if cid not in data_map:
+                    name = f"{r.get('client__first_name') or ''} {r.get('client__last_name') or ''}".strip()
+                    name = name or r.get("client__company_name")
+
+                    data_map[cid] = {
+                        "client_id": cid,
+                        "client_name": name,
+                        "total_pending": Decimal("0.00"),
+                        "monthly": {m: Decimal("0.00") for m in months_list}
+                    }
+
+                month_key = r["month"].strftime("%Y-%m")
+
+                if month_key in data_map[cid]["monthly"]:
+                    data_map[cid]["monthly"][month_key] += r["amount"]
+
+                data_map[cid]["total_pending"] += r["amount"]
+
+            clients = list(data_map.values())
+
+            # Grand Total
+            grand_total = sum(
+                (c["total_pending"] for c in clients),
+                Decimal("0.00")
+            )
+
+            return Response({
+                "status": "1",
+                "message": "Success",
+                "count": len(clients),
+                "months": months_list,
+                "grand_total_pending": grand_total,
+                "clients": clients
+            })
+
+        except Exception as e:
+            return Response({
+                "status": "0",
+                "message": "Something went wrong",
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+  

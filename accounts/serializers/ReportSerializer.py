@@ -412,3 +412,20 @@ class InternStatementReportSerializer(serializers.ModelSerializer):
         if intern and intern.job_detail:
             return intern.job_detail.employee_id
         return None
+
+
+class ClientOutstandingSerializer(serializers.Serializer):
+
+    client_id = serializers.IntegerField(source='client')
+    client_name = serializers.SerializerMethodField()
+    customer_number = serializers.CharField(source='client__customer_number', allow_null=True)
+
+    total_invoice_amount = serializers.DecimalField(source='total_invoice', max_digits=12, decimal_places=2)
+
+    total_paid_amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    total_return_amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    total_pending_amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+
+    def get_client_name(self, obj):
+        name = f"{obj.get('client__first_name') or ''} {obj.get('client__last_name') or ''}".strip()
+        return name or obj.get('client__company_name')

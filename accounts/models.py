@@ -852,15 +852,16 @@ class SalesReturnItem(models.Model):
             }
 
             # Keep pricing/tax synced when creating or when target invoice item changes.
-            if not old or old.invoice_item_id != self.invoice_item_id:
+            if old and old.invoice_item_id != self.invoice_item_id:
                 self.unit_price = self.invoice_item.unit_price
                 self.sgst_percentage = self.invoice_item.sgst_percentage
                 self.cgst_percentage = self.invoice_item.cgst_percentage
 
-            if old and old.invoice_item_id != self.invoice_item_id:
-                if self.quantity > self.invoice_item.available_quantity:
+                available = self.invoice_item.available_quantity
+
+                if self.quantity > available:
                     raise ValidationError(
-                        f"Only {self.invoice_item.available_quantity} available"
+                        f"Only {available} available for return"
                     )
 
                 old_invoice_item = old.invoice_item
@@ -891,11 +892,23 @@ class SalesReturnItem(models.Model):
                         new_product.stock += new_units
                         new_product.save(update_fields=["stock"])
             else:
-                delta = self.quantity if not old else self.quantity - old.quantity
-                if delta > self.invoice_item.available_quantity:
-                    raise ValidationError(
-                        f"Only {self.invoice_item.available_quantity} available"
-                    )
+                available = self.invoice_item.available_quantity
+
+                if not old:
+                    # CREATE CASE
+                    if self.quantity > available:
+                        raise ValidationError(f"Only {available} available")
+
+                    delta = self.quantity
+
+                else:
+                    # UPDATE CASE (same invoice_item)
+                    allowed = available + old.quantity
+
+                    if self.quantity > allowed:
+                        raise ValidationError(f"Only {allowed} available")
+
+                    delta = self.quantity - old.quantity
 
                 self.invoice_item.returned_quantity = max(
                     Decimal("0"),

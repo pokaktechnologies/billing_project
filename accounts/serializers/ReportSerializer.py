@@ -420,6 +420,10 @@ class ClientOutstandingSerializer(serializers.Serializer):
     client_name = serializers.SerializerMethodField()
     customer_number = serializers.CharField(source='client__customer_number', allow_null=True)
 
+    salesperson = serializers.SerializerMethodField()
+    salesperson_id = serializers.CharField(source='client__salesperson__id', allow_null=True)
+
+
     total_invoice_amount = serializers.DecimalField(source='total_invoice', max_digits=12, decimal_places=2)
 
     total_paid_amount = serializers.DecimalField(max_digits=12, decimal_places=2)
@@ -429,3 +433,9 @@ class ClientOutstandingSerializer(serializers.Serializer):
     def get_client_name(self, obj):
         name = f"{obj.get('client__first_name') or ''} {obj.get('client__last_name') or ''}".strip()
         return name or obj.get('client__company_name')
+    
+    def get_salesperson(self, obj):
+        name = f"{obj.get('client__salesperson__first_name') or ''} {obj.get('client__salesperson__last_name') or ''}".strip()
+        return name or obj.get('client__salesperson__company_name')
+    
+    

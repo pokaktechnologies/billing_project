@@ -1744,15 +1744,20 @@ class PendingInvoiceReportView(APIView):
             )
         ).filter(pending_amount__gt=0).order_by('-created_at')
 
+        # Helper
+        def fmt(value):
+            return str(Decimal(value or 0).quantize(Decimal("0.01")))
+
+        # ✅ Format invoice rows
         data = [
             {
                 "invoice_id": inv.id,
                 "invoice_number": inv.invoice_number,
                 "invoice_date": inv.invoice_date,
-                "total": inv.invoice_grand_total,
-                "paid": inv.total_receipt,
-                "returned": inv.total_return,
-                "pending": inv.pending_amount
+                "total": fmt(inv.invoice_grand_total),
+                "paid": fmt(inv.total_receipt),
+                "returned": fmt(inv.total_return),
+                "pending": fmt(inv.pending_amount)
             }
             for inv in invoices
         ]
@@ -1794,14 +1799,14 @@ class PendingInvoiceReportView(APIView):
                     )
                 }
             },
-            "total_invoice_amount": totals["total_invoice_amount"],
-            "total_return_amount": totals["total_return_amount"],
-            "total_pending_amount": totals["total_pending_amount"],
-            "total_paid_amount": totals["total_paid_amount"],
+            # ✅ Format all totals
+            "total_invoice_amount": fmt(totals["total_invoice_amount"]),
+            "total_return_amount": fmt(totals["total_return_amount"]),
+            "total_pending_amount": fmt(totals["total_pending_amount"]),
+            "total_paid_amount": fmt(totals["total_paid_amount"]),
             "invoices": data
         })
     
-
 from decimal import Decimal, InvalidOperation
 
 class ClientOutstandingReportView(APIView):
@@ -1811,6 +1816,7 @@ class ClientOutstandingReportView(APIView):
 
         # Query params
         search = request.query_params.get('search')
+        salesperson = request.query_params.get('salesperson')
         min_pending = request.query_params.get('min_pending')
         max_pending = request.query_params.get('max_pending')
         ordering = request.query_params.get('ordering')  # ex: asc, desc, total_pending_amount, -total_pending_amount
@@ -1834,7 +1840,10 @@ class ClientOutstandingReportView(APIView):
             'client__first_name',
             'client__last_name',
             'client__company_name',
-            'client__customer_number'
+            'client__customer_number',
+            'client__salesperson__first_name',
+            'client__salesperson__last_name',
+            'client__salesperson__id',
         ).annotate(
             total_invoice=Coalesce(
                 Sum('invoice_grand_total'),
@@ -1860,6 +1869,8 @@ class ClientOutstandingReportView(APIView):
             invoices = invoices.filter(
                 Q(client__first_name__icontains=search) |
                 Q(client__last_name__icontains=search) |
+                Q(client__salesperson__first_name__icontains=search) |
+                Q(client__salesperson__last_name__icontains=search) |
                 Q(client__company_name__icontains=search) |
                 Q(client__customer_number__icontains=search)
             )
@@ -1870,6 +1881,10 @@ class ClientOutstandingReportView(APIView):
 
         if max_pending is not None:
             invoices = invoices.filter(total_pending_amount__lte=max_pending)
+
+        if salesperson:
+            invoices = invoices.filter(client__salesperson=salesperson)
+
 
         # Only pending > 0
         invoices = invoices.filter(total_pending_amount__gt=0)
@@ -1909,8 +1924,8 @@ class ClientOutstandingReportView(APIView):
         )
 
         # Inject grand total
-        response.data["grand_total_pending"] = totals["grand_total_pending"]
-
+        grand_total = totals["grand_total_pending"]
+        response.data["grand_total_pending"] = str(grand_total.quantize(Decimal("0.01")))
         return response
 
 
@@ -1926,14 +1941,16 @@ class ClientMonthlyAgingReportView(APIView):
             date_from = request.query_params.get("date_from")
             date_to = request.query_params.get("date_to")
             client_id = request.query_params.get("client")
+            salesperson = request.query_params.get("salesperson")
+
+
             try:
                 month_count = int(request.query_params.get("month_count") or 12)
 
-                # limit range
                 if month_count <= 0:
                     month_count = 12
 
-                if month_count > 12:  #  limit (you can choose 12/24/36)
+                if month_count > 12:
                     month_count = 12
 
             except ValueError:
@@ -1942,7 +1959,7 @@ class ClientMonthlyAgingReportView(APIView):
                     "message": "Invalid month_count. Must be a number"
                 }, status=400)
 
-            # Date Handling (SAFE)
+            # Date Handling
             today = datetime.today().date().replace(day=1)
 
             try:
@@ -1961,7 +1978,7 @@ class ClientMonthlyAgingReportView(APIView):
                     "status": "0",
                     "message": "Invalid date format. Use YYYY-MM-DD"
                 }, status=400)
-            
+
             # Dynamic Months List (LATEST FIRST)
             months_list = []
             temp = start_date
@@ -1970,7 +1987,7 @@ class ClientMonthlyAgingReportView(APIView):
                 months_list.append(temp.strftime("%Y-%m"))
                 temp += relativedelta(months=1)
 
-            months_list = list(reversed(months_list))  # latest first
+            months_list = list(reversed(months_list))
 
             # Fields
             money = DecimalField(max_digits=14, decimal_places=2)
@@ -2007,14 +2024,18 @@ class ClientMonthlyAgingReportView(APIView):
                     Q(client__company_name__icontains=search)
                 )
 
+            # Client Filter
             if client_id:
                 if not Customer.objects.filter(id=client_id).exists():
                     return Response({
                         "status": "0",
                         "message": "Client not found."
                     }, status=404)
-                
+
                 invoices = invoices.filter(client=client_id)
+
+            if salesperson:
+                invoices = invoices.filter(client__salesperson__id=salesperson)
 
             # Annotate
             invoices = invoices.annotate(
@@ -2034,12 +2055,16 @@ class ClientMonthlyAgingReportView(APIView):
                 "client__first_name",
                 "client__last_name",
                 "client__company_name",
-                "month"
+                "client__customer_number",
+                "client__salesperson__first_name",
+                "client__salesperson__last_name",
+                "client__salesperson__id",
             ).annotate(
+                month=TruncMonth("invoice_date"),
                 amount=Coalesce(Sum("pending"), zero)
-            ).order_by("client_id", "-month")  # latest first
+            ).order_by("client_id", "-month")
 
-            # Build Response
+            # Build Response — keep raw Decimals while accumulating
             data_map = {}
 
             for r in rows:
@@ -2052,6 +2077,11 @@ class ClientMonthlyAgingReportView(APIView):
                     data_map[cid] = {
                         "client_id": cid,
                         "client_name": name,
+                        "customer_number": r.get("client__customer_number"),
+                        "salesperson": {
+                            "id": r.get("client__salesperson__id"),
+                            "name": f"{r.get('client__salesperson__first_name') or ''} {r.get('client__salesperson__last_name') or ''}".strip()
+                        },
                         "total_pending": Decimal("0.00"),
                         "monthly": {m: Decimal("0.00") for m in months_list}
                     }
@@ -2063,11 +2093,27 @@ class ClientMonthlyAgingReportView(APIView):
 
                 data_map[cid]["total_pending"] += r["amount"]
 
-            clients = list(data_map.values())
+            # Format Decimals AFTER accumulation
+            def fmt(value):
+                return str(value.quantize(Decimal("0.01")))
+
+            clients = []
+            for c in data_map.values():
+                clients.append({
+                    "client_id": c["client_id"],
+                    "client_name": c["client_name"],
+                    "customer_number": c["customer_number"],
+                    "salesperson": c["salesperson"],
+                    "total_pending": fmt(c["total_pending"]),
+                    "monthly": {
+                        m: fmt(v)
+                        for m, v in c["monthly"].items()
+                    }
+                })
 
             # Grand Total
             grand_total = sum(
-                (c["total_pending"] for c in clients),
+                (c["total_pending"] for c in data_map.values()),
                 Decimal("0.00")
             )
 
@@ -2076,7 +2122,7 @@ class ClientMonthlyAgingReportView(APIView):
                 "message": "Success",
                 "count": len(clients),
                 "months": months_list,
-                "grand_total_pending": grand_total,
+                "grand_total_pending": fmt(grand_total),
                 "clients": clients
             })
 
@@ -2086,4 +2132,3 @@ class ClientMonthlyAgingReportView(APIView):
                 "message": "Something went wrong",
                 "error": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-  

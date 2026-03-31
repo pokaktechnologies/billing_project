@@ -124,3 +124,11 @@ class InvoiceJournalSyncTests(TestCase):
             InvoiceModel.objects.filter(invoice_number="INV-1001").exists()
         )
         self.assertFalse(JournalEntry.objects.filter(id=journal.id).exists())
+
+    def test_sync_invoice_journal_accepts_string_invoice_date(self):
+        invoice = self._create_invoice()
+        invoice.invoice_date = "2026-03-10"
+
+        journal = sync_invoice_journal(invoice, self.user)
+
+        self.assertEqual(journal.date.date(), date(2026, 3, 10))

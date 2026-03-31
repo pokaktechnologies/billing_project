@@ -1,10 +1,11 @@
 from decimal import Decimal
 from collections import defaultdict
-from datetime import datetime, time
+from datetime import datetime, time, date
 from django.db import transaction
 from django.db.models import F
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from internship.models import Course
 from finance.models import JournalEntry, JournalLine, Account
 from finance.utils import JOURNAL_ACCOUNT_MAPPING
@@ -71,7 +72,20 @@ def _apply_stock_deltas(stock_deltas):
 
 
 def _journal_datetime_for_invoice(invoice):
-    journal_dt = datetime.combine(invoice.invoice_date, time.min)
+    invoice_date = invoice.invoice_date
+
+    if isinstance(invoice_date, str):
+        invoice_date = parse_date(invoice_date)
+        if invoice_date is None:
+            raise ValidationError({"invoice_date": "Invalid invoice_date format. Use YYYY-MM-DD."})
+
+    if isinstance(invoice_date, datetime):
+        invoice_date = invoice_date.date()
+
+    if not isinstance(invoice_date, date):
+        raise ValidationError({"invoice_date": "Invalid invoice_date value."})
+
+    journal_dt = datetime.combine(invoice_date, time.min)
     if timezone.is_naive(journal_dt):
         return timezone.make_aware(journal_dt, timezone.get_current_timezone())
     return journal_dt

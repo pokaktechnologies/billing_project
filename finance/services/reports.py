@@ -253,60 +253,76 @@ def get_trial_balance_data(from_date, to_date):
     }
 
 def get_balance_sheet_data(from_date, to_date, net_profit=0):
-    lines = JournalLine.objects.filter(journal__date__range=(from_date, to_date), account__status='active')
+    line_filter = Q()
+    if from_date:
+        line_filter &= Q(journalline__journal__date__gte=from_date)
+    if to_date:
+        line_filter &= Q(journalline__journal__date__lte=to_date)
+
+    all_accounts = list(
+        Account.objects.filter(status='active', type__in=['asset', 'liability', 'equity'])
+        .annotate(
+            debit_sum=Coalesce(
+                Sum('journalline__debit', filter=line_filter),
+                Value(0),
+                output_field=DecimalField()
+            ),
+            credit_sum=Coalesce(
+                Sum('journalline__credit', filter=line_filter),
+                Value(0),
+                output_field=DecimalField()
+            )
+        )
+        .order_by('account_number')
+    )
+
+    def calculate_balance(account):
+        if account.type in Account.DEBIT_BALANCE_TYPES:
+            movement = account.debit_sum - account.credit_sum
+        else:
+            movement = account.credit_sum - account.debit_sum
+        return Decimal(account.opening_balance) + movement
 
     def get_balances(account_type):
-        qs = lines.filter(account__type=account_type)
-        annotated = qs.values(
-            'account__id', 'account__name', 'account__account_number',
-            'account__parent_account__id', 'account__parent_account__name', 'account__parent_account__account_number'
-        ).annotate(
-            debit_sum=Coalesce(Sum('debit'), Decimal(0)),
-            credit_sum=Coalesce(Sum('credit'), Decimal(0))
-        )
+        type_accounts = [acc for acc in all_accounts if acc.type == account_type]
+        parents = [acc for acc in type_accounts if acc.parent_account_id is None]
+        children_by_parent = defaultdict(list)
 
-        accounts_map = defaultdict(lambda: {"children": []})
+        for acc in type_accounts:
+            if acc.parent_account_id is not None:
+                children_by_parent[acc.parent_account_id].append(acc)
+
+        structured = []
         total = Decimal(0)
 
-        for item in annotated:
-            debit, credit = item['debit_sum'], item['credit_sum']
-            net_amount = credit - debit if account_type in ['liability', 'equity'] else debit - credit
-            total += net_amount
+        for parent in parents:
+            parent_own_balance = calculate_balance(parent)
+            children = children_by_parent.get(parent.id, [])
+            children_data = []
+            parent_total = parent_own_balance
 
-            acc_id, acc_name, acc_num = item['account__id'], item['account__name'], item['account__account_number']
-            parent_id, parent_name, parent_num = item['account__parent_account__id'], item['account__parent_account__name'], item['account__parent_account__account_number']
-            
-            acc_data = {
-                "id": acc_id,
-                "account": acc_name,
-                "account_number": acc_num,
-                "amount": float(net_amount)
-            }
+            for child in children:
+                child_balance = calculate_balance(child)
+                parent_total += child_balance
+                children_data.append({
+                    "id": child.id,
+                    "account": child.name,
+                    "account_number": child.account_number,
+                    "amount": float(child_balance)
+                })
 
-            if parent_id:
-                if parent_id not in accounts_map:
-                    accounts_map[parent_id] = {
-                        "id": parent_id,
-                        "parent": parent_name,
-                        "account_number": parent_num,
-                        "balance": {"account": parent_name, "amount": 0},
-                        "children": []
-                    }
-                accounts_map[parent_id]["children"].append(acc_data)
-            else:
-                accounts_map[acc_id]["balance"] = acc_data
-                accounts_map[acc_id]["id"] = acc_id
-                accounts_map[acc_id]["account_number"] = acc_num
+            structured.append({
+                "id": parent.id,
+                "parent": parent.name,
+                "account_number": parent.account_number,
+                "balance": {
+                    "account": parent.name,
+                    "amount": float(parent_own_balance)
+                },
+                "children": children_data
+            })
+            total += parent_total
 
-        structured = [
-            {
-                "id": data.get("id"),
-                "parent": data["balance"]["account"],
-                "account_number": data.get("account_number"),
-                "balance": data["balance"],
-                "children": data.get("children", [])
-            } for acc_id, data in accounts_map.items()
-        ]
         return float(total), structured
 
     assets_total, assets_accounts = get_balances('asset')

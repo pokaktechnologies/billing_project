@@ -1,4 +1,10 @@
-from .receipt import InternReceiptService, ClientReceiptService, ClientReceiptUpdater, InternReceiptUpdater
+from .receipt import (
+    InternReceiptService,
+    ClientReceiptService,
+    ClientReceiptUpdater,
+    InternReceiptUpdater,
+    delete_receipt_with_journals,
+)
 
 class ReceiptFactory:
 
@@ -24,3 +30,7 @@ class ReceiptFactory:
             return InternReceiptUpdater()
 
         raise ValueError("Unsupported receipt type")
+
+    @staticmethod
+    def delete(receipt):
+        return delete_receipt_with_journals(receipt)

@@ -345,18 +345,19 @@ def get_balance_sheet_data(from_date, to_date, net_profit=0):
 
 def get_hierarchical_balances(filters):
     """
+    Expert Accounting Audit Version: 
     Returns total balances grouped by hierarchy (Type -> Parent -> Child).
-    Shows ALL types, parents, and children even if they have no journal entries (with 0 balance).
+    Ensures Parent Totals = Sum(Children) + Parent's Own Balance.
     Filters: type, parent_account, child_account, start_date, end_date.
     """
-    from django.db.models import Value, DecimalField
+    from django.db.models import Value, DecimalField, Sum
     from django.db.models.functions import Coalesce
     from django.db import models
+    from ..models import Account
     
-    # Helper for debit/credit normal types
-    debit_normal_types = {'asset', 'cost_of_sales', 'general_expenses'}
+    debit_normal_types = Account.DEBIT_BALANCE_TYPES
     
-    # Build date filter
+    # Build date filter for movement
     start_date = filters.get('start_date')
     end_date = filters.get('end_date')
     line_filter = models.Q()
@@ -365,8 +366,8 @@ def get_hierarchical_balances(filters):
     if end_date:
         line_filter &= models.Q(journalline__journal__date__lte=end_date)
     
-    # Get ALL active accounts with their totals (even those with 0)
-    all_accounts = Account.objects.filter(status='active').annotate(
+    # Get ALL active accounts with their totals via 1 efficient query
+    all_accounts = list(Account.objects.filter(status='active').annotate(
         total_debit=Coalesce(
             Sum('journalline__debit', filter=line_filter),
             Value(0), output_field=DecimalField()
@@ -375,59 +376,67 @@ def get_hierarchical_balances(filters):
             Sum('journalline__credit', filter=line_filter),
             Value(0), output_field=DecimalField()
         )
-    ).order_by('account_number')
+    ).order_by('account_number'))
     
-    # Apply optional filters
+    # 1. Classification & In-memory Grouping
     acc_type_filter = filters.get('type')
-    parent_id = filters.get('parent_account')
-    child_id = filters.get('child_account')
+    parent_id = str(filters.get('parent_account')) if filters.get('parent_account') else None
+    child_id = str(filters.get('child_account')) if filters.get('child_account') else None
     
-    # Build complete hierarchy for ALL types
+    parents_by_type = {code: [] for code, _ in Account.ACCOUNT_TYPES}
+    children_by_parent = {}
+    
+    for acc in all_accounts:
+        # Calculate individual account balance (respecting Normal Balance side)
+        if acc.type in debit_normal_types:
+            movement = float(acc.total_debit - acc.total_credit)
+        else:
+            movement = float(acc.total_credit - acc.total_debit)
+            
+        # Attach calculated balance to the object for later use
+        acc.calculated_balance = movement + (float(acc.opening_balance) if not start_date else 0)
+        
+        if acc.parent_account_id is None:
+            if acc_type_filter and acc.type != acc_type_filter: continue
+            if parent_id and str(acc.id) != parent_id: continue
+            parents_by_type.setdefault(acc.type, []).append(acc)
+        else:
+            if child_id and str(acc.id) != child_id: continue
+            children_by_parent.setdefault(acc.parent_account_id, []).append(acc)
+    
+    # 2. Build Structured Output
     formatted_output = {}
     
     for type_code, type_label in Account.ACCOUNT_TYPES:
-        # Skip if type filter is set and doesn't match
-        if acc_type_filter and acc_type_filter != type_code:
-            continue
+        if acc_type_filter and acc_type_filter != type_code: continue
             
         prefix = Account.TYPE_PREFIX_MAP.get(type_code, "0")
         type_number = f"{prefix}.0000"
         
-        # Get all parent accounts (Level 2) for this type
-        parent_accounts = all_accounts.filter(type=type_code, parent_account__isnull=True)
-        
-        # Apply parent filter if set
-        if parent_id:
-            parent_accounts = parent_accounts.filter(id=parent_id)
-        
+        parent_accounts = parents_by_type.get(type_code, [])
         parents_list = []
         type_total = 0.0
         
         for parent in parent_accounts:
-            # Get all children for this parent
-            children = all_accounts.filter(parent_account=parent)
+            children = children_by_parent.get(parent.id, [])
             
-            # Apply child filter if set
-            if child_id:
-                children = children.filter(id=child_id)
+            # Audit Check: Only hide parent if we are filtering by a specific child and it's not present
+            if child_id and not children:
+                continue
             
             children_list = []
-            parent_total = 0.0
+            # DERIVE parent_total: Sum(children) + Parent's own balance (if any)
+            # Ideally Parent is Level 2 and should be non-posting, but audit catch-all includes its balance.
+            parent_total = parent.calculated_balance
             
             for child in children:
-                # Calculate balance based on account type
-                if type_code in debit_normal_types:
-                    balance = float(child.total_debit - child.total_credit)
-                else:
-                    balance = float(child.total_credit - child.total_debit)
-                
                 children_list.append({
                     'id': child.id,
                     'account': child.name,
                     'account_number': child.account_number,
-                    'total': balance
+                    'total': child.calculated_balance
                 })
-                parent_total += balance
+                parent_total += child.calculated_balance
             
             parents_list.append({
                 'id': parent.id,
@@ -438,6 +447,10 @@ def get_hierarchical_balances(filters):
             })
             type_total += parent_total
         
+        # Omit types if they have no relevant parents due to child/parent filters
+        if (child_id or parent_id) and not parents_list:
+            continue
+            
         formatted_output[type_code] = {
             'label': type_label,
             'number': type_number,

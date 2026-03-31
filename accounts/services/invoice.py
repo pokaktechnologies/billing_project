@@ -1,8 +1,10 @@
 from decimal import Decimal
 from collections import defaultdict
+from datetime import datetime, time
 from django.db import transaction
 from django.db.models import F
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from internship.models import Course
 from finance.models import JournalEntry, JournalLine, Account
 from finance.utils import JOURNAL_ACCOUNT_MAPPING
@@ -67,6 +69,78 @@ def _apply_stock_deltas(stock_deltas):
 
         Product.objects.filter(id=product_id).update(stock=F("stock") + delta)
 
+
+def _journal_datetime_for_invoice(invoice):
+    journal_dt = datetime.combine(invoice.invoice_date, time.min)
+    if timezone.is_naive(journal_dt):
+        return timezone.make_aware(journal_dt, timezone.get_current_timezone())
+    return journal_dt
+
+
+def _journal_narration_for_invoice(invoice):
+    if invoice.invoice_type == "intern":
+        return f"Intern Invoice {invoice.invoice_number}"
+    return f"Invoice {invoice.invoice_number}"
+
+
+def _journal_salesperson_for_invoice(invoice):
+    if invoice.invoice_type == "client" and invoice.client_id:
+        return invoice.client.salesperson
+    return None
+
+
+def sync_invoice_journal(invoice, user=None, previous_invoice_number=None):
+    accounts = JOURNAL_ACCOUNT_MAPPING["invoice"]
+    debit_account = Account.objects.get(name=accounts["debit"])
+    credit_account = Account.objects.get(name=accounts["credit"])
+
+    lookup_numbers = [invoice.invoice_number]
+    if previous_invoice_number and previous_invoice_number != invoice.invoice_number:
+        lookup_numbers.append(previous_invoice_number)
+
+    journal = (
+        JournalEntry.objects
+        .filter(type="invoice", type_number__in=lookup_numbers)
+        .order_by("id")
+        .first()
+    )
+
+    if not journal:
+        journal = JournalEntry(type="invoice")
+
+    journal.type = "invoice"
+    journal.type_number = invoice.invoice_number
+    journal.narration = _journal_narration_for_invoice(invoice)
+    journal.user = user or invoice.user
+    journal.salesperson = _journal_salesperson_for_invoice(invoice)
+    journal.date = _journal_datetime_for_invoice(invoice)
+    journal.save()
+
+    journal.lines.all().delete()
+    JournalLine.objects.bulk_create([
+        JournalLine(
+            journal=journal,
+            account=debit_account,
+            debit=invoice.invoice_grand_total
+        ),
+        JournalLine(
+            journal=journal,
+            account=credit_account,
+            credit=invoice.invoice_grand_total
+        )
+    ])
+
+    return journal
+
+
+def delete_invoice_with_journal(invoice):
+    with transaction.atomic():
+        JournalEntry.objects.filter(
+            type="invoice",
+            type_number=invoice.invoice_number
+        ).delete()
+        invoice.delete()
+
 class ClientInvoiceService:
 
     @staticmethod
@@ -120,33 +194,13 @@ class ClientInvoiceService:
             InvoiceItem.objects.bulk_create(items)
 
             invoice.recalculate_total()
-            ClientInvoiceService._create_journal(invoice, user)
+            sync_invoice_journal(invoice, user)
 
         return invoice
 
     @staticmethod
     def _create_journal(invoice, user):
-        accounts = JOURNAL_ACCOUNT_MAPPING["invoice"]
-
-        journal = JournalEntry.objects.create(
-            type="invoice",
-            type_number=invoice.invoice_number,
-            narration=f"Invoice {invoice.invoice_number}",
-            user=user
-        )
-
-        JournalLine.objects.bulk_create([
-            JournalLine(
-                journal=journal,
-                account=Account.objects.get(name=accounts["debit"]),
-                debit=invoice.invoice_grand_total
-            ),
-            JournalLine(
-                journal=journal,
-                account=Account.objects.get(name=accounts["credit"]),
-                credit=invoice.invoice_grand_total
-            )
-        ])
+        return sync_invoice_journal(invoice, user)
 
 
 class InternInvoiceService:
@@ -196,33 +250,13 @@ class InternInvoiceService:
             )
 
             invoice.recalculate_total()
-            InternInvoiceService._create_journal(invoice, user)
+            sync_invoice_journal(invoice, user)
 
         return invoice
 
     @staticmethod
     def _create_journal(invoice, user):
-        accounts = JOURNAL_ACCOUNT_MAPPING["invoice"]
-
-        journal = JournalEntry.objects.create(
-            type="invoice",
-            type_number=invoice.invoice_number,
-            narration=f"Intern Invoice {invoice.invoice_number}",
-            user=user
-        )
-
-        JournalLine.objects.bulk_create([
-            JournalLine(
-                journal=journal,
-                account=Account.objects.get(name=accounts["debit"]),
-                debit=invoice.invoice_grand_total
-            ),
-            JournalLine(
-                journal=journal,
-                account=Account.objects.get(name=accounts["credit"]),
-                credit=invoice.invoice_grand_total
-            )
-        ])
+        return sync_invoice_journal(invoice, user)
 
 
  
@@ -234,6 +268,7 @@ class ClientInvoiceUpdater:
             raise ValidationError("Client invoice update requires items")
 
         with transaction.atomic():
+            previous_invoice_number = invoice.invoice_number
             # ✅ 1. Update main invoice table
             update_invoice_header(invoice, data)
 
@@ -282,6 +317,11 @@ class ClientInvoiceUpdater:
 
             # ✅ 3. Recalculate totals
             invoice.recalculate_total()
+            sync_invoice_journal(
+                invoice,
+                user,
+                previous_invoice_number=previous_invoice_number
+            )
 
         return invoice
 
@@ -305,6 +345,7 @@ class InternInvoiceUpdater:
         )
 
         with transaction.atomic():
+            previous_invoice_number = invoice.invoice_number
             # ✅ 1. Update main invoice table
             update_invoice_header(invoice, data)
 
@@ -325,6 +366,11 @@ class InternInvoiceUpdater:
 
             # ✅ 3. Recalculate totals
             invoice.recalculate_total()
+            sync_invoice_journal(
+                invoice,
+                user,
+                previous_invoice_number=previous_invoice_number
+            )
 
         return invoice
 

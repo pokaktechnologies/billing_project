@@ -3390,7 +3390,7 @@ class InvoiceDetailAPI(APIView):
             invoice = get_object_or_404(InvoiceModel, id=ioid)
         else:
             invoice = get_object_or_404(InvoiceModel, id=ioid, user=request.user)
-        invoice.delete()
+        InvoiceFactory.delete(invoice)
         return Response({"status": 1, "message": "Invoice deleted"})
 
 class PendingInvoiceListView(APIView):

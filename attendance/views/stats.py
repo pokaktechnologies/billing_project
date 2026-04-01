@@ -3,7 +3,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.utils import timezone
 from datetime import datetime
-from django.db.models import Avg, Count, Q
+from django.db.models import Avg, Count, Q, Sum
 from ..models import DailyAttendance
 from accounts.models import StaffProfile
 from .attendance import DailyAttendanceTodayView
@@ -91,6 +91,7 @@ class StaffWiseAttendanceStats(APIView):
         end_date = request.query_params.get("end_date")
         department = request.query_params.get("department")
         job_type = request.query_params.get("job_type")
+        staff_status = request.query_params.get("staff_status")
         staff_ids = [sid for sid in request.query_params.getlist("staff") if sid.isdigit()]  # supports ?staff=1&staff=2
 
         # -----------------------------
@@ -109,6 +110,10 @@ class StaffWiseAttendanceStats(APIView):
         # --- FILTER BY STAFF IDS ---
         if staff_ids:
             staff_qs = staff_qs.filter(id__in=staff_ids)
+
+        # --- FILTER BY staff_status ---
+        if staff_status:
+            staff_qs = staff_qs.filter(job_detail__status=staff_status)
 
         # -----------------------------
         # ATTENDANCE QUERY (CONSISTENT WITH STAFF FILTERS)
@@ -132,6 +137,7 @@ class StaffWiseAttendanceStats(APIView):
                 present_count=Count("id", filter=Q(status="full_day")),
                 half_day_count=Count("id", filter=Q(status="half_day")),
                 leave_count=Count("id", filter=Q(status="leave")),
+                total_working_hours=Sum("total_working_hours"),
             )
         }
 
@@ -154,6 +160,7 @@ class StaffWiseAttendanceStats(APIView):
                 "present_count": s.get("present_count", 0),
                 "half_day_count": s.get("half_day_count", 0),
                 "leave_count": s.get("leave_count", 0),
+                "total_working_hours": s.get("total_working_hours", 0),
             })
 
         return Response(results)
@@ -214,6 +221,7 @@ class AllStaffWiseAttendanceStats(APIView):
                 present_count=Count("id", filter=Q(status="full_day")),
                 half_day_count=Count("id", filter=Q(status="half_day")),
                 leave_count=Count("id", filter=Q(status="leave")),
+                total_working_hours=Sum("total_working_hours"),
             )
         }
         
@@ -237,6 +245,7 @@ class AllStaffWiseAttendanceStats(APIView):
                 "present_count": s.get("present_count", 0),
                 "half_day_count": s.get("half_day_count", 0),
                 "leave_count": s.get("leave_count", 0),
+                "total_working_hours": s.get("total_working_hours", 0),
             })
 
         return Response(results)

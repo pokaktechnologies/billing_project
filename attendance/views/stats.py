@@ -161,6 +161,7 @@ class StaffWiseAttendanceStats(APIView):
                 "half_day_count": s.get("half_day_count", 0),
                 "leave_count": s.get("leave_count", 0),
                 "total_working_hours": s.get("total_working_hours", 0),
+                "total_hours": s.get("total_records", 0) * 9,
             })
 
         return Response(results)
@@ -246,6 +247,7 @@ class AllStaffWiseAttendanceStats(APIView):
                 "half_day_count": s.get("half_day_count", 0),
                 "leave_count": s.get("leave_count", 0),
                 "total_working_hours": s.get("total_working_hours", 0),
+                "total_hours": s.get("total_records", 0) * 9,
             })
 
         return Response(results)

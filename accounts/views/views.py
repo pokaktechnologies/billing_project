@@ -2193,7 +2193,13 @@ class ReceiptView(BaseAPIView):
         
         serializer = ReceiptSerializer(receipt, data=request.data, partial=True)
         if serializer.is_valid():
-            serializer.save()
+            update_data = dict(serializer.validated_data)
+            if "debit_id" in request.data:
+                update_data["debit_id"] = request.data.get("debit_id")
+            if "credit_id" in request.data:
+                update_data["credit_id"] = request.data.get("credit_id")
+            updater = ReceiptFactory.get_updater(receipt)
+            updater.update(receipt, update_data, request.user)
             return Response({"status": "1", "message": "Receipt updated"}, status=200)
         return Response(serializer.errors, status=400)
 
@@ -2210,20 +2216,7 @@ class ReceiptView(BaseAPIView):
                 receipt = get_object_or_404(ReceiptModel, id=rec_id)
             else:
                 receipt = get_object_or_404(ReceiptModel, id=rec_id, user=request.user)
-            invoice = receipt.invoice
-            receipt_number = receipt.receipt_number
-
-            JournalEntry.objects.filter(
-                type='receipt',
-                type_number=receipt_number
-            ).delete()
-
-            JournalEntry.objects.filter(
-                type='tax_payment',
-                type_number=receipt_number + "_TAX"
-            ).delete()
-
-            receipt.delete()
+            ReceiptFactory.delete(receipt)
 
         return Response(
             {"status": "1", "message": "Receipt and related journals deleted successfully."},
@@ -3390,7 +3383,7 @@ class InvoiceDetailAPI(APIView):
             invoice = get_object_or_404(InvoiceModel, id=ioid)
         else:
             invoice = get_object_or_404(InvoiceModel, id=ioid, user=request.user)
-        invoice.delete()
+        InvoiceFactory.delete(invoice)
         return Response({"status": 1, "message": "Invoice deleted"})
 
 class PendingInvoiceListView(APIView):

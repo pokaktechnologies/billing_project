@@ -252,111 +252,189 @@ def get_trial_balance_data(from_date, to_date):
         }
     }
 
-def get_balance_sheet_data(from_date, to_date, net_profit=0):
-    lines = JournalLine.objects.filter(journal__date__range=(from_date, to_date), account__status='active')
+from collections import defaultdict
+from decimal import Decimal
+from django.db.models import Sum, Q, Value, DecimalField
+from django.db.models.functions import Coalesce
 
-    def get_balances(account_type):
-        qs = lines.filter(account__type=account_type)
-        annotated = qs.values(
-            'account__id', 'account__name', 'account__account_number',
-            'account__parent_account__id', 'account__parent_account__name', 'account__parent_account__account_number'
-        ).annotate(
-            debit_sum=Coalesce(Sum('debit'), Decimal(0)),
-            credit_sum=Coalesce(Sum('credit'), Decimal(0))
+
+def get_balance_sheet_data(from_date=None, to_date=None, net_profit=Decimal("0.00")):
+    """
+    Production-grade Balance Sheet generator
+    """
+
+    # -----------------------------
+    # FILTER JOURNAL LINES
+    # -----------------------------
+    line_filter = Q()
+    if from_date:
+        line_filter &= Q(journalline__journal__date__gte=from_date)
+    if to_date:
+        line_filter &= Q(journalline__journal__date__lte=to_date)
+
+    # -----------------------------
+    # FETCH ALL ACCOUNTS
+    # -----------------------------
+    all_accounts = list(
+        Account.objects.filter(
+            status="active",
+            type__in=["asset", "liability", "equity"]
         )
+        .annotate(
+            debit_sum=Coalesce(
+                Sum("journalline__debit", filter=line_filter),
+                Value(Decimal("0.00")),
+                output_field=DecimalField()
+            ),
+            credit_sum=Coalesce(
+                Sum("journalline__credit", filter=line_filter),
+                Value(Decimal("0.00")),
+                output_field=DecimalField()
+            ),
+        )
+        .order_by("account_number")
+    )
 
-        accounts_map = defaultdict(lambda: {"children": []})
-        total = Decimal(0)
+    # -----------------------------
+    # BUILD LOOKUP MAPS
+    # -----------------------------
+    account_map = {acc.id: acc for acc in all_accounts}
+    children_map = defaultdict(list)
 
-        for item in annotated:
-            debit, credit = item['debit_sum'], item['credit_sum']
-            net_amount = credit - debit if account_type in ['liability', 'equity'] else debit - credit
-            total += net_amount
+    for acc in all_accounts:
+        if acc.parent_account_id:
+            children_map[acc.parent_account_id].append(acc)
 
-            acc_id, acc_name, acc_num = item['account__id'], item['account__name'], item['account__account_number']
-            parent_id, parent_name, parent_num = item['account__parent_account__id'], item['account__parent_account__name'], item['account__parent_account__account_number']
-            
-            acc_data = {
-                "id": acc_id,
-                "account": acc_name,
-                "account_number": acc_num,
-                "amount": float(net_amount)
-            }
+    # -----------------------------
+    # BALANCE CALCULATION
+    # -----------------------------
+    def calculate_balance(account):
+        if account.type in Account.DEBIT_BALANCE_TYPES:
+            movement = account.debit_sum - account.credit_sum
+        else:
+            movement = account.credit_sum - account.debit_sum
 
-            if parent_id:
-                if parent_id not in accounts_map:
-                    accounts_map[parent_id] = {
-                        "id": parent_id,
-                        "parent": parent_name,
-                        "account_number": parent_num,
-                        "balance": {"account": parent_name, "amount": 0},
-                        "children": []
-                    }
-                accounts_map[parent_id]["children"].append(acc_data)
-            else:
-                accounts_map[acc_id]["balance"] = acc_data
-                accounts_map[acc_id]["id"] = acc_id
-                accounts_map[acc_id]["account_number"] = acc_num
+        return Decimal(account.opening_balance) + movement
 
-        structured = [
-            {
-                "id": data.get("id"),
-                "parent": data["balance"]["account"],
-                "account_number": data.get("account_number"),
-                "balance": data["balance"],
-                "children": data.get("children", [])
-            } for acc_id, data in accounts_map.items()
-        ]
-        return float(total), structured
+    # -----------------------------
+    # RECURSIVE TREE BUILDER
+    # -----------------------------
+    def build_tree(account):
+        own_balance = calculate_balance(account)
+        children = children_map.get(account.id, [])
 
-    assets_total, assets_accounts = get_balances('asset')
-    liabilities_total, liabilities_accounts = get_balances('liability')
-    equity_total, equity_accounts = get_balances('equity')
+        children_data = []
+        total_balance = own_balance
 
-    equity_total += float(net_profit)
+        for child in children:
+            child_node = build_tree(child)
+            total_balance += child_node["total"]
+            children_data.append(child_node)
+
+        return {
+            "id": account.id,
+            "account": account.name,
+            "account_number": account.account_number,
+            "own_balance": own_balance,   # direct balance
+            "total": total_balance,       # including children
+            "children": children_data,
+        }
+
+    # -----------------------------
+    # TYPE GROUPING
+    # -----------------------------
+    def build_section(account_type):
+        roots = [acc for acc in all_accounts if acc.type == account_type and acc.parent_account_id is None]
+
+        section_data = []
+        section_total = Decimal("0.00")
+
+        for root in roots:
+            node = build_tree(root)
+            section_total += node["total"]
+            section_data.append(node)
+
+        return section_total, section_data
+
+    # -----------------------------
+    # BUILD SECTIONS
+    # -----------------------------
+    assets_total, assets_accounts = build_section("asset")
+    liabilities_total, liabilities_accounts = build_section("liability")
+    equity_total, equity_accounts = build_section("equity")
+
+    # -----------------------------
+    # HANDLE NET PROFIT (SAFE WAY)
+    # -----------------------------
+    net_profit = Decimal(net_profit or 0)
+
+    # NOTE:
+    # Ideally net_profit should already exist in retained earnings.
+    # Only add if you KNOW it's not already included.
+    equity_total += net_profit
+
+    # -----------------------------
+    # FINAL CHECK
+    # -----------------------------
     check = assets_total - (liabilities_total + equity_total)
 
+    # -----------------------------
+    # METADATA
+    # -----------------------------
     def get_type_meta(code, label):
         prefix = Account.TYPE_PREFIX_MAP.get(code, "0")
-        return {"label": label, "number": f"{prefix}.0000"}
+        return {
+            "label": label,
+            "number": f"{prefix}.0000"
+        }
 
+    # -----------------------------
+    # RESPONSE
+    # -----------------------------
     return {
         "title": "Balance Sheet",
         "period": f"{from_date} to {to_date}",
+
         "assets": {
-            "total": assets_total, 
-            "metadata": get_type_meta('asset', 'Asset'),
-            "accounts": assets_accounts
+            "total": str(assets_total),
+            "metadata": get_type_meta("asset", "Assets"),
+            "accounts": assets_accounts,
         },
+
         "liabilities": {
-            "total": liabilities_total, 
-            "metadata": get_type_meta('liability', 'Liability'),
-            "accounts": liabilities_accounts
+            "total": str(liabilities_total),
+            "metadata": get_type_meta("liability", "Liabilities"),
+            "accounts": liabilities_accounts,
         },
+
         "equity": {
-            "total": equity_total, 
-            "metadata": get_type_meta('equity', 'Equity'),
-            "accounts": equity_accounts
+            "total": str(equity_total),
+            "metadata": get_type_meta("equity", "Equity"),
+            "accounts": equity_accounts,
         },
-        "net_profit_used": float(net_profit),
-        "check": check
+
+        "net_profit_used": str(net_profit),
+
+        # MUST be zero (or near zero tolerance)
+        "check": str(check),
     }
 
 
 def get_hierarchical_balances(filters):
     """
+    Expert Accounting Audit Version: 
     Returns total balances grouped by hierarchy (Type -> Parent -> Child).
-    Shows ALL types, parents, and children even if they have no journal entries (with 0 balance).
+    Ensures Parent Totals = Sum(Children) + Parent's Own Balance.
     Filters: type, parent_account, child_account, start_date, end_date.
     """
-    from django.db.models import Value, DecimalField
+    from django.db.models import Value, DecimalField, Sum
     from django.db.models.functions import Coalesce
     from django.db import models
+    from ..models import Account
     
-    # Helper for debit/credit normal types
-    debit_normal_types = {'asset', 'cost_of_sales', 'general_expenses'}
+    debit_normal_types = Account.DEBIT_BALANCE_TYPES
     
-    # Build date filter
+    # Build date filter for movement
     start_date = filters.get('start_date')
     end_date = filters.get('end_date')
     line_filter = models.Q()
@@ -365,8 +443,8 @@ def get_hierarchical_balances(filters):
     if end_date:
         line_filter &= models.Q(journalline__journal__date__lte=end_date)
     
-    # Get ALL active accounts with their totals (even those with 0)
-    all_accounts = Account.objects.filter(status='active').annotate(
+    # Get ALL active accounts with their totals via 1 efficient query
+    all_accounts = list(Account.objects.filter(status='active').annotate(
         total_debit=Coalesce(
             Sum('journalline__debit', filter=line_filter),
             Value(0), output_field=DecimalField()
@@ -375,59 +453,67 @@ def get_hierarchical_balances(filters):
             Sum('journalline__credit', filter=line_filter),
             Value(0), output_field=DecimalField()
         )
-    ).order_by('account_number')
+    ).order_by('account_number'))
     
-    # Apply optional filters
+    # 1. Classification & In-memory Grouping
     acc_type_filter = filters.get('type')
-    parent_id = filters.get('parent_account')
-    child_id = filters.get('child_account')
+    parent_id = str(filters.get('parent_account')) if filters.get('parent_account') else None
+    child_id = str(filters.get('child_account')) if filters.get('child_account') else None
     
-    # Build complete hierarchy for ALL types
+    parents_by_type = {code: [] for code, _ in Account.ACCOUNT_TYPES}
+    children_by_parent = {}
+    
+    for acc in all_accounts:
+        # Calculate individual account balance (respecting Normal Balance side)
+        if acc.type in debit_normal_types:
+            movement = float(acc.total_debit - acc.total_credit)
+        else:
+            movement = float(acc.total_credit - acc.total_debit)
+            
+        # Attach calculated balance to the object for later use
+        acc.calculated_balance = movement + (float(acc.opening_balance) if not start_date else 0)
+        
+        if acc.parent_account_id is None:
+            if acc_type_filter and acc.type != acc_type_filter: continue
+            if parent_id and str(acc.id) != parent_id: continue
+            parents_by_type.setdefault(acc.type, []).append(acc)
+        else:
+            if child_id and str(acc.id) != child_id: continue
+            children_by_parent.setdefault(acc.parent_account_id, []).append(acc)
+    
+    # 2. Build Structured Output
     formatted_output = {}
     
     for type_code, type_label in Account.ACCOUNT_TYPES:
-        # Skip if type filter is set and doesn't match
-        if acc_type_filter and acc_type_filter != type_code:
-            continue
+        if acc_type_filter and acc_type_filter != type_code: continue
             
         prefix = Account.TYPE_PREFIX_MAP.get(type_code, "0")
         type_number = f"{prefix}.0000"
         
-        # Get all parent accounts (Level 2) for this type
-        parent_accounts = all_accounts.filter(type=type_code, parent_account__isnull=True)
-        
-        # Apply parent filter if set
-        if parent_id:
-            parent_accounts = parent_accounts.filter(id=parent_id)
-        
+        parent_accounts = parents_by_type.get(type_code, [])
         parents_list = []
         type_total = 0.0
         
         for parent in parent_accounts:
-            # Get all children for this parent
-            children = all_accounts.filter(parent_account=parent)
+            children = children_by_parent.get(parent.id, [])
             
-            # Apply child filter if set
-            if child_id:
-                children = children.filter(id=child_id)
+            # Audit Check: Only hide parent if we are filtering by a specific child and it's not present
+            if child_id and not children:
+                continue
             
             children_list = []
-            parent_total = 0.0
+            # DERIVE parent_total: Sum(children) + Parent's own balance (if any)
+            # Ideally Parent is Level 2 and should be non-posting, but audit catch-all includes its balance.
+            parent_total = parent.calculated_balance
             
             for child in children:
-                # Calculate balance based on account type
-                if type_code in debit_normal_types:
-                    balance = float(child.total_debit - child.total_credit)
-                else:
-                    balance = float(child.total_credit - child.total_debit)
-                
                 children_list.append({
                     'id': child.id,
                     'account': child.name,
                     'account_number': child.account_number,
-                    'total': balance
+                    'total': child.calculated_balance
                 })
-                parent_total += balance
+                parent_total += child.calculated_balance
             
             parents_list.append({
                 'id': parent.id,
@@ -438,6 +524,10 @@ def get_hierarchical_balances(filters):
             })
             type_total += parent_total
         
+        # Omit types if they have no relevant parents due to child/parent filters
+        if (child_id or parent_id) and not parents_list:
+            continue
+            
         formatted_output[type_code] = {
             'label': type_label,
             'number': type_number,

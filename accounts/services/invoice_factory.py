@@ -1,4 +1,10 @@
-from .invoice import InternInvoiceService, ClientInvoiceService, ClientInvoiceUpdater, InternInvoiceUpdater
+from .invoice import (
+    InternInvoiceService,
+    ClientInvoiceService,
+    ClientInvoiceUpdater,
+    InternInvoiceUpdater,
+    delete_invoice_with_journal,
+)
 class InvoiceFactory:
 
     @staticmethod
@@ -23,3 +29,7 @@ class InvoiceFactory:
             return InternInvoiceUpdater()
 
         raise ValueError("Unsupported invoice type")
+
+    @staticmethod
+    def delete(invoice):
+        return delete_invoice_with_journal(invoice)

@@ -111,6 +111,10 @@ urlpatterns = [
     path('reports/client-statement/<int:client_id>/', ClientStatementDetailReportView.as_view(), name='client_statement_detail_report'),
     path('reports/intern-statement/', InternStatementReportView.as_view(),  name='intern_statement_report'),
 
+    path('reports/pending-invoices/<int:id>/', PendingInvoiceReportView.as_view(), name='pending_invoice_report'),
+    path('reports/client-outstanding/', ClientOutstandingReportView.as_view(), name='client_outstanding_report'),
+    path('reports/client-aging-report/',ClientMonthlyAgingReportView.as_view(), name='client_monthly_aging_report'),
+
     # Purchase 
     path('reports/purchase-order/', PurchaseOrderReportView.as_view(), name='purchase_report'),
     path('reports/material-receive/', MaterialReceiveReportView.as_view(), name='material_receive_report'),

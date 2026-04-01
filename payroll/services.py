@@ -7,7 +7,7 @@ from .models import AttendanceSummary, Payroll, PayrollPeriod
 from accounts.models import StaffProfile
 from django.db import transaction
 
-PAID_LEAVE_LIMIT = 2
+PAID_LEAVE_LIMIT = 1
 
 def generate_attendance_summary(staff, period):
     """

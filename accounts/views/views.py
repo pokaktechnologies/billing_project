@@ -2134,6 +2134,8 @@ class ReceiptView(BaseAPIView):
 
     def get(self, request, rec_id=None):
         receipt_type = request.query_params.get('type')
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
 
         if rec_id:
             if request.user.is_superuser:
@@ -2154,7 +2156,15 @@ class ReceiptView(BaseAPIView):
 
             if receipt_type:
                 receipts = receipts.filter(receipt_type=receipt_type)
-            
+
+            if start_date:
+                start_date = datetime.strptime(start_date, "%Y-%m-%d")
+                receipts = receipts.filter(created_at__gte=start_date)
+
+            if end_date:
+                end_date = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
+                receipts = receipts.filter(created_at__lt=end_date)
+                
             # optional pagination
             return paginate_response(receipts, request, ReceiptSerializer)
 
@@ -3310,6 +3320,8 @@ class InvoiceAPI(BaseAPIView):
     def get(self, request):
         invoice_type = request.query_params.get('type')
         client_id = request.query_params.get('client_id')
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
 
         if request.user.is_superuser:
             qs = InvoiceModel.objects.all()
@@ -3321,6 +3333,15 @@ class InvoiceAPI(BaseAPIView):
 
         if client_id:
             qs = qs.filter(client_id=client_id)
+
+
+        if start_date:
+            start_date = datetime.strptime(start_date, "%Y-%m-%d")
+            qs = qs.filter(created_at__gte=start_date)
+
+        if end_date:
+            end_date = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
+            qs = qs.filter(created_at__lt=end_date)
 
         return paginate_response(qs, request, InvoiceListSerializer)
 

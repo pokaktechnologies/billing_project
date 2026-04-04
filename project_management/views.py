@@ -144,6 +144,7 @@ class project_management(BaseAPIView):
     def post(self, request, format=None):
         serializer = ProjectManagementSerializer(data=request.data)
         members = request.data.get('members')  # Optional
+        boards = request.data.get('boards')  # Optional
 
         # Validate members only if provided
         if members:
@@ -163,29 +164,50 @@ class project_management(BaseAPIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
 
-            serializer.save(user=request.user)
+            try:
+                with transaction.atomic():
+                    serializer.save(user=request.user)
 
-            # Allocate members if any
-            if members:
-                for member in members:
-                    try:
-                        member_instance = Member.objects.get(pk=member['member'])
-                        stack_instance = Stack.objects.get(pk=member['stack'])
-                        ProjectMember.objects.create(
-                            project=serializer.instance,
-                            member=member_instance,
-                            stack=stack_instance
-                        )
-                    except Member.DoesNotExist:
-                        return Response(
-                            {"status": "0", "message": f"Member with ID {member['member']} not found"},
-                            status=status.HTTP_400_BAD_REQUEST
-                        )
-                    except Stack.DoesNotExist:
-                        return Response(
-                            {"status": "0", "message": f"Stack with ID {member['stack']} not found"},
-                            status=status.HTTP_400_BAD_REQUEST
-                        )
+                    # Allocate members if any
+                    if members:
+                        for member in members:
+                            try:
+                                member_instance = Member.objects.get(pk=member['member'])
+                                stack_instance = Stack.objects.get(pk=member['stack'])
+                                ProjectMember.objects.create(
+                                    project=serializer.instance,
+                                    member=member_instance,
+                                    stack=stack_instance
+                                )
+                            except Member.DoesNotExist:
+                                raise ValueError(f"Member with ID {member['member']} not found")
+                            except Stack.DoesNotExist:
+                                raise ValueError(f"Stack with ID {member['stack']} not found")
+                    
+                    # Create task boards if any
+                    if boards:
+                        if not isinstance(boards, list):
+                            raise ValueError("Boards should be provided as a list")
+                        for board in boards:
+                            name = board.get('name')
+                            if not name:
+                                raise ValueError("TaskBoard name is required")
+                            start_date = board.get('start_date') or None
+                            end_date = board.get('end_date') or None
+                            try:
+                                TaskBoard.objects.create(
+                                    project=serializer.instance,
+                                    name=name,
+                                    start_date=start_date,
+                                    end_date=end_date
+                                )
+                            except Exception as ex:
+                                raise ValueError(f"Invalid TaskBoard data: {str(ex)}")
+            except ValueError as e:
+                return Response(
+                    {"status": "0", "message": str(e)},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
             return Response(
                 {"status": "1", "message": "Project created successfully", "project_id": serializer.data['id']},
@@ -671,6 +693,18 @@ class ProjectMembersViewListByProjectView(APIView):
             )
         project_members = ProjectMember.objects.filter(project__id=project_id).order_by('-created_at')
         serializer = ProjectMemberSerializer(project_members, many=True)
+        return Response(
+            {"status": "1", "message": "success", "data": serializer.data},
+            status=status.HTTP_200_OK
+        )
+
+class TaskBoardListByProjectView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, project_id):
+        boards = TaskBoard.objects.filter(project__id=project_id).order_by('-created_at')
+        serializer = TaskBoardSerializer(boards, many=True)
         return Response(
             {"status": "1", "message": "success", "data": serializer.data},
             status=status.HTTP_200_OK
@@ -2487,3 +2521,43 @@ class ContractReportView(APIView):
             {"status": "1", "message": "success", "data": serializer.data},
             status=status.HTTP_200_OK
         )
+
+
+
+
+class NumberGeneratorView(APIView):
+    def generate_next_number(self, model, field_name: str, prefix: str, length: int) -> str:
+        start = 10**(length - 1) + 1  # e.g., for length 6 -> 100001
+
+        # Filter by prefix and order descending to get the latest number
+        latest_order = model.objects.filter(**{f"{field_name}__startswith": f"{prefix}|"}).order_by(f"-{field_name}").first()
+
+        if latest_order:
+            latest_number_str = getattr(latest_order, field_name).split('|')[1]
+            next_number = int(latest_number_str) + 1
+        else:
+            next_number = start  # Start from e.g., 100001
+
+        return f"{prefix}|{next_number:0{length}d}"
+
+    def get(self, request):
+        req_type = request.query_params.get('type') or request.query_params.get('type ')
+        if isinstance(req_type, str):
+            req_type = req_type.strip().upper()
+
+        if req_type == "PR":
+            generated_number = self.generate_next_number(ProjectManagement, "project_number", "PR", 6)
+        elif req_type == "CN":
+            generated_number = self.generate_next_number(ClientContract, "contract_number", "CN", 6)
+        else:
+            return Response({
+                'status': '0',
+                'message': 'Invalid type.',
+                'number': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            'status': '1',
+            'message': 'Success',
+            'number': generated_number
+        }, status=status.HTTP_200_OK)

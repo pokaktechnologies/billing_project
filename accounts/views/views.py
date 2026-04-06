@@ -2159,11 +2159,11 @@ class ReceiptView(BaseAPIView):
 
             if start_date:
                 start_date = datetime.strptime(start_date, "%Y-%m-%d")
-                receipts = receipts.filter(created_at__gte=start_date)
+                receipts = receipts.filter(receipt_date__gte=start_date)
 
             if end_date:
                 end_date = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
-                receipts = receipts.filter(created_at__lt=end_date)
+                receipts = receipts.filter(receipt_date__lt=end_date)
                 
             # optional pagination
             return paginate_response(receipts, request, ReceiptSerializer)
@@ -3337,11 +3337,11 @@ class InvoiceAPI(BaseAPIView):
 
         if start_date:
             start_date = datetime.strptime(start_date, "%Y-%m-%d")
-            qs = qs.filter(created_at__gte=start_date)
+            qs = qs.filter(invoice_date__gte=start_date)
 
         if end_date:
             end_date = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
-            qs = qs.filter(created_at__lt=end_date)
+            qs = qs.filter(invoice_date__lt=end_date)
 
         return paginate_response(qs, request, InvoiceListSerializer)
 

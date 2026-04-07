@@ -46,3 +46,19 @@ class ManagementStaffSignatureSerializer(serializers.ModelSerializer):
 
     def get_staff_name(self, obj):
         return f"{obj.staff.user.first_name} {obj.staff.user.last_name}"
+
+
+class PublicCertificateRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Certificate
+        fields = [
+            'id', 'full_name', 'email', 'category', 
+            'start_date', 'end_date', 'designation', 
+            'proof_document', 'requested_at'
+        ]
+        read_only_fields = ['id', 'requested_at']
+
+    def validate(self, data):
+        if 'end_date' in data and 'start_date' in data and data['end_date'] < data['start_date']:
+            raise serializers.ValidationError("End date must be after start date.")
+        return data

@@ -8,7 +8,11 @@ from rest_framework.permissions import IsAuthenticated
 
 from activity_logs.base_view import BaseAPIView, BaseGenericAPIView
 from .models import Certificate
-from .serializers import CertificateSerializer, ManagementStaffSignatureSerializer
+from .serializers import (
+    CertificateSerializer, 
+    ManagementStaffSignatureSerializer, 
+    PublicCertificateRequestSerializer
+)
 from accounts.permissions import HasModulePermission
 from accounts.models import JobDetail, StaffProfile, CustomUser  # Import here to avoid circular imports
 import base64
@@ -292,3 +296,13 @@ class CertificateReportView(views.APIView):
 
         serializer = CertificateSerializer(certificates, many=True)
         return Response(serializer.data)
+
+
+class PublicCertificateRequestView(generics.CreateAPIView):
+    queryset = Certificate.objects.all()
+    serializer_class = PublicCertificateRequestSerializer
+    permission_classes = [permissions.AllowAny]
+
+    def perform_create(self, serializer):
+        # Ensure status is always Pending for public requests
+        serializer.save(status='Pending')

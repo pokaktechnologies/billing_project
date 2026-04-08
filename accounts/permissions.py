@@ -155,6 +155,17 @@ PARENT_MODULE_MAP = [
         "submodules": [
             "setup"
         ]
+    },
+
+    {
+        "name": "dashboard",
+        "submodules": [
+            "hr_dashboard",
+            "intern_dashboard",
+            "bde_dashboard",
+            "project_manager_dashboard",
+            "developer_dashboard"
+        ]
     }
 
 ]

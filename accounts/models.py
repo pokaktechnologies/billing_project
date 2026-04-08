@@ -1228,6 +1228,13 @@ class ModulePermission(models.Model):
         ("hr_reports", "HR Reports"),
         ("internship_reports", "Internship Reports"),
         ("inventory_reports", "Inventory Reports"),
+
+        # DASHBOARD
+        ("hr_dashboard", "HR Dashboard"),
+        ("intern_dashboard", "Intern Dashboard"),
+        ("bde_dashboard", "BDE Dashboard"),
+        ("project_manager_dashboard", "Project Manager Dashboard"),
+        ("developer_dashboard", "Developer Dashboard"),
     ]
 
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="module_permissions")

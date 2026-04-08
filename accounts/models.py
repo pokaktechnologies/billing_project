@@ -1235,6 +1235,24 @@ class ModulePermission(models.Model):
         ("bde_dashboard", "BDE Dashboard"),
         ("project_manager_dashboard", "Project Manager Dashboard"),
         ("developer_dashboard", "Developer Dashboard"),
+
+        # TASK MANAGEMENT
+        ('dashboard', "Dashboard"),
+        ('courses', "Courses"),
+        ('interns', "Interns"),
+        ('faculty', "Faculty"),
+        ('payments', "Payments"),
+
+        # Faculty Management
+        ("all_taskd", "All Tasks"),
+        ("my_courses", "My Courses"),
+        ("interns", "Interns"),
+        ("submissions", "Submissions"),
+
+        # Internship Pro
+        ("my_tasks", "My Tasks"),
+        ("study_materials", "Study Materials"),
+        ("payments", "Payments")
     ]
 
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="module_permissions")

@@ -166,6 +166,36 @@ PARENT_MODULE_MAP = [
             "project_manager_dashboard",
             "developer_dashboard"
         ]
+    },
+
+    {
+        "name": "Task Management",
+        "submodules": [
+            "Dashboard",
+            "Courses",
+            "Interns",
+            "Faculty",
+            "Payments"
+        ]
+    },
+
+    {
+        "name": "Faculty Management",
+        "submodules": [
+            "All Tasks",
+            "My Courses",
+            "Interns",
+            "Submissions"
+        ]
+    },
+
+    {
+        "name": "Internship Pro",
+        "submodules": [
+            "My Tasks",
+            "Study Materials",
+            "Payments"
+        ]
     }
 
 ]

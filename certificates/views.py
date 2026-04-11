@@ -7,11 +7,12 @@ from django.http import HttpResponse
 from rest_framework.permissions import IsAuthenticated
 
 from activity_logs.base_view import BaseAPIView, BaseGenericAPIView
-from .models import Certificate
+from .models import Certificate, CertificateHistory
 from .serializers import (
     CertificateSerializer, 
     ManagementStaffSignatureSerializer, 
-    PublicCertificateRequestSerializer
+    PublicCertificateRequestSerializer,
+    CertificateHistorySerializer
 )
 from accounts.permissions import HasModulePermission
 from accounts.models import JobDetail, StaffProfile, CustomUser  # Import here to avoid circular imports
@@ -306,3 +307,10 @@ class PublicCertificateRequestView(generics.CreateAPIView):
     def perform_create(self, serializer):
         # Ensure status is always Pending for public requests
         serializer.save(status='Pending')
+
+class CertificateHistoryListCreateView(BaseGenericAPIView, generics.ListCreateAPIView):
+    queryset = CertificateHistory.objects.all().order_by('-created_at')
+    serializer_class = CertificateHistorySerializer
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = 'certificate'
+

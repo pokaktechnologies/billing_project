@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Certificate
+from .models import Certificate, CertificateHistory
 from django.utils import timezone
 import logging
 from accounts.models import JobDetail
@@ -62,3 +62,8 @@ class PublicCertificateRequestSerializer(serializers.ModelSerializer):
         if 'end_date' in data and 'start_date' in data and data['end_date'] < data['start_date']:
             raise serializers.ValidationError("End date must be after start date.")
         return data
+
+class CertificateHistorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CertificateHistory
+        fields = '__all__'

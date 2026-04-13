@@ -22,11 +22,11 @@ class Student(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
 
     def get_full_name(self):
-        user = self.user.user
+        user = self.profile.user
         return f"{user.first_name} {user.last_name}"
     
     def __str__(self):
-        return self.user.user.first_name
+        return self.profile.user.first_name
 
 class Faculty(models.Model):
     user = models.OneToOneField(StaffProfile, on_delete=models.CASCADE, related_name="faculty_profile")

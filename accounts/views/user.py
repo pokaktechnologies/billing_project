@@ -16,14 +16,16 @@ from django.core.mail import send_mail
 import random
 from django.conf import settings
 from django.db.models import Q
-
+from hr_section.models import Enquiry
+from hr_section.serializers import EnquirySerializer
+from project_management.models import TaskAssign
 from attendance.models import DailyAttendance
 from attendance.serializers import DailyAttendanceSerializer, DailyAttendanceSessionDetailSerializer
 from django.utils.dateparse import parse_date
-from datetime import datetime
+from datetime import datetime,date
 
 from project_management.models import ProjectManagement, Task
-
+from project_management.serializers import ProjectManagerSerializer, AssignedTaskListSerializer
 
 class DepartmentView(BaseAPIView):
     permission_classes = [IsAuthenticated]
@@ -775,3 +777,93 @@ class GraphicDesignerDashboardView(APIView):
                 },
             }
         })
+
+class AdminDashboardView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        response_data = {
+            "user": {
+                "id": user.id,
+                "name": user.get_full_name(),
+                "email": user.email,
+                "is_staff": user.is_staff,
+            }
+        }
+
+        # hr dashboard datas
+        enquiries = Enquiry.objects.all()
+        staff = StaffProfile.objects.filter(job_detail__isnull=False)
+
+        staff_on_leave = StaffProfile.objects.filter(
+            daily_attendance__status="leave",
+            daily_attendance__date=timezone.localdate()
+        ).distinct()
+
+        hr_data = {
+            "enquiries": {
+                "total_enquiries": enquiries.count(),
+                "total_new_enquiries": enquiries.filter(status='new').count(),
+                "total_reviewed_enquiries": enquiries.filter(status='reviewed').count(),
+                "total_responded_enquiries": enquiries.filter(status='responded').count(),
+                "recent_enquiries": EnquirySerializer(enquiries[:3], many=True).data,
+            },
+            "staff": {
+                "total_staff": staff.count(),
+                "active_staff": staff.filter(job_detail__status='active').count(),
+                "on_leave": staff_on_leave.count(),
+                "staff_on_leave_list": StaffProfileSerializer(staff_on_leave[:3], many=True).data,
+            },
+            "attendance": {
+                "present_staff": staff.count() - staff_on_leave.count(),
+                "absent_staff": staff_on_leave.count(),
+                "late_staff": DailyAttendance.objects.filter(
+                    sessions__status='late',
+                    date=timezone.localdate()
+                ).distinct().count(),
+            }
+        }
+
+        # project manager dashborad datas
+        total_projects = ProjectManagement.objects.all().order_by("-created_at")
+
+        assigned_tasks = TaskAssign.objects.select_related(
+            "task", "assigned_to__member", "assigned_to__project"
+        ).all().order_by("-assigned_at")
+
+        pm_data = {
+            "stats": {
+                "total_projects": total_projects.filter(
+                    status__in=["not_started", "in_progress", "on_hold"]
+                ).count(),
+                "completed_tasks": assigned_tasks.filter(task__status="completed").count(),
+                "pending_tasks": assigned_tasks.filter(
+                    task__status__in=["not_started", "in_progress", "on_hold"]
+                ).count(),
+                "overdue_tasks": assigned_tasks.filter(
+                    task__end_date__lt=date.today(),
+                    task__status__in=["not_started", "in_progress", "on_hold"]
+                ).count(),
+            },
+            "projects": ProjectManagerSerializer(total_projects[:3], many=True).data,
+            "assigned_tasks": AssignedTaskListSerializer(assigned_tasks[:3], many=True).data,
+            "submitted_tasks": AssignedTaskListSerializer(
+                assigned_tasks.filter(task__status="completed")[:3], many=True
+            ).data,
+        }
+
+        return Response({
+            "status": "1",
+            "message": "Admin dashboard fetched successfully",
+            "data": {
+                "user": {
+                    "id": user.id,
+                    "name": user.get_full_name(),
+                    "email": user.email,
+                },
+                "hr_dashboard": hr_data,
+                "project_dashboard": pm_data
+            }
+        }, status=status.HTTP_200_OK)

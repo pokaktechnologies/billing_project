@@ -21,17 +21,24 @@ class InstallmentItemSerializer(serializers.ModelSerializer):
 
 class InstallmentPlanSerializer(serializers.ModelSerializer):
     items = InstallmentItemSerializer(many=True)
+    course_total_fee = serializers.DecimalField(
+        source="course.total_fee",
+        max_digits=10,
+        decimal_places=2
+    )
+
 
     class Meta:
         model = InstallmentPlan
         fields = [
             "id",
             "course",
+            "course_total_fee",
             "total_installments",
             "is_active",
             "items",
         ]
-        read_only_fields = ["course"]
+        read_only_fields = ["course", "total_installments"]
 
     def create(self, validated_data):
         items_data = validated_data.pop("items")
@@ -47,6 +54,9 @@ class CourseSerializer(serializers.ModelSerializer):
         source="department.name",
         read_only=True
     )
+
+    sudents_count = serializers.SerializerMethodField()
+
     installment_plans = InstallmentPlanSerializer(
         many=True,
         required=False
@@ -65,6 +75,7 @@ class CourseSerializer(serializers.ModelSerializer):
             "is_active",
             "department",
             "department_name",
+            'sudents_count',
             "total_fee",
             "installment_plans",
             "created_at",
@@ -75,6 +86,9 @@ class CourseSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["created_at", "sgst", "cgst", "total_tax_percentage"]
 
+
+    def get_sudents_count(self, obj):
+        return obj.students.count()
 
     # ---------- TAX LOGIC ----------
     def get_sgst(self, obj):
@@ -258,8 +272,13 @@ class FacultySerializer(serializers.ModelSerializer):
         fields = ["id", "user", "name"]
 
 class CourseFacultySerializer(serializers.ModelSerializer):
-    faculty_name = serializers.CharField(source="get_full_name", read_only=True)
+    faculty_name    = serializers.CharField(source="get_full_name", read_only=True)
     department_name = serializers.CharField(source="department.name", read_only=True)
+    email           = serializers.CharField(source="faculty.user.staff_email", read_only=True)
+    phone_number    = serializers.CharField(source="faculty.user.phone_number", read_only=True)
+
+    course_count    = serializers.IntegerField(read_only=True)
+    students_count  = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = CourseFaculty
@@ -269,9 +288,12 @@ class CourseFacultySerializer(serializers.ModelSerializer):
             "faculty_name",
             "department",
             "department_name",
-            "is_active",   # 🔥 add this
+            "email",
+            "phone_number",
+            "course_count",
+            "students_count",
+            "is_active",
         ]
-
 #Batch
 class BatchSerializer(serializers.ModelSerializer):
     faculty_name = serializers.CharField(source="faculty.get_full_name", read_only=True)
@@ -339,18 +361,30 @@ from django.db import transaction
 
 class StudentSerializer(serializers.ModelSerializer):
     profile = StaffProfileSerializer(required=False, allow_null=True)
+    course_title = serializers.CharField(source="course.title", read_only=True)
+    batch_number = serializers.CharField(source="batch.batch_number", read_only=True)
+    center_name = serializers.CharField(source="center.name", read_only=True)
+    councellor_name = serializers.CharField(source="councellor.get_full_name", read_only=True)
+    payment_installment_count = serializers.CharField(source="payment_type.total_installments", read_only=True)
     class Meta:
         model = Student
         fields = [
             "id",
             "profile",
+            "student_id",
             "center",
+            "center_name",
             "course",
+            "course_title",
             "batch",
+            "batch_number",
             "payment_type",
+            "payment_installment_count",
             "start_date",
             "councellor",
-            "is_active"
+            "councellor_name",
+            "is_active",
+            "created_at"
         ]
         extra_kwargs = {
             "profile": {"required": False}
@@ -456,9 +490,25 @@ class StudentSerializer(serializers.ModelSerializer):
             return instance
         
 class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
+    sudent_name = serializers.CharField(source="student.profile.get_full_name", read_only=True)
+    course_title = serializers.CharField(source="course.title", read_only=True)
+    batch_number = serializers.CharField(source="batch.batch_number", read_only=True)
+    total_installments = serializers.CharField(source="installment_plan.total_installments", read_only=True)
+
     class Meta:
         model = StudentCourseEnrollment
-        fields = ["id", "student", "course", "batch", "installment_plan"]
+        fields = [
+            "id",
+            "student",
+            "sudent_name",
+            "course",
+            "course_title",
+            "batch",
+            "batch_number",
+            "installment_plan",
+            "total_installments",
+            "enrollment_date"
+        ]
         read_only_fields = ["course"]
 
     def validate(self, attrs):

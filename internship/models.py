@@ -19,6 +19,7 @@ class Student(models.Model):
     start_date = models.DateField()
     is_active = models.BooleanField(default=True)
     councellor = models.ForeignKey(SalesPerson, on_delete=models.SET_NULL, null=True, blank=True, related_name="counselled_students")
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
 
     def get_full_name(self):
         user = self.user.user

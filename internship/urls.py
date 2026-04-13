@@ -67,6 +67,7 @@ intern_patterns = [
 internship_admin_patterns = [
     path('course/', internship_admin.CourseListCreateAPIView.as_view(), name='instructor-course-list'),
     path('course/<int:pk>/', internship_admin.CourseRetrieveUpdateDestroyAPIView.as_view(), name='instructor-course-detail'),
+    path("installment-plan/", internship_admin.InstallmentListAPIView.as_view()),
     path("installment-plan/<int:pk>/", internship_admin.InstallmentPlanUpdateAPIView.as_view()),
 
     #Faculty

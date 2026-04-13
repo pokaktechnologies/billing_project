@@ -5,6 +5,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.filters import SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.parsers import MultiPartParser, FormParser
+from django.db.models import Count
+
 
 
 # ===== Course Views ======
@@ -18,7 +20,7 @@ class CourseListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = CourseSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter]
-    filterset_fields = ['department','is_active']
+    filterset_fields = ['department','is_active', "students"]
     search_fields = ['title', 'description', 'department__name']
 
 
@@ -38,6 +40,13 @@ class InstallmentPlanUpdateAPIView(generics.UpdateAPIView):
     serializer_class = InstallmentPlanUpdateSerializer
     permission_classes = [IsAuthenticated]
 
+class InstallmentListAPIView(generics.ListAPIView):
+    queryset = InstallmentPlan.objects.prefetch_related("items").all()
+    serializer_class = InstallmentPlanSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ["course"]
+
 #Faculty
 class FacultyListCreateAPIView(generics.ListCreateAPIView):
     queryset = Faculty.objects.all()
@@ -45,10 +54,26 @@ class FacultyListCreateAPIView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
 
 class CourseFacultyListCreateAPIView(generics.ListCreateAPIView):
-    queryset = CourseFaculty.objects.select_related("faculty", "department").all()
+    queryset = CourseFaculty.objects.select_related(
+        "faculty", "department"
+    ).annotate(
+        course_count=Count("faculty__course_faculties", distinct=True),
+        students_count=Count("batches__students", distinct=True)
+    )
+
     serializer_class = CourseFacultySerializer
     permission_classes = [IsAuthenticated]
-
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    filterset_fields = {
+            "department": ["exact"],
+            "batches__course": ["exact"],
+            "batches": ["exact"],
+        }
+    search_fields = [
+    "faculty__user__user__first_name",
+    "faculty__user__user__last_name",
+    "department__name"
+        ]
 class CourseFacultyRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     queryset = CourseFaculty.objects.select_related("faculty", "department").all()
     serializer_class = CourseFacultySerializer
@@ -124,7 +149,7 @@ class StudentListCreateAPIView(generics.ListCreateAPIView):
         "profile__user__last_name",
         "profile__user__email"
     ]
-    filterset_fields = ["course", "batch", "is_active"]
+    filterset_fields = ["course", "batch", "center", "is_active"]
 
 class StudentRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Student.objects.select_related(
@@ -145,6 +170,8 @@ class StudentCourseEnrollmentView(generics.ListCreateAPIView):
     queryset = StudentCourseEnrollment.objects.select_related("student", "batch", "installment_plan").all()
     serializer_class = StudentCourseEnrollmentSerializer
     permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    filterset_fields = ["course", "batch"]
 
 class StudentCourseEnrollmentDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = StudentCourseEnrollment.objects.select_related("student", "batch", "installment_plan").all()

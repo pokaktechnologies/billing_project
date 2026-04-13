@@ -13,6 +13,8 @@ from attendance.models import DailyAttendance
 from django_filters.rest_framework import DjangoFilterBackend
 from decimal import Decimal
 from datetime import timedelta
+from rest_framework.filters import SearchFilter
+
 
 
 # ===== Course Views ======
@@ -338,6 +340,9 @@ class StudyMaterialAPIView(generics.ListCreateAPIView):
     queryset = StudyMaterial.objects.all()
     serializer_class = StudyMaterialSerializer
     permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    filterset_fields = ['course', 'batch', 'material_type']
+    search_fields = ['title', 'description']
     
 
 class StudyMaterialDetailAPIView(generics.RetrieveUpdateDestroyAPIView):

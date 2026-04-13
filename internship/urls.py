@@ -82,6 +82,7 @@ internship_admin_patterns = [
 
     path("students/", internship_admin.StudentListCreateAPIView.as_view(), name="student-list-create"),
     path("students/<int:id>/", internship_admin.StudentRetrieveUpdateDestroyAPIView.as_view(), name="student-detail"),
+    path("students/<int:pk>/credentials/", internship_admin.StudentCredentialsAPIView.as_view(), name="student-credentials"),
 
     path("enrollments/", internship_admin.StudentCourseEnrollmentView.as_view(), name="student-course-enrollment-list-create"),
     path("enrollments/<int:pk>/", internship_admin.StudentCourseEnrollmentDetailView.as_view(), name="student-course-enrollment-detail"),

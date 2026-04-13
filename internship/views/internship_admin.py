@@ -6,6 +6,10 @@ from rest_framework.filters import SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.db.models import Count
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.db import transaction
 
 
 
@@ -27,7 +31,6 @@ class CourseListCreateAPIView(generics.ListCreateAPIView):
     }
                         
     search_fields = ['title', 'description', 'department__name']
-
 
 
 class CourseRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
@@ -166,6 +169,68 @@ class StudentListCreateAPIView(generics.ListCreateAPIView):
         "is_active": ["exact"],
         "batch__faculty": ["exact"],
     }
+
+
+class StudentCredentialsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        try:
+            student = Student.objects.select_related("profile__user").get(pk=pk)
+        except Student.DoesNotExist:
+            return Response({"error": "Student not found"}, status=404)
+
+        user = student.profile.user
+
+        return Response({
+            "student_id": student.id,
+            "email": user.email,
+            "password": "********"  # Do not return the actual password
+        }, status=200)
+
+    def patch(self, request, pk):
+        try:
+            student = Student.objects.select_related("profile__user").get(pk=pk)
+        except Student.DoesNotExist:
+            return Response({"error": "Student not found"}, status=404)
+
+        user = student.profile.user
+
+        email = request.data.get("email")
+        password = request.data.get("password")
+        confirm_password = request.data.get("confirm_password")
+
+        updated_fields = []
+
+        with transaction.atomic():
+
+            # Email Update
+            if email:
+                if CustomUser.objects.filter(email=email).exclude(id=user.id).exists():
+                    return Response(
+                        {"error": "Email already exists"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                user.email = email
+                updated_fields.append("email")
+
+            # Password Update
+            if password:
+                if password != confirm_password:
+                    return Response(
+                        {"error": "Passwords do not match"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                user.set_password(password)
+                updated_fields.append("password")
+
+            user.save()
+
+        return Response({
+            "message": "Student credentials updated successfully",
+            "updated_fields": updated_fields
+        }, status=200)
+
 class StudentRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Student.objects.select_related(
         "profile__user",

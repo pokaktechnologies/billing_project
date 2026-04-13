@@ -487,7 +487,8 @@ class StudentSerializer(serializers.ModelSerializer):
 
                     user.save()
 
-            return instance
+            if not profile_data:
+                return instance
         
 class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
     sudent_name = serializers.CharField(source="student.profile.get_full_name", read_only=True)

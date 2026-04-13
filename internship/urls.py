@@ -1,5 +1,5 @@
 from django.urls import path, include
-from .views import instructor, intern, report_view
+from .views import instructor, intern, report_view, internship_admin
 
 instructor_patterns = [
     path('course/', instructor.InstructorCourseListCreateAPIView.as_view(), name='instructor-course-list'),
@@ -61,9 +61,32 @@ intern_patterns = [
     path('payments/', intern.MyCoursePaymentListAPIView.as_view()),
 
     #Dashboard
-    path('dashaboard/',intern.InternDashboardAPIView.as_view()),
-    
-   
+    path('dashaboard/',intern.InternDashboardAPIView.as_view()),   
+]
+
+internship_admin_patterns = [
+    path('course/', internship_admin.CourseListCreateAPIView.as_view(), name='instructor-course-list'),
+    path('course/<int:pk>/', internship_admin.CourseRetrieveUpdateDestroyAPIView.as_view(), name='instructor-course-detail'),
+    path("installment-plan/<int:pk>/", internship_admin.InstallmentPlanUpdateAPIView.as_view()),
+
+    #Faculty
+    path('faculty/', internship_admin.FacultyListCreateAPIView.as_view(), name='faculty-list'),
+    path('course-faculty/', internship_admin.CourseFacultyListCreateAPIView.as_view(), name='course-faculty-list'),
+    path('course-faculty/<int:pk>/', internship_admin.CourseFacultyRetrieveUpdateDestroyAPIView.as_view(), name='course-faculty-detail'),
+
+    #Batch
+    path('batch/preview/', internship_admin.BatchNumberPreviewAPIView.as_view(), name='batch-number-preview'),
+    path('batch/', internship_admin.BatchListCreateAPIView.as_view(), name='batch-list'),
+    path('batch/<int:pk>/', internship_admin.BatchRetrieveUpdateDestroyAPIView.as_view(), name='batch-detail'),
+
+    path("students/", internship_admin.StudentListCreateAPIView.as_view(), name="student-list-create"),
+    path("students/<int:id>/", internship_admin.StudentRetrieveUpdateDestroyAPIView.as_view(), name="student-detail"),
+
+    path("enrollments/", internship_admin.StudentCourseEnrollmentView.as_view(), name="student-course-enrollment-list-create"),
+    path("enrollments/<int:pk>/", internship_admin.StudentCourseEnrollmentDetailView.as_view(), name="student-course-enrollment-detail"),
+
+    path("centers/", internship_admin.CenterListCreateAPIView.as_view(), name="center-list-create"),
+    path("centers/<int:pk>/", internship_admin.CenterRetrieveUpdateDestroyAPIView.as_view(), name="center-detail"),
 ]
 
 report_patterns = [
@@ -79,6 +102,7 @@ report_patterns = [
 urlpatterns = [
     path('instructor/', include((instructor_patterns))),
     path('intern/', include((intern_patterns))),
+    path('', include((internship_admin_patterns))),
     path('report/', include(report_patterns)),
 ]
 

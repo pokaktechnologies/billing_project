@@ -351,15 +351,21 @@ class StudyMaterialDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
 class CourseStudyMaterialListAPIView(generics.ListAPIView):
     serializer_class = StudyMaterialSerializer
     permission_classes = [IsAuthenticated]
-    
 
     def get_queryset(self):
         course_id = self.kwargs.get("course_id")
+        batch_id = self.kwargs.get("batch_id")
 
         title = self.request.query_params.get("title")
         material_type = self.request.query_params.get("type") 
 
-        queryset = StudyMaterial.objects.filter(course=course_id).order_by("-created_at")
+        queryset = StudyMaterial.objects.all()
+
+        if course_id:
+            queryset = queryset.filter(course_id=course_id)
+
+        if batch_id:
+            queryset = queryset.filter(batch_id=batch_id)
 
         if title:
             queryset = queryset.filter(title__icontains=title)
@@ -367,8 +373,8 @@ class CourseStudyMaterialListAPIView(generics.ListAPIView):
         if material_type:
             queryset = queryset.filter(material_type=material_type)
 
-        return queryset
-
+        return queryset.order_by("-created_at")
+    
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
         serializer = self.get_serializer(queryset, many=True)

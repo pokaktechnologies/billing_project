@@ -553,6 +553,10 @@ class StudyMaterialSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         file = attrs.get("file")
         url = attrs.get("url")
+        batch = attrs.get("batch") or getattr(self.instance, "batch", None)
+
+        if not batch:
+            raise serializers.ValidationError("Batch is required for study material.")
 
         if not file and not url:
             raise serializers.ValidationError("Either file or url is required.")

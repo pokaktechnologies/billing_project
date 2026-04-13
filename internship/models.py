@@ -1,6 +1,51 @@
 from django.db import models
-from accounts.models import Department, StaffProfile
+from accounts.models import Department, SalesPerson, StaffProfile
 
+
+class Center(models.Model):
+    name = models.CharField(max_length=100)
+    country = models.ForeignKey('accounts.Country', on_delete=models.SET_NULL, null=True, blank=True)
+    state = models.ForeignKey('accounts.State', on_delete=models.SET_NULL, null=True, blank=True)
+    address = models.TextField(blank=True, null=True)
+    def __str__(self):
+        return self.name
+class Student(models.Model):
+    profile  = models.OneToOneField(StaffProfile, on_delete=models.CASCADE, related_name="student_profile")
+    student_id = models.CharField(max_length=20, unique=True)
+    center = models.ForeignKey(Center, on_delete=models.SET_NULL, null=True, blank=True, related_name="students")
+    course = models.ForeignKey('Course', on_delete=models.SET_NULL, null=True, blank=True, related_name="students")
+    batch = models.ForeignKey('Batch', on_delete=models.SET_NULL, null=True, blank=True, related_name="students")
+    payment_type = models.ForeignKey('InstallmentPlan', on_delete=models.SET_NULL, null=True, blank=True, related_name="students")
+    start_date = models.DateField()
+    is_active = models.BooleanField(default=True)
+    councellor = models.ForeignKey(SalesPerson, on_delete=models.SET_NULL, null=True, blank=True, related_name="counselled_students")
+
+    def get_full_name(self):
+        user = self.user.user
+        return f"{user.first_name} {user.last_name}"
+    
+    def __str__(self):
+        return self.user.user.first_name
+
+class Faculty(models.Model):
+    user = models.OneToOneField(StaffProfile, on_delete=models.CASCADE, related_name="faculty_profile")
+    def get_full_name(self):
+        user = self.user.user
+        return f"{user.first_name} {user.last_name}"
+    
+    def __str__(self):
+        return self.user.user.first_name
+
+class CourseFaculty(models.Model):
+    faculty = models.ForeignKey(Faculty, on_delete=models.CASCADE, related_name="course_faculties")
+    department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name="faculties")
+    is_active = models.BooleanField(default=True)
+    def __str__(self):
+        return self.faculty.user.user.first_name
+    
+    def get_full_name(self):
+        user = self.faculty.user.user
+        return f"{user.first_name} {user.last_name}"
 
 class Course(models.Model):
     title = models.CharField(max_length=200)
@@ -11,13 +56,13 @@ class Course(models.Model):
         related_name="courses"
     )
     total_fee = models.DecimalField(max_digits=10, decimal_places=2)
-    number_of_installments = models.PositiveIntegerField(default=1)
     tax_settings = models.ForeignKey(
         'finance.TaxSettings',
         on_delete=models.PROTECT,
         null=True,
         blank=True
     )
+    is_active = models.BooleanField(default=True)
 
     created_at = models.DateTimeField(
         auto_now_add=True,
@@ -27,9 +72,70 @@ class Course(models.Model):
 
     def __str__(self):
         return self.title
+    
+class Batch(models.Model):
+    batch_number = models.CharField(max_length=50)
+    description = models.TextField(blank=True, null=True)
+    faculty = models.ForeignKey(
+        CourseFaculty,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="batches"
+    )
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="batches")
+    start_date = models.DateField()
+    end_date = models.DateField()
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        unique_together = ['course', 'batch_number']
+
+    def __str__(self):
+        return f"{self.course.title} - {self.batch_number}"
 
 
+from django.core.exceptions import ValidationError
 
+class InstallmentPlan(models.Model):
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='installment_plans')
+    total_installments = models.PositiveIntegerField()
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        unique_together = ['course', 'total_installments']
+        ordering = ['total_installments']
+        indexes = [
+            models.Index(fields=['course']),
+        ]
+
+    def clean(self):
+        total = sum(item.amount for item in self.items.all())
+        if total != self.course.total_fee:
+            raise ValidationError("Installments total must match course fee")
+
+    def __str__(self):
+        return f"{self.course.title} - {self.total_installments} Installments"
+    
+class InstallmentItem(models.Model):
+    plan = models.ForeignKey(
+        InstallmentPlan,
+        on_delete=models.CASCADE,
+        related_name='items'
+    )
+
+    installment_number = models.PositiveIntegerField()
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    due_days = models.PositiveIntegerField()
+
+    class Meta:
+        ordering = ['installment_number']
+        unique_together = ['plan', 'installment_number']
+
+    def __str__(self):
+        return f"{self.plan} - Installment {self.installment_number}"
+
+###############
 class CourseInstallment(models.Model):
     course = models.ForeignKey(
         Course,
@@ -47,6 +153,25 @@ class CourseInstallment(models.Model):
     def __str__(self):
         return f"{self.course.title} - Installment {self.id}"
 
+# enroll student with installment plan
+class StudentCourseEnrollment(models.Model):
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="enrollments")
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="enrollments")
+    batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name="enrollments")
+    installment_plan = models.ForeignKey(InstallmentPlan, on_delete=models.SET_NULL, null=True, blank=True, related_name="enrollments")
+    enrollment_date = models.DateField(auto_now_add=True)
+    class Meta:
+        unique_together = ['student', 'course']
+
+    def save(self, *args, **kwargs):
+        if self.batch:
+            self.course = self.batch.course
+        elif not self.course:
+            raise ValueError("Course must be set either directly or via batch.")
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.student.profile.user.email} - {self.course.title}"
 
 class CoursePayment(models.Model):
     PAYMENT_METHODS = [
@@ -98,7 +223,7 @@ class CoursePayment(models.Model):
             f"{self.amount_paid}"
         )
 
-
+#################
 class AssignedStaffCourse(models.Model):
     staff = models.ForeignKey(StaffProfile, on_delete=models.CASCADE, db_index=True)
     course = models.ForeignKey(Course, on_delete=models.CASCADE, db_index=True)
@@ -123,7 +248,8 @@ class StudyMaterial(models.Model):
         ('document', 'Document'),
     ]
 
-    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, null=True, blank=True)
+    batch = models.ForeignKey(Batch, on_delete=models.CASCADE, null=True, blank=True, related_name="study_materials")
     title = models.CharField(max_length=200)
     description = models.TextField()
     material_type = models.CharField(max_length=20, choices=STUDY_MATERIAL_TYPES)
@@ -133,7 +259,12 @@ class StudyMaterial(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.title} ({self.course.title})"
+        return f"{self.title} ({self.batch})"
+    
+    def save(self, *args, **kwargs):
+        if self.batch:
+            self.course = self.batch.course
+        super().save(*args, **kwargs)
 
 
 class Task(models.Model):

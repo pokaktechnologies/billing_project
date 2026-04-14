@@ -137,7 +137,7 @@ class InstallmentItem(models.Model):
         return f"{self.plan} - Installment {self.installment_number}"
 
 ###############
-class CourseInstallment(models.Model):
+class CourseInstallment(models.Model):#######
     course = models.ForeignKey(
         Course,
         on_delete=models.CASCADE,
@@ -182,14 +182,15 @@ class CoursePayment(models.Model):
         ('upi', 'UPI'),
     ]
 
-    staff = models.ForeignKey(
-        StaffProfile,
+    student = models.ForeignKey(
+        Student,
         on_delete=models.CASCADE,
         related_name="course_payments"
     )
 
+
     installment = models.ForeignKey(
-        CourseInstallment,
+        InstallmentItem,
         on_delete=models.CASCADE,
         related_name="payments"
     )
@@ -216,16 +217,22 @@ class CoursePayment(models.Model):
 
     class Meta:
         ordering = ["-payment_date"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["student", "installment"],
+                name="unique_student_installment_payment",
+            )
+        ]
 
     def __str__(self):
         return (
-            f"{self.staff.user.email} | "
-            f"{self.installment.course.title} | "
+            f"{self.student.profile.user.email} | "
+            f"{self.installment.plan.course.title} | "
             f"{self.amount_paid}"
         )
 
 #################
-class AssignedStaffCourse(models.Model):
+class AssignedStaffCourse(models.Model):####
     staff = models.ForeignKey(StaffProfile, on_delete=models.CASCADE, db_index=True)
     course = models.ForeignKey(Course, on_delete=models.CASCADE, db_index=True)
     assigned_date = models.DateField(auto_now_add=True)

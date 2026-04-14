@@ -35,12 +35,12 @@ instructor_patterns = [
 
     path('course/<int:course_id>/installments/', instructor.InstallmentListAPIView.as_view()),
 
-    path("payments/", instructor.CoursePaymentListCreateAPIView.as_view()),
-    path("payments-list/", instructor.CoursePaymentListAPIView.as_view()),
-    path("payments/<int:pk>/", instructor.CoursePaymentRetrieveAPIView.as_view()),
-    path("payments/<int:pk>/delete/", instructor.CoursePaymentDestroyAPIView.as_view()),
+    # path("payments/", instructor.CoursePaymentListCreateAPIView.as_view()),
+    # path("payments-list/", instructor.CoursePaymentListAPIView.as_view()),
+    # path("payments/<int:pk>/", instructor.CoursePaymentRetrieveAPIView.as_view()),
+    # path("payments/<int:pk>/delete/", instructor.CoursePaymentDestroyAPIView.as_view()),
 
-    path("payments/<int:pk>/detail/", instructor.CoursePaymentDetailAPIView.as_view()),
+    # path("payments/<int:pk>/detail/", instructor.CoursePaymentDetailAPIView.as_view()),
 ]
 
 
@@ -89,6 +89,13 @@ internship_admin_patterns = [
 
     path("centers/", internship_admin.CenterListCreateAPIView.as_view(), name="center-list-create"),
     path("centers/<int:pk>/", internship_admin.CenterRetrieveUpdateDestroyAPIView.as_view(), name="center-detail"),
+
+    path("payments/", internship_admin.CoursePaymentListCreateAPIView.as_view()),
+    path("payments/<int:pk>/detail/", internship_admin.CoursePaymentDetailAPIView.as_view()),
+    path("payments/<int:pk>/delete/", internship_admin.CoursePaymentDestroyAPIView.as_view()),
+    path("payments/<int:pk>/", internship_admin.CoursePaymentRetrieveAPIView.as_view()),
+    path("payments-list/", internship_admin.CoursePaymentListAPIView.as_view()),
+
 ]
 
 report_patterns = [

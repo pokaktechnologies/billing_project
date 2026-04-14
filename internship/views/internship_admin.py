@@ -10,6 +10,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.db import transaction
+from decimal import Decimal
+
 
 
 
@@ -27,6 +29,7 @@ class CourseListCreateAPIView(generics.ListCreateAPIView):
     filterset_fields = {
         "department": ["exact"],
         "is_active": ["exact"],
+        "students": ["exact"],
         "batches__faculty": ["exact"],
     }
                         
@@ -270,3 +273,135 @@ class CenterRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Center.objects.select_related("country", "state").all()
     serializer_class = CenterSerializer
     permission_classes = [IsAuthenticated]
+
+
+class CoursePaymentListCreateAPIView(generics.ListCreateAPIView):
+    queryset = CoursePayment.objects.select_related(
+        "student",
+        "student__profile",
+        "student__profile__user",
+        "installment",
+        "installment__plan",
+        "installment__plan__course"
+    )
+    serializer_class = CoursePaymentSerializer
+    permission_classes = [IsAuthenticated]
+    
+class CoursePaymentListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+
+    def get(self, request):
+
+        queryset = (
+            Student.objects
+            .select_related("profile", "profile__user", "course")
+            .prefetch_related(
+                "course_payments__installment__plan__course"
+            )
+        )
+
+        data = []
+
+        for student in queryset:
+            payments = list(student.course_payments.all())
+            if not payments:
+                continue
+
+            plan = payments[0].installment.plan
+            course = plan.course
+
+            total_fee = course.total_fee
+
+            paid_amount = sum(
+                (p.amount_paid for p in payments),
+                Decimal("0.00")
+            )
+
+            pending_amount = total_fee - paid_amount
+
+            resolved_plan = get_staff_installment_plan(
+                student,
+                course,
+                preferred_plan=plan,
+            ) or plan
+            next_installment = get_next_unpaid_installment_item(
+                student,
+                course,
+                preferred_plan=resolved_plan,
+            )
+            next_due_date = get_installment_due_date_for_staff(
+                student,
+                next_installment,
+            )
+
+            user = student.profile.user
+            data.append({
+                "id": student.id,
+                "student_name": f"{user.first_name} {user.last_name}",
+                "student_id": student.student_id,
+                "course_title": course.title,
+                "total_fee": total_fee,
+                "paid_amount": paid_amount,
+                "pending_amount": pending_amount,
+                "next_due_date": next_due_date,
+            })
+
+        return Response(data, status=200)
+
+class CoursePaymentDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+
+    def get(self, request, pk):
+
+        student = get_object_or_404(
+            Student.objects.select_related("profile", "profile__user"),
+            id=pk,
+        )
+
+        payment = (
+            CoursePayment.objects
+            .filter(student=student)
+            .select_related(
+                "student",
+                "student__profile",
+                "student__profile__user",
+                "installment",
+                "installment__plan",
+                "installment__plan__course"
+            )
+            .order_by("-payment_date")
+            .first()
+        )
+
+        if not payment:
+            return Response(
+                {"detail": "No payments found for this student"},
+                status=404
+            )
+
+        serializer = CoursePaymentDetailSerializer(payment)
+        return Response(serializer.data, status=200)
+
+
+class CoursePaymentDestroyAPIView(generics.DestroyAPIView):
+    queryset = CoursePayment.objects.all()
+    serializer_class = CoursePaymentSerializer
+    permission_classes = [IsAuthenticated]
+    
+
+class CoursePaymentRetrieveAPIView(generics.RetrieveAPIView):
+    queryset = CoursePayment.objects.select_related(
+        "student",
+        "student__profile",
+        "student__profile__user",
+        "installment",
+        "installment__plan",
+        "installment__plan__course"
+    )
+    serializer_class = CoursePaymentSerializer
+    permission_classes = [IsAuthenticated]
+    
+
+

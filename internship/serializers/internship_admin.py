@@ -4,7 +4,14 @@ from rest_framework import serializers
 from accounts.models import CustomUser
 from accounts.views import user
 from ..models import *
-from django.db import transaction
+from django.db import transaction, IntegrityError
+from internship.utils import (
+    get_installment_due_date_for_staff,
+    get_next_unpaid_installment_item,
+    get_payment_student,
+    get_staff_course_enrollment,
+    get_staff_installment_plan,
+)
 from ..utils import generate_batch_number, generate_student_id, get_clean_prefix
 
 class InstallmentItemSerializer(serializers.ModelSerializer):
@@ -532,3 +539,215 @@ class CenterSerializer(serializers.ModelSerializer):
             "state_name",
             "address"
         ]
+
+
+class CoursePaymentSerializer(serializers.ModelSerializer):
+    course_title = serializers.CharField(
+        source="installment.plan.course.title",
+        read_only=True
+    )
+
+    installment_amount = serializers.DecimalField(
+        source="installment.amount",
+        max_digits=10,
+        decimal_places=2,
+        read_only=True
+    )
+
+    class Meta:
+        model = CoursePayment
+        fields = [
+            "id",
+            "student",
+            "installment",
+            "course_title",
+            "installment_amount",
+            "amount_paid",
+            "payment_method",
+            "transaction_id",
+            "payment_date",
+        ]
+        read_only_fields = ["payment_date"]
+
+    def validate(self, data):
+        student = data["student"]
+        installment = data["installment"]
+        amount_paid = data["amount_paid"]
+        payment_method = data["payment_method"]
+        transaction_id = data.get("transaction_id")
+
+        course = installment.plan.course
+        enrollment = get_staff_course_enrollment(
+            student,
+            course,
+            installment_plan=installment.plan,
+        )
+
+        # Student must be enrolled
+        if not enrollment:
+            raise serializers.ValidationError("Student not enrolled in this course.")
+
+        # Transaction ID check
+        if payment_method != "cash" and not transaction_id:
+            raise serializers.ValidationError("Transaction ID required.")
+
+        # Full payment check
+        if amount_paid != installment.amount:
+            raise serializers.ValidationError("Full payment required.")
+
+        return data
+
+    def create(self, validated_data):
+        try:
+            with transaction.atomic():
+                return super().create(validated_data)
+        except IntegrityError as exc:
+            raise serializers.ValidationError(
+                "This installment has already been paid."
+            ) from exc
+
+    def update(self, instance, validated_data):
+        # Immutable financial records
+        raise serializers.ValidationError(
+            "Payments cannot be updated once created."
+        )
+
+
+class CourceInstallmentListSerializer(serializers.ModelSerializer):
+    # installment_no = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+    due_date = serializers.SerializerMethodField()
+    paid_date = serializers.SerializerMethodField()
+    payment_method = serializers.SerializerMethodField()
+
+    class Meta:
+        model = InstallmentItem
+        fields = [
+            "id",
+            # "installment_no",
+            "amount",
+            "status",
+            "due_date",
+            "paid_date",
+            "payment_method",
+        ]
+
+    #  Get payment ONLY for this staff
+    def get_payment(self, obj):
+        student = get_payment_student(self.context.get("student"))
+        if not student:
+            return None
+        return obj.payments.filter(student=student).order_by("-payment_date").first()
+
+    # #  Installment number (1,2,3…)
+    # def get_installment_no(self, obj):
+    #     ids = list(
+    #         obj.course.installments
+    #         .order_by("due_days_after_enrollment")
+    #         .values_list("id", flat=True)
+    #     )
+    #     return f"#{ids.index(obj.id) + 1}"
+
+    #  Paid / Pending (staff-specific)
+    def get_status(self, obj):
+        return "Paid" if self.get_payment(obj) else "Pending"
+
+    #  Paid date
+    def get_paid_date(self, obj):
+        payment = self.get_payment(obj)
+        return payment.payment_date if payment else None
+
+    #  Payment method
+    def get_payment_method(self, obj):
+        payment = self.get_payment(obj)
+        return payment.payment_method if payment else "-"
+
+    #  Due date (based on staff enrollment)
+    def get_due_date(self, obj):
+        student = self.context.get("student")
+        if not student:
+            return None
+        return get_installment_due_date_for_staff(student, obj)
+
+class CoursePaymentDetailSerializer(serializers.ModelSerializer):
+    student_full_name = serializers.SerializerMethodField()
+    student_code = serializers.CharField(source="student.student_id", read_only=True)
+    phone_number = serializers.CharField(source="student.profile.phone_number", read_only=True)
+    email = serializers.CharField(source="student.profile.user.email", read_only=True)
+    course_title = serializers.CharField(source="installment.plan.course.title", read_only=True)
+    course_id = serializers.CharField(source="installment.plan.course.id", read_only=True)
+
+    course_total_fee = serializers.CharField(source="installment.plan.course.total_fee", read_only=True)
+    total_paid = serializers.SerializerMethodField()
+    pending_fee = serializers.SerializerMethodField()
+    next_due_date = serializers.SerializerMethodField()
+
+    installment_list = CourceInstallmentListSerializer(
+        many=True,
+        source="installment.plan.items",
+        read_only=True,
+    )
+
+
+
+
+    class Meta:
+        model = CoursePayment
+        fields = [
+            "id",
+            "student",
+            "student_full_name",
+            "student_code",
+            "phone_number",
+            "email",
+            "course_title",
+            "course_id",
+            # "installment",
+
+            "course_total_fee",
+            "total_paid",
+            "pending_fee",
+            "next_due_date",
+
+            "installment_list",
+        ]
+
+    def get_student_full_name(self, obj):
+        user = obj.student.profile.user
+        return f"{user.first_name} {user.last_name}"
+    
+    def get_total_paid(self, obj):
+        course = obj.installment.plan.course
+        total_paid = CoursePayment.objects.filter(
+            student=obj.student,
+            installment__plan__course=course
+        ).aggregate(total=models.Sum('amount_paid'))['total'] or 0
+        return total_paid
+
+    def get_pending_fee(self, obj):
+        course = obj.installment.plan.course
+        total_paid = self.get_total_paid(obj)
+        pending = course.total_fee - total_paid
+        return pending
+    
+    def get_next_due_date(self, obj):
+        course = obj.installment.plan.course
+        plan = get_staff_installment_plan(
+            obj.student,
+            course,
+            preferred_plan=obj.installment.plan,
+        ) or obj.installment.plan
+        next_installment = get_next_unpaid_installment_item(
+            obj.student,
+            course,
+            preferred_plan=plan,
+        )
+        return get_installment_due_date_for_staff(obj.student, next_installment)
+    
+    def to_representation(self, instance):
+        self.fields["installment_list"].context.update({
+            "student": instance.student
+        })
+        return super().to_representation(instance)
+
+

@@ -31,7 +31,8 @@ class InstallmentPlanSerializer(serializers.ModelSerializer):
     course_total_fee = serializers.DecimalField(
         source="course.total_fee",
         max_digits=10,
-        decimal_places=2
+        decimal_places=2,
+        read_only=True
     )
 
 
@@ -45,7 +46,7 @@ class InstallmentPlanSerializer(serializers.ModelSerializer):
             "is_active",
             "items",
         ]
-        read_only_fields = ["course", "total_installments"]
+        read_only_fields = ["course", "course_total_fee"]
 
     def create(self, validated_data):
         items_data = validated_data.pop("items")
@@ -117,23 +118,48 @@ class CourseSerializer(serializers.ModelSerializer):
         plans = data.get("installment_plans", [])
         total_fee = data.get("total_fee", getattr(self.instance, "total_fee", None))
 
+        # ── Duplicate total_installments across plans ──
+        total_installments_list = [plan.get("total_installments") for plan in plans]
+        if len(total_installments_list) != len(set(total_installments_list)):
+            duplicates = list(set(n for n in total_installments_list if total_installments_list.count(n) > 1))
+            raise serializers.ValidationError(
+                f"Duplicate total_installments {duplicates} found. Each plan must have a unique installment count."
+            )
+
         for plan in plans:
             items = plan.get("items", [])
+            total_installments = plan.get("total_installments")
 
-            total = sum(i["amount"] for i in items)
-
-            if total != total_fee:
+            # ── Duplicate installment_number within a plan ──
+            installment_numbers = [item["installment_number"] for item in items]
+            if len(installment_numbers) != len(set(installment_numbers)):
+                duplicates = list(set(n for n in installment_numbers if installment_numbers.count(n) > 1))
                 raise serializers.ValidationError(
-                    f"Plan total must equal course fee ({total_fee})"
+                    f"Duplicate installment_number(s) {duplicates} found in plan '{total_installments} installments'."
                 )
 
-            if len(items) != plan.get("total_installments"):
+            # ── Installment numbers must be sequential (1, 2, 3...) ──
+            expected = list(range(1, total_installments + 1))
+            if sorted(installment_numbers) != expected:
                 raise serializers.ValidationError(
-                    "Items count must match total_installments"
+                    f"Installment numbers must be sequential starting from 1. "
+                    f"Expected {expected}, got {sorted(installment_numbers)}."
+                )
+
+            # ── Items count must match total_installments ──
+            if len(items) != total_installments:
+                raise serializers.ValidationError(
+                    "Items count must match total_installments."
+                )
+
+            # ── Total amount must match course fee ──
+            total = sum(i["amount"] for i in items)
+            if total != total_fee:
+                raise serializers.ValidationError(
+                    f"Plan total ({total}) must equal course fee ({total_fee})."
                 )
 
         return data
-
 
     # ---------- CREATE ----------
     def create(self, validated_data):
@@ -373,6 +399,7 @@ class StudentSerializer(serializers.ModelSerializer):
     center_name = serializers.CharField(source="center.name", read_only=True)
     councellor_name = serializers.CharField(source="councellor.get_full_name", read_only=True)
     payment_installment_count = serializers.CharField(source="payment_type.total_installments", read_only=True)
+    student_id = serializers.CharField(read_only=True)
     class Meta:
         model = Student
         fields = [

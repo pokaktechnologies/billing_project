@@ -199,5 +199,5 @@ urlpatterns = [
     ## DASHBOARD URLS
     path('dashboard/developer/', DeveloperDashboardView.as_view(), name='developers-dashboard'),
     path('dashboard/designer/', GraphicDesignerDashboardView.as_view(), name='admin-dashboard'),
-
+    path('dashboard/admin/', AdminDashboardView.as_view(), name='admin-dashboard')
 ]

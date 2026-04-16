@@ -5,7 +5,11 @@ from django.utils.timezone import now
 from rest_framework import serializers
 
 from accounts.models import StaffProfile
-from internship.models import TaskSubmission, AssignedStaffCourse, CoursePayment, CourseInstallment, TaskAssignment
+from internship.models import TaskSubmission, AssignedStaffCourse, CoursePayment, TaskAssignment
+from internship.utils import (
+    get_installment_due_date_for_staff,
+    get_next_unpaid_installment_item,
+)
 
 
 # report based on task
@@ -181,8 +185,8 @@ class InternPaymentSummaryReportSerializer(serializers.ModelSerializer):
     def get_paid_amount(self, obj):
 
         total = CoursePayment.objects.filter(
-            staff=obj.staff,
-            installment__course=obj.course
+            student__profile=obj.staff,
+            installments__plan__course=obj.course
         ).aggregate(
             total=Sum("amount_paid")
         )["total"]
@@ -210,20 +214,14 @@ class InternPaymentSummaryReportSerializer(serializers.ModelSerializer):
         return "Pending"
 
     def get_next_due_date(self, obj):
-
-        unpaid_installment = CourseInstallment.objects.filter(
-            course=obj.course
-        ).exclude(
-            payments__staff=obj.staff
-        ).order_by(
-            "due_days_after_enrollment"
-        ).first()
-
-        if not unpaid_installment:
-            return None
-
-        return obj.assigned_date + \
-               timedelta(days=unpaid_installment.due_days_after_enrollment)
+        unpaid_installment = get_next_unpaid_installment_item(
+            obj.staff,
+            obj.course,
+        )
+        return get_installment_due_date_for_staff(
+            obj.staff,
+            unpaid_installment,
+        )
 
     def get_overdue_days(self, obj):
 
@@ -298,8 +296,8 @@ class InternSummaryReportSerializer(serializers.ModelSerializer):
         total_fee = obj.course.total_fee
 
         paid = CoursePayment.objects.filter(
-            staff=obj.staff,
-            installment__course=obj.course
+            student__profile=obj.staff,
+            installments__plan__course=obj.course
         ).aggregate(
             total=Sum("amount_paid")
         )["total"] or 0

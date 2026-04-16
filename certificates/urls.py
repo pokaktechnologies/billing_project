@@ -18,6 +18,10 @@ urlpatterns = [
 
     #Reports
     path("reports/certificate/", views.CertificateReportView.as_view(),name="certificate-report"),
-    
+    # Public Request
+    path('public-request/', views.PublicCertificateRequestView.as_view(), name='public-certificate-request'),
+
+    # Certificate History
+    path('history/', views.CertificateHistoryListCreateView.as_view(), name='certificate-history-list-create'),
 
 ]

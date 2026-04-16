@@ -155,6 +155,47 @@ PARENT_MODULE_MAP = [
         "submodules": [
             "setup"
         ]
+    },
+
+    {
+        "name": "dashboard",
+        "submodules": [
+            "hr_dashboard",
+            "intern_dashboard",
+            "bde_dashboard",
+            "project_manager_dashboard",
+            "developer_dashboard"
+        ]
+    },
+
+    {
+        "name": "Task Management",
+        "submodules": [
+            "Dashboard",
+            "Courses",
+            "Interns",
+            "Faculty",
+            "Payments"
+        ]
+    },
+
+    {
+        "name": "Faculty Management",
+        "submodules": [
+            "All Tasks",
+            "My Courses",
+            "Interns",
+            "Submissions"
+        ]
+    },
+
+    {
+        "name": "Internship Pro",
+        "submodules": [
+            "My Tasks",
+            "Study Materials",
+            "Payments"
+        ]
     }
 
 ]
@@ -191,6 +232,8 @@ PARENT_MODULE_MAP = [
 
 class HasModulePermission(BasePermission):
     def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
 
         # Superusers (admin) always have access
         if request.user.is_superuser:

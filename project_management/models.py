@@ -14,6 +14,8 @@ STATUS_CHOICES = [
 from datetime import date
 
 class ClientContract(models.Model):
+    contract_type = models.CharField(max_length=255, null=True, blank=True)
+    contract_number = models.CharField(max_length=255, unique=True, null=True, blank=True)
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
     client = models.ForeignKey(Customer, on_delete=models.CASCADE)
     contract_name = models.CharField(max_length=255)
@@ -31,6 +33,7 @@ class ClientContract(models.Model):
 
 
 class ProjectManagement(models.Model):
+    project_number = models.CharField(max_length=255, unique=True, null=True, blank=True)
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
     contract = models.ForeignKey(ClientContract, on_delete=models.CASCADE, null=True, blank=True)
     project_name = models.CharField(max_length=255)
@@ -102,6 +105,8 @@ class ProjectMember(models.Model):
 class TaskBoard(models.Model):
     project = models.ForeignKey(ProjectManagement, on_delete=models.CASCADE)
     name = models.CharField(max_length=100)
+    start_date = models.DateField(null=True, blank=True)  # planned
+    end_date = models.DateField(null=True, blank=True)    # deadline
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     def __str__(self):

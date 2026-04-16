@@ -4,14 +4,15 @@ from rest_framework.response import Response
 
 from accounts.models import StaffProfile
 from ..models import (
-    Course, AssignedStaffCourse, CoursePayment, StudyMaterial, Task, 
+    Course, AssignedStaffCourse, CoursePayment, StudyMaterial, Task, Student,
     TaskSubmission, TaskAssignment, TaskSubmissionAttachment
 )
 from accounts.permissions import HasModulePermission
 from rest_framework.permissions import IsAuthenticated
 from ..serializers.intern import *
 from rest_framework import viewsets
-from ..serializers.instructor import TaskSerializer, StudyMaterialSerializer, CourseSerializer ,CoursePaymentDetailSerializer
+from ..serializers.instructor import TaskSerializer, StudyMaterialSerializer, CourseSerializer 
+from ..serializers.internship_admin import CoursePaymentDetailSerializer
 from rest_framework.decorators import action
 from django.shortcuts import get_object_or_404
 from django.db.models import OuterRef, Subquery, Sum
@@ -257,17 +258,21 @@ class MyCoursePaymentListAPIView(generics.ListAPIView):
 
     def get(self, request,):
 
-        # Get staff
-        staff = get_object_or_404(StaffProfile, id=request.user.staff_profile.id)
+        student = get_object_or_404(
+            Student.objects.select_related("profile", "profile__user"),
+            profile_id=request.user.staff_profile.id,
+        )
 
-        # Get latest payment (to identify course)
         payment = (
             CoursePayment.objects
-            .filter(staff=staff)
+            .filter(student=student)
             .select_related(
-                "staff",
-                "installment",
-                "installment__course"
+                "student",
+                "student__profile",
+                "student__profile__user",
+                "installments",
+                "installments__plan",
+                "installments__plan__course"
             )
             .order_by("-payment_date")
             .first()
@@ -275,7 +280,7 @@ class MyCoursePaymentListAPIView(generics.ListAPIView):
 
         if not payment:
             return Response(
-                {"detail": "No payments found for this staff"},
+                {"detail": "No payments found for this student"},
                 status=404
             )
 
@@ -352,13 +357,17 @@ class InternDashboardAPIView(APIView):
         # PAYMENTS SUMMARY
         # ================================
 
-        payments_qs = CoursePayment.objects.filter(staff=staff_profile)
+        student = getattr(staff_profile, "student_profile", None)
+        payments_qs = CoursePayment.objects.filter(student=student) if student else CoursePayment.objects.none()
 
         total_paid = payments_qs.aggregate(
             total=Sum("amount_paid")
         )["total"] or 0
 
-        course = payments_qs.first().installment.course if payments_qs.exists() else None
+        course = (
+            payments_qs.select_related("installments__plan__course").first().installments.plan.course
+            if payments_qs.exists() else None
+        )
         total_fee = course.total_fee if course else 0
         balance = total_fee - total_paid
 

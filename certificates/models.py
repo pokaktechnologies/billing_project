@@ -35,3 +35,11 @@ class Certificate(models.Model):
     class Meta:
         verbose_name = "Certificate Request"
         verbose_name_plural = "Certificate Requests"
+
+
+class CertificateHistory(models.Model):
+    name = models.CharField(max_length=200, help_text="Full name of the certificate requester")
+    certificate_type = models.CharField(max_length=20, help_text="Type of the certificate")
+    created_at = models.DateTimeField(auto_now_add=True, help_text="Date and time the certificate was created")
+    def __str__(self):
+        return f"{self.name} - {self.certificate_type} Certificate"

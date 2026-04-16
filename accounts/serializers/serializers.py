@@ -1629,7 +1629,7 @@ class ContractDetailSerializer(serializers.ModelSerializer):
 class InvoiceItemCreateSerializer(serializers.Serializer):
     product = serializers.IntegerField(required=False)
     quantity = serializers.DecimalField(max_digits=10, decimal_places=2)
-    unit_price = serializers.DecimalField(max_digits=10, decimal_places=2)
+    unit_price = serializers.DecimalField(max_digits=10, decimal_places=5)
     sgst_percentage = serializers.DecimalField(
         max_digits=5, decimal_places=2, required=False, default=0
     )
@@ -1649,7 +1649,7 @@ class InvoiceCreateSerializer(serializers.Serializer):
 
     # Intern-only fields
     fee_amount = serializers.DecimalField(
-        max_digits=12, decimal_places=2, required=False
+        max_digits=12, decimal_places=5, required=False
     )
     sgst_percentage = serializers.DecimalField(
         max_digits=5, decimal_places=2, required=False

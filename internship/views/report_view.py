@@ -10,11 +10,11 @@ from django.db.models import Count, Q, F, Sum
 
 from accounts.models import StaffProfile
 from accounts.permissions import HasModulePermission
-from internship.models import Task, TaskSubmission, AssignedStaffCourse, TaskAssignment, CoursePayment, \
-    CourseInstallment
+from internship.models import Task, TaskSubmission, AssignedStaffCourse, TaskAssignment, CoursePayment
 from internship.serializers.report_serializers import TaskReportSerializer, InternTaskPerformanceReportSerializer, \
     TaskSubmissionReportSerializer, InternPaymentSummaryReportSerializer, InternSummaryReportSerializer, \
     EnrollmentReportSerializer
+from internship.utils import get_installment_due_date_for_staff, get_next_unpaid_installment_item
 
 
 # report based on tasks
@@ -182,23 +182,19 @@ class InternPaymentSummaryReportAPIView(generics.ListAPIView):
             for obj in queryset:
                 total_fee = obj.course.total_fee
                 paid = CoursePayment.objects.filter(
-                    staff=obj.staff,
-                    installment__course=obj.course
+                    student__profile=obj.staff,
+                    installments__plan__course=obj.course
                 ).aggregate(total=Sum("amount_paid"))["total"] or 0
                 pending = total_fee - paid
-                installments = CourseInstallment.objects.filter(
-                    course=obj.course
-                ).order_by("due_days_after_enrollment")
-                is_overdue = False
-                has_future_due = False
-                for inst in installments:
-                    due_date = obj.assigned_date + timedelta(
-                        days=inst.due_days_after_enrollment
-                    )
-                    if due_date < today:
-                        is_overdue = True
-                    if due_date >= today:
-                        has_future_due = True
+                next_installment = get_next_unpaid_installment_item(
+                    obj.staff,
+                    obj.course,
+                )
+                next_due_date = get_installment_due_date_for_staff(
+                    obj.staff,
+                    next_installment,
+                )
+                is_overdue = bool(next_due_date and next_due_date < today)
                 if payment_status.lower() == "fully paid" and pending <= 0:
                     filtered_ids.append(obj.id)
                 elif payment_status.lower() == "pending" and pending > 0 and not is_overdue:

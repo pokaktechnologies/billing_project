@@ -27,6 +27,7 @@ urlpatterns = [
     path('project_members/<int:pk>/', ProjectMembersDetail.as_view(), name='project_members_detail'),
     path('<int:project_id>/members/', ProjectMembersListByProjectView.as_view(), name='project_members_by_project'),
     path('<int:project_id>/members_view/', ProjectMembersViewListByProjectView.as_view(), name='project_members_by_project_member_view'),
+    path('<int:project_id>/boards/', TaskBoardListByProjectView.as_view(), name='task_board_by_project'),
     path('my_projects/', MyProjectsView.as_view(), name='my_projects'),
     path('my_projects/<int:project_id>/', MyProjectDetailView.as_view(), name='my_project_detail'),
 
@@ -74,4 +75,7 @@ urlpatterns = [
     path('reports/project/', ProjectReportView.as_view(), name='project_report'),
     path('reports/project-timeline/<int:id>/', ProjectTimelineReportView.as_view(), name='project_report_timeline'),
     path('reports/contract/', ContractReportView.as_view(), name='project_contract_report'),
+    
+    # Number Generator
+    path('generate-number/', NumberGeneratorView.as_view(), name='generate_project_contract_number'),
 ]

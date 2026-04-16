@@ -14,6 +14,8 @@ class ClientContractSerializer(serializers.ModelSerializer):
             'client',
             'client_first_name',
             'client_last_name',
+            'contract_number',
+            'contract_type',
             'contract_name',
             'description',
             'contract_date',
@@ -35,6 +37,7 @@ class ProjectManagementSerializer(serializers.ModelSerializer):
         model = ProjectManagement
         fields = [
             'id',
+            'project_number',
             'contract',  # ForeignKey to ClientContract
             'client_first_name', # shows client name from ClientContract
             'client_last_name',
@@ -76,6 +79,7 @@ class ProjectManagementDetailsSerializer(serializers.ModelSerializer):
         model = ProjectManagement
         fields = [
             'id',
+            'project_number',
             'contract',  # ForeignKey to ClientContract
             'client_first_name', # shows client name from ClientContract
             'client_last_name',
@@ -190,7 +194,7 @@ class ProjectMemberSerializer(serializers.ModelSerializer):
 class TaskBoardSerializer(serializers.ModelSerializer):
     class Meta:
         model = TaskBoard
-        fields = ['id', 'project', 'name', 'created_at', 'updated_at']
+        fields = ['id', 'project', 'name', 'start_date', 'end_date', 'created_at', 'updated_at']
         read_only_fields = ['created_at', 'updated_at']
 
 
@@ -271,7 +275,7 @@ class TaskSerializer(serializers.ModelSerializer):
 class ProjectManagerSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProjectManagement
-        fields = ['id', 'project_name', 'status', 'start_date', 'end_date']
+        fields = ['id', 'project_number', 'project_name', 'status', 'start_date', 'end_date']
 
 class AssignedTaskListSerializer(serializers.ModelSerializer):
     task_name = serializers.CharField(source="task.task_name", read_only=True)

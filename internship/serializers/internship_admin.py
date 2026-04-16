@@ -5,6 +5,7 @@ from accounts.models import CustomUser
 from accounts.views import user
 from ..models import *
 from django.db import transaction, IntegrityError
+from django.db.models import Sum
 from internship.utils import (
     get_installment_due_date_for_staff,
     get_next_unpaid_installment_item,
@@ -570,12 +571,12 @@ class CenterSerializer(serializers.ModelSerializer):
 
 class CoursePaymentSerializer(serializers.ModelSerializer):
     course_title = serializers.CharField(
-        source="installment.plan.course.title",
+        source="installments.plan.course.title",
         read_only=True
     )
 
     installment_amount = serializers.DecimalField(
-        source="installment.amount",
+        source="installments.amount",
         max_digits=10,
         decimal_places=2,
         read_only=True
@@ -586,7 +587,7 @@ class CoursePaymentSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "student",
-            "installment",
+            "installments",
             "course_title",
             "installment_amount",
             "amount_paid",
@@ -598,16 +599,16 @@ class CoursePaymentSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         student = data["student"]
-        installment = data["installment"]
+        installments = data["installments"]
         amount_paid = data["amount_paid"]
         payment_method = data["payment_method"]
         transaction_id = data.get("transaction_id")
 
-        course = installment.plan.course
+        course = installments.plan.course
         enrollment = get_staff_course_enrollment(
             student,
             course,
-            installment_plan=installment.plan,
+            installment_plan=installments.plan,
         )
 
         # Student must be enrolled
@@ -619,7 +620,7 @@ class CoursePaymentSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Transaction ID required.")
 
         # Full payment check
-        if amount_paid != installment.amount:
+        if amount_paid != installments.amount:
             raise serializers.ValidationError("Full payment required.")
 
         return data
@@ -701,17 +702,17 @@ class CoursePaymentDetailSerializer(serializers.ModelSerializer):
     student_code = serializers.CharField(source="student.student_id", read_only=True)
     phone_number = serializers.CharField(source="student.profile.phone_number", read_only=True)
     email = serializers.CharField(source="student.profile.user.email", read_only=True)
-    course_title = serializers.CharField(source="installment.plan.course.title", read_only=True)
-    course_id = serializers.CharField(source="installment.plan.course.id", read_only=True)
+    course_title = serializers.CharField(source="installments.plan.course.title", read_only=True)
+    course_id = serializers.CharField(source="installments.plan.course.id", read_only=True)
 
-    course_total_fee = serializers.CharField(source="installment.plan.course.total_fee", read_only=True)
+    course_total_fee = serializers.CharField(source="installments.plan.course.total_fee", read_only=True)
     total_paid = serializers.SerializerMethodField()
     pending_fee = serializers.SerializerMethodField()
     next_due_date = serializers.SerializerMethodField()
 
     installment_list = CourceInstallmentListSerializer(
         many=True,
-        source="installment.plan.items",
+        source="installments.plan.items",
         read_only=True,
     )
 
@@ -744,26 +745,26 @@ class CoursePaymentDetailSerializer(serializers.ModelSerializer):
         return f"{user.first_name} {user.last_name}"
     
     def get_total_paid(self, obj):
-        course = obj.installment.plan.course
+        course = obj.installments.plan.course
         total_paid = CoursePayment.objects.filter(
             student=obj.student,
-            installment__plan__course=course
-        ).aggregate(total=models.Sum('amount_paid'))['total'] or 0
+            installments__plan__course=course
+        ).aggregate(total=Sum("amount_paid"))["total"] or 0
         return total_paid
 
     def get_pending_fee(self, obj):
-        course = obj.installment.plan.course
+        course = obj.installments.plan.course
         total_paid = self.get_total_paid(obj)
         pending = course.total_fee - total_paid
         return pending
     
     def get_next_due_date(self, obj):
-        course = obj.installment.plan.course
+        course = obj.installments.plan.course
         plan = get_staff_installment_plan(
             obj.student,
             course,
-            preferred_plan=obj.installment.plan,
-        ) or obj.installment.plan
+            preferred_plan=obj.installments.plan,
+        ) or obj.installments.plan
         next_installment = get_next_unpaid_installment_item(
             obj.student,
             course,

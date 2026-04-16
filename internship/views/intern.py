@@ -270,9 +270,9 @@ class MyCoursePaymentListAPIView(generics.ListAPIView):
                 "student",
                 "student__profile",
                 "student__profile__user",
-                "installment",
-                "installment__plan",
-                "installment__plan__course"
+                "installments",
+                "installments__plan",
+                "installments__plan__course"
             )
             .order_by("-payment_date")
             .first()
@@ -365,7 +365,7 @@ class InternDashboardAPIView(APIView):
         )["total"] or 0
 
         course = (
-            payments_qs.select_related("installment__plan__course").first().installment.plan.course
+            payments_qs.select_related("installments__plan__course").first().installments.plan.course
             if payments_qs.exists() else None
         )
         total_fee = course.total_fee if course else 0

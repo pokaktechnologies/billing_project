@@ -280,9 +280,9 @@ class CoursePaymentListCreateAPIView(generics.ListCreateAPIView):
         "student",
         "student__profile",
         "student__profile__user",
-        "installment",
-        "installment__plan",
-        "installment__plan__course"
+        "installments",
+        "installments__plan",
+        "installments__plan__course"
     )
     serializer_class = CoursePaymentSerializer
     permission_classes = [IsAuthenticated]
@@ -297,7 +297,7 @@ class CoursePaymentListAPIView(APIView):
             Student.objects
             .select_related("profile", "profile__user", "course")
             .prefetch_related(
-                "course_payments__installment__plan__course"
+                "course_payments__installments__plan__course"
             )
         )
 
@@ -308,7 +308,7 @@ class CoursePaymentListAPIView(APIView):
             if not payments:
                 continue
 
-            plan = payments[0].installment.plan
+            plan = payments[0].installments.plan
             course = plan.course
 
             total_fee = course.total_fee
@@ -367,9 +367,9 @@ class CoursePaymentDetailAPIView(APIView):
                 "student",
                 "student__profile",
                 "student__profile__user",
-                "installment",
-                "installment__plan",
-                "installment__plan__course"
+                "installments",
+                "installments__plan",
+                "installments__plan__course"
             )
             .order_by("-payment_date")
             .first()
@@ -396,9 +396,9 @@ class CoursePaymentRetrieveAPIView(generics.RetrieveAPIView):
         "student",
         "student__profile",
         "student__profile__user",
-        "installment",
-        "installment__plan",
-        "installment__plan__course"
+        "installments",
+        "installments__plan",
+        "installments__plan__course"
     )
     serializer_class = CoursePaymentSerializer
     permission_classes = [IsAuthenticated]

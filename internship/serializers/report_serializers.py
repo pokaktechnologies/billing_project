@@ -186,7 +186,7 @@ class InternPaymentSummaryReportSerializer(serializers.ModelSerializer):
 
         total = CoursePayment.objects.filter(
             student__profile=obj.staff,
-            installment__plan__course=obj.course
+            installments__plan__course=obj.course
         ).aggregate(
             total=Sum("amount_paid")
         )["total"]
@@ -297,7 +297,7 @@ class InternSummaryReportSerializer(serializers.ModelSerializer):
 
         paid = CoursePayment.objects.filter(
             student__profile=obj.staff,
-            installment__plan__course=obj.course
+            installments__plan__course=obj.course
         ).aggregate(
             total=Sum("amount_paid")
         )["total"] or 0

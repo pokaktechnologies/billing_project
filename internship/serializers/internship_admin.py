@@ -500,6 +500,7 @@ class StudentSerializer(serializers.ModelSerializer):
             "start_date",
             "councellor",
             "councellor_name",
+            "modules",
             "is_active",
             "created_at"
         ]

@@ -62,7 +62,7 @@ intern_patterns = [
 
     #Dashboard
     path('dashaboard/',intern.InternDashboardAPIView.as_view()),   
-]
+]   
 
 internship_admin_patterns = [
     path('course/', internship_admin.CourseListCreateAPIView.as_view(), name='instructor-course-list'),
@@ -72,8 +72,9 @@ internship_admin_patterns = [
 
     #Faculty
     path('faculty/', internship_admin.FacultyListCreateAPIView.as_view(), name='faculty-list'),
-    path('course-faculty/', internship_admin.CourseFacultyListCreateAPIView.as_view(), name='course-faculty-list'),
-    path('course-faculty/<int:pk>/', internship_admin.CourseFacultyRetrieveUpdateDestroyAPIView.as_view(), name='course-faculty-detail'),
+    path('faculty/<int:pk>/', internship_admin.FacultyRetrieveUpdateDestroyAPIView.as_view(), name='faculty-detail'),
+    # path('course-faculty/', internship_admin.FacultyListCreateAPIView.as_view(), name='course-faculty-list'),
+    # path('course-faculty/<int:pk>/', internship_admin.FacultyRetrieveUpdateDestroyAPIView.as_view(), name='course-faculty-detail'),
 
     #Batch
     path('batch/preview/', internship_admin.BatchNumberPreviewAPIView.as_view(), name='batch-number-preview'),

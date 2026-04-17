@@ -4,8 +4,8 @@ from accounts.models import Department, SalesPerson, StaffProfile
 
 class Center(models.Model):
     name = models.CharField(max_length=100)
-    country = models.ForeignKey('accounts.Country', on_delete=models.SET_NULL, null=True, blank=True)
-    state = models.ForeignKey('accounts.State', on_delete=models.SET_NULL, null=True, blank=True)
+    country_name = models.CharField(max_length=50, null=True, blank=True)
+    state_name = models.CharField(max_length=50, null=True, blank=True)
     address = models.TextField(blank=True, null=True)
     def __str__(self):
         return self.name
@@ -30,6 +30,8 @@ class Student(models.Model):
 
 class Faculty(models.Model):
     user = models.OneToOneField(StaffProfile, on_delete=models.CASCADE, related_name="faculty_profile")
+    department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name="faculties", null=True, blank=True)
+    is_active = models.BooleanField(default=True)
     def get_full_name(self):
         user = self.user.user
         return f"{user.first_name} {user.last_name}"
@@ -39,7 +41,7 @@ class Faculty(models.Model):
 
 class CourseFaculty(models.Model):
     faculty = models.ForeignKey(Faculty, on_delete=models.CASCADE, related_name="course_faculties")
-    department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name="faculties")
+    department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name="course_faculties")
     is_active = models.BooleanField(default=True)
     def __str__(self):
         return self.faculty.user.user.first_name
@@ -51,6 +53,7 @@ class CourseFaculty(models.Model):
 class Course(models.Model):
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
+    faculties = models.ManyToManyField(Faculty, related_name="courses", blank=True)
     department = models.ForeignKey(
         'accounts.Department',
         on_delete=models.CASCADE,
@@ -77,13 +80,7 @@ class Course(models.Model):
 class Batch(models.Model):
     batch_number = models.CharField(max_length=50)
     description = models.TextField(blank=True, null=True)
-    faculty = models.ForeignKey(
-        CourseFaculty,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="batches"
-    )
+    faculties = models.ManyToManyField(Faculty, related_name="batches", blank=True)
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="batches")
     start_date = models.DateField()
     end_date = models.DateField()

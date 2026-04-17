@@ -2,7 +2,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Sum
 from rest_framework import serializers
 
-from accounts.models import CustomUser, StaffProfile
+from accounts.models import CustomUser, ModulePermission, StaffProfile
 from ..models import (
     Batch,
     Center,
@@ -477,6 +477,12 @@ class StudentSerializer(serializers.ModelSerializer):
     councellor_name = serializers.CharField(source="councellor.get_full_name", read_only=True)
     payment_installment_count = serializers.CharField(source="payment_type.total_installments", read_only=True)
     student_id = serializers.CharField(read_only=True)
+    modules = serializers.ListField(
+        child=serializers.ChoiceField(choices=ModulePermission.MODULE_CHOICES),
+        write_only=True,
+        required=False
+    )
+
     class Meta:
         model = Student
         fields = [
@@ -514,6 +520,7 @@ class StudentSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         with transaction.atomic():
+            modules = validated_data.pop("modules", [])
 
             # Extract nested data
             profile_data = validated_data.pop("profile")
@@ -550,6 +557,14 @@ class StudentSerializer(serializers.ModelSerializer):
                 user=custom_user,
                 **profile_data
             )
+            
+            #  Assign module permissions
+            if modules:
+                ModulePermission.objects.bulk_create([
+                    ModulePermission(user=custom_user, module_name=module)
+                    for module in modules
+                ])
+
 
             # Create Student
             return Student.objects.create(
@@ -561,30 +576,31 @@ class StudentSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         with transaction.atomic():
 
+            modules = validated_data.pop("modules", None)
             profile_data = validated_data.pop("profile", None)
 
-            # Update Student fields
+            profile = instance.profile
+            user = profile.user   #  FIX: always define
+
+            #  Update Student fields
             for attr, value in validated_data.items():
                 setattr(instance, attr, value)
             instance.save()
 
+            #  Update Profile + User
             if profile_data:
                 user_data = profile_data.pop("user", None)
 
                 # Update StaffProfile
-                profile = instance.profile
                 for attr, value in profile_data.items():
                     setattr(profile, attr, value)
                 profile.save()
 
-                # Update CustomUser
                 if user_data:
-                    user = profile.user
-
                     email = user_data.get("email")
                     password = user_data.pop("password", None)
 
-                    # Email uniqueness check (correct place)
+                    # Email uniqueness check
                     if email and CustomUser.objects.filter(email=email).exclude(id=user.id).exists():
                         raise serializers.ValidationError({
                             "email": "Email already exists"
@@ -598,8 +614,16 @@ class StudentSerializer(serializers.ModelSerializer):
 
                     user.save()
 
-            if not profile_data:
-                return instance
+            #  Update module permissions
+            if modules is not None:
+                ModulePermission.objects.filter(user=user).delete()
+
+                ModulePermission.objects.bulk_create([
+                    ModulePermission(user=user, module_name=module)
+                    for module in modules
+                ])
+
+            return instance
         
 class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
     sudent_name = serializers.CharField(source="student.profile.get_full_name", read_only=True)

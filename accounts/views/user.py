@@ -642,14 +642,14 @@ class DeveloperDashboardView(APIView):
             )
 
         department = job_detail.department
-        if not department or department.name != "Development":
-            return Response(
-                {
-                    "status": "0",
-                    "message": "Access restricted to Development department only"
-                },
-                status=status.HTTP_403_FORBIDDEN
-            )
+        # if not department or department.name != "Development":
+        #     return Response(
+        #         {
+        #             "status": "0",
+        #             "message": "Access restricted to Development department only"
+        #         },
+        #         status=status.HTTP_403_FORBIDDEN
+        #     )
 
         ## Projects Detail
         projects = ProjectManagement.objects.filter(
@@ -751,14 +751,14 @@ class GraphicDesignerDashboardView(APIView):
             )
 
         department = job_detail.department
-        if not department or department.name != "Design":
-            return Response(
-                {
-                    "status": "0",
-                    "message": "Access restricted to Design department only"
-                },
-                status=status.HTTP_403_FORBIDDEN
-            )
+        # if not department or department.name != "Design":
+        #     return Response(
+        #         {
+        #             "status": "0",
+        #             "message": "Access restricted to Design department only"
+        #         },
+        #         status=status.HTTP_403_FORBIDDEN
+        #     )
 
         return Response({
             "status": "1",

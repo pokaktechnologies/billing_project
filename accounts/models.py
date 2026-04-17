@@ -1156,6 +1156,13 @@ class ModulePermission(models.Model):
         # ('instructor', "Instructor"),
         # ('intern', "Intern"),
 
+        # DASHBOARD
+        ("hr_dashboard", "HR Dashboard"),
+        ("intern_dashboard", "Intern Dashboard"),
+        ("bde_dashboard", "BDE Dashboard"),
+        ("project_manager_dashboard", "Project Manager Dashboard"),
+        ("developer_dashboard", "Developer Dashboard"),
+        
         # SALES
         ("quotation", "Quotation"),
         ("invoice", "Invoice"),
@@ -1232,12 +1239,7 @@ class ModulePermission(models.Model):
         ("internship_reports", "Internship Reports"),
         ("inventory_reports", "Inventory Reports"),
 
-        # DASHBOARD
-        ("hr_dashboard", "HR Dashboard"),
-        ("intern_dashboard", "Intern Dashboard"),
-        ("bde_dashboard", "BDE Dashboard"),
-        ("project_manager_dashboard", "Project Manager Dashboard"),
-        ("developer_dashboard", "Developer Dashboard"),
+
 
         # TASK MANAGEMENT
         ('dashboard', "Dashboard"),

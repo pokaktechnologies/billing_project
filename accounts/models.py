@@ -1247,6 +1247,8 @@ class ModulePermission(models.Model):
         ('interns', "Interns"),
         ('faculty', "Faculty"),
         ('payments', "Payments"),
+        ('center', "Center"),
+        ('classes', "Classes"),
 
         # Faculty Management
         ("all_taskd", "All Tasks"),

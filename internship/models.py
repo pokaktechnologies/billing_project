@@ -295,7 +295,7 @@ class Task(models.Model):
     due_date = models.DateField()
     course = models.ForeignKey(Course,on_delete=models.CASCADE,related_name='tasks',)
     assigned_to = models.ManyToManyField(
-        StaffProfile,
+        Student,
         through='TaskAssignment',
         related_name='tasks'
     )
@@ -313,14 +313,15 @@ class TaskAssignment(models.Model):
     ]
 
     task = models.ForeignKey(Task, on_delete=models.CASCADE, db_index=True,related_name="assignments")
-    staff = models.ForeignKey(StaffProfile, on_delete=models.CASCADE, db_index=True)
+    staff = models.ForeignKey(StaffProfile, on_delete=models.CASCADE, db_index=True, blank=True, null=True)
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, db_index=True, blank=True, null=True)
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     revision_due_date = models.DateField(null=True, blank=True)
     assigned_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ('task', 'staff')
+        unique_together = ('task', 'student')
 
     def __str__(self):
         return f"{self.staff} - {self.task} [{self.status}]"

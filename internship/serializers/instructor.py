@@ -3,6 +3,7 @@ from internship.models import *
 from accounts.models import StaffProfile
 from accounts.serializers.user import *
 from internship.serializers.intern import TaskSubmissionAttachmentSerializer
+from .internship_admin import StudentSerializer
 
 
 class SimpleStaffProfileSerializer(serializers.ModelSerializer):
@@ -50,7 +51,7 @@ class CourseSerializer(serializers.ModelSerializer):
             "department",
             "department_name",
             "total_fee",
-            "number_of_installments",
+            # "number_of_installments",
             "installments",
             "created_at",
             "tax_settings",
@@ -285,6 +286,7 @@ class TaskAttachmentSerializer(serializers.ModelSerializer):
 
 class TaskAssignmentSerializer(serializers.ModelSerializer):
     staff = SimpleStaffProfileSerializer(read_only=True)
+    student = StudentSerializer(read_only=True)
 
     class Meta:
         model = TaskAssignment
@@ -295,87 +297,86 @@ class TaskSerializer(serializers.ModelSerializer):
         child=serializers.IntegerField(),
         write_only=True
     )
+
     assigned_to_ids = serializers.SerializerMethodField()
+    total_student_count = serializers.SerializerMethodField()
 
-    total_staff_count = serializers.SerializerMethodField()
     attachments = TaskAttachmentSerializer(many=True, read_only=True)
-
     status = serializers.SerializerMethodField()
+
     class Meta:
         model = Task
         fields = [
             'id', 'title', 'description',
             'start_date', 'due_date', 'status', 'course',
             'assigned_to', 'attachments',
-            'total_staff_count', 'assigned_to_ids'
+            'total_student_count', 'assigned_to_ids'
         ]
 
+    # ===== STATUS =====
     def get_status(self, obj):
         request = self.context.get("request")
         if not request:
             return None
 
-        intern_ids = request.query_params.get("intern")
-        if not intern_ids:
+        student_id = request.query_params.get("student")
+        if not student_id:
             return None
 
-        staff_id = int(intern_ids.split(",")[0])
-
-        assignment = obj.assignments.filter(staff_id=staff_id).first()
+        assignment = obj.assignments.filter(student_id=student_id).first()
         return assignment.status if assignment else None
 
-    def get_total_staff_count(self, obj):
+    # ===== COUNT =====
+    def get_total_student_count(self, obj):
         return obj.assigned_to.count()
-    
+
+    # ===== IDS =====
     def get_assigned_to_ids(self, obj):
         return list(obj.assigned_to.values_list('id', flat=True))
 
     # ===== CREATE =====
     def create(self, validated_data):
-        staff_ids = validated_data.pop('assigned_to', [])
+        student_ids = validated_data.pop('assigned_to', [])
         request = self.context['request']
         files = request.FILES.getlist('files')
-        course = validated_data.get("course")
 
+        course = validated_data.get("course")
         if not course:
             raise serializers.ValidationError({"course": "Course is required."})
 
-        valid_staff_ids = AssignedStaffCourse.objects.filter(
-            course=course,
-            staff_id__in=staff_ids
-        ).values_list("staff_id", flat=True)
+        # ✅ validate students belong to course (adjust if your model differs)
+        valid_students = Student.objects.filter(
+            id__in=student_ids,
+            course=course
+        )
 
-        invalid_staff = set(staff_ids) - set(valid_staff_ids)
+        valid_student_ids = valid_students.values_list("id", flat=True)
+        invalid_students = set(student_ids) - set(valid_student_ids)
 
-        # friendly message
-        if invalid_staff:
-            staff_info = StaffProfile.objects.filter(id__in=invalid_staff).values(
-                "user__email",
-                "user__first_name",
-                "user__last_name"
-            )
-            readable = [
-                f"{s['user__first_name']} {s['user__last_name']} ({s['user__email']})"
-                for s in staff_info
-            ]
+        if invalid_students:
             raise serializers.ValidationError({
-                "assigned_to": "These staff are not assigned to this course: " + ", ".join(readable)
+                "assigned_to": f"Invalid student IDs: {list(invalid_students)}"
             })
 
+        # create task
         task = Task.objects.create(**validated_data)
 
-        for staff_id in valid_staff_ids:
-            TaskAssignment.objects.create(task=task, staff_id=staff_id)
+        # create assignments
+        for student_id in valid_student_ids:
+            TaskAssignment.objects.create(
+                task=task,
+                student_id=student_id
+            )
 
+        # attachments
         for file in files:
             TaskAttachment.objects.create(task=task, file=file)
 
         return task
 
-
     # ===== UPDATE =====
     def update(self, instance, validated_data):
-        staff_ids = validated_data.pop('assigned_to', None)
+        student_ids = validated_data.pop('assigned_to', None)
         request = self.context['request']
         files = request.FILES.getlist('files')
 
@@ -384,41 +385,38 @@ class TaskSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
         instance.save()
 
-        if staff_ids is not None:
+        # update assignments
+        if student_ids is not None:
             course = instance.course
 
-            valid_staff_ids = AssignedStaffCourse.objects.filter(
-                course=course,
-                staff_id__in=staff_ids
-            ).values_list("staff_id", flat=True)
+            valid_students = Student.objects.filter(
+                id__in=student_ids,
+                course=course
+            )
 
-            invalid_staff = set(staff_ids) - set(valid_staff_ids)
+            valid_student_ids = valid_students.values_list("id", flat=True)
+            invalid_students = set(student_ids) - set(valid_student_ids)
 
-            if invalid_staff:
-                staff_info = StaffProfile.objects.filter(id__in=invalid_staff).values(
-                    "user__email",
-                    "user__first_name",
-                    "user__last_name"
-                )
-                readable = [
-                    f"{s['user__first_name']} {s['user__last_name']} ({s['user__email']})"
-                    for s in staff_info
-                ]
+            if invalid_students:
                 raise serializers.ValidationError({
-                    "assigned_to": "These staff are not assigned to this course: " + ", ".join(readable)
+                    "assigned_to": f"Invalid student IDs: {list(invalid_students)}"
                 })
 
+            # clear old assignments
             TaskAssignment.objects.filter(task=instance).delete()
 
-            for staff_id in valid_staff_ids:
-                TaskAssignment.objects.create(task=instance, staff_id=staff_id)
+            # create new ones
+            for student_id in valid_student_ids:
+                TaskAssignment.objects.create(
+                    task=instance,
+                    student_id=student_id
+                )
 
         # new attachments
         for file in files:
             TaskAttachment.objects.create(task=instance, file=file)
 
         return instance
-
 
 class InstructorTaskDetailSerializer(serializers.ModelSerializer):
     staff_assignments = TaskAssignmentSerializer(

@@ -6,6 +6,17 @@ from accounts.models import ModulePermission
 PARENT_MODULE_MAP = [
 
     {
+        "name": "dashboard",
+        "submodules": [
+            "hr_dashboard",
+            "intern_dashboard",
+            "bde_dashboard",
+            "project_manager_dashboard",
+            "developer_dashboard"
+        ]
+    },
+
+    {
         "name": "home",
         "submodules": [
             "home"
@@ -63,28 +74,37 @@ PARENT_MODULE_MAP = [
             "hr_reports"
         ]
     },
-
     {
-        "name": "task_management",
+        "name": "Task Management",
         "submodules": [
-            "task_all",
-            "task_study_material",
-            "task_interns",
-            "task_submissions",
-            "task_payments",
-            "internship_reports"
+            "Dashboard",
+            "Courses",
+            "Interns",
+            "Faculty",
+            "Payments",
+            "Center",
+            "Classes",
         ]
     },
 
     {
-        "name": "internship_pro",
+        "name": "Faculty Management",
         "submodules": [
-            "intern_all_task",
-            "intern_study_materials",
-            "intern_payments"
+            "All Tasks",
+            "My Courses",
+            "Interns",
+            "Submissions"
         ]
     },
 
+    {
+        "name": "Internship Pro",
+        "submodules": [
+            "My Tasks",
+            "Study Materials",
+            "Payments"
+        ]
+    },
     {
         "name": "accounts",
         "submodules": [
@@ -156,47 +176,6 @@ PARENT_MODULE_MAP = [
             "setup"
         ]
     },
-
-    {
-        "name": "dashboard",
-        "submodules": [
-            "hr_dashboard",
-            "intern_dashboard",
-            "bde_dashboard",
-            "project_manager_dashboard",
-            "developer_dashboard"
-        ]
-    },
-
-    {
-        "name": "Task Management",
-        "submodules": [
-            "Dashboard",
-            "Courses",
-            "Interns",
-            "Faculty",
-            "Payments"
-        ]
-    },
-
-    {
-        "name": "Faculty Management",
-        "submodules": [
-            "All Tasks",
-            "My Courses",
-            "Interns",
-            "Submissions"
-        ]
-    },
-
-    {
-        "name": "Internship Pro",
-        "submodules": [
-            "My Tasks",
-            "Study Materials",
-            "Payments"
-        ]
-    }
 
 ]
 

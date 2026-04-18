@@ -1,3 +1,4 @@
+from django.utils import timezone
 from django.db import IntegrityError, transaction
 from django.db.models import Sum
 from rest_framework import serializers
@@ -384,8 +385,8 @@ class BatchSerializer(serializers.ModelSerializer):
     )
 
     faculty_details = serializers.SerializerMethodField()
-
-    course_title = serializers.CharField(source="course.title", read_only=True)
+    course_title    = serializers.CharField(source="course.title", read_only=True)
+    is_expired      = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Batch
@@ -393,33 +394,38 @@ class BatchSerializer(serializers.ModelSerializer):
             "id",
             "batch_number",
             "description",
-            "faculties",        # write
-            "faculty_details",  # read
+            "faculties",
+            "faculty_details",
             "course",
             "course_title",
             "start_date",
             "end_date",
             "is_active",
+            "is_expired",
             "created_at",
         ]
         read_only_fields = ["batch_number", "created_at"]
 
-    #  Clean faculty response
     def get_faculty_details(self, obj):
         return [
-            {
-                "id": faculty.id,
-                "name": faculty.get_full_name()
-            }
-            for faculty in obj.faculties.all()
+            {"id": f.id, "name": f.get_full_name()}
+            for f in obj.faculties.all()
         ]
 
-    #  Create
+    def get_is_expired(self, obj):
+        return timezone.now().date() > obj.end_date
+
+    def validate(self, data):
+        end_date   = data.get("end_date", getattr(self.instance, "end_date", None))
+        start_date = data.get("start_date", getattr(self.instance, "start_date", None))
+        if end_date and start_date and end_date <= start_date:
+            raise serializers.ValidationError("end_date must be after start_date.")
+        return data
+
     def create(self, validated_data):
         faculties = validated_data.pop("faculties", [])
-        course = validated_data.get("course")
-
-        prefix = get_clean_prefix(course.title)
+        course    = validated_data.get("course")
+        prefix    = get_clean_prefix(course.title)
 
         with transaction.atomic():
             validated_data["batch_number"] = generate_batch_number(
@@ -429,14 +435,17 @@ class BatchSerializer(serializers.ModelSerializer):
                 length=3,
                 course=course,
             )
-
             batch = Batch.objects.create(**validated_data)
             batch.faculties.set(faculties)
             return batch
 
-    #  Update
     def update(self, instance, validated_data):
-        faculties = validated_data.pop("faculties", None)
+        faculties    = validated_data.pop("faculties", None)
+        new_end_date = validated_data.get("end_date", instance.end_date)
+
+        #  Re-activate batch if end_date extended beyond today
+        if new_end_date >= timezone.now().date():
+            validated_data["is_active"] = True
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
@@ -882,16 +891,20 @@ class CoursePaymentDetailSerializer(serializers.ModelSerializer):
 
 
 class ClassListCreateSerializer(serializers.ModelSerializer):
-    center_name = serializers.CharField(source="center.name", read_only=True)
+    center_name    = serializers.CharField(source="center.name", read_only=True)
     sections_count = serializers.SerializerMethodField()
 
     class Meta:
-        model = Class
+        model  = Class
         fields = ["id", "name", "center", "center_name", "sections_count", "is_active", "created_at"]
         read_only_fields = ["id", "created_at"]
 
     def get_sections_count(self, obj):
-        return obj.sections.count()
+        #  Only count sections with active batches
+        return obj.sections.filter(
+            batch__is_active=True,
+            batch__end_date__gte=timezone.now().date()
+        ).count()
 
 
 class SectionSerializer(serializers.ModelSerializer):
@@ -903,26 +916,28 @@ class SectionSerializer(serializers.ModelSerializer):
     course_title     = serializers.CharField(source="batch.course.title", read_only=True)
     batch_number     = serializers.CharField(source="batch.batch_number", read_only=True)
     duration_minutes = serializers.SerializerMethodField(read_only=True)
-    students_count   = serializers.SerializerMethodField(read_only=True)  # ← replaces max_students
+    students_count   = serializers.SerializerMethodField(read_only=True)
+    is_active        = serializers.BooleanField(source="batch.is_active", read_only=True)
 
     class Meta:
-        model = Section
+        model  = Section
         fields = [
             "id",
             "class_obj",
             "batch",
             "start_time",
             "end_time",
-            "students_count",   # ← dynamic from batch
+            "students_count",
             "days",
             "days_display",
             "course_title",
             "batch_number",
             "duration_minutes",
+            "is_active",
         ]
 
     def get_students_count(self, obj):
-        return obj.batch.students.count()  # students assigned to that batch
+        return obj.batch.students.count()
 
     def get_days_display(self, obj):
         return [d.day for d in obj.days.all()]
@@ -930,17 +945,10 @@ class SectionSerializer(serializers.ModelSerializer):
     def get_duration_minutes(self, obj):
         from datetime import datetime, date
         start = datetime.combine(date.today(), obj.start_time)
-        end = datetime.combine(date.today(), obj.end_time)
-        diff = int((end - start).total_seconds() / 60)
+        end   = datetime.combine(date.today(), obj.end_time)
+        diff  = int((end - start).total_seconds() / 60)
         hours, mins = divmod(diff, 60)
-        if mins:
-            return f"{hours} hr {mins} min"
-        return f"{hours} hr"
-
-    def validate(self, data):
-        if data["start_time"] >= data["end_time"]:
-            raise serializers.ValidationError("End time must be greater than start time.")
-        return data
+        return f"{hours} hr {mins} min" if mins else f"{hours} hr"
 
     def validate_days(self, value):
         if not value:
@@ -949,9 +957,44 @@ class SectionSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Duplicate days are not allowed.")
         return value
 
+    def validate(self, data):
+        # 1. Time sanity check
+        if data["start_time"] >= data["end_time"]:
+            raise serializers.ValidationError("End time must be greater than start time.")
+
+        class_obj  = data.get("class_obj")
+        start_time = data.get("start_time")
+        end_time   = data.get("end_time")
+        days       = data.get("days", [])
+        today      = timezone.now().date()
+
+        #  Overlap check — only against ACTIVE, NON-EXPIRED batch sections
+        qs = Section.objects.filter(
+            class_obj=class_obj,
+            start_time__lt=end_time,
+            end_time__gt=start_time,
+            batch__is_active=True,
+            batch__end_date__gte=today,       # expired batch = free slot
+        ).prefetch_related("days")
+
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+
+        for section in qs:
+            existing_days = set(section.days.values_list("day", flat=True))
+            conflict_days = set(days) & existing_days
+            if conflict_days:
+                raise serializers.ValidationError(
+                    f"Time conflict on {', '.join(sorted(conflict_days))} — "
+                    f"'{section.batch}' already runs {section.start_time:%H:%M} "
+                    f"to {section.end_time:%H:%M} in this class."
+                )
+
+        return data
+
     @transaction.atomic
     def create(self, validated_data):
-        days = validated_data.pop("days")
+        days    = validated_data.pop("days")
         section = Section.objects.create(**validated_data)
         SectionDay.objects.bulk_create([
             SectionDay(section=section, day=day) for day in days

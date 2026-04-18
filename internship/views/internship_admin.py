@@ -1,4 +1,5 @@
 from decimal import Decimal
+from django.utils import timezone
 from django.db import transaction
 from django.db.models import Count
 from django.shortcuts import get_object_or_404
@@ -151,23 +152,22 @@ class BatchNumberPreviewAPIView(APIView):
         return Response({"batch_number": batch_number})
     
 class BatchListCreateAPIView(generics.ListCreateAPIView):
-    queryset = Batch.objects.select_related("course").prefetch_related("faculties")
+    queryset         = Batch.objects.select_related("course").prefetch_related("faculties")
     serializer_class = BatchSerializer
     permission_classes = [IsAuthenticated]
-    filter_backends = [DjangoFilterBackend, SearchFilter]
+    filter_backends  = [DjangoFilterBackend, SearchFilter]
     filterset_fields = ['course', 'faculties']
-    search_fields = [
+    search_fields    = [
         'batch_number',
         'course__title',
         'faculties__user__user__first_name',
-        'faculties__user__user__last_name'
+        'faculties__user__user__last_name',
     ]
 
 class BatchRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Batch.objects.select_related("course").prefetch_related("faculties").all()
+    queryset         = Batch.objects.select_related("course").prefetch_related("faculties")
     serializer_class = BatchSerializer
     permission_classes = [IsAuthenticated]
-
 
 class StudentListCreateAPIView(generics.ListCreateAPIView):
     queryset = Student.objects.select_related(
@@ -435,45 +435,47 @@ class CoursePaymentRetrieveAPIView(generics.RetrieveAPIView):
 
 
 class ClassListCreateAPIView(generics.ListCreateAPIView):
-    serializer_class = ClassListCreateSerializer
+    serializer_class   = ClassListCreateSerializer
     permission_classes = [IsAuthenticated]
-    filter_backends = [DjangoFilterBackend,SearchFilter]
-    filterset_fields = ["center", "is_active"]
-    search_fields = ["name"]
+    filter_backends    = [DjangoFilterBackend, SearchFilter]
+    filterset_fields   = ["center", "is_active"]
+    search_fields      = ["name"]
 
     def get_queryset(self):
-        return Class.objects.select_related("center").prefetch_related("sections").filter(is_active=True)
-
+        return Class.objects.select_related("center").prefetch_related(
+            "sections__days", "sections__batch"
+        ).filter(is_active=True)
 
 class ClassRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
-    serializer_class = ClassListCreateSerializer
+    serializer_class   = ClassListCreateSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Class.objects.select_related("center").prefetch_related("sections")
-
+        return Class.objects.select_related("center").prefetch_related(
+            "sections__days", "sections__batch"
+        )
 
 class SectionListCreateAPIView(generics.ListCreateAPIView):
-    serializer_class = SectionSerializer
+    serializer_class   = SectionSerializer
     permission_classes = [IsAuthenticated]
-    filter_backends = [DjangoFilterBackend]
-    filterset_fields = ["class_obj", "batch", "batch__course"]
+    filter_backends    = [DjangoFilterBackend]
+    filterset_fields   = ["class_obj", "batch", "batch__course"]
 
     def get_queryset(self):
+        today = timezone.now().date()
         qs = Section.objects.select_related(
             "class_obj", "batch", "batch__course"
-        ).prefetch_related("days")
-
-        # Filter by day (e.g. ?day=mon)
+        ).prefetch_related("days").filter(
+            batch__is_active=True,        # active batch only
+            batch__end_date__gte=today,   # non-expired only
+        )
         day = self.request.query_params.get("day")
         if day:
             qs = qs.filter(days__day=day)
-
         return qs
 
-
 class SectionRetrieveUpdateDeleteAPIView(generics.RetrieveUpdateDestroyAPIView):
-    serializer_class = SectionSerializer
+    serializer_class   = SectionSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):

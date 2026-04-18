@@ -97,6 +97,11 @@ internship_admin_patterns = [
     path("payments/<int:pk>/", internship_admin.CoursePaymentRetrieveAPIView.as_view()),
     path("payments-list/", internship_admin.CoursePaymentListAPIView.as_view()),
 
+    path("class/", internship_admin.ClassListCreateAPIView.as_view()),
+    path("class/<int:pk>/", internship_admin.ClassRetrieveUpdateDestroyAPIView.as_view()),
+    path("sections/", internship_admin.SectionListCreateAPIView.as_view()),
+    path("sections/<int:pk>/", internship_admin.SectionRetrieveUpdateDeleteAPIView.as_view()),
+
 ]
 
 report_patterns = [

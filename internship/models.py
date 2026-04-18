@@ -91,7 +91,53 @@ class Batch(models.Model):
 
     def __str__(self):
         return f"{self.course.title} - {self.batch_number}"
+    
 
+class Class(models.Model):
+    name       = models.CharField(max_length=100)
+    center     = models.ForeignKey("Center", on_delete=models.CASCADE, related_name="classes")
+    is_active  = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+
+class Section(models.Model):
+    class_obj    = models.ForeignKey(Class, on_delete=models.CASCADE, related_name="sections")   
+    batch        = models.ForeignKey("Batch", on_delete=models.CASCADE)
+    start_time   = models.TimeField()
+    end_time     = models.TimeField()
+    created_at   = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.class_obj.name} - {self.batch}"
+
+    def clean(self):
+        if self.start_time >= self.end_time:
+            raise ValidationError("End time must be greater than start time")
+
+
+class SectionDay(models.Model):
+    DAYS = [
+        ("mon", "Monday"),
+        ("tue", "Tuesday"),
+        ("wed", "Wednesday"),
+        ("thu", "Thursday"),
+        ("fri", "Friday"),
+        ("sat", "Saturday"),
+        ("sun", "Sunday"),
+    ]
+
+    section = models.ForeignKey(Section, on_delete=models.CASCADE, related_name="days")
+    day     = models.CharField(max_length=3, choices=DAYS)
+
+    class Meta:
+        unique_together = ("section", "day")
+
+    def __str__(self):
+        return f"{self.section} - {self.day}"
+    
 
 from django.core.exceptions import ValidationError
 

@@ -9,6 +9,9 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework import generics
+from ..models import Section, Class
+from ..serializers.internship_admin import SectionSerializer, ClassListCreateSerializer
 
 from accounts.models import CustomUser
 from internship.utils import (
@@ -430,3 +433,50 @@ class CoursePaymentRetrieveAPIView(generics.RetrieveAPIView):
     
 
 
+
+class ClassListCreateAPIView(generics.ListCreateAPIView):
+    serializer_class = ClassListCreateSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend,SearchFilter]
+    filterset_fields = ["center", "is_active"]
+    search_fields = ["name"]
+
+    def get_queryset(self):
+        return Class.objects.select_related("center").prefetch_related("sections").filter(is_active=True)
+
+
+class ClassRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = ClassListCreateSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Class.objects.select_related("center").prefetch_related("sections")
+
+
+class SectionListCreateAPIView(generics.ListCreateAPIView):
+    serializer_class = SectionSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ["class_obj", "batch", "batch__course"]
+
+    def get_queryset(self):
+        qs = Section.objects.select_related(
+            "class_obj", "batch", "batch__course"
+        ).prefetch_related("days")
+
+        # Filter by day (e.g. ?day=mon)
+        day = self.request.query_params.get("day")
+        if day:
+            qs = qs.filter(days__day=day)
+
+        return qs
+
+
+class SectionRetrieveUpdateDeleteAPIView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = SectionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Section.objects.select_related(
+            "class_obj", "batch", "batch__course"
+        ).prefetch_related("days")

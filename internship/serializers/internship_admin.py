@@ -13,6 +13,9 @@ from ..models import (
     InstallmentPlan,
     Student,
     StudentCourseEnrollment,
+    Class,
+    Section,
+    SectionDay,
 )
 from internship.utils import (
     get_installment_due_date_for_staff,
@@ -878,3 +881,92 @@ class CoursePaymentDetailSerializer(serializers.ModelSerializer):
         return super().to_representation(instance)
 
 
+class ClassListCreateSerializer(serializers.ModelSerializer):
+    center_name = serializers.CharField(source="center.name", read_only=True)
+    sections_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Class
+        fields = ["id", "name", "center", "center_name", "sections_count", "is_active", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+    def get_sections_count(self, obj):
+        return obj.sections.count()
+
+
+class SectionSerializer(serializers.ModelSerializer):
+    days = serializers.ListField(
+        child=serializers.ChoiceField(choices=SectionDay.DAYS),
+        write_only=True
+    )
+    days_display     = serializers.SerializerMethodField(read_only=True)
+    course_title     = serializers.CharField(source="batch.course.title", read_only=True)
+    batch_number     = serializers.CharField(source="batch.batch_number", read_only=True)
+    duration_minutes = serializers.SerializerMethodField(read_only=True)
+    students_count   = serializers.SerializerMethodField(read_only=True)  # ← replaces max_students
+
+    class Meta:
+        model = Section
+        fields = [
+            "id",
+            "class_obj",
+            "batch",
+            "start_time",
+            "end_time",
+            "students_count",   # ← dynamic from batch
+            "days",
+            "days_display",
+            "course_title",
+            "batch_number",
+            "duration_minutes",
+        ]
+
+    def get_students_count(self, obj):
+        return obj.batch.students.count()  # students assigned to that batch
+
+    def get_days_display(self, obj):
+        return [d.day for d in obj.days.all()]
+
+    def get_duration_minutes(self, obj):
+        from datetime import datetime, date
+        start = datetime.combine(date.today(), obj.start_time)
+        end = datetime.combine(date.today(), obj.end_time)
+        diff = int((end - start).total_seconds() / 60)
+        hours, mins = divmod(diff, 60)
+        if mins:
+            return f"{hours} hr {mins} min"
+        return f"{hours} hr"
+
+    def validate(self, data):
+        if data["start_time"] >= data["end_time"]:
+            raise serializers.ValidationError("End time must be greater than start time.")
+        return data
+
+    def validate_days(self, value):
+        if not value:
+            raise serializers.ValidationError("At least one day is required.")
+        if len(value) != len(set(value)):
+            raise serializers.ValidationError("Duplicate days are not allowed.")
+        return value
+
+    @transaction.atomic
+    def create(self, validated_data):
+        days = validated_data.pop("days")
+        section = Section.objects.create(**validated_data)
+        SectionDay.objects.bulk_create([
+            SectionDay(section=section, day=day) for day in days
+        ])
+        return section
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        days = validated_data.pop("days", None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        if days is not None:
+            instance.days.all().delete()
+            SectionDay.objects.bulk_create([
+                SectionDay(section=instance, day=day) for day in days
+            ])
+        return instance

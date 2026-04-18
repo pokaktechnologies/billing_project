@@ -233,26 +233,13 @@ class CoursePayment(models.Model):
         blank=True
     )
 
-    # staff = models.ForeignKey(
-    #     StaffProfile,
-    #     on_delete=models.CASCADE,
-    #     related_name="course_payments"
-    # )
-
     installments = models.ForeignKey(
         InstallmentItem,
         on_delete=models.CASCADE,
-        related_name="payments",
+        related_name="course_payments",
         null=True,
         blank=True
     )
-
-    # installment = models.ForeignKey(
-    #     CourseInstallment,
-    #     on_delete=models.CASCADE,
-    #     related_name="payments"
-    # )
-
 
     amount_paid = models.DecimalField(
         max_digits=10,
@@ -276,19 +263,8 @@ class CoursePayment(models.Model):
 
     class Meta:
         ordering = ["-payment_date"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["student", "installments"],
-                name="unique_student_installment_payment",
-            )
-        ]
 
-    # def __str__(self):
-    #     return (
-    #         f"{self.student.profile.user.email} | "
-    #         f"{self.installment.plan.course.title} | "
-    #         f"{self.amount_paid}"
-    #     )
+
 
 #################
 class AssignedStaffCourse(models.Model):####

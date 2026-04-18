@@ -93,6 +93,18 @@ class InstallmentListAPIView(generics.ListAPIView):
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ["course"]
 
+
+class InstallmentSelectionListAPIView(generics.ListAPIView):
+    serializer_class = InstallmentPlanSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        course_id = self.kwargs.get("course_id")
+        return InstallmentPlan.objects.filter(
+            course_id=course_id,
+            is_active=True
+        ).prefetch_related("items").order_by("total_installments")
+
 class FacultyQuerysetMixin:
     queryset = Faculty.objects.select_related(
         "user__user",

@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta
+from django.db.models import Sum
+
 
 def generate_batch_number(model, field_name: str, prefix: str, length: int, course):
     year = datetime.now().year
@@ -144,21 +146,23 @@ def get_staff_course_start_date(staff, course, installment_plan=None):
 
 def get_next_unpaid_installment_item(staff, course, preferred_plan=None):
     student = get_payment_student(staff)
-    plan = get_staff_installment_plan(
-        staff,
-        course,
-        preferred_plan=preferred_plan,
-    )
+    plan = get_staff_installment_plan(staff, course, preferred_plan=preferred_plan)
     if not plan or not student:
         return None
 
+    # "course_payments" related_name use ചെയ്യുക
+    # Fully paid items exclude ചെയ്യുക (partial ആയവ still show ചെയ്യണം)
+    fully_paid_item_ids = []
+    for item in plan.items.all():
+        paid = item.course_payments.filter(
+            student=student
+        ).aggregate(t=Sum("amount_paid"))["t"] or 0
+        if paid >= item.amount:
+            fully_paid_item_ids.append(item.id)
+
     return plan.items.exclude(
-        payments__student=student
-    ).order_by(
-        "installment_number",
-        "due_days",
-        "id",
-    ).first()
+        id__in=fully_paid_item_ids
+    ).order_by("installment_number", "due_days", "id").first()
 
 
 def get_installment_due_date_for_staff(staff, installment):

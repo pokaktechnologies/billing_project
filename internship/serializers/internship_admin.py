@@ -254,7 +254,7 @@ class InstallmentPlanUpdateSerializer(serializers.ModelSerializer):
                 "This installment plan is already assigned to students. Modification not allowed."
             )
 
-        # ✅ 1. Prevent duplicate plan (course + total_installments)
+        #  1. Prevent duplicate plan (course + total_installments)
         if InstallmentPlan.objects.filter(
             course=instance.course,
             total_installments=total_installments
@@ -263,13 +263,13 @@ class InstallmentPlanUpdateSerializer(serializers.ModelSerializer):
                 "Plan with this installment count already exists for this course"
             )
 
-        # ✅ 2. Validate items count
+        #  2. Validate items count
         if len(items_data) != total_installments:
             raise serializers.ValidationError(
                 "Items count must match total_installments"
             )
 
-        # ✅ 3. Validate duplicate installment_number in request
+        #  3. Validate duplicate installment_number in request
         numbers = [item["installment_number"] for item in items_data]
         if len(numbers) != len(set(numbers)):
             raise serializers.ValidationError(
@@ -278,7 +278,7 @@ class InstallmentPlanUpdateSerializer(serializers.ModelSerializer):
 
         with transaction.atomic():
 
-            # ✅ Update plan fields
+            #  Update plan fields
             instance.total_installments = total_installments
             instance.is_active = validated_data.get(
                 "is_active", instance.is_active
@@ -300,15 +300,15 @@ class InstallmentPlanUpdateSerializer(serializers.ModelSerializer):
                 item_id = item_data.get("id")
                 number = item_data["installment_number"]
 
-                # 🔹 CASE 1: Update using ID
+                #  CASE 1: Update using ID
                 if item_id and item_id in existing_items:
                     item = existing_items[item_id]
 
-                # 🔹 CASE 2: Update using installment_number (AUTO MATCH)
+                #  CASE 2: Update using installment_number (AUTO MATCH)
                 elif number in existing_by_number:
                     item = existing_by_number[number]
 
-                # 🔹 CASE 3: Create new
+                #  CASE 3: Create new
                 else:
                     item = InstallmentItem.objects.create(
                         plan=instance,
@@ -319,7 +319,7 @@ class InstallmentPlanUpdateSerializer(serializers.ModelSerializer):
                     updated_ids.append(item.id)
                     continue
 
-                # 🔹 UPDATE fields (including amount change 🔥)
+                #  UPDATE fields (including amount change )
                 item.installment_number = number
                 item.amount = item_data["amount"]
                 item.due_days = item_data["due_days"]
@@ -327,7 +327,7 @@ class InstallmentPlanUpdateSerializer(serializers.ModelSerializer):
 
                 updated_ids.append(item.id)
 
-            # 🔹 DELETE removed items
+            #  DELETE removed items
             for item in instance.items.all():
                 if item.id not in updated_ids:
                     item.delete()
@@ -661,8 +661,37 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
         read_only_fields = ["course"]
 
     def validate(self, attrs):
-        if not attrs.get("batch"):
+        batch = attrs.get("batch")
+        installment_plan = attrs.get("installment_plan")
+        student = attrs.get("student")
+
+        # ── Batch required ──
+        if not batch:
             raise serializers.ValidationError("Batch is required.")
+
+
+        if installment_plan:
+            if installment_plan.course_id != batch.course_id:
+                raise serializers.ValidationError(
+                    f"Installment plan '{installment_plan}' does not belong "
+                    f"to course '{batch.course.title}'."
+                )
+
+        # ── Student already enrolled in this course? ──
+        course = batch.course
+        existing_qs = StudentCourseEnrollment.objects.filter(
+            student=student,
+            course=course,
+        )
+
+        if self.instance:
+            existing_qs = existing_qs.exclude(pk=self.instance.pk)
+
+        if existing_qs.exists():
+            raise serializers.ValidationError(
+                f"Student is already enrolled in '{course.title}'."
+            )
+
         return attrs
     
 class CenterSerializer(serializers.ModelSerializer):
@@ -685,13 +714,14 @@ class CoursePaymentSerializer(serializers.ModelSerializer):
         source="installments.plan.course.title",
         read_only=True
     )
-
     installment_amount = serializers.DecimalField(
         source="installments.amount",
         max_digits=10,
         decimal_places=2,
         read_only=True
     )
+    already_paid = serializers.SerializerMethodField()
+    balance = serializers.SerializerMethodField()
 
     class Meta:
         model = CoursePayment
@@ -701,6 +731,8 @@ class CoursePaymentSerializer(serializers.ModelSerializer):
             "installments",
             "course_title",
             "installment_amount",
+            "already_paid",
+            "balance",
             "amount_paid",
             "payment_method",
             "transaction_id",
@@ -708,100 +740,131 @@ class CoursePaymentSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["payment_date"]
 
+    def get_already_paid(self, obj):
+        if not obj.installments:  
+            return 0
+        return CoursePayment.objects.filter(
+            student=obj.student,
+            installments=obj.installments,
+        ).aggregate(t=Sum("amount_paid"))["t"] or 0
+
+    def get_balance(self, obj):
+        if not obj.installments: 
+            return 0
+        already = self.get_already_paid(obj)
+        return obj.installments.amount - already
+
     def validate(self, data):
-        student = data["student"]
-        installments = data["installments"]
-        amount_paid = data["amount_paid"]
+        student        = data["student"]
+        installments   = data["installments"]
+        amount_paid    = data["amount_paid"]
         payment_method = data["payment_method"]
         transaction_id = data.get("transaction_id")
 
         course = installments.plan.course
-        enrollment = get_staff_course_enrollment(
-            student,
-            course,
-            installment_plan=installments.plan,
-        )
 
-        # Student must be enrolled
+        #  Enrollment check
+        enrollment = StudentCourseEnrollment.objects.filter(
+            student=student,
+            course=course,
+        ).first()
+
         if not enrollment:
-            raise serializers.ValidationError("Student not enrolled in this course.")
+            raise serializers.ValidationError(
+                "Student not enrolled in this course."
+            )
 
-        # Transaction ID check
+        if enrollment.installment_plan and enrollment.installment_plan_id != installments.plan_id:
+            raise serializers.ValidationError(
+                "This installment plan is not assigned to this student."
+            )
+
         if payment_method != "cash" and not transaction_id:
-            raise serializers.ValidationError("Transaction ID required.")
+            raise serializers.ValidationError(
+                "Transaction ID required for non-cash payments."
+            )
 
-        # Full payment check
-        if amount_paid != installments.amount:
-            raise serializers.ValidationError("Full payment required.")
+        already_paid = CoursePayment.objects.filter(
+            student=student,
+            installments=installments,
+        ).aggregate(t=Sum("amount_paid"))["t"] or 0
+
+        remaining = installments.amount - already_paid
+
+        if amount_paid <= 0:
+            raise serializers.ValidationError("Amount must be greater than zero.")
+
+        if amount_paid > remaining:
+            raise serializers.ValidationError(
+                f"Overpayment! Item due: ₹{installments.amount}, "
+                f"Already paid: ₹{already_paid}, "
+                f"Max you can pay: ₹{remaining}."
+            )
 
         return data
 
     def create(self, validated_data):
-        try:
-            with transaction.atomic():
-                return super().create(validated_data)
-        except IntegrityError as exc:
-            raise serializers.ValidationError(
-                "This installment has already been paid."
-            ) from exc
+        with transaction.atomic():
+            return super().create(validated_data)
 
     def update(self, instance, validated_data):
-        # Immutable financial records
         raise serializers.ValidationError(
             "Payments cannot be updated once created."
         )
 
-
 class CourceInstallmentListSerializer(serializers.ModelSerializer):
-    # installment_no = serializers.SerializerMethodField()
-    status = serializers.SerializerMethodField()
-    due_date = serializers.SerializerMethodField()
-    paid_date = serializers.SerializerMethodField()
+    status         = serializers.SerializerMethodField()
+    due_date       = serializers.SerializerMethodField()
+    paid_date      = serializers.SerializerMethodField()
     payment_method = serializers.SerializerMethodField()
+    total_paid     = serializers.SerializerMethodField()  
+    balance        = serializers.SerializerMethodField()  
 
     class Meta:
-        model = InstallmentItem
+        model  = InstallmentItem
         fields = [
             "id",
-            # "installment_no",
             "amount",
             "status",
             "due_date",
             "paid_date",
             "payment_method",
+            "total_paid",   # ✅ new
+            "balance",      # ✅ new
         ]
 
-    #  Get payment ONLY for this staff
-    def get_payment(self, obj):
+    def _get_payments(self, obj):
+        """ഈ student-ന്റെ ഈ item-ലേക്കുള്ള എല്ലാ payments"""
         student = get_payment_student(self.context.get("student"))
         if not student:
-            return None
-        return obj.payments.filter(student=student).order_by("-payment_date").first()
+            return CoursePayment.objects.none()
+        return obj.course_payments.filter(student=student).order_by("payment_date")
 
-    # #  Installment number (1,2,3…)
-    # def get_installment_no(self, obj):
-    #     ids = list(
-    #         obj.course.installments
-    #         .order_by("due_days_after_enrollment")
-    #         .values_list("id", flat=True)
-    #     )
-    #     return f"#{ids.index(obj.id) + 1}"
+    def get_total_paid(self, obj):
+        return self._get_payments(obj).aggregate(
+            t=Sum("amount_paid")
+        )["t"] or 0
 
-    #  Paid / Pending (staff-specific)
+    def get_balance(self, obj):
+        return obj.amount - self.get_total_paid(obj)
+
     def get_status(self, obj):
-        return "Paid" if self.get_payment(obj) else "Pending"
+        total_paid = self.get_total_paid(obj)
+        if total_paid <= 0:
+            return "Pending"
+        elif total_paid < obj.amount:
+            return "Partial"
+        return "Paid"
 
-    #  Paid date
     def get_paid_date(self, obj):
-        payment = self.get_payment(obj)
-        return payment.payment_date if payment else None
+        # Last payment date
+        last = self._get_payments(obj).last()
+        return last.payment_date if last else None
 
-    #  Payment method
     def get_payment_method(self, obj):
-        payment = self.get_payment(obj)
-        return payment.payment_method if payment else "-"
+        last = self._get_payments(obj).last()
+        return last.payment_method if last else "-"
 
-    #  Due date (based on staff enrollment)
     def get_due_date(self, obj):
         student = self.context.get("student")
         if not student:

@@ -34,14 +34,14 @@ class InstructorCourseRetrieveUpdateDestroyAPIView(
     
 
 
-class InstallmentListAPIView(generics.ListAPIView):
-    serializer_class = CourseInstallmentSerializer
-    permission_classes = [IsAuthenticated]
+# class InstallmentListAPIView(generics.ListAPIView):
+#     serializer_class = CourseInstallmentSerializer
+#     permission_classes = [IsAuthenticated]
     
 
-    def get_queryset(self):
-        course_id = self.kwargs.get("course_id")
-        return CourseInstallment.objects.filter(course_id=course_id).order_by("due_days_after_enrollment")
+#     def get_queryset(self):
+#         course_id = self.kwargs.get("course_id")
+#         return InstallmentPlan.objects.filter(course_id=course_id).order_by("due_days")
 
 
 class InstructorAssignedStaffCourseListCreateAPIView(generics.ListCreateAPIView):

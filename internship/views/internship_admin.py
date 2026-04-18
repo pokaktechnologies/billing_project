@@ -51,8 +51,10 @@ class CourseListCreateAPIView(generics.ListCreateAPIView):
         "department",
         "tax_settings",
     ).prefetch_related(
-        "faculties",
+        "batches__faculties__user__user",
         "installment_plans__items",
+    ).annotate(
+        students_count=Count('students', distinct=True)
     ).order_by('-created_at')
 
     serializer_class = CourseSerializer
@@ -63,7 +65,6 @@ class CourseListCreateAPIView(generics.ListCreateAPIView):
         "department": ["exact"],
         "is_active": ["exact"],
         "students": ["exact"],
-        "faculties": ["exact"],
         "batches__faculties": ["exact"],
     }
 
@@ -74,8 +75,10 @@ class CourseRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
         "department",
         "tax_settings",
     ).prefetch_related(
-        "faculties",
+        "batches__faculties__user__user",
         "installment_plans__items"
+    ).annotate(
+        students_count=Count('students', distinct=True)
     )
 
     serializer_class = CourseSerializer
@@ -110,7 +113,7 @@ class FacultyQuerysetMixin:
         "user__user",
         "department",
     ).annotate(
-        course_count=Count("courses", distinct=True),
+        course_count=Count("batches__course", distinct=True),
         students_count=Count("batches__students", distinct=True),
     ).order_by("id")
 
@@ -122,7 +125,6 @@ class FacultyListCreateAPIView(FacultyQuerysetMixin, generics.ListCreateAPIView)
     filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_fields = {
         "department": ["exact"],
-        "courses": ["exact"],
         "batches__course": ["exact"],
         "batches": ["exact"],
         "is_active": ["exact"],
@@ -164,7 +166,7 @@ class BatchNumberPreviewAPIView(APIView):
         return Response({"batch_number": batch_number})
     
 class BatchListCreateAPIView(generics.ListCreateAPIView):
-    queryset         = Batch.objects.select_related("course").prefetch_related("faculties")
+    queryset         = Batch.objects.select_related("course").prefetch_related("faculties__user__user")
     serializer_class = BatchSerializer
     permission_classes = [IsAuthenticated]
     filter_backends  = [DjangoFilterBackend, SearchFilter]
@@ -177,7 +179,7 @@ class BatchListCreateAPIView(generics.ListCreateAPIView):
     ]
 
 class BatchRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
-    queryset         = Batch.objects.select_related("course").prefetch_related("faculties")
+    queryset         = Batch.objects.select_related("course").prefetch_related("faculties__user__user")
     serializer_class = BatchSerializer
     permission_classes = [IsAuthenticated]
 

@@ -75,16 +75,10 @@ class CourseSerializer(serializers.ModelSerializer):
         source="department.name",
         read_only=True
     )
-    faculties = serializers.PrimaryKeyRelatedField(
-        many=True,
-        queryset=Faculty.objects.all(),
-        write_only=True,
-        required=False
-    )
 
     faculty_details = serializers.SerializerMethodField()
 
-    sudents_count = serializers.SerializerMethodField()
+    students_count = serializers.SerializerMethodField()
 
     installment_plans = InstallmentPlanSerializer(
         many=True,
@@ -104,9 +98,8 @@ class CourseSerializer(serializers.ModelSerializer):
             "is_active",
             "department",
             "department_name",
-            "faculties",
             "faculty_details",
-            'sudents_count',
+            'students_count',
             "total_fee",
             "installment_plans",
             "created_at",
@@ -124,16 +117,23 @@ class CourseSerializer(serializers.ModelSerializer):
         ]
 
 
-    def get_sudents_count(self, obj):
+    def get_students_count(self, obj):
+        annotated_count = getattr(obj, "students_count", None)
+        if annotated_count is not None:
+            return annotated_count
         return obj.students.count()
 
     def get_faculty_details(self, obj):
+        faculties = set()
+        for batch in obj.batches.all():
+            for f in batch.faculties.all():
+                faculties.add(f)
         return [
             {
                 "id": faculty.id,
                 "name": faculty.get_full_name()
             }
-            for faculty in obj.faculties.all()
+            for faculty in faculties
         ]
 
     # ---------- TAX LOGIC ----------
@@ -202,9 +202,7 @@ class CourseSerializer(serializers.ModelSerializer):
     # ---------- CREATE ----------
     def create(self, validated_data):
         plans_data = validated_data.pop("installment_plans", [])
-        faculties = validated_data.pop("faculties", [])
         course = Course.objects.create(**validated_data)
-        course.faculties.set(faculties)
 
         for plan_data in plans_data:
             items_data = plan_data.pop("items")
@@ -219,12 +217,9 @@ class CourseSerializer(serializers.ModelSerializer):
     # ---------- UPDATE ----------
     def update(self, instance, validated_data):
         validated_data.pop("installment_plans", None)
-        faculties = validated_data.pop("faculties", None)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
-        if faculties is not None:
-            instance.faculties.set(faculties)
         return instance
     
 class InstallmentItemUpdateSerializer(serializers.ModelSerializer):
@@ -366,7 +361,7 @@ class FacultySerializer(serializers.ModelSerializer):
         annotated_count = getattr(obj, "course_count", None)
         if annotated_count is not None:
             return annotated_count
-        return obj.courses.count()
+        return Course.objects.filter(batches__faculties=obj).distinct().count()
 
     def get_students_count(self, obj):
         annotated_count = getattr(obj, "students_count", None)
@@ -639,7 +634,7 @@ class StudentSerializer(serializers.ModelSerializer):
             return instance
         
 class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
-    sudent_name = serializers.CharField(source="student.profile.get_full_name", read_only=True)
+    student_name = serializers.CharField(source="student.profile.get_full_name", read_only=True)
     course_title = serializers.CharField(source="course.title", read_only=True)
     batch_number = serializers.CharField(source="batch.batch_number", read_only=True)
     total_installments = serializers.CharField(source="installment_plan.total_installments", read_only=True)
@@ -649,7 +644,7 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "student",
-            "sudent_name",
+            "student_name",
             "course",
             "course_title",
             "batch",

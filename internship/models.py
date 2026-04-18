@@ -346,7 +346,7 @@ class TaskAssignment(models.Model):
         unique_together = ('task', 'student')
 
     def __str__(self):
-        return f"{self.staff} - {self.task} [{self.status}]"
+        return f"{self.student} - {self.task} [{self.status}]"
 
 
 class TaskAttachment(models.Model):

@@ -118,65 +118,79 @@ class CourseEnrolledStudentsListAPIView(APIView):
 
 # ===== Intern Views ======
 
-class InternListAPIView(APIView):
+class StudentListAPIView(APIView):
     permission_classes = [IsAuthenticated]
-    
 
     def get(self, request):
-        department_id = request.query_params.get("department")    # int
-        name = request.query_params.get("name")                   # str
-        status = request.query_params.get("status")               # active, inactive, etc.
+        course_id = request.query_params.get("course")
+        name = request.query_params.get("name")
+        status = request.query_params.get("status")
+        batch_id = request.query_params.get("batch")
 
-        qs = JobDetail.objects.filter(job_type="internship").select_related(
-            "staff", "staff__user", "department"
+        qs = Student.objects.select_related(
+            "profile__user",
+            "course",
+            "batch",
+            "center"
         )
 
-        # department filter
-        if department_id:
-            qs = qs.filter(department_id=department_id)
+        # batch filter
+        if batch_id:
+            qs = qs.filter(batch_id=batch_id)
 
-        # status filter
+        # course filter
+        if course_id:
+            qs = qs.filter(course_id=course_id)
+
+        # active/inactive
         if status:
-            qs = qs.filter(status=status)
 
-        # name filter (first, last, or email)
+            if status == "active":
+                qs = qs.filter(is_active=True)
+            elif status == "inactive":
+                qs = qs.filter(is_active=False)
+
+        # name filter
         if name:
             qs = qs.filter(
-                Q(staff__user__first_name__icontains=name) |
-                Q(staff__user__last_name__icontains=name) |
-                Q(staff__user__email__icontains=name)
+                Q(profile__user__first_name__icontains=name) |
+                Q(profile__user__last_name__icontains=name) |
+                Q(profile__user__email__icontains=name)
             )
 
-        # output staff profile, not jobdetail itself
-        staff_profiles = [item.staff for item in qs]
-
-        serializer = InternListSerializer(staff_profiles, many=True)
+        serializer = StudentSerializer(qs, many=True)
         return Response(serializer.data)
 
-class InternProfileInfoAPIView(generics.RetrieveAPIView):
+
+class StudentProfileInfoAPIView(generics.RetrieveAPIView):
     permission_classes = [IsAuthenticated]
-    
-    serializer_class = InternProfileSerializer
-    queryset = StaffProfile.objects.all().select_related("user", "job_detail", "job_detail__department")
 
-class InternsStatsAPIView(APIView):
+    serializer_class = StudentSerializer
+    queryset = Student.objects.select_related(
+        "profile__user",
+        "course",
+        "batch",
+        "center",
+        "payment_type",
+        "councellor"
+    )
+
+
+class StudentsStatsAPIView(APIView):
     permission_classes = [IsAuthenticated]
-    
 
-    def get(self, request, *args, **kwargs):
-        # interns = job_detail rows where job_type == internship
-        interns = JobDetail.objects.filter(job_type="internship")
+    def get(self, request):
+        students = Student.objects.all()
 
-        total_interns = interns.count()
-        active = interns.filter(status="active").count()
-        inactive = interns.filter(status="inactive").count()
+        total = students.count()
+        active = students.filter(is_active=True).count()
+        inactive = students.filter(is_active=False).count()
 
         return Response({
-            "total_interns": total_interns,
-            "active_interns": active,
-            "inactive_interns": inactive,
+            "total_students": total,
+            "active_students": active,
+            "inactive_students": inactive,
         })
-
 
 
 
@@ -335,12 +349,11 @@ class TaskStatsAPIView(APIView):
         return Response(stats)
 
 
-class StaffPerformanceStatsAPIView(APIView):
+class StudentPerformanceStatsAPIView(APIView):
     permission_classes = [IsAuthenticated]
-    
 
-    def get(self, request, staff_id):
-        qs = TaskAssignment.objects.filter(staff_id=staff_id)
+    def get(self, request, student_id):
+        qs = TaskAssignment.objects.filter(student_id=student_id)
 
         total = qs.count()
         completed = qs.filter(status="completed").count()
@@ -348,9 +361,8 @@ class StaffPerformanceStatsAPIView(APIView):
         submitted = qs.filter(status="submitted").count()
         revision = qs.filter(status="revision_required").count()
 
-
-        # ---- Attendance calculation ----
-        attendance_qs = DailyAttendance.objects.filter(staff_id=staff_id)
+        # ---- Attendance (if students have attendance) ----
+        attendance_qs = DailyAttendance.objects.filter(staff=student_id)
 
         total_days = attendance_qs.count()
 
@@ -361,9 +373,9 @@ class StaffPerformanceStatsAPIView(APIView):
             attend_score = full_days * 1 + half_days * 0.5
             attendance_percentage = round((attend_score / total_days) * 100, 2)
         else:
-            attendance_percentage = None   # no data
-        
-        # ---- Performance Status (based on attendance) ----
+            attendance_percentage = None
+
+        # ---- Performance Status ----
         if attendance_percentage is None:
             performance_status = "No attendance data"
         elif attendance_percentage >= 90:
@@ -387,7 +399,6 @@ class StaffPerformanceStatsAPIView(APIView):
                 "performance_status": performance_status,
             }
         })
-
 
 from django.db.models import Subquery, OuterRef, F
 from django.utils.timezone import now
@@ -448,7 +459,53 @@ class InstructorSubmissionListAPIView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]   # add your instructor permission
 
     def get_queryset(self):
-        return TaskSubmission.objects.all()
+        qs = TaskSubmission.objects.select_related(
+            "assignment__task",
+            "assignment__student__profile__user",
+            "assignment__staff__user"
+        )
+
+        title = self.request.query_params.get("title")
+        student = self.request.query_params.get("student")
+        status = self.request.query_params.get("status")
+        search = self.request.query_params.get("search")
+
+        # 🔹 title filter
+        if title:
+            qs = qs.filter(assignment__task__title__icontains=title)
+
+        # 🔹 status filter
+        if status:
+            qs = qs.filter(assignment__status=status)
+
+        # 🔹 student filter (hybrid)
+        if student:
+            if student.isdigit():
+                qs = qs.filter(
+                    Q(assignment__student_id=int(student)) |
+                    Q(assignment__staff_id=int(student))
+                )
+            else:
+                qs = qs.filter(
+                    Q(assignment__student__profile__user__first_name__icontains=student) |
+                    Q(assignment__student__profile__user__last_name__icontains=student) |
+                    Q(assignment__student__profile__user__email__icontains=student) |
+                    Q(assignment__staff__user__first_name__icontains=student) |
+                    Q(assignment__staff__user__last_name__icontains=student) |
+                    Q(assignment__staff__user__email__icontains=student)
+                )
+
+        # 🔍 GLOBAL SEARCH (title + student name)
+        if search:
+            qs = qs.filter(
+                Q(assignment__task__title__icontains=search) |
+                Q(assignment__student__profile__user__first_name__icontains=search) |
+                Q(assignment__student__profile__user__last_name__icontains=search) |
+                Q(assignment__staff__user__first_name__icontains=search) |
+                Q(assignment__staff__user__last_name__icontains=search)
+            )
+
+        return qs.order_by("-id").distinct()
 
 
 # detail view to review a submission

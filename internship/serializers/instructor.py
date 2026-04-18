@@ -441,7 +441,7 @@ from django.utils import timezone
 class InstructorSubmissionSerializer(serializers.ModelSerializer):
     title = serializers.CharField(source='assignment.task.title', read_only=True)
     status = serializers.CharField(source='assignment.status', read_only=True)
-    staff = serializers.SerializerMethodField()
+    student = serializers.SerializerMethodField()
     due_date = serializers.DateField(source='assignment.task.due_date', read_only=True)
 
     class Meta:
@@ -449,31 +449,31 @@ class InstructorSubmissionSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "title",
-            "staff",
+            "student",
             "assignment",
             "submitted_at",
             "link",
-            "response", 
+            "response",
             "instructor_feedback",
             "reviewed_at",
             "due_date",
             "status",
-            # "revision_due_date",
-
         ]
-    def get_staff(self, obj):
-        return f"{obj.assignment.staff.user.first_name} {obj.assignment.staff.user.last_name}"
 
+    def get_student(self, obj):
+        student = obj.assignment.student
+        if student and student.profile and student.profile.user:
+            user = student.profile.user
+            return f"{user.first_name} {user.last_name}"
+        return None
 class InstructorSubmissionDetailSerializer(serializers.ModelSerializer):
     title = serializers.CharField(source='assignment.task.title', read_only=True)
     description = serializers.CharField(source='assignment.task.description', read_only=True)
     status = serializers.CharField(source='assignment.status', read_only=True)
-    staff = serializers.SerializerMethodField()
+    student = serializers.SerializerMethodField()
     due_date = serializers.DateField(source='assignment.task.due_date', read_only=True)
 
-    # attachments = serializers.CharField(source='assignment.task.attachments.file', read_only=True)
     attachments = TaskSubmissionAttachmentSerializer(many=True, read_only=True)
-
 
     class Meta:
         model = TaskSubmission
@@ -481,23 +481,24 @@ class InstructorSubmissionDetailSerializer(serializers.ModelSerializer):
             "id",
             "title",
             "description",
-            "staff",
+            "student",
             "status",
-
             "assignment",
             "link",
-            "response", 
+            "response",
             "instructor_feedback",
-
             "attachments",
-
             "submitted_at",
             "reviewed_at",
             "due_date",
         ]
-    def get_staff(self, obj):
-        return f"{obj.assignment.staff.user.first_name} {obj.assignment.staff.user.last_name}"
 
+    def get_student(self, obj):
+        student = obj.assignment.student
+        if student and student.profile and student.profile.user:
+            user = student.profile.user
+            return f"{user.first_name} {user.last_name}"
+        return None
 class InstructorSubmissionReviewSerializer(serializers.ModelSerializer):
     # Map status and revision_due_date to the related assignment fields
     status = serializers.ChoiceField(

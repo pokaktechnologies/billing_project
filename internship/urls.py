@@ -7,9 +7,9 @@ instructor_patterns = [
     path('assigned-staff-course/', instructor.InstructorAssignedStaffCourseListCreateAPIView.as_view(), name='instructor-assignedstaffcourse-list'),
     path('assigned-staff-course/<int:pk>/', instructor.InstructorAssignedStaffCourseRetrieveUpdateDestroyAPIView.as_view(), name='instructor-assignedstaffcourse-detail'),
     path('course/<int:course_id>/enrolled-students/', instructor.CourseEnrolledStudentsListAPIView.as_view(), name='instructor-course-enrolled-students'),
-    path('interns/', instructor.InternListAPIView.as_view()),
-    path('interns/<int:pk>/', instructor.InternProfileInfoAPIView.as_view()),
-    path('interns/stats/', instructor.InternsStatsAPIView.as_view()),
+    path('students/', instructor.StudentListAPIView.as_view()),
+    path('students/<int:pk>/', instructor.StudentProfileInfoAPIView.as_view()),
+    path('students/stats/', instructor.StudentsStatsAPIView.as_view()),
 
     path('study-material/', instructor.StudyMaterialAPIView.as_view(), name='instructor-study-material-list'),
     path('study-material/<int:pk>/', instructor.StudyMaterialDetailAPIView.as_view(), name='instructor-study-material-detail'),
@@ -24,7 +24,7 @@ instructor_patterns = [
     path('tasks/intern/<int:staff_id>/stats/', instructor.InternTaskStatsAPIView.as_view()),
     path('attachments/<int:pk>/', instructor.TaskAttachmentDeleteAPIView.as_view()),
 
-    path('staff/<int:staff_id>/performance/', instructor.StaffPerformanceStatsAPIView.as_view()),
+    path('students/<int:student_id>/performance/', instructor.StudentPerformanceStatsAPIView.as_view()),
 
 
     

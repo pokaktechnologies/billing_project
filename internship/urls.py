@@ -21,18 +21,20 @@ instructor_patterns = [
     path('tasks/<int:pk>/', instructor.TaskRetrieveUpdateDestroyAPIView.as_view()),
     path('tasks/<int:pk>/detail/', instructor.TaskDetailAPIView.as_view()),
     path('tasks/stats/', instructor.TaskStatsAPIView.as_view()),
-    path('tasks/intern/<int:staff_id>/stats/', instructor.InternTaskStatsAPIView.as_view()),
+    path('tasks/intern/<int:student_id>/stats/', instructor.InternTaskStatsAPIView.as_view()),
     path('attachments/<int:pk>/', instructor.TaskAttachmentDeleteAPIView.as_view()),
 
     path('students/<int:student_id>/performance/', instructor.StudentPerformanceStatsAPIView.as_view()),
 
 
-    
+
     path('submissions/', instructor.InstructorSubmissionListAPIView.as_view()),
     path('submissions/<int:pk>/', instructor.InstructorSubmissionDetailAPIView.as_view()),
     path('submissions/<int:pk>/review/', instructor.InstructorSubmissionReviewAPI.as_view()),
     path('submissions/stats/', instructor.SubmissionStatsAPIView.as_view()),
 
+
+    path('faculty/<int:faculty_id>/courses/', instructor.FacultyCourseListAPIView.as_view()),
     # path('course/<int:course_id>/installments/', instructor.InstallmentListAPIView.as_view()),
 
     # path("payments/", instructor.CoursePaymentListCreateAPIView.as_view()),
@@ -61,8 +63,8 @@ intern_patterns = [
     path('payments/', intern.MyCoursePaymentListAPIView.as_view()),
 
     #Dashboard
-    path('dashaboard/',intern.InternDashboardAPIView.as_view()),   
-]   
+    path('dashaboard/',intern.InternDashboardAPIView.as_view()),
+]
 
 internship_admin_patterns = [
     path('course/', internship_admin.CourseListCreateAPIView.as_view(), name='instructor-course-list'),

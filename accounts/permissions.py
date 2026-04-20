@@ -78,31 +78,31 @@ PARENT_MODULE_MAP = [
         "name": "Task Management",
         "submodules": [
             "Dashboard",
-            "Courses",
-            "Interns",
-            "Faculty",
-            "Payments",
-            "Center",
-            "Classes",
+            "courses",
+            "interns",
+            "faculty",
+            "payments",
+            "center",
+            "classes",
         ]
     },
 
     {
         "name": "Faculty Management",
         "submodules": [
-            "All Tasks",
-            "My Courses",
-            "Interns",
-            "Submissions"
+            "all_taskd",
+            "my_courses",
+            "interns",
+            "submissions"
         ]
     },
 
     {
         "name": "Internship Pro",
         "submodules": [
-            "My Tasks",
-            "Study Materials",
-            "Payments"
+            "my_tasks",
+            "study_materials",
+            "payments"
         ]
     },
     {

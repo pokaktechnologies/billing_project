@@ -1,5 +1,5 @@
 from django.shortcuts import get_object_or_404
-from rest_framework import generics,filters
+from rest_framework import generics,filters, status
 from rest_framework.response import Response
 from internship.models import Course
 from internship.serializers.instructor import CourseSerializer
@@ -22,7 +22,7 @@ class InstructorCourseListCreateAPIView(generics.ListCreateAPIView):
     queryset = Course.objects.prefetch_related("installments", "department").order_by('-created_at')
     serializer_class = CourseSerializer
     permission_classes = [IsAuthenticated]
-    
+
 
 
 class InstructorCourseRetrieveUpdateDestroyAPIView(
@@ -31,13 +31,13 @@ class InstructorCourseRetrieveUpdateDestroyAPIView(
     queryset = Course.objects.prefetch_related("installments", "department")
     serializer_class = CourseSerializer
     permission_classes = [IsAuthenticated]
-    
+
 
 
 # class InstallmentListAPIView(generics.ListAPIView):
 #     serializer_class = CourseInstallmentSerializer
 #     permission_classes = [IsAuthenticated]
-    
+
 
 #     def get_queryset(self):
 #         course_id = self.kwargs.get("course_id")
@@ -47,7 +47,7 @@ class InstructorCourseRetrieveUpdateDestroyAPIView(
 class InstructorAssignedStaffCourseListCreateAPIView(generics.ListCreateAPIView):
     queryset = AssignedStaffCourse.objects.select_related("staff", "course").order_by("-assigned_date")
     permission_classes = [IsAuthenticated]
-    
+
 
     def get_serializer_class(self):
         if self.request.method == "POST":
@@ -70,13 +70,13 @@ class InstructorAssignedStaffCourseRetrieveUpdateDestroyAPIView(
     queryset = AssignedStaffCourse.objects.select_related("staff", "course")
     serializer_class = AssignedStaffCourseDetailSerializer
     permission_classes = [IsAuthenticated]
-    
+
 
 
 #list staff inter by course id (Enrolled Students(count))
 class CourseEnrolledStudentsListAPIView(APIView):
     permission_classes = [IsAuthenticated]
-    
+
 
     def get(self, request, course_id):
 
@@ -92,7 +92,7 @@ class CourseEnrolledStudentsListAPIView(APIView):
             course = Course.objects.get(id=course_id)
         except Course.DoesNotExist:
             return Response({"detail": "Course not found."}, status=404)
-        
+
         assigned_staff_courses = AssignedStaffCourse.objects.filter(course=course).select_related("staff__user")
 
         #search by student name (first name) if query param provided
@@ -106,7 +106,7 @@ class CourseEnrolledStudentsListAPIView(APIView):
             assigned_staff_courses = assigned_staff_courses.filter(assigned_date__gte=enrollment_date_from)
         if enrollment_date_to:
             assigned_staff_courses = assigned_staff_courses.filter(assigned_date__lte=enrollment_date_to)
-            
+
         serializer = AssignedStaffCourseSerializer(assigned_staff_courses, many=True)
         return Response(
             {
@@ -203,13 +203,13 @@ class StudyMaterialAPIView(generics.ListCreateAPIView):
     filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_fields = ['course', 'batch', 'material_type']
     search_fields = ['title', 'description']
-    
+
 
 class StudyMaterialDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
     queryset = StudyMaterial.objects.all()
     serializer_class = StudyMaterialSerializer
     permission_classes = [IsAuthenticated]
-    
+
 
 
 # list study materials by course
@@ -222,7 +222,7 @@ class CourseStudyMaterialListAPIView(generics.ListAPIView):
         batch_id = self.kwargs.get("batch_id")
 
         title = self.request.query_params.get("title")
-        material_type = self.request.query_params.get("type") 
+        material_type = self.request.query_params.get("type")
 
         queryset = StudyMaterial.objects.all()
 
@@ -239,7 +239,7 @@ class CourseStudyMaterialListAPIView(generics.ListAPIView):
             queryset = queryset.filter(material_type=material_type)
 
         return queryset.order_by("-created_at")
-    
+
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
         serializer = self.get_serializer(queryset, many=True)
@@ -261,47 +261,45 @@ class TaskListCreateAPIView(generics.ListCreateAPIView):
         qs = Task.objects.all().order_by('-id')
 
         title = self.request.query_params.get("title")
-        intern_ids = self.request.query_params.get("intern")
+        student_ids = self.request.query_params.get("student")  # ✅ renamed
         course = self.request.query_params.get("course")
-        status = self.request.query_params.get("status")  # pending, submitted, revision_required, completed
+        status = self.request.query_params.get("status")
 
-        #assigned date
         assigned_from = self.request.query_params.get("assigned_from")
         assigned_to = self.request.query_params.get("assigned_to")
 
-        #due date
         due_from = self.request.query_params.get("due_from")
         due_to = self.request.query_params.get("due_to")
 
         if course:
-            qs =  qs.filter(course_id=course)
+            qs = qs.filter(course_id=course)
 
         if title:
             qs = qs.filter(title__icontains=title)
 
-        #intern-based filtering
-        if intern_ids:
-            staff_ids = [int(x) for x in intern_ids.split(",") if x.isdigit()]
-            qs = qs.filter(assignments__staff_id__in=staff_ids)
+        # ✅ student-based filtering
+        if student_ids:
+            student_ids = [int(x) for x in student_ids.split(",") if x.isdigit()]
 
-            #status ONLY when intern exists
+            qs = qs.filter(assignments__student_id__in=student_ids)
+
             if status:
                 qs = qs.filter(assignments__status=status)
 
-            #assigned_at date range
             if assigned_from:
                 qs = qs.filter(assignments__assigned_at__date__gte=assigned_from)
+
             if assigned_to:
                 qs = qs.filter(assignments__assigned_at__date__lte=assigned_to)
 
-            #revision_due_date range
             if due_from:
                 qs = qs.filter(assignments__revision_due_date__gte=due_from)
+
             if due_to:
                 qs = qs.filter(assignments__revision_due_date__lte=due_to)
 
         return qs.distinct()
-    
+
 
 class TaskRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Task.objects.all()
@@ -409,32 +407,32 @@ from django.utils.timezone import now
 class InternTaskStatsAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, staff_id, format=None):
-        # pull ALL assignments for that staff
+    def get(self, request, student_id, format=None):
+
+        # 🔹 pull ALL assignments for that student
         assignments = (
             TaskAssignment.objects
-            .filter(staff_id=staff_id)
+            .filter(student_id=student_id)
             .select_related("task")
             .order_by("task_id", "-assigned_at")
         )
 
-        # pick latest per task
+        # 🔹 pick latest assignment per task
         latest_by_task = {}
         for a in assignments:
             if a.task_id not in latest_by_task:
                 latest_by_task[a.task_id] = a
 
-        # now we have exactly 1 assignment per task
         latest = latest_by_task.values()
 
-        # counts
+        # 🔹 counts
         total_tasks = len(latest)
         completed = sum(1 for a in latest if a.status == "completed")
         pending = sum(1 for a in latest if a.status == "pending")
         submitted = sum(1 for a in latest if a.status == "submitted")
         revision = sum(1 for a in latest if a.status == "revision_required")
 
-        # overdue check
+        # 🔹 overdue check
         today = now().date()
         overdue = sum(
             1 for a in latest
@@ -449,7 +447,6 @@ class InternTaskStatsAPIView(APIView):
             "completed": completed,
             "overdue": overdue,
         })
-
 
 
 # ===== Submission Views ======
@@ -548,3 +545,19 @@ class SubmissionStatsAPIView(APIView):
                 stats[status] += 1
 
         return Response(stats)
+
+# course under the faculy
+class FacultyCourseListAPIView(APIView):
+    def get(self, request, faculty_id):
+        courses = Course.objects.filter(
+            batches__faculties__id=faculty_id,
+            is_active=True
+        ).select_related(
+            "department", "tax_settings"
+        ).prefetch_related(
+            "batches__faculties",
+            "installment_plans__items"
+        ).distinct()
+
+        serializer = CourseSerializer(courses, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

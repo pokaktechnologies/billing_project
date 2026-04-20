@@ -201,7 +201,7 @@ class StudyMaterialAPIView(generics.ListCreateAPIView):
     serializer_class = StudyMaterialSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter]
-    filterset_fields = ['course', 'batch', 'material_type']
+    filterset_fields = ['course', 'batches', 'material_type']
     search_fields = ['title', 'description']
 
 
@@ -230,7 +230,7 @@ class CourseStudyMaterialListAPIView(generics.ListAPIView):
             queryset = queryset.filter(course_id=course_id)
 
         if batch_id:
-            queryset = queryset.filter(batch_id=batch_id)
+            queryset = queryset.filter(batches__id=batch_id)
 
         if title:
             queryset = queryset.filter(title__icontains=title)
@@ -263,7 +263,12 @@ class TaskListCreateAPIView(generics.ListCreateAPIView):
         title = self.request.query_params.get("title")
         student_ids = self.request.query_params.get("student")  # ✅ renamed
         course = self.request.query_params.get("course")
+<<<<<<< HEAD
         status = self.request.query_params.get("status")
+=======
+        batch = self.request.query_params.get("batch")
+        status = self.request.query_params.get("status")  # pending, submitted, revision_required, completed
+>>>>>>> 7585134b3f66ae29544c4272d2897f71af726353
 
         assigned_from = self.request.query_params.get("assigned_from")
         assigned_to = self.request.query_params.get("assigned_to")
@@ -273,6 +278,9 @@ class TaskListCreateAPIView(generics.ListCreateAPIView):
 
         if course:
             qs = qs.filter(course_id=course)
+
+        if batch:
+            qs = qs.filter(batch_id=batch)
 
         if title:
             qs = qs.filter(title__icontains=title)
@@ -310,6 +318,15 @@ class TaskDetailAPIView(generics.RetrieveAPIView):
     queryset = Task.objects.all()
     serializer_class = InstructorTaskDetailSerializer
     permission_classes = [IsAuthenticated]
+
+
+class BatchTaskListAPIView(generics.ListAPIView):
+    serializer_class = TaskSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        batch_id = self.kwargs.get("batch_id")
+        return Task.objects.filter(batch_id=batch_id).order_by('-id')
 
 
 class TaskAttachmentDeleteAPIView(generics.DestroyAPIView):

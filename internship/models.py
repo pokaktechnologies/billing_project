@@ -292,7 +292,7 @@ class StudyMaterial(models.Model):
     ]
 
     course = models.ForeignKey(Course, on_delete=models.CASCADE, null=True, blank=True)
-    batch = models.ForeignKey(Batch, on_delete=models.CASCADE, null=True, blank=True, related_name="study_materials")
+    batches = models.ManyToManyField(Batch, blank=True, related_name="study_materials")
     title = models.CharField(max_length=200)
     description = models.TextField()
     material_type = models.CharField(max_length=20, choices=STUDY_MATERIAL_TYPES)
@@ -302,11 +302,9 @@ class StudyMaterial(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.title} ({self.batch})"
+        return f"{self.title} ({self.course.title if self.course else 'No Course'})"
     
     def save(self, *args, **kwargs):
-        if self.batch:
-            self.course = self.batch.course
         super().save(*args, **kwargs)
 
 
@@ -316,6 +314,7 @@ class Task(models.Model):
     start_date = models.DateField()
     due_date = models.DateField()
     course = models.ForeignKey(Course,on_delete=models.CASCADE,related_name='tasks',)
+    batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name='tasks')
     assigned_to = models.ManyToManyField(
         Student,
         through='TaskAssignment',

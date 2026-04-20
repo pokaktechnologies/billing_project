@@ -268,10 +268,6 @@ class StudyMaterialSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         file = attrs.get("file")
         url = attrs.get("url")
-        batch = attrs.get("batch") or getattr(self.instance, "batch", None)
-
-        if not batch:
-            raise serializers.ValidationError("Batch is required for study material.")
 
         if not file and not url:
             raise serializers.ValidationError("Either file or url is required.")
@@ -308,7 +304,7 @@ class TaskSerializer(serializers.ModelSerializer):
         model = Task
         fields = [
             'id', 'title', 'description',
-            'start_date', 'due_date', 'status', 'course',
+            'start_date', 'due_date', 'status', 'course', 'batch',
             'assigned_to', 'attachments',
             'total_student_count', 'assigned_to_ids'
         ]
@@ -344,11 +340,13 @@ class TaskSerializer(serializers.ModelSerializer):
         if not course:
             raise serializers.ValidationError({"course": "Course is required."})
 
-        # ✅ validate students belong to course (adjust if your model differs)
-        valid_students = Student.objects.filter(
-            id__in=student_ids,
-            course=course
-        )
+        # ✅ validate students belong to course and batch (if specified)
+        filter_kwargs = {"id__in": student_ids, "course": course}
+        batch = validated_data.get("batch")
+        if batch:
+            filter_kwargs["batch"] = batch
+            
+        valid_students = Student.objects.filter(**filter_kwargs)
 
         valid_student_ids = valid_students.values_list("id", flat=True)
         invalid_students = set(student_ids) - set(valid_student_ids)
@@ -389,10 +387,12 @@ class TaskSerializer(serializers.ModelSerializer):
         if student_ids is not None:
             course = instance.course
 
-            valid_students = Student.objects.filter(
-                id__in=student_ids,
-                course=course
-            )
+            filter_kwargs = {"id__in": student_ids, "course": course}
+            batch = instance.batch
+            if batch:
+                filter_kwargs["batch"] = batch
+
+            valid_students = Student.objects.filter(**filter_kwargs)
 
             valid_student_ids = valid_students.values_list("id", flat=True)
             invalid_students = set(student_ids) - set(valid_student_ids)
@@ -430,7 +430,7 @@ class InstructorTaskDetailSerializer(serializers.ModelSerializer):
         model = Task
         fields = [
             'id', 'title', 'description', 'start_date', 'due_date',
-            'course', 'attachments', 'staff_assignments'
+            'course', 'batch', 'attachments', 'staff_assignments'
         ]
 
 

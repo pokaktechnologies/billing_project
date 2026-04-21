@@ -263,12 +263,8 @@ class TaskListCreateAPIView(generics.ListCreateAPIView):
         title = self.request.query_params.get("title")
         student_ids = self.request.query_params.get("student")  # ✅ renamed
         course = self.request.query_params.get("course")
-<<<<<<< HEAD
-        status = self.request.query_params.get("status")
-=======
         batch = self.request.query_params.get("batch")
         status = self.request.query_params.get("status")  # pending, submitted, revision_required, completed
->>>>>>> 7585134b3f66ae29544c4272d2897f71af726353
 
         assigned_from = self.request.query_params.get("assigned_from")
         assigned_to = self.request.query_params.get("assigned_to")

@@ -22,7 +22,7 @@ instructor_patterns = [
     path('tasks/<int:pk>/detail/', instructor.TaskDetailAPIView.as_view()),
     path('tasks/stats/', instructor.TaskStatsAPIView.as_view()),
     path('tasks/intern/<int:student_id>/stats/', instructor.InternTaskStatsAPIView.as_view()),
-    path('tasks/intern/<int:staff_id>/stats/', instructor.InternTaskStatsAPIView.as_view()),
+    # path('tasks/intern/<int:staff_id>/stats/', instructor.InternTaskStatsAPIView.as_view()),
     path('batch/<int:batch_id>/tasks/', instructor.BatchTaskListAPIView.as_view(), name='instructor-batch-task-list'),
     path('attachments/<int:pk>/', instructor.TaskAttachmentDeleteAPIView.as_view()),
 

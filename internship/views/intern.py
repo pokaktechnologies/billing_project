@@ -1,110 +1,108 @@
-from rest_framework.views import APIView
-from rest_framework import generics, status, serializers
-from rest_framework.response import Response
+from django.db.models import Sum
 
-from accounts.models import StaffProfile
-from ..models import (
-    Course, AssignedStaffCourse, CoursePayment, StudyMaterial, Task, Student,
-    TaskSubmission, TaskAssignment, TaskSubmissionAttachment
-)
-from accounts.permissions import HasModulePermission
+from rest_framework import generics, serializers, status, viewsets
 from rest_framework.permissions import IsAuthenticated
-from ..serializers.intern import *
-from rest_framework import viewsets
-from ..serializers.instructor import TaskSerializer, StudyMaterialSerializer, CourseSerializer 
-from ..serializers.internship_admin import CoursePaymentDetailSerializer
-from rest_framework.decorators import action
-from django.shortcuts import get_object_or_404
-from django.db.models import OuterRef, Subquery, Sum
-from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-from django.utils.timezone import now
+from rest_framework.views import APIView
+
+from ..models import Course, CoursePayment, StudyMaterial, Task, TaskAssignment, TaskSubmissionAttachment
+from ..serializers import internship_admin
+from ..serializers.intern import (
+    InternTaskMiniSerializer,
+    InternTaskSerializer,
+    StudyMaterialMiniSerializer,
+    TaskSubmissionAttachmentSerializer,
+    TaskSubmissionSerializer,
+)
+from ..serializers.instructor import StudyMaterialSerializer
+from ..serializers.internship_admin import CoursePaymentDetailSerializer
+from ..utils import (
+    get_authenticated_student,
+    get_student_course_ids,
+    get_student_courses_queryset,
+    get_student_enrollments,
+    get_student_submissions_queryset,
+    get_student_task_assignments,
+    get_student_tasks_queryset,
+)
+
 
 # === Course Views ===
 
 class MyCourseView(APIView):
     permission_classes = [IsAuthenticated]
-    
 
     def get(self, request):
-        staff_profile = getattr(request.user, "staff_profile", None)
-        if not staff_profile:
+        student = get_authenticated_student(request.user)
+        if not student:
             return Response(
-                {"detail": "User has no staff profile"},
-                status=status.HTTP_400_BAD_REQUEST
+                {"detail": "User has no student profile"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        assigned = AssignedStaffCourse.objects.filter(
-            staff=staff_profile
-        ).select_related("course")
+        courses = list(get_student_courses_queryset(student))
+        serializer = internship_admin.CourseSerializer(courses, many=True)
+        data = serializer.data
 
-        courses = [a.course for a in assigned]
-        # get the count of the study meterials for each course
-        study_material_counts = {
-            course.id: StudyMaterial.objects.filter(course=course).count()
-            for course in courses
-        }
-        data = []
-        for course in courses:
-            course_data = CourseSerializer(course).data
-            course_data["study_material_count"] = study_material_counts.get(course.id, 0)
-            data.append(course_data)
+        for course_data, course in zip(data, courses):
+            course_data["study_material_count"] = course.study_material_count
 
         return Response(data)
 
 
 class MyCourseDetailView(generics.RetrieveAPIView):
     permission_classes = [IsAuthenticated]
-    
-    serializer_class = CourseSerializer
-    queryset = Course.objects.all()
+    serializer_class = internship_admin.CourseSerializer
 
+    def get_queryset(self):
+        student = get_authenticated_student(self.request.user)
+        return get_student_courses_queryset(student)
 
 
 class MyCourseStudyMaterialListAPIView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
-    
     serializer_class = StudyMaterialSerializer
 
     def get_queryset(self):
-        staff_profile = getattr(self.request.user, "staff_profile", None)
-        if not staff_profile:
+        student = get_authenticated_student(self.request.user)
+        if not student:
             return StudyMaterial.objects.none()
 
-        assigned_course_ids = (
-            AssignedStaffCourse.objects
-            .filter(staff=staff_profile)
-            .values_list("course_id", flat=True)
-        )
-
+        course_id = self.kwargs.get("course_id")
         queryset = StudyMaterial.objects.filter(
-            course_id__in=assigned_course_ids,
+            course_id__in=get_student_course_ids(student),
             is_public=True,
-        )
+        ).select_related("course")
 
-        # search by title
+        if course_id:
+            queryset = queryset.filter(course_id=course_id)
+
         title = self.request.query_params.get("title")
         if title:
             queryset = queryset.filter(title__icontains=title)
 
-        # filter by type
         material_type = self.request.query_params.get("type")
         if material_type:
             queryset = queryset.filter(material_type=material_type)
 
         return queryset.order_by("-created_at")
 
-    
-# path('study-material/<int:pk>/', intern.MyStudyMaterialDetailView.as_view(), name='intern-study-material-detail'),
+
 class MyStudyMaterialDetailView(generics.RetrieveAPIView):
     permission_classes = [IsAuthenticated]
-    
     serializer_class = StudyMaterialSerializer
-    queryset = StudyMaterial.objects.filter(is_public=True)
+
+    def get_queryset(self):
+        student = get_authenticated_student(self.request.user)
+        if not student:
+            return StudyMaterial.objects.none()
+
+        return StudyMaterial.objects.filter(
+            is_public=True,
+            course_id__in=get_student_course_ids(student),
+        ).select_related("course")
 
 
-    
 # === Task Views ===
 
 class MyTaskViewSet(viewsets.ReadOnlyModelViewSet):
@@ -112,77 +110,34 @@ class MyTaskViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = InternTaskSerializer
 
     def get_queryset(self):
-        user = self.request.user
-        staff_profile = getattr(user, "staff_profile", None)
-        
-        if not staff_profile:
+        student = get_authenticated_student(self.request.user)
+        if not student:
             return Task.objects.none()
 
-        # Subquery → latest assignment per task
-        latest_assignment_sub = (
-            TaskAssignment.objects
-            .filter(task=OuterRef("pk"), staff=staff_profile)
-            .order_by("-assigned_at")
-        )
+        queryset = get_student_tasks_queryset(student)
 
-        queryset = (
-            Task.objects
-            .filter(assignments__staff=staff_profile)
-            .distinct()
-            .annotate(
-                latest_status=Subquery(
-                    latest_assignment_sub.values("status")[:1]
-                )
-            )
-        )
-
-        # GET query params
         title = self.request.query_params.get("title")
         status_filter = self.request.query_params.get("status")
 
-        # Search by task title
         if title:
             queryset = queryset.filter(title__icontains=title)
 
-        # Filter by latest assignment status
         if status_filter:
             queryset = queryset.filter(latest_status=status_filter)
 
-        return queryset
-
-
+        return queryset.order_by("-id")
 
 
 class MyTaskStatsAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        user = request.user
-        staff_profile = getattr(user, "staff_profile", None)
+        student = get_authenticated_student(request.user)
+        if not student:
+            return Response({"detail": "Student profile not found."}, status=400)
 
-        if not staff_profile:
-            return Response({"detail": "Staff profile not found."}, status=400)
+        tasks = get_student_tasks_queryset(student)
 
-        # Subquery: get latest assignment for each task
-        latest_assignment_subquery = (
-            TaskAssignment.objects
-            .filter(staff=staff_profile, task=OuterRef("pk"))
-            .order_by("-assigned_at")
-        )
-
-        # Annotate each task with its latest status
-        tasks = (
-            Task.objects
-            .filter(assignments__staff=staff_profile)
-            .distinct()
-            .annotate(
-                latest_status=Subquery(
-                    latest_assignment_subquery.values("status")[:1]
-                )
-            )
-        )
-
-        # Database-level counts (clean, fast, correct)
         data = {
             "all_tasks": tasks.count(),
             "pending": tasks.filter(latest_status="pending").count(),
@@ -194,9 +149,6 @@ class MyTaskStatsAPIView(APIView):
         return Response(data)
 
 
-
-
-
 # === Task Submission Views ===
 
 class TaskSubmissionListCreateAPI(generics.ListCreateAPIView):
@@ -204,29 +156,29 @@ class TaskSubmissionListCreateAPI(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        queryset = TaskSubmission.objects.filter(
-            assignment__staff__user=self.request.user
-        )
+        student = get_authenticated_student(self.request.user)
+        queryset = get_student_submissions_queryset(student)
 
-        #filter by task_id (query param)
         task_id = self.request.query_params.get("task_id")
         if task_id:
-            queryset = queryset.filter(
-                assignment__task__id=task_id
-            )
+            queryset = queryset.filter(assignment__task__id=task_id)
 
         return queryset
 
     def perform_create(self, serializer):
         assignment_id = self.request.data.get("assignment")
+        student = get_authenticated_student(self.request.user)
+
+        if not student:
+            raise serializers.ValidationError("User has no student profile.")
+
+        if not assignment_id:
+            raise serializers.ValidationError({"assignment": "Assignment is required."})
 
         try:
-            assignment = TaskAssignment.objects.get(
-                id=assignment_id,
-                staff__user=self.request.user
-            )
+            assignment = get_student_task_assignments(student).get(id=assignment_id)
         except TaskAssignment.DoesNotExist:
-            raise ValueError("You are not assigned to this task")
+            raise serializers.ValidationError("You are not assigned to this task.")
 
         serializer.save(assignment=assignment)
 
@@ -236,10 +188,8 @@ class TaskSubmissionDetailAPI(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return TaskSubmission.objects.filter(
-            assignment__staff__user=self.request.user
-        )
-
+        student = get_authenticated_student(self.request.user)
+        return get_student_submissions_queryset(student)
 
 
 class DeleteTaskSubmissionAttachmentAPI(generics.DestroyAPIView):
@@ -247,23 +197,28 @@ class DeleteTaskSubmissionAttachmentAPI(generics.DestroyAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        student = get_authenticated_student(self.request.user)
+        if not student:
+            return TaskSubmissionAttachment.objects.none()
+
         return TaskSubmissionAttachment.objects.filter(
-            submission__assignment__staff__user=self.request.user
-        )
-    
+            submission__assignment__student=student
+        ).select_related("submission", "submission__assignment")
+
+
 class MyCoursePaymentListAPIView(generics.ListAPIView):
-    # serializer_class = CoursePaymentSerializer
     permission_classes = [IsAuthenticated]
-    queryset = CoursePayment.objects.all()
 
-    def get(self, request,):
+    def get(self, request):
+        student = get_authenticated_student(request.user)
+        if not student:
+            return Response(
+                {"detail": "User has no student profile"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        student = get_object_or_404(
-            Student.objects.select_related("profile", "profile__user"),
-            profile_id=request.user.staff_profile.id,
-        )
-
-        payment = (
+        course_id = request.query_params.get("course_id")
+        payment_qs = (
             CoursePayment.objects
             .filter(student=student)
             .select_related(
@@ -272,61 +227,44 @@ class MyCoursePaymentListAPIView(generics.ListAPIView):
                 "student__profile__user",
                 "installments",
                 "installments__plan",
-                "installments__plan__course"
+                "installments__plan__course",
             )
-            .order_by("-payment_date")
-            .first()
+            .order_by("-payment_date", "-id")
         )
 
+        if course_id:
+            if not get_student_enrollments(student).filter(course_id=course_id).exists():
+                return Response(
+                    {"detail": "Course not found in your enrollments"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            payment_qs = payment_qs.filter(installments__plan__course_id=course_id)
+
+        payment = payment_qs.first()
         if not payment:
             return Response(
                 {"detail": "No payments found for this student"},
-                status=404
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         serializer = CoursePaymentDetailSerializer(payment)
-        return Response(serializer.data, status=200)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-
-
-###  FOR DASHABOARD ----------
-
+# === Dashboard ===
 
 class InternDashboardAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        user = request.user
-        staff_profile = getattr(user, "staff_profile", None)
-
-        if not staff_profile:
+        student = get_authenticated_student(request.user)
+        if not student:
             return Response(
-                {"detail": "Staff profile not found"},
-                status=400
+                {"detail": "Student profile not found"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # ================================
-        # TASKS (STATUS COUNTS + LATEST)
-        # ================================
-
-        latest_assignment_subquery = (
-            TaskAssignment.objects
-            .filter(staff=staff_profile, task=OuterRef("pk"))
-            .order_by("-assigned_at")
-        )
-
-        tasks_qs = (
-            Task.objects
-            .filter(assignments__staff=staff_profile)
-            .distinct()
-            .annotate(
-                latest_status=Subquery(
-                    latest_assignment_subquery.values("status")[:1]
-                )
-            )
-        )
-
+        tasks_qs = get_student_tasks_queryset(student).order_by("-id")
         task_stats = {
             "total": tasks_qs.count(),
             "pending": tasks_qs.filter(latest_status="pending").count(),
@@ -335,52 +273,37 @@ class InternDashboardAPIView(APIView):
             "revision": tasks_qs.filter(latest_status="revision_required").count(),
         }
 
-        latest_tasks = InternTaskMiniSerializer(
-            tasks_qs.order_by("-id")[:5],
-            many=True
-        ).data
+        latest_tasks = InternTaskMiniSerializer(tasks_qs[:5], many=True).data
 
-        # ================================
-        # STUDY MATERIALS
-        # ================================
-
-        study_materials_qs = StudyMaterial.objects.filter(
-            course__assignedstaffcourse__staff=staff_profile
-        ).distinct()[:5]
-
-        study_materials = StudyMaterialMiniSerializer(
-            study_materials_qs,
-            many=True
-        ).data
-
-        # ================================
-        # PAYMENTS SUMMARY
-        # ================================
-
-        student = getattr(staff_profile, "student_profile", None)
-        payments_qs = CoursePayment.objects.filter(student=student) if student else CoursePayment.objects.none()
-
-        total_paid = payments_qs.aggregate(
-            total=Sum("amount_paid")
-        )["total"] or 0
-
-        course = (
-            payments_qs.select_related("installments__plan__course").first().installments.plan.course
-            if payments_qs.exists() else None
+        study_materials_qs = (
+            StudyMaterial.objects
+            .filter(
+                course_id__in=get_student_course_ids(student),
+                is_public=True,
+            )
+            .select_related("course")
+            .order_by("-created_at")
+            .distinct()[:5]
         )
-        total_fee = course.total_fee if course else 0
+        study_materials = StudyMaterialMiniSerializer(study_materials_qs, many=True).data
+
+        payments_qs = CoursePayment.objects.filter(student=student)
+        total_paid = payments_qs.aggregate(total=Sum("amount_paid"))["total"] or 0
+
+        total_fee = (
+            Course.objects
+            .filter(enrollments__student=student)
+            .distinct()
+            .aggregate(total=Sum("total_fee"))["total"]
+        ) or 0
         balance = total_fee - total_paid
 
         payment_summary = {
             "total_fee": total_fee,
             "paid_amount": total_paid,
             "balance_amount": balance,
-            "status": "Paid" if balance <= 0 else "Pending"
+            "status": "Paid" if balance <= 0 else "Pending",
         }
-
-        # ================================
-        # FINAL RESPONSE
-        # ================================
 
         return Response({
             "status": "success",
@@ -390,5 +313,5 @@ class InternDashboardAPIView(APIView):
                 "latest_tasks": latest_tasks,
                 "study_materials": study_materials,
                 "payments": payment_summary,
-            }
+            },
         })

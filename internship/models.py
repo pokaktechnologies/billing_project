@@ -318,7 +318,7 @@ class Task(models.Model):
     assigned_to = models.ManyToManyField(
         Student,
         through='TaskAssignment',
-        related_name='tasks'
+        related_name='tasks',
     )
 
     def __str__(self):

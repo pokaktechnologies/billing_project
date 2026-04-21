@@ -4,7 +4,6 @@ from rest_framework import status
 from rest_framework.exceptions import NotFound
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -39,7 +38,6 @@ class InternshipApplicationPagination(PageNumberPagination):
 
 class InternshipApplicationAPIView(APIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
-    permission_classes = [IsAuthenticated]
     pagination_class = InternshipApplicationPagination
 
     def get_queryset(self):

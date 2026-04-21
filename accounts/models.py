@@ -1247,6 +1247,7 @@ class ModulePermission(models.Model):
         ('payments', "Payments"),
         ('center', "Center"),
         ('classes', "Classes"),
+        ('form_submissions', "Form Submissions"),
 
         # Faculty Management
         ("all_taskd", "All Tasks"),

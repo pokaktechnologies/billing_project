@@ -84,6 +84,7 @@ PARENT_MODULE_MAP = [
             "payments",
             "center",
             "classes",
+            "form_submissions"
         ]
     },
 

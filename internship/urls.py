@@ -1,5 +1,5 @@
 from django.urls import path, include
-from .views import instructor, intern, report_view, internship_admin
+from .views import application, instructor, intern, report_view, internship_admin
 
 instructor_patterns = [
     path('course/', instructor.InstructorCourseListCreateAPIView.as_view(), name='instructor-course-list'),
@@ -124,6 +124,8 @@ urlpatterns = [
     path('instructor/', include((instructor_patterns))),
     path('intern/', include((intern_patterns))),
     path('', include((internship_admin_patterns))),
+    path('applications/', application.InternshipApplicationAPIView.as_view(), name='internship-application-list-create'),
+    path('applications/<int:pk>/', application.InternshipApplicationAPIView.as_view(), name='internship-application-detail'),
     path('report/', include(report_patterns)),
 ]
 

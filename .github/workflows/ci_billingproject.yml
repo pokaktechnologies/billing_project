@@ -32,9 +32,11 @@ jobs:
             echo "Previous commit: $PREV_COMMIT"
             echo "Current commit: $(git rev-parse HEAD)"
 
-            # 🔥 NEW: catch merge conflict markers
             echo "🔍 Checking for merge conflict markers..."
-            if grep -r "<<<<<<<" .; then
+            if grep -r "<<<<<<<" . \
+              --exclude-dir=.git \
+              --exclude-dir=node_modules \
+              --exclude="*.yml"; then
               echo "❌ Merge conflict markers found!"
               exit 1
             fi

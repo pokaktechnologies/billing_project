@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from ..models import StudyMaterial, TaskAttachment, TaskSubmission, TaskAssignment, Task, TaskSubmissionAttachment, AssignedStaffCourse, CourseInstallment
+from ..models import StudyMaterial, TaskAttachment, TaskSubmission, TaskAssignment, Task, TaskSubmissionAttachment
+from ..utils import get_authenticated_student, get_student_task_assignment
 from datetime import date
 
 # from django.utils import timezone
@@ -38,27 +39,24 @@ class InternTaskSerializer(serializers.ModelSerializer):
             "task_attachment",
         ]
 
-    def get_status(self, obj):
-        staff_profile = getattr(self.context['request'].user, 'staff_profile', None)
-        if not staff_profile:
-            return None
+    def _get_assignment(self, obj):
+        request = self.context.get("request")
+        student = get_authenticated_student(getattr(request, "user", None))
+        return get_student_task_assignment(obj, student)
 
-        assignment = TaskAssignment.objects.filter(task=obj, staff=staff_profile).first()
+    def get_status(self, obj):
+        assignment = self._get_assignment(obj)
         return assignment.status if assignment else None
 
     def get_assignment_details(self, obj):
-        staff_profile = getattr(self.context['request'].user, 'staff_profile', None)
-        if not staff_profile:
-            return []
-
-        assignment = TaskAssignment.objects.filter(task=obj, staff=staff_profile).first()
+        assignment = self._get_assignment(obj)
         if not assignment:
             return []
 
         return TaskAssignmentSerializer(assignment).data
     
     def get_task_attachment(self, obj):
-        attachments = TaskAttachment.objects.filter(task=obj)
+        attachments = obj.attachments.all()
         return TaskAttachmentSerializer(attachments, many=True).data
 
 
@@ -78,6 +76,7 @@ class TaskSubmissionSerializer(serializers.ModelSerializer):
     title = serializers.CharField(source='assignment.task.title', read_only=True)
     description = serializers.CharField(source='assignment.task.description', read_only=True)
     status = serializers.CharField(source='assignment.status', read_only=True)
+    student_name = serializers.SerializerMethodField(read_only=True)
     staff = serializers.SerializerMethodField(read_only=True)
     due_date = serializers.DateField(source='assignment.task.due_date', read_only=True)
 
@@ -106,20 +105,47 @@ class TaskSubmissionSerializer(serializers.ModelSerializer):
             "description",
             "task_attachment",
             "status",
+            "student_name",
             "staff",
             "due_date",
         ]
         read_only_fields = ["submitted_at", "instructor_feedback", "reviewed_at"]
 
+    def _get_assignee_name(self, assignment):
+        student = assignment.student
+        if student and student.profile and student.profile.user:
+            user = student.profile.user
+            return f"{user.first_name} {user.last_name}".strip()
+
+        staff = assignment.staff
+        if staff and staff.user:
+            return f"{staff.user.first_name} {staff.user.last_name}".strip()
+
+        return None
+
+    def get_student_name(self, obj):
+        return self._get_assignee_name(obj.assignment)
+
     def get_staff(self, obj):
-        return f"{obj.assignment.staff.user.first_name} {obj.assignment.staff.user.last_name}"
+        # Backward-compatible alias for older clients.
+        return self._get_assignee_name(obj.assignment)
     
     def get_task_attachment(self, obj):
-        attachments = TaskAttachment.objects.filter(task=obj.assignment.task)
+        attachments = obj.assignment.task.attachments.all()
         return TaskAttachmentSerializer(attachments, many=True).data
 
     def validate(self, data):
         assignment = data.get("assignment") or self.instance.assignment
+        request = self.context.get("request")
+        student = get_authenticated_student(getattr(request, "user", None))
+
+        if not student:
+            raise serializers.ValidationError("User has no student profile.")
+
+        if assignment.student_id != student.id:
+            raise serializers.ValidationError(
+                "You are not assigned to this task."
+            )
 
         task = assignment.task
         due = task.due_date
@@ -170,7 +196,6 @@ class TaskSubmissionSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         files = validated_data.pop("files", [])
-        print("Updating submission with files:", files)
         
         # normal update fields
         for attr, value in validated_data.items():
@@ -204,13 +229,11 @@ class InternTaskMiniSerializer(serializers.ModelSerializer):
             "due_date",
             "course",
             "status",
-            "due_date",
-            "status",
             "attachment",
         ]
 
     def get_attachment(self, obj):
-        attachments = TaskAttachment.objects.filter(task=obj)
+        attachments = obj.attachments.all()
         return TaskAttachmentSerializer(attachments, many=True).data
 
 

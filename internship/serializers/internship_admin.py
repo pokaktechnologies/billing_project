@@ -531,11 +531,22 @@ class StudentSerializer(serializers.ModelSerializer):
             modules = validated_data.pop("modules", [])
 
             # Extract nested data
-            profile_data = validated_data.pop("profile")
-            user_data = profile_data.pop("user")
+            profile_data = validated_data.pop("profile", None)
+
+            if not profile_data:
+                raise serializers.ValidationError({
+                    "profile": "This field is required"
+                })
+
+            user_data = profile_data.pop("user", None)
+
+            if not user_data:
+                raise serializers.ValidationError({
+                    "user": "User data is required"
+                })
 
             password = user_data.pop("password", None)
-
+            
             if not password:
                 raise serializers.ValidationError({
                     "password": "Password is required"

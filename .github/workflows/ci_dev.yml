@@ -36,7 +36,9 @@ jobs:
             if grep -r "<<<<<<<" . \
               --exclude-dir=.git \
               --exclude-dir=node_modules \
-              --exclude="*.yml"; then
+              --exclude-dir=media \
+              --exclude-dir=.github \
+              --binary-files=without-match; then
               echo "❌ Merge conflict markers found!"
               exit 1
             fi

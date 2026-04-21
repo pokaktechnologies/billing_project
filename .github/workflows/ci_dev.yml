@@ -51,11 +51,11 @@ jobs:
             # 🔥 NEW: force full Django import (catches your exact bug)
             echo "🔍 Forcing Django URL import..."
             docker compose run --rm backend python -c "
-import django
-django.setup()
-from django.urls import get_resolver
-get_resolver().url_patterns
-" || { echo '❌ URL import failed'; exit 1; }
+            import django
+            django.setup()
+            from django.urls import get_resolver
+            get_resolver().url_patterns
+            " || { echo '❌ URL import failed'; exit 1; }
 
             echo "📝 Running migrations..."
             docker compose run --rm backend python manage.py migrate --noinput || exit 1

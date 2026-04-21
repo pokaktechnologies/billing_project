@@ -53,6 +53,8 @@ jobs:
             # 🔥 NEW: force full Django import (catches hidden syntax errors)
             echo "🔍 Forcing Django URL import..."
             docker compose run --rm backend python -c "
+            import os
+            os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
             import django
             django.setup()
             from django.urls import get_resolver

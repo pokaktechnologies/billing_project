@@ -478,11 +478,14 @@ class StaffProfileSerializer(serializers.ModelSerializer):
 
 class StudentSerializer(serializers.ModelSerializer):
     profile = StaffProfileSerializer(required=False, allow_null=True)
-    course_title = serializers.CharField(source="course.title", read_only=True)
-    batch_number = serializers.CharField(source="batch.batch_number", read_only=True)
+    batch = serializers.SerializerMethodField()
+    batch_number = serializers.SerializerMethodField()
+    course = serializers.SerializerMethodField()
+    course_title = serializers.SerializerMethodField()
     center_name = serializers.CharField(source="center.name", read_only=True)
     councellor_name = serializers.CharField(source="councellor.get_full_name", read_only=True)
-    payment_installment_count = serializers.CharField(source="payment_type.total_installments", read_only=True)
+    payment_type = serializers.SerializerMethodField()
+    payment_installment_count = serializers.SerializerMethodField()    
     student_id = serializers.CharField(read_only=True)
     modules = serializers.ListField(
         child=serializers.ChoiceField(choices=ModulePermission.MODULE_CHOICES),
@@ -494,8 +497,8 @@ class StudentSerializer(serializers.ModelSerializer):
         model = Student
         fields = [
             "id",
-            "profile",
             "student_id",
+            "profile",
             "center",
             "center_name",
             "course",
@@ -514,6 +517,35 @@ class StudentSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             "profile": {"required": False}
         }
+
+
+
+    def get_batch(self, obj):
+        enrollment = obj.enrollments.first()
+        return enrollment.batch.id if enrollment and enrollment.batch else None
+    
+    def get_batch_number(self, obj):
+        enrollment = obj.enrollments.first()
+        return enrollment.batch.batch_number if enrollment and enrollment.batch else None
+
+    def get_course(self, obj):
+        enrollment = obj.enrollments.first()
+        return enrollment.course.id if enrollment and enrollment.course else None
+    
+    def get_course_title(self, obj):
+        enrollment = obj.enrollments.first()
+        return enrollment.course.title if enrollment and enrollment.course else None
+    
+    def get_payment_type(self, obj):
+        enrollment = obj.enrollments.first()
+        return enrollment.installment_plan.id if enrollment and enrollment.installment_plan else None
+
+
+    def get_payment_installment_count(self, obj):
+        enrollment = obj.enrollments.first()
+        if enrollment and enrollment.installment_plan:
+            return enrollment.installment_plan.total_installments
+        return None
 
     def validate(self, attrs):
         course = attrs.get("course")
@@ -675,27 +707,22 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
         if not batch:
             raise serializers.ValidationError("Batch is required.")
 
+        # ── Installment plan must match course ──
+        if installment_plan and installment_plan.course_id != batch.course_id:
+            raise serializers.ValidationError(
+                f"Installment plan '{installment_plan}' does not belong "
+                f"to course '{batch.course.title}'."
+            )
 
-        if installment_plan:
-            if installment_plan.course_id != batch.course_id:
-                raise serializers.ValidationError(
-                    f"Installment plan '{installment_plan}' does not belong "
-                    f"to course '{batch.course.title}'."
-                )
-
-        # ── Student already enrolled in this course? ──
-        course = batch.course
-        existing_qs = StudentCourseEnrollment.objects.filter(
-            student=student,
-            course=course,
-        )
+        # ── ❗ MAIN VALIDATION: One student → only one course ──
+        existing_qs = StudentCourseEnrollment.objects.filter(student=student)
 
         if self.instance:
             existing_qs = existing_qs.exclude(pk=self.instance.pk)
 
         if existing_qs.exists():
             raise serializers.ValidationError(
-                f"Student is already enrolled in '{course.title}'."
+                "This student is already enrolled in a course."
             )
 
         return attrs

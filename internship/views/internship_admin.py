@@ -1,7 +1,7 @@
 from decimal import Decimal
 from django.utils import timezone
 from django.db import transaction
-from django.db.models import Count
+from django.db.models import Count, Prefetch
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import generics, status
@@ -184,13 +184,6 @@ class BatchRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
 
 class StudentListCreateAPIView(generics.ListCreateAPIView):
-    queryset = Student.objects.select_related(
-        "profile__user",
-        "course",
-        "batch",
-        "payment_type",
-        "councellor"
-    )
 
     serializer_class = StudentSerializer
     permission_classes = [IsAuthenticated]
@@ -206,15 +199,27 @@ class StudentListCreateAPIView(generics.ListCreateAPIView):
     ]
 
     filterset_fields = {
-        "course": ["exact"],
-        "batch": ["exact"],
+        "enrollments__course": ["exact"],
+        "enrollments__batch": ["exact"],
         "center": ["exact"],
         "is_active": ["exact"],
-        "batch__faculties": ["exact"],
     }
 
     def get_queryset(self):
-        return super().get_queryset().distinct()
+        return Student.objects.select_related(
+            "profile__user",
+            "center",
+            "councellor"
+        ).prefetch_related(
+            Prefetch(
+                "enrollments",
+                queryset=StudentCourseEnrollment.objects.select_related(
+                    "course",
+                    "batch",
+                    "installment_plan"
+                )
+            )
+        ).distinct()
 
 class StudentCredentialsAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -279,11 +284,18 @@ class StudentCredentialsAPIView(APIView):
 class StudentRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Student.objects.select_related(
         "profile__user",
-        "course",
-        "batch",
-        "payment_type",
+        "center",
         "councellor"
-    ).all()
+    ).prefetch_related(
+        Prefetch(
+            "enrollments",
+            queryset=StudentCourseEnrollment.objects.select_related(
+                "course",
+                "batch",
+                "installment_plan"
+            )
+        )
+    )
 
     serializer_class = StudentSerializer
     permission_classes = [IsAuthenticated]

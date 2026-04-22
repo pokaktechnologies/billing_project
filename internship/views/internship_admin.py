@@ -12,7 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import generics
 from ..models import Section, Class
-from ..serializers.internship_admin import SectionSerializer, ClassListCreateSerializer
+from ..serializers.internship_admin import SectionSerializer, ClassListCreateSerializer, StudentPaymentDetailSerializer, StudentPaymentSerializer
 
 from accounts.models import CustomUser
 from internship.utils import (
@@ -33,7 +33,6 @@ from ..models import (
 from ..serializers.internship_admin import (
     BatchSerializer,
     CenterSerializer,
-    CoursePaymentDetailSerializer,
     CoursePaymentSerializer,
     CourseSerializer,
     FacultySerializer,
@@ -341,103 +340,47 @@ class CoursePaymentListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = CoursePaymentSerializer
     permission_classes = [IsAuthenticated]
     
-class CoursePaymentListAPIView(APIView):
+
+
+class StudentPaymentListAPIView(generics.ListAPIView):
+    serializer_class = StudentPaymentSerializer
     permission_classes = [IsAuthenticated]
-    
 
-    def get(self, request):
+    def get_queryset(self):
+        return Student.objects.select_related(
+            "profile__user"
+        ).prefetch_related(
+            Prefetch(
+                "enrollments",
+                queryset=StudentCourseEnrollment.objects.select_related(
+                    "course",
+                    "batch",
+                    "installment_plan",
+                )
+            ),
+            "course_payments__installments__plan",
+        ).filter(
+            enrollments__isnull=False
+        ).distinct()
 
-        queryset = (
-            Student.objects
-            .select_related("profile", "profile__user", "course")
-            .prefetch_related(
-                "course_payments__installments__plan__course"
-            )
-        )
 
-        data = []
-
-        for student in queryset:
-            payments = list(student.course_payments.all())
-            if not payments:
-                continue
-
-            plan = payments[0].installments.plan
-            course = plan.course
-
-            total_fee = course.total_fee
-
-            paid_amount = sum(
-                (p.amount_paid for p in payments),
-                Decimal("0.00")
-            )
-
-            pending_amount = total_fee - paid_amount
-
-            resolved_plan = get_staff_installment_plan(
-                student,
-                course,
-                preferred_plan=plan,
-            ) or plan
-            next_installment = get_next_unpaid_installment_item(
-                student,
-                course,
-                preferred_plan=resolved_plan,
-            )
-            next_due_date = get_installment_due_date_for_staff(
-                student,
-                next_installment,
-            )
-
-            user = student.profile.user
-            data.append({
-                "id": student.id,
-                "student_name": f"{user.first_name} {user.last_name}",
-                "student_id": student.student_id,
-                "course_title": course.title,
-                "total_fee": total_fee,
-                "paid_amount": paid_amount,
-                "pending_amount": pending_amount,
-                "next_due_date": next_due_date,
-            })
-
-        return Response(data, status=200)
-
-class CoursePaymentDetailAPIView(APIView):
+class StudentPaymentDetailAPIView(APIView):
     permission_classes = [IsAuthenticated]
-    
 
     def get(self, request, pk):
-
-        student = get_object_or_404(
-            Student.objects.select_related("profile", "profile__user"),
-            id=pk,
-        )
-
-        payment = (
-            CoursePayment.objects
-            .filter(student=student)
-            .select_related(
-                "student",
-                "student__profile",
+        enrollment = get_object_or_404(
+            StudentCourseEnrollment.objects.select_related(
                 "student__profile__user",
-                "installments",
-                "installments__plan",
-                "installments__plan__course"
-            )
-            .order_by("-payment_date")
-            .first()
+                "course",
+                "installment_plan",
+            ).prefetch_related(
+                "installment_plan__items",
+                "student__course_payments__installments",
+            ),
+            student_id=pk,
         )
-
-        if not payment:
-            return Response(
-                {"detail": "No payments found for this student"},
-                status=404
-            )
-
-        serializer = CoursePaymentDetailSerializer(payment)
-        return Response(serializer.data, status=200)
-
+        serializer = StudentPaymentDetailSerializer(enrollment)
+        return Response(serializer.data)
 
 class CoursePaymentDestroyAPIView(generics.DestroyAPIView):
     queryset = CoursePayment.objects.all()

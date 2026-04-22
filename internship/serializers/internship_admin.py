@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.utils import timezone
 from django.db import IntegrityError, transaction
 from django.db.models import Sum
@@ -862,8 +864,8 @@ class CourceInstallmentListSerializer(serializers.ModelSerializer):
             "due_date",
             "paid_date",
             "payment_method",
-            "total_paid",   # ✅ new
-            "balance",      # ✅ new
+            "total_paid",   # new
+            "balance",      # new
         ]
 
     def _get_payments(self, obj):
@@ -904,87 +906,130 @@ class CourceInstallmentListSerializer(serializers.ModelSerializer):
             return None
         return get_installment_due_date_for_staff(student, obj)
 
-class CoursePaymentDetailSerializer(serializers.ModelSerializer):
-    student_full_name = serializers.SerializerMethodField()
-    student_code = serializers.CharField(source="student.student_id", read_only=True)
-    phone_number = serializers.CharField(source="student.profile.phone_number", read_only=True)
-    email = serializers.CharField(source="student.profile.user.email", read_only=True)
-    course_title = serializers.CharField(source="installments.plan.course.title", read_only=True)
-    course_id = serializers.CharField(source="installments.plan.course.id", read_only=True)
 
-    course_total_fee = serializers.CharField(source="installments.plan.course.total_fee", read_only=True)
+
+class StudentPaymentDetailSerializer(serializers.ModelSerializer):
+    student_full_name = serializers.SerializerMethodField()
+    student_code = serializers.CharField(source="student.student_id")
+    phone_number = serializers.CharField(source="student.profile.phone_number")
+    email = serializers.CharField(source="student.profile.user.email")
+
+    course_title = serializers.CharField(source="course.title")
+    course_id = serializers.CharField(source="course.id")
+    course_total_fee = serializers.DecimalField(
+        source="course.total_fee",
+        max_digits=10,
+        decimal_places=2,
+        coerce_to_string=True,
+    )
+
     total_paid = serializers.SerializerMethodField()
     pending_fee = serializers.SerializerMethodField()
     next_due_date = serializers.SerializerMethodField()
-
-    installment_list = CourceInstallmentListSerializer(
-        many=True,
-        source="installments.plan.items",
-        read_only=True,
-    )
-
-
-
+    installment_list = serializers.SerializerMethodField()
 
     class Meta:
-        model = CoursePayment
+        model = StudentCourseEnrollment
         fields = [
             "id",
-            "student",
             "student_full_name",
             "student_code",
             "phone_number",
             "email",
             "course_title",
             "course_id",
-            # "installment",
-
             "course_total_fee",
             "total_paid",
             "pending_fee",
             "next_due_date",
-
             "installment_list",
         ]
 
+    # Decimal formatter — always returns string like "15000.00"
+    def format_decimal(self, value):
+        return str(Decimal(str(value)).quantize(Decimal("0.00")))
+
+    # Student full name
     def get_student_full_name(self, obj):
         user = obj.student.profile.user
         return f"{user.first_name} {user.last_name}"
-    
-    def get_total_paid(self, obj):
-        course = obj.installments.plan.course
-        total_paid = CoursePayment.objects.filter(
-            student=obj.student,
-            installments__plan__course=course
-        ).aggregate(total=Sum("amount_paid"))["total"] or 0
-        return total_paid
 
+    # Total paid
+    def get_total_paid(self, obj):
+        payments = [
+            p for p in obj.student.course_payments.all()
+            if p.installments and p.installments.plan_id == obj.installment_plan_id
+        ]
+        total = sum((p.amount_paid for p in payments), Decimal("0.00"))
+        return self.format_decimal(total)
+
+    # Pending fee
     def get_pending_fee(self, obj):
-        course = obj.installments.plan.course
-        total_paid = self.get_total_paid(obj)
-        pending = course.total_fee - total_paid
-        return pending
-    
+        total = Decimal(str(obj.course.total_fee))
+        paid = Decimal(self.get_total_paid(obj))
+        return self.format_decimal(total - paid)
+
+    # Next due date
     def get_next_due_date(self, obj):
-        course = obj.installments.plan.course
-        plan = get_staff_installment_plan(
-            obj.student,
-            course,
-            preferred_plan=obj.installments.plan,
-        ) or obj.installments.plan
+        if not obj.installment_plan:
+            return None
+
         next_installment = get_next_unpaid_installment_item(
             obj.student,
-            course,
-            preferred_plan=plan,
+            obj.course,
+            preferred_plan=obj.installment_plan,
         )
-        return get_installment_due_date_for_staff(obj.student, next_installment)
-    
-    def to_representation(self, instance):
-        self.fields["installment_list"].context.update({
-            "student": instance.student
-        })
-        return super().to_representation(instance)
 
+        if not next_installment:
+            return None
+
+        return get_installment_due_date_for_staff(
+            obj.student,
+            next_installment,
+        )
+
+    # Installment list
+    def get_installment_list(self, obj):
+        plan = obj.installment_plan
+        if not plan:
+            return []
+
+        student = obj.student
+        all_payments = list(student.course_payments.all())
+
+        result = []
+
+        for item in plan.items.all():
+            payments = [
+                p for p in all_payments
+                if p.installments_id == item.id
+            ]
+
+            total_paid = sum((p.amount_paid for p in payments), Decimal("0.00"))
+            item_amount = Decimal(str(item.amount))
+
+            # Status logic
+            if total_paid == 0:
+                status = "Pending"
+            elif total_paid < item_amount:
+                status = "Partial"
+            else:
+                status = "Paid"
+
+            first_payment = payments[0] if payments else None
+
+            result.append({
+                "id": item.id,
+                "amount": self.format_decimal(item_amount),
+                "status": status,
+                "due_date": get_installment_due_date_for_staff(student, item),
+                "paid_date": first_payment.payment_date if first_payment else None,
+                "payment_method": first_payment.payment_method if first_payment else None,
+                "total_paid": self.format_decimal(total_paid),
+                "balance": self.format_decimal(item_amount - total_paid),
+            })
+
+        return result
 
 class ClassListCreateSerializer(serializers.ModelSerializer):
     center_name    = serializers.CharField(source="center.name", read_only=True)
@@ -1109,3 +1154,112 @@ class SectionSerializer(serializers.ModelSerializer):
                 SectionDay(section=instance, day=day) for day in days
             ])
         return instance
+
+
+from rest_framework import serializers
+from decimal import Decimal
+
+
+class StudentPaymentSerializer(serializers.ModelSerializer):
+    student_name = serializers.SerializerMethodField()
+    course_title = serializers.SerializerMethodField()
+    installment_plan = serializers.SerializerMethodField()
+    total_fee = serializers.SerializerMethodField()
+    paid_amount = serializers.SerializerMethodField()
+    pending_amount = serializers.SerializerMethodField()
+    next_due_date = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Student
+        fields = [
+            "id",
+            "student_name",
+            "student_id",
+            "course_title",
+            "installment_plan",
+            "total_fee",
+            "paid_amount",
+            "pending_amount",
+            "next_due_date",
+        ]
+
+    # Decimal formatter
+    def format_decimal(self, value):
+        return str(Decimal(str(value)).quantize(Decimal("0.00")))
+
+    # Cache enrollment
+    def get_enrollment(self, obj):
+        if not hasattr(obj, "_cached_enrollment"):
+            obj._cached_enrollment = obj.enrollments.first()
+        return obj._cached_enrollment
+
+    # Student name
+    def get_student_name(self, obj):
+        user = obj.profile.user
+        return f"{user.first_name} {user.last_name}"
+
+    # Course title
+    def get_course_title(self, obj):
+        enrollment = self.get_enrollment(obj)
+        return getattr(enrollment.course, "title", None) if enrollment else None
+
+    # Total fee
+    def get_total_fee(self, obj):
+        enrollment = self.get_enrollment(obj)
+        if enrollment:
+            return self.format_decimal(
+                getattr(enrollment.course, "total_fee", Decimal("0.00"))
+            )
+        return self.format_decimal(Decimal("0.00"))
+
+    # Paid amount
+    def get_paid_amount(self, obj):
+        enrollment = self.get_enrollment(obj)
+        if not enrollment or not enrollment.installment_plan:
+            return self.format_decimal(Decimal("0.00"))
+
+        payments = [
+            p for p in obj.course_payments.all()
+            if p.installments and p.installments.plan_id == enrollment.installment_plan_id
+        ]
+
+        total = sum((p.amount_paid for p in payments), Decimal("0.00"))
+        return self.format_decimal(total)
+
+    # Pending amount
+    def get_pending_amount(self, obj):
+        total = Decimal(self.get_total_fee(obj))
+        paid = Decimal(self.get_paid_amount(obj))
+        return self.format_decimal(total - paid)
+
+    # Installment plan
+    def get_installment_plan(self, obj):
+        enrollment = self.get_enrollment(obj)
+        if enrollment and enrollment.installment_plan:
+            plan = enrollment.installment_plan
+            return {
+                "id": plan.id,
+                "total_installments": plan.total_installments,
+            }
+        return None
+
+    # Next due date
+    def get_next_due_date(self, obj):
+        enrollment = self.get_enrollment(obj)
+        if not enrollment or not enrollment.installment_plan:
+            return None
+
+        next_installment = get_next_unpaid_installment_item(
+            obj,
+            enrollment.course,
+            preferred_plan=enrollment.installment_plan,
+        )
+
+        if not next_installment:
+            return None
+
+        return get_installment_due_date_for_staff(
+            obj,
+            next_installment,
+        )
+

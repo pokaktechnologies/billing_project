@@ -5,7 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from ..models import Course, CoursePayment, StudyMaterial, Task, TaskAssignment, TaskSubmissionAttachment
+from ..models import Course, CoursePayment, StudentCourseEnrollment, StudyMaterial, Task, TaskAssignment, TaskSubmissionAttachment
 from ..serializers import internship_admin
 from ..serializers.intern import (
     InternTaskMiniSerializer,
@@ -15,7 +15,7 @@ from ..serializers.intern import (
     TaskSubmissionSerializer,
 )
 from ..serializers.instructor import StudyMaterialSerializer
-from ..serializers.internship_admin import CoursePaymentDetailSerializer
+from ..serializers.internship_admin import StudentPaymentDetailSerializer
 from ..utils import (
     get_authenticated_student,
     get_student_course_ids,
@@ -206,7 +206,7 @@ class DeleteTaskSubmissionAttachmentAPI(generics.DestroyAPIView):
         ).select_related("submission", "submission__assignment")
 
 
-class MyCoursePaymentListAPIView(generics.ListAPIView):
+class MyCoursePaymentListAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -214,42 +214,34 @@ class MyCoursePaymentListAPIView(generics.ListAPIView):
         if not student:
             return Response(
                 {"detail": "User has no student profile"},
-                status=status.HTTP_400_BAD_REQUEST,
+                status=400,
             )
 
         course_id = request.query_params.get("course_id")
-        payment_qs = (
-            CoursePayment.objects
-            .filter(student=student)
-            .select_related(
-                "student",
-                "student__profile",
-                "student__profile__user",
-                "installments",
-                "installments__plan",
-                "installments__plan__course",
-            )
-            .order_by("-payment_date", "-id")
-        )
 
+        enrollments = StudentCourseEnrollment.objects.select_related(
+            "student__profile__user",
+            "course",
+            "installment_plan"
+        ).prefetch_related(
+            "installment_plan__items",
+            "student__course_payments__installments"
+        ).filter(student=student)
+
+        # filter by course
         if course_id:
-            if not get_student_enrollments(student).filter(course_id=course_id).exists():
-                return Response(
-                    {"detail": "Course not found in your enrollments"},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
-            payment_qs = payment_qs.filter(installments__plan__course_id=course_id)
+            enrollments = enrollments.filter(course_id=course_id)
 
-        payment = payment_qs.first()
-        if not payment:
+        enrollment = enrollments.first()
+
+        if not enrollment:
             return Response(
-                {"detail": "No payments found for this student"},
-                status=status.HTTP_404_NOT_FOUND,
+                {"detail": "No enrollment found"},
+                status=404
             )
 
-        serializer = CoursePaymentDetailSerializer(payment)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
+        serializer = StudentPaymentDetailSerializer(enrollment)
+        return Response(serializer.data)
 
 # === Dashboard ===
 

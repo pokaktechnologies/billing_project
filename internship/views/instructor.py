@@ -1,7 +1,7 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import generics,filters, status
 from rest_framework.response import Response
-from internship.models import Course
+from internship.models import Course, Student, Faculty
 from internship.serializers.instructor import CourseSerializer
 from internship.models import AssignedStaffCourse
 from internship.serializers.instructor import *
@@ -15,6 +15,7 @@ from decimal import Decimal
 from datetime import timedelta
 from rest_framework.filters import SearchFilter
 from accounts.models import StaffProfile
+from internship.serializers.internship_admin import StudentSerializer
 
 
 # ===== Course Views ======
@@ -573,4 +574,21 @@ class FacultyCourseListAPIView(APIView):
         ).distinct()
 
         serializer = CourseSerializer(courses, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+class FacultyStudentsAPIView(APIView):
+
+    def get(self, request, faculty_id):
+        try:
+            faculty = Faculty.objects.get(id=faculty_id)
+        except Faculty.DoesNotExist:
+            return Response({"error": "Faculty not found"}, status=404)
+
+        # Get batches handled by faculty
+        batches = faculty.batches.all()
+
+        # Get students in those batches
+        students = Student.objects.filter(batch__in=batches)
+
+        serializer = StudentSerializer(students, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)

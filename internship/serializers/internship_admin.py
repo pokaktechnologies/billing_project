@@ -478,6 +478,7 @@ class StaffProfileSerializer(serializers.ModelSerializer):
             "address"
         ]
 
+
 class StudentSerializer(serializers.ModelSerializer):
     profile = StaffProfileSerializer(required=False, allow_null=True)
     batch = serializers.SerializerMethodField()
@@ -487,13 +488,14 @@ class StudentSerializer(serializers.ModelSerializer):
     center_name = serializers.CharField(source="center.name", read_only=True)
     councellor_name = serializers.CharField(source="councellor.get_full_name", read_only=True)
     payment_type = serializers.SerializerMethodField()
-    payment_installment_count = serializers.SerializerMethodField()    
+    payment_installment_count = serializers.SerializerMethodField()
     student_id = serializers.CharField(read_only=True)
     modules = serializers.ListField(
         child=serializers.ChoiceField(choices=ModulePermission.MODULE_CHOICES),
         write_only=True,
         required=False
     )
+    full_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Student
@@ -501,6 +503,7 @@ class StudentSerializer(serializers.ModelSerializer):
             "id",
             "student_id",
             "profile",
+            "full_name",
             "center",
             "center_name",
             "course",
@@ -520,12 +523,13 @@ class StudentSerializer(serializers.ModelSerializer):
             "profile": {"required": False}
         }
 
-
+    def get_full_name(self, obj):
+        return obj.get_full_name()
 
     def get_batch(self, obj):
         enrollment = obj.enrollments.first()
         return enrollment.batch.id if enrollment and enrollment.batch else None
-    
+
     def get_batch_number(self, obj):
         enrollment = obj.enrollments.first()
         return enrollment.batch.batch_number if enrollment and enrollment.batch else None
@@ -533,15 +537,14 @@ class StudentSerializer(serializers.ModelSerializer):
     def get_course(self, obj):
         enrollment = obj.enrollments.first()
         return enrollment.course.id if enrollment and enrollment.course else None
-    
+
     def get_course_title(self, obj):
         enrollment = obj.enrollments.first()
         return enrollment.course.title if enrollment and enrollment.course else None
-    
+
     def get_payment_type(self, obj):
         enrollment = obj.enrollments.first()
         return enrollment.installment_plan.id if enrollment and enrollment.installment_plan else None
-
 
     def get_payment_installment_count(self, obj):
         enrollment = obj.enrollments.first()
@@ -580,7 +583,7 @@ class StudentSerializer(serializers.ModelSerializer):
                 })
 
             password = user_data.pop("password", None)
-            
+
             if not password:
                 raise serializers.ValidationError({
                     "password": "Password is required"
@@ -610,7 +613,7 @@ class StudentSerializer(serializers.ModelSerializer):
                 user=custom_user,
                 **profile_data
             )
-            
+
             #  Assign module permissions
             if modules:
                 ModulePermission.objects.bulk_create([
@@ -618,14 +621,13 @@ class StudentSerializer(serializers.ModelSerializer):
                     for module in modules
                 ])
 
-
             # Create Student
             return Student.objects.create(
                 student_id=student_id,
                 profile=staff_profile,
                 **validated_data
             )
-        
+
     def update(self, instance, validated_data):
         with transaction.atomic():
 
@@ -633,7 +635,7 @@ class StudentSerializer(serializers.ModelSerializer):
             profile_data = validated_data.pop("profile", None)
 
             profile = instance.profile
-            user = profile.user   #  FIX: always define
+            user = profile.user  # FIX: always define
 
             #  Update Student fields
             for attr, value in validated_data.items():
@@ -677,7 +679,8 @@ class StudentSerializer(serializers.ModelSerializer):
                 ])
 
             return instance
-        
+
+
 class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source="student.profile.get_full_name", read_only=True)
     course_title = serializers.CharField(source="course.title", read_only=True)

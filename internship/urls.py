@@ -37,6 +37,7 @@ instructor_patterns = [
 
 
     path('faculty/<int:faculty_id>/courses/', instructor.FacultyCourseListAPIView.as_view()),
+    path('faculty/<int:faculty_id>/students/', instructor.FacultyStudentsAPIView.as_view()),
     # path('course/<int:course_id>/installments/', instructor.InstallmentListAPIView.as_view()),
 
     # path("payments/", instructor.CoursePaymentListCreateAPIView.as_view()),

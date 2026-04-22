@@ -37,6 +37,7 @@ instructor_patterns = [
 
 
     path('faculty/<int:faculty_id>/courses/', instructor.FacultyCourseListAPIView.as_view()),
+    path('faculty/<int:faculty_id>/students/', instructor.FacultyStudentsAPIView.as_view()),
     # path('course/<int:course_id>/installments/', instructor.InstallmentListAPIView.as_view()),
 
     # path("payments/", instructor.CoursePaymentListCreateAPIView.as_view()),
@@ -98,10 +99,10 @@ internship_admin_patterns = [
     path("centers/<int:pk>/", internship_admin.CenterRetrieveUpdateDestroyAPIView.as_view(), name="center-detail"),
 
     path("payments/", internship_admin.CoursePaymentListCreateAPIView.as_view()),
-    path("payments/<int:pk>/detail/", internship_admin.CoursePaymentDetailAPIView.as_view()),
+    path("payments/<int:pk>/detail/", internship_admin.StudentPaymentDetailAPIView.as_view()),
     path("payments/<int:pk>/delete/", internship_admin.CoursePaymentDestroyAPIView.as_view()),
     path("payments/<int:pk>/", internship_admin.CoursePaymentRetrieveAPIView.as_view()),
-    path("payments-list/", internship_admin.CoursePaymentListAPIView.as_view()),
+    path("payments-list/", internship_admin.StudentPaymentListAPIView.as_view()),
 
     path("class/", internship_admin.ClassListCreateAPIView.as_view()),
     path("class/<int:pk>/", internship_admin.ClassRetrieveUpdateDestroyAPIView.as_view()),

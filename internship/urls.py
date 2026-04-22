@@ -1,5 +1,5 @@
 from django.urls import path, include
-from .views import instructor, intern, report_view, internship_admin
+from .views import application, instructor, intern, report_view, internship_admin
 
 instructor_patterns = [
     path('course/', instructor.InstructorCourseListCreateAPIView.as_view(), name='instructor-course-list'),
@@ -7,9 +7,9 @@ instructor_patterns = [
     path('assigned-staff-course/', instructor.InstructorAssignedStaffCourseListCreateAPIView.as_view(), name='instructor-assignedstaffcourse-list'),
     path('assigned-staff-course/<int:pk>/', instructor.InstructorAssignedStaffCourseRetrieveUpdateDestroyAPIView.as_view(), name='instructor-assignedstaffcourse-detail'),
     path('course/<int:course_id>/enrolled-students/', instructor.CourseEnrolledStudentsListAPIView.as_view(), name='instructor-course-enrolled-students'),
-    path('interns/', instructor.InternListAPIView.as_view()),
-    path('interns/<int:pk>/', instructor.InternProfileInfoAPIView.as_view()),
-    path('interns/stats/', instructor.InternsStatsAPIView.as_view()),
+    path('students/', instructor.StudentListAPIView.as_view()),
+    path('students/<int:pk>/', instructor.StudentProfileInfoAPIView.as_view()),
+    path('students/stats/', instructor.StudentsStatsAPIView.as_view()),
 
     path('study-material/', instructor.StudyMaterialAPIView.as_view(), name='instructor-study-material-list'),
     path('study-material/<int:pk>/', instructor.StudyMaterialDetailAPIView.as_view(), name='instructor-study-material-detail'),
@@ -21,19 +21,23 @@ instructor_patterns = [
     path('tasks/<int:pk>/', instructor.TaskRetrieveUpdateDestroyAPIView.as_view()),
     path('tasks/<int:pk>/detail/', instructor.TaskDetailAPIView.as_view()),
     path('tasks/stats/', instructor.TaskStatsAPIView.as_view()),
-    path('tasks/intern/<int:staff_id>/stats/', instructor.InternTaskStatsAPIView.as_view()),
+    path('tasks/intern/<int:student_id>/stats/', instructor.InternTaskStatsAPIView.as_view()),
+    # path('tasks/intern/<int:staff_id>/stats/', instructor.InternTaskStatsAPIView.as_view()),
+    path('batch/<int:batch_id>/tasks/', instructor.BatchTaskListAPIView.as_view(), name='instructor-batch-task-list'),
     path('attachments/<int:pk>/', instructor.TaskAttachmentDeleteAPIView.as_view()),
 
-    path('staff/<int:staff_id>/performance/', instructor.StaffPerformanceStatsAPIView.as_view()),
+    path('students/<int:student_id>/performance/', instructor.StudentPerformanceStatsAPIView.as_view()),
 
 
-    
+
     path('submissions/', instructor.InstructorSubmissionListAPIView.as_view()),
     path('submissions/<int:pk>/', instructor.InstructorSubmissionDetailAPIView.as_view()),
     path('submissions/<int:pk>/review/', instructor.InstructorSubmissionReviewAPI.as_view()),
     path('submissions/stats/', instructor.SubmissionStatsAPIView.as_view()),
 
-    path('course/<int:course_id>/installments/', instructor.InstallmentListAPIView.as_view()),
+
+    path('faculty/<int:faculty_id>/courses/', instructor.FacultyCourseListAPIView.as_view()),
+    # path('course/<int:course_id>/installments/', instructor.InstallmentListAPIView.as_view()),
 
     # path("payments/", instructor.CoursePaymentListCreateAPIView.as_view()),
     # path("payments-list/", instructor.CoursePaymentListAPIView.as_view()),
@@ -61,7 +65,7 @@ intern_patterns = [
     path('payments/', intern.MyCoursePaymentListAPIView.as_view()),
 
     #Dashboard
-    path('dashaboard/',intern.InternDashboardAPIView.as_view()),   
+    path('dashaboard/',intern.InternDashboardAPIView.as_view()),
 ]
 
 internship_admin_patterns = [
@@ -70,10 +74,13 @@ internship_admin_patterns = [
     path("installment-plan/", internship_admin.InstallmentListAPIView.as_view()),
     path("installment-plan/<int:pk>/", internship_admin.InstallmentPlanUpdateAPIView.as_view()),
 
+    path('course/<int:course_id>/installments/', internship_admin.InstallmentSelectionListAPIView.as_view()),
+
     #Faculty
     path('faculty/', internship_admin.FacultyListCreateAPIView.as_view(), name='faculty-list'),
-    path('course-faculty/', internship_admin.CourseFacultyListCreateAPIView.as_view(), name='course-faculty-list'),
-    path('course-faculty/<int:pk>/', internship_admin.CourseFacultyRetrieveUpdateDestroyAPIView.as_view(), name='course-faculty-detail'),
+    path('faculty/<int:pk>/', internship_admin.FacultyRetrieveUpdateDestroyAPIView.as_view(), name='faculty-detail'),
+    # path('course-faculty/', internship_admin.FacultyListCreateAPIView.as_view(), name='course-faculty-list'),
+    # path('course-faculty/<int:pk>/', internship_admin.FacultyRetrieveUpdateDestroyAPIView.as_view(), name='course-faculty-detail'),
 
     #Batch
     path('batch/preview/', internship_admin.BatchNumberPreviewAPIView.as_view(), name='batch-number-preview'),
@@ -96,6 +103,11 @@ internship_admin_patterns = [
     path("payments/<int:pk>/", internship_admin.CoursePaymentRetrieveAPIView.as_view()),
     path("payments-list/", internship_admin.CoursePaymentListAPIView.as_view()),
 
+    path("class/", internship_admin.ClassListCreateAPIView.as_view()),
+    path("class/<int:pk>/", internship_admin.ClassRetrieveUpdateDestroyAPIView.as_view()),
+    path("sections/", internship_admin.SectionListCreateAPIView.as_view()),
+    path("sections/<int:pk>/", internship_admin.SectionRetrieveUpdateDeleteAPIView.as_view()),
+
 ]
 
 report_patterns = [
@@ -112,6 +124,8 @@ urlpatterns = [
     path('instructor/', include((instructor_patterns))),
     path('intern/', include((intern_patterns))),
     path('', include((internship_admin_patterns))),
+    path('applications/', application.InternshipApplicationAPIView.as_view(), name='internship-application-list-create'),
+    path('applications/<int:pk>/', application.InternshipApplicationAPIView.as_view(), name='internship-application-detail'),
     path('report/', include(report_patterns)),
 ]
 

@@ -108,6 +108,8 @@ internship_admin_patterns = [
     path("sections/", internship_admin.SectionListCreateAPIView.as_view()),
     path("sections/<int:pk>/", internship_admin.SectionRetrieveUpdateDeleteAPIView.as_view()),
 
+    # dashboard
+    path("dashboard/academic/", internship_admin.AcademicDashboardAPIView.as_view()),
 ]
 
 report_patterns = [

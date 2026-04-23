@@ -1266,3 +1266,8 @@ class StudentPaymentSerializer(serializers.ModelSerializer):
             next_installment,
         )
 
+class AcademicDashboardSerializer(serializers.Serializer):
+    stats = serializers.DictField()
+    charts = serializers.DictField()
+    recent_interns = serializers.ListField()
+    top_faculty = serializers.ListField()

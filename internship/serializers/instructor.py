@@ -312,17 +312,17 @@ class TaskSerializer(serializers.ModelSerializer):
         ]
 
     # ===== STATUS =====
-    # def get_status(self, obj):
-    #     request = self.context.get("request")
-    #     if not request:
-    #         return None
-    #
-    #     student_id = request.query_params.get("student")
-    #     if not student_id:
-    #         return None
-    #
-    #     assignment = obj.assignments.filter(student_id=student_id).first()
-    #     return assignment.status if assignment else None
+    def get_status(self, obj):
+        request = self.context.get("request")
+        if not request:
+            return None
+
+        student_id = request.query_params.get("student")
+        if not student_id:
+            return None
+
+        assignment = obj.assignments.filter(student_id=student_id).first()
+        return assignment.status if assignment else None
 
     # ===== COUNT =====
     def get_total_student_count(self, obj):

@@ -560,11 +560,37 @@ class SubmissionStatsAPIView(APIView):
 
         return Response(stats)
 
-# course under the faculy
+# course under the faculy with id passing
+# class FacultyCourseListAPIView(APIView):
+#     def get(self, request, faculty_id):
+#         courses = Course.objects.filter(
+#             batches__faculties__id=faculty_id,
+#             is_active=True
+#         ).select_related(
+#             "department", "tax_settings"
+#         ).prefetch_related(
+#             "batches__faculties",
+#             "installment_plans__items"
+#         ).distinct()
+#
+#         serializer = CourseSerializer(courses, many=True)
+#         return Response(serializer.data, status=status.HTTP_200_OK)
+
+# course under faculty with requst.user
 class FacultyCourseListAPIView(APIView):
-    def get(self, request, faculty_id):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            faculty = request.user.staff_profile.faculty_profile
+        except AttributeError:
+            return Response(
+                {"error": "Logged-in user is not a faculty"},
+                status=403
+            )
+
         courses = Course.objects.filter(
-            batches__faculties__id=faculty_id,
+            batches__faculties=faculty,
             is_active=True
         ).select_related(
             "department", "tax_settings"
@@ -574,21 +600,83 @@ class FacultyCourseListAPIView(APIView):
         ).distinct()
 
         serializer = CourseSerializer(courses, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.data)
 
+# students under faculty with id
+# class FacultyStudentsAPIView(APIView):
+#
+#     def get(self, request, faculty_id):
+#         try:
+#             faculty = Faculty.objects.get(id=faculty_id)
+#         except Faculty.DoesNotExist:
+#             return Response({"error": "Faculty not found"}, status=404)
+#
+#         # Get batches handled by faculty
+#         batches = faculty.batches.all()
+#
+#         # Get students in those batches
+#         students = Student.objects.filter(batch__in=batches)
+#
+#         serializer = StudentSerializer(students, many=True)
+#         return Response(serializer.data, status=status.HTTP_200_OK)
+
+# students under faculty with request.user
 class FacultyStudentsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
 
-    def get(self, request, faculty_id):
+    def get(self, request):
         try:
-            faculty = Faculty.objects.get(id=faculty_id)
-        except Faculty.DoesNotExist:
-            return Response({"error": "Faculty not found"}, status=404)
+            faculty = request.user.staff_profile.faculty_profile
+        except AttributeError:
+            return Response(
+                {"error": "Logged-in user is not a faculty"},
+                status=403
+            )
 
-        # Get batches handled by faculty
+        # base queryset (students under faculty batches)
         batches = faculty.batches.all()
 
-        # Get students in those batches
-        students = Student.objects.filter(batch__in=batches)
+        students = Student.objects.select_related(
+            "profile__user", "course", "batch", "course__department"
+        ).filter(
+            batch__in=batches
+        ).distinct()
+
+        # filterss
+
+        name = request.query_params.get("search")   # 🔍 search
+        status = request.query_params.get("status")
+        course = request.query_params.get("course")
+        department = request.query_params.get("department")
+        batch = request.query_params.get("batch")
+
+        # Search
+        if name:
+            students = students.filter(
+                Q(profile__user__first_name__icontains=name) |
+                Q(profile__user__last_name__icontains=name) |
+                Q(profile__user__email__icontains=name)
+            )
+
+        # Status filter
+        if status:
+            status = status.lower()
+            if status == "active":
+                students = students.filter(is_active=True)
+            elif status == "inactive":
+                students = students.filter(is_active=False)
+
+        # Course filter
+        if course:
+            students = students.filter(course_id=course)
+
+        # Department filter (through course)
+        if department:
+            students = students.filter(course__department_id=department)
+
+        # Batch filter
+        if batch:
+            students = students.filter(batch_id=batch)
 
         serializer = StudentSerializer(students, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.data)

@@ -636,21 +636,29 @@ class FacultyStudentsAPIView(APIView):
         # base queryset (students under faculty batches)
         batches = faculty.batches.all()
 
-        students = Student.objects.select_related(
-            "profile__user", "course", "batch", "course__department"
+        # use enrollment instead of student.batch
+        enrollments = StudentCourseEnrollment.objects.select_related(
+            "student__profile__user",
+            "batch",
+            "course"
         ).filter(
             batch__in=batches
+        )
+
+        # extract students
+        students = Student.objects.filter(
+            id__in=enrollments.values_list("student_id", flat=True)
+        ).select_related(
+            "profile__user", "course", "batch"
         ).distinct()
 
-        # filterss
-
-        name = request.query_params.get("search")   # 🔍 search
+        # filters
+        name = request.query_params.get("search")
         status = request.query_params.get("status")
         course = request.query_params.get("course")
         department = request.query_params.get("department")
         batch = request.query_params.get("batch")
 
-        # Search
         if name:
             students = students.filter(
                 Q(profile__user__first_name__icontains=name) |
@@ -658,25 +666,20 @@ class FacultyStudentsAPIView(APIView):
                 Q(profile__user__email__icontains=name)
             )
 
-        # Status filter
         if status:
-            status = status.lower()
-            if status == "active":
+            if status.lower() == "active":
                 students = students.filter(is_active=True)
-            elif status == "inactive":
+            elif status.lower() == "inactive":
                 students = students.filter(is_active=False)
 
-        # Course filter
         if course:
-            students = students.filter(course_id=course)
+            students = students.filter(enrollments__course_id=course)
 
-        # Department filter (through course)
         if department:
-            students = students.filter(course__department_id=department)
+            students = students.filter(enrollments__course__department_id=department)
 
-        # Batch filter
         if batch:
-            students = students.filter(batch_id=batch)
+            students = students.filter(enrollments__batch_id=batch)
 
-        serializer = StudentSerializer(students, many=True)
+        serializer = StudentSerializer(students.distinct(), many=True)
         return Response(serializer.data)

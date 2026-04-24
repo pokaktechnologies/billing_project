@@ -262,10 +262,10 @@ class TaskListCreateAPIView(generics.ListCreateAPIView):
         qs = Task.objects.all().order_by('-id')
 
         title = self.request.query_params.get("title")
-        student_ids = self.request.query_params.get("student")  # ✅ renamed
+        student_ids = self.request.query_params.get("student")
         course = self.request.query_params.get("course")
         batch = self.request.query_params.get("batch")
-        status = self.request.query_params.get("status")  # pending, submitted, revision_required, completed
+        status = self.request.query_params.get("status")
 
         assigned_from = self.request.query_params.get("assigned_from")
         assigned_to = self.request.query_params.get("assigned_to")
@@ -273,6 +273,7 @@ class TaskListCreateAPIView(generics.ListCreateAPIView):
         due_from = self.request.query_params.get("due_from")
         due_to = self.request.query_params.get("due_to")
 
+        # base fltr
         if course:
             qs = qs.filter(course_id=course)
 
@@ -282,29 +283,30 @@ class TaskListCreateAPIView(generics.ListCreateAPIView):
         if title:
             qs = qs.filter(title__icontains=title)
 
-        # ✅ student-based filtering
+        # std flt
         if student_ids:
             student_ids = [int(x) for x in student_ids.split(",") if x.isdigit()]
-
             qs = qs.filter(assignments__student_id__in=student_ids)
 
-            if status:
-                qs = qs.filter(assignments__status=status)
+        # sts fltr
+        if status:
+            qs = qs.filter(assignments__status=status)
 
-            if assigned_from:
-                qs = qs.filter(assignments__assigned_at__date__gte=assigned_from)
+        # asn dt
+        if assigned_from:
+            qs = qs.filter(assignments__assigned_at__date__gte=assigned_from)
 
-            if assigned_to:
-                qs = qs.filter(assignments__assigned_at__date__lte=assigned_to)
+        if assigned_to:
+            qs = qs.filter(assignments__assigned_at__date__lte=assigned_to)
 
-            if due_from:
-                qs = qs.filter(assignments__revision_due_date__gte=due_from)
+        # due dt
+        if due_from:
+            qs = qs.filter(assignments__revision_due_date__gte=due_from)
 
-            if due_to:
-                qs = qs.filter(assignments__revision_due_date__lte=due_to)
+        if due_to:
+            qs = qs.filter(assignments__revision_due_date__lte=due_to)
 
         return qs.distinct()
-
 
 class TaskRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Task.objects.all()

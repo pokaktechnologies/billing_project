@@ -282,7 +282,7 @@ class CreateStaffWithPermissionsView(BaseAPIView):
                             status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            staff_user = CustomUser.objects.get(id=staff_id, is_staff=True, is_superuser=False)
+            staff_user = CustomUser.objects.get(id=staff_id, is_staff=True)
             staff_user.delete()
             return Response({"status": "1", "message": "Staff user deleted successfully."},
                             status=status.HTTP_204_NO_CONTENT)
@@ -294,7 +294,7 @@ class CreateStaffWithPermissionsView(BaseAPIView):
 class UpdateStaffUserView(BaseGenericAPIView, generics.UpdateAPIView):
     permission_classes = [IsAuthenticated]
     # 
-    queryset = CustomUser.objects.filter(is_staff=True, is_superuser=False)
+    queryset = CustomUser.objects.filter(is_staff=True)
     serializer_class = StaffUserUpdateSerializer
     lookup_field = "id"
     parser_classes = [MultiPartParser, FormParser, JSONParser]
@@ -508,7 +508,7 @@ class ListStaffView(APIView):
         if staff_id:
             # If staff_id is provided, return details of that specific staff member
             try:
-                staff_user = CustomUser.objects.get(id=staff_id, is_staff=True, is_superuser=False)
+                staff_user = CustomUser.objects.get(id=staff_id, is_staff=True)
                 data = {
                     "id": staff_user.id,
                     "email": staff_user.email,
@@ -519,7 +519,7 @@ class ListStaffView(APIView):
                 return Response({"status": "1", "message": "success", "data": data})
             except CustomUser.DoesNotExist:
                 return Response({"status": "0", "message": "Staff user not found"}, status=status.HTTP_404_NOT_FOUND)
-        staff_users = CustomUser.objects.filter(is_staff=True, is_superuser=False).values('id', 'email', 'first_name',
+        staff_users = CustomUser.objects.filter(is_staff=True).values('id', 'email', 'first_name',
                                                                                           'last_name')
         return Response({"status": "1", "message": "success", "data": list(staff_users)})
 

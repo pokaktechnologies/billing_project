@@ -225,7 +225,6 @@ class CreateStaffWithPermissionsView(BaseAPIView):
                 ).get(
                     id=staff_id,
                     is_staff=True,
-                    is_superuser=False
                 )
                 serializer = StaffUserSerializer(staff_user)
                 return Response({"status": "1", "message": "success", "data": serializer.data})

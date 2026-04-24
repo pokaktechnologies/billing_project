@@ -1,7 +1,7 @@
 from decimal import Decimal
 from django.utils import timezone
 from django.db import transaction
-from django.db.models import Count, Prefetch
+from django.db.models import Count, Prefetch, Sum
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import generics, status
@@ -11,7 +11,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import generics
-from ..models import Section, Class
+from datetime import datetime
+from django.db.models.functions import TruncMonth
+from ..models import Section, Class, Student, Course, Faculty, StudentCourseEnrollment, CoursePayment
 from ..serializers.internship_admin import SectionSerializer, ClassListCreateSerializer, StudentPaymentDetailSerializer, StudentPaymentSerializer
 
 from accounts.models import CustomUser
@@ -451,3 +453,99 @@ class SectionRetrieveUpdateDeleteAPIView(generics.RetrieveUpdateDestroyAPIView):
         return Section.objects.select_related(
             "class_obj", "batch", "batch__course"
         ).prefetch_related("days")
+
+
+class AcademicDashboardAPIView(APIView):
+
+    def get(self, request):
+        year = int(request.GET.get("year", datetime.now().year))
+
+        # status
+        active_students = Student.objects.filter(is_active=True).count()
+        active_courses = Course.objects.filter(is_active=True).count()
+        faculty_count = Faculty.objects.filter(is_active=True).count()
+
+        # Pending payments
+        paid_students = CoursePayment.objects.values("student").distinct().count()
+        total_students = Student.objects.count()
+        pending_payments = total_students - paid_students
+
+        stats = {
+            "active_students": active_students,
+            "active_courses": active_courses,
+            "faculty_count": faculty_count,
+            "pending_payments": pending_payments,
+        }
+
+        # revenue chart
+        revenue_data = (
+            CoursePayment.objects
+            .filter(payment_date__year=year)
+            .annotate(month=TruncMonth("payment_date"))
+            .values("month")
+            .annotate(total=Sum("amount_paid"))
+            .order_by("month")
+        )
+
+        revenue_chart = [
+            {
+                "month": item["month"].strftime("%b"),
+                "amount": item["total"]
+            }
+            for item in revenue_data
+        ]
+
+        # enrollmetn chart
+        enrollment_data = (
+            StudentCourseEnrollment.objects
+            .values("course__title")
+            .annotate(count=Count("id"))
+            .order_by("-count")[:6]
+        )
+
+        enrollment_chart = [
+            {
+                "course": item["course__title"],
+                "students": item["count"]
+            }
+            for item in enrollment_data
+        ]
+
+        # recent intern
+        recent_students = Student.objects.select_related("profile__user") \
+                              .order_by("-created_at")[:5]
+
+        recent_interns = [
+            {
+                "name": s.get_full_name(),
+                "course": s.course.title if s.course else None,
+                "status": "Active" if s.is_active else "Inactive"
+            }
+            for s in recent_students
+        ]
+
+        # top faculty
+        faculty_data = (
+            Faculty.objects.annotate(
+                student_count=Count("batches__students")
+            )
+            .order_by("-student_count")[:5]
+        )
+
+        top_faculty = [
+            {
+                "name": f.get_full_name(),
+                "students": f.student_count
+            }
+            for f in faculty_data
+        ]
+
+        return Response({
+            "stats": stats,
+            "charts": {
+                "revenue": revenue_chart,
+                "enrollments": enrollment_chart
+            },
+            "recent_interns": recent_interns,
+            "top_faculty": top_faculty
+        })

@@ -539,3 +539,6 @@ class InternshipDocument(models.Model):
         first_name = self.application.first_name if self.application else "No"
         last_name = self.application.last_name if self.application else "Application"
         return f"{self.document_type} - {first_name} {last_name} (ID: {self.id})"
+
+
+

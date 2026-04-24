@@ -288,11 +288,10 @@ class TaskAssignmentSerializer(serializers.ModelSerializer):
         model = TaskAssignment
         fields = "__all__"
 from internship.models import Task
+
 class TaskSerializer(serializers.ModelSerializer):
-    assigned_to = serializers.PrimaryKeyRelatedField(
-        # child=serializers.IntegerField(),
-        queryset=Student.objects.all(),
-        many=True,
+    assigned_to = serializers.ListField(
+        child=serializers.IntegerField(),
         write_only=True
     )
 
@@ -306,14 +305,11 @@ class TaskSerializer(serializers.ModelSerializer):
         model = Task
         fields = [
             'id', 'title', 'description',
-            'start_date', 'due_date', 'status', 'course', 'batch',
+            'start_date', 'due_date', 'status',
+            'course', 'batch',
             'assigned_to', 'attachments',
             'total_student_count', 'assigned_to_ids'
         ]
-        extra_kwargs = {
-            "course": {"required": False},
-            "batch": {"required": False},
-        }
 
     # ===== STATUS =====
     def get_status(self, obj):
@@ -334,60 +330,51 @@ class TaskSerializer(serializers.ModelSerializer):
 
     # ===== IDS =====
     def get_assigned_to_ids(self, obj):
-        return list(obj.assigned_to.values_list('student_id', flat=True))
+        return list(obj.assigned_to.values_list('id', flat=True))
 
-    # ===== VALIDATION =====
-    def validate(self, attrs):
-        students = attrs.get("assigned_to", [])
-        course = attrs.get("course")
-        batch = attrs.get("batch")
-
-        if not students:
-            raise serializers.ValidationError({
-                "assigned_to": "At least one student is required."
-            })
-
-        if not course:
-            raise serializers.ValidationError({
-                "course": "Course is required."
-            })
-
-        if not batch:
-            raise serializers.ValidationError({
-                "batch": "Batch is required."
-            })
-
-        # Validate students belong to given course & batch
-        invalid_students = []
-
-        for student in students:
-            if student.course_id != course.id or student.batch_id != batch.id:
-                invalid_students.append(student.id)
-
-        if invalid_students:
-            raise serializers.ValidationError({
-                "assigned_to": f"These students do not belong to the selected course/batch: {invalid_students}"
-            })
-
-        return attrs    # ===== CREATE =====
+    # ===== CREATE =====
     def create(self, validated_data):
-        students = validated_data.pop('assigned_to', [])
+        student_ids = validated_data.pop('assigned_to', [])
         request = self.context['request']
         files = request.FILES.getlist('files')
 
-        # create task
-        task = Task.objects.create(**validated_data)
+        course = validated_data.get("course")
+        batch = validated_data.get("batch")
 
-        # create assignments
-        for student in students:
-            TaskAssignment.objects.create(
-                task=task,
-                student=student
-            )
+        if not course:
+            raise serializers.ValidationError({"course": "Course is required."})
 
-        # attachments
-        for file in files:
-            TaskAttachment.objects.create(task=task, file=file)
+        if not batch:
+            raise serializers.ValidationError({"batch": "Batch is required."})
+
+        # ✅ VALIDATE USING ENROLLMENT
+        valid_enrollments = StudentCourseEnrollment.objects.filter(
+            student_id__in=student_ids,
+            course=course,
+            batch=batch
+        )
+
+        valid_student_ids = valid_enrollments.values_list("student_id", flat=True)
+        invalid_students = set(student_ids) - set(valid_student_ids)
+
+        if invalid_students:
+            raise serializers.ValidationError({
+                "assigned_to": f"These students are not enrolled in this course/batch: {list(invalid_students)}"
+            })
+
+        with transaction.atomic():
+            # create task
+            task = Task.objects.create(**validated_data)
+
+            # create assignments
+            TaskAssignment.objects.bulk_create([
+                TaskAssignment(task=task, student_id=sid)
+                for sid in valid_student_ids
+            ])
+
+            # attachments
+            for file in files:
+                TaskAttachment.objects.create(task=task, file=file)
 
         return task
 
@@ -402,41 +389,38 @@ class TaskSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
         instance.save()
 
-        # update assignments
         if student_ids is not None:
             course = instance.course
-
-            filter_kwargs = {"id__in": student_ids, "course": course}
             batch = instance.batch
-            if batch:
-                filter_kwargs["batch"] = batch
 
-            valid_students = Student.objects.filter(**filter_kwargs)
+            # ✅ VALIDATE USING ENROLLMENT
+            valid_enrollments = StudentCourseEnrollment.objects.filter(
+                student_id__in=student_ids,
+                course=course,
+                batch=batch
+            )
 
-            valid_student_ids = valid_students.values_list("id", flat=True)
+            valid_student_ids = valid_enrollments.values_list("student_id", flat=True)
             invalid_students = set(student_ids) - set(valid_student_ids)
 
             if invalid_students:
                 raise serializers.ValidationError({
-                    "assigned_to": f"Invalid student IDs: {list(invalid_students)}"
+                    "assigned_to": f"Invalid students for this batch/course: {list(invalid_students)}"
                 })
 
-            # clear old assignments
+            # replace assignments
             TaskAssignment.objects.filter(task=instance).delete()
 
-            # create new ones
-            for student_id in valid_student_ids:
-                TaskAssignment.objects.create(
-                    task=instance,
-                    student_id=student_id
-                )
+            TaskAssignment.objects.bulk_create([
+                TaskAssignment(task=instance, student_id=sid)
+                for sid in valid_student_ids
+            ])
 
-        # new attachments
+        # attachments
         for file in files:
             TaskAttachment.objects.create(task=instance, file=file)
 
         return instance
-
 class InstructorTaskDetailSerializer(serializers.ModelSerializer):
     staff_assignments = TaskAssignmentSerializer(
         many=True,

@@ -5,11 +5,9 @@ from django.db.models import Count, OuterRef, Prefetch, Q, Subquery, Sum
 
 def generate_batch_number(model, field_name: str, prefix: str, length: int, course):
     year = datetime.now().year
+    start = 1
 
-    start = 1  # 001, 002...
-
-    # Filter course-wise + year-wise
-    latest = model.objects.filter(
+    latest = model.objects.select_for_update().filter(
         course=course,
         **{f"{field_name}__startswith": f"{prefix}{year}"}
     ).order_by(f"-{field_name}").first()

@@ -238,7 +238,6 @@ class CreateStaffWithPermissionsView(BaseAPIView):
         # ===========================
         staff_users = CustomUser.objects.filter(
             is_staff=True,
-            is_superuser=False
         ).select_related(
             'staff_profile',
             'staff_profile__job_detail',

@@ -422,14 +422,14 @@ class BatchSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         faculties = validated_data.pop("faculties", [])
         course    = validated_data.get("course")
-        prefix    = get_clean_prefix(course.title)
+        # prefix    = get_clean_prefix(course.title)
 
         with transaction.atomic():
             validated_data["batch_number"] = generate_batch_number(
                 model=Batch,
                 field_name="batch_number",
-                prefix=prefix,
-                length=3,
+                prefix="BAT",
+                length=4,
                 course=course,
             )
             batch = Batch.objects.create(**validated_data)
@@ -1266,3 +1266,8 @@ class StudentPaymentSerializer(serializers.ModelSerializer):
             next_installment,
         )
 
+class AcademicDashboardSerializer(serializers.Serializer):
+    stats = serializers.DictField()
+    charts = serializers.DictField()
+    recent_interns = serializers.ListField()
+    top_faculty = serializers.ListField()

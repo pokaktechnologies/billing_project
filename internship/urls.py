@@ -35,9 +35,8 @@ instructor_patterns = [
     path('submissions/<int:pk>/review/', instructor.InstructorSubmissionReviewAPI.as_view()),
     path('submissions/stats/', instructor.SubmissionStatsAPIView.as_view()),
 
-
-    path('faculty/<int:faculty_id>/courses/', instructor.FacultyCourseListAPIView.as_view()),
-    path('faculty/<int:faculty_id>/students/', instructor.FacultyStudentsAPIView.as_view()),
+    path('faculty/my-courses/', instructor.FacultyCourseListAPIView.as_view()),
+    path('faculty/my-students/', instructor.FacultyStudentsAPIView.as_view()),
     # path('course/<int:course_id>/installments/', instructor.InstallmentListAPIView.as_view()),
 
     # path("payments/", instructor.CoursePaymentListCreateAPIView.as_view()),
@@ -109,6 +108,8 @@ internship_admin_patterns = [
     path("sections/", internship_admin.SectionListCreateAPIView.as_view()),
     path("sections/<int:pk>/", internship_admin.SectionRetrieveUpdateDeleteAPIView.as_view()),
 
+    # dashboard
+    path("dashboard/academic/", internship_admin.AcademicDashboardAPIView.as_view()),
 ]
 
 report_patterns = [

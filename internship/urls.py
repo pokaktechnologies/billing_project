@@ -118,7 +118,13 @@ report_patterns = [
     path('report-task-submission/', report_view.TaskSubmissionReportAPIView.as_view()),
     path("reports-intern-payment-summary/", report_view.InternPaymentSummaryReportAPIView.as_view()),
     path("reports-intern-summary/", report_view.InternSummaryReportAPIView.as_view()),
-    path("report-enrollment/", report_view.EnrollmentReportAPIView.as_view())
+    path("report-enrollment/", report_view.EnrollmentReportAPIView.as_view()),
+
+    path("center/", report_view.CenterReportsView.as_view(), name="center-reports"),
+    path("center/<int:pk>/", report_view.CenterDetailReportView.as_view(), name="center-detail-report"),
+
+    path("batch/", report_view.BatchReportAPIView.as_view(), name="batch-reports"),
+    path("batch/<int:pk>/", report_view.BatchDetailReportAPIView.as_view(), name="batch-detail-report"),
 
 ]
 

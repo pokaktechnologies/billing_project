@@ -5,7 +5,7 @@ from django.utils.timezone import now
 from rest_framework import serializers
 
 from accounts.models import StaffProfile
-from internship.models import TaskSubmission, AssignedStaffCourse, CoursePayment, TaskAssignment
+from internship.models import Center, Course, Student, TaskSubmission, AssignedStaffCourse, CoursePayment, TaskAssignment, Faculty
 from internship.utils import (
     get_installment_due_date_for_staff,
     get_next_unpaid_installment_item,
@@ -367,3 +367,174 @@ class EnrollmentReportSerializer(serializers.ModelSerializer):
         if job_detail:
             return job_detail.status
         return "Unknown"
+
+
+
+
+class FacultyInCenterSerializer(serializers.Serializer):
+    id = serializers.IntegerField(source="faculty.id")
+    name = serializers.SerializerMethodField()
+    department = serializers.CharField(source="faculty.department.name", default=None)
+
+    def get_name(self, obj):
+        return obj.get_full_name() if hasattr(obj, 'get_full_name') else str(obj)
+
+
+class CenterReportsSerializer(serializers.ModelSerializer):
+    total_students = serializers.IntegerField(read_only=True)
+    active_students = serializers.IntegerField(read_only=True)
+    inactive_students = serializers.IntegerField(read_only=True)
+    total_courses = serializers.IntegerField(read_only=True)
+    faculties = serializers.IntegerField(read_only=True)  
+
+    class Meta:
+        model = Center
+        fields = [
+            "id",
+            "name",
+            "country_name",
+            "state_name",
+            "address",
+            "total_students",
+            "active_students",
+            "inactive_students",
+            "total_courses",
+            "faculties",
+        ]
+
+
+class StudentInSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+    email = serializers.SerializerMethodField()
+    course = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Student
+        fields = ["id", "student_id", "name", "email", "course", "is_active"]
+
+    def get_name(self, obj):
+        return obj.get_full_name()
+
+    def get_email(self, obj):
+        return obj.profile.user.email
+
+    def get_course(self, obj):
+        enrollment = obj.enrollments.select_related("course").first()
+        return enrollment.course.title if enrollment and enrollment.course else None
+
+
+class CourseInCenterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Course
+        fields = ["id", "title", "total_fee", "is_active"]
+
+
+class FacultyInCenterSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+    department = serializers.CharField(source="department.name", default=None)
+
+    class Meta:
+        model = Faculty
+        fields = ["id", "name", "department", "is_active"]
+
+    def get_name(self, obj):
+        return obj.get_full_name()
+
+
+class CenterDetailReportSerializer(serializers.ModelSerializer):
+    active_students = serializers.SerializerMethodField()
+    inactive_students = serializers.SerializerMethodField()
+    courses = serializers.SerializerMethodField()
+    faculties = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Center
+        fields = [
+            "id",
+            "name",
+            "country_name",
+            "state_name",
+            "address",
+            "active_students",
+            "inactive_students",
+            "courses",
+            "faculties",
+        ]
+
+    def get_active_students(self, obj):
+        qs = obj.students.filter(is_active=True).select_related(
+            "profile__user", "course"
+        )
+        return StudentInSerializer(qs, many=True).data
+
+    def get_inactive_students(self, obj):
+        qs = obj.students.filter(is_active=False).select_related(
+            "profile__user", "course"
+        )
+        return StudentInSerializer(qs, many=True).data
+
+    def get_courses(self, obj):
+        courses = Course.objects.filter(
+            students__center=obj
+        ).distinct()
+        return CourseInCenterSerializer(courses, many=True).data
+
+    def get_faculties(self, obj):
+        faculties = Faculty.objects.filter(
+            batches__students__center=obj
+        ).distinct().select_related("user__user", "department")
+        return FacultyInCenterSerializer(faculties, many=True).data
+
+
+from ..models import Batch
+
+class BatchReportSerializer(serializers.ModelSerializer):
+    course_name = serializers.CharField(source="course.title", read_only=True)
+    student_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Batch
+        fields = [
+            "id",
+            "batch_number",
+            "description",
+            "course",
+            "course_name",
+            "start_date",
+            "end_date",
+            "is_active",
+            "created_at",
+            "student_count",
+        ]
+
+
+class BatchDetailReportSerializer(serializers.ModelSerializer):
+    course_name = serializers.CharField(source="course.title", read_only=True)
+    students = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Batch
+        fields = [
+            "id",
+            "batch_number",
+            "description",
+            "course",
+            "course_name",
+            "start_date",
+            "end_date",
+            "is_active",
+            "created_at",
+            "students",
+        ]
+
+    def get_students(self, obj):
+        # StudentCourseEnrollment → student (batch വഴി)
+        students = Student.objects.filter(
+            enrollments__batch=obj
+        ).select_related(
+            "profile__user"
+        ).prefetch_related(
+            "enrollments__course"
+        ).distinct()
+        return StudentInSerializer(students, many=True).data
+

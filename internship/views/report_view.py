@@ -10,8 +10,8 @@ from django.db.models import Count, Q, F, Sum
 
 from accounts.models import StaffProfile
 from accounts.permissions import HasModulePermission
-from internship.models import Task, TaskSubmission, AssignedStaffCourse, TaskAssignment, CoursePayment
-from internship.serializers.report_serializers import TaskReportSerializer, InternTaskPerformanceReportSerializer, \
+from internship.models import Center, Task, TaskSubmission, AssignedStaffCourse, TaskAssignment, CoursePayment
+from internship.serializers.report_serializers import CenterDetailReportSerializer, CenterReportsSerializer, TaskReportSerializer, InternTaskPerformanceReportSerializer, \
     TaskSubmissionReportSerializer, InternPaymentSummaryReportSerializer, InternSummaryReportSerializer, \
     EnrollmentReportSerializer
 from internship.utils import get_installment_due_date_for_staff, get_next_unpaid_installment_item
@@ -294,3 +294,76 @@ class EnrollmentReportAPIView(generics.ListAPIView):
                 Q(staff__user__last_name__icontains=name_clean)
             )
         return queryset.order_by("-assigned_date")
+
+
+
+
+class CenterReportsView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = CenterReportsSerializer
+
+    def get_queryset(self):
+        return Center.objects.annotate(
+            total_students=Count("students"),
+            active_students=Count("students", filter=Q(students__is_active=True)),
+            inactive_students=Count("students", filter=Q(students__is_active=False)),
+            total_courses=Count("students__course", distinct=True),
+            faculties=Count("students__batch__faculties", distinct=True),  # count annotate
+        )
+    
+
+
+class CenterDetailReportView(generics.RetrieveAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = CenterDetailReportSerializer
+    queryset = Center.objects.all()
+
+
+from ..models import Batch
+from ..serializers.report_serializers import BatchDetailReportSerializer, BatchReportSerializer
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from django.db.models import Count, Q
+
+
+class BatchReportAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        queryset = Batch.objects.select_related("course").annotate(
+            student_count=Count(
+                "enrollments__student",
+                filter=Q(enrollments__student__is_active=True),
+                distinct=True
+            )
+        )
+
+        course_id = request.query_params.get("course_id")
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
+        completed = request.query_params.get("completed")
+
+        if course_id:
+            queryset = queryset.filter(course_id=course_id)
+        if start_date:
+            queryset = queryset.filter(start_date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(end_date__lte=end_date)
+
+        if completed is not None:
+            if completed.lower() == "true":
+                queryset = queryset.filter(end_date__lt=now().date())
+        else:
+            queryset = queryset.filter(end_date__gte=now().date())
+
+        queryset = queryset.order_by("-created_at")
+
+        serializer = BatchReportSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+
+class BatchDetailReportAPIView(generics.RetrieveAPIView):
+    serializer_class = BatchDetailReportSerializer
+    permission_classes = [IsAuthenticated]
+    queryset = Batch.objects.select_related("course").all()

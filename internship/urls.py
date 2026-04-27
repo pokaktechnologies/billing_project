@@ -126,6 +126,8 @@ report_patterns = [
     path("batch/", report_view.BatchReportAPIView.as_view(), name="batch-reports"),
     path("batch/<int:pk>/", report_view.BatchDetailReportAPIView.as_view(), name="batch-detail-report"),
 
+    path("course/", report_view.CourseReportAPIView.as_view(), name="course-reports"),
+    path("course/<int:pk>/", report_view.CourseDetailReportAPIView.as_view(), name="course-detail-report"),
 ]
 
 urlpatterns = [

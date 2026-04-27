@@ -5,7 +5,8 @@ from django.utils.timezone import now
 from rest_framework import serializers
 
 from accounts.models import StaffProfile
-from internship.models import Center, Course, Student, TaskSubmission, AssignedStaffCourse, CoursePayment, TaskAssignment, Faculty
+from internship.models import Batch, Center, Course, Student, TaskSubmission, AssignedStaffCourse, CoursePayment, TaskAssignment, Faculty
+from internship.serializers.internship_admin import InstallmentPlanSerializer
 from internship.utils import (
     get_installment_due_date_for_staff,
     get_next_unpaid_installment_item,
@@ -370,47 +371,15 @@ class EnrollmentReportSerializer(serializers.ModelSerializer):
 
 
 
-
-class FacultyInCenterSerializer(serializers.Serializer):
-    id = serializers.IntegerField(source="faculty.id")
-    name = serializers.SerializerMethodField()
-    department = serializers.CharField(source="faculty.department.name", default=None)
-
-    def get_name(self, obj):
-        return obj.get_full_name() if hasattr(obj, 'get_full_name') else str(obj)
-
-
-class CenterReportsSerializer(serializers.ModelSerializer):
-    total_students = serializers.IntegerField(read_only=True)
-    active_students = serializers.IntegerField(read_only=True)
-    inactive_students = serializers.IntegerField(read_only=True)
-    total_courses = serializers.IntegerField(read_only=True)
-    faculties = serializers.IntegerField(read_only=True)  
-
-    class Meta:
-        model = Center
-        fields = [
-            "id",
-            "name",
-            "country_name",
-            "state_name",
-            "address",
-            "total_students",
-            "active_students",
-            "inactive_students",
-            "total_courses",
-            "faculties",
-        ]
-
-
 class StudentInSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
     email = serializers.SerializerMethodField()
     course = serializers.SerializerMethodField()
+    batch = serializers.SerializerMethodField()
 
     class Meta:
         model = Student
-        fields = ["id", "student_id", "name", "email", "course", "is_active"]
+        fields = ["id", "student_id", "name", "email", "course", "batch", "is_active"]
 
     def get_name(self, obj):
         return obj.get_full_name()
@@ -418,18 +387,23 @@ class StudentInSerializer(serializers.ModelSerializer):
     def get_email(self, obj):
         return obj.profile.user.email
 
+    def _get_enrollment(self, obj):
+        if not hasattr(obj, '_cached_enrollment'):
+            obj._cached_enrollment = obj.enrollments.select_related(
+                "course", "batch"
+            ).first()
+        return obj._cached_enrollment
+
     def get_course(self, obj):
-        enrollment = obj.enrollments.select_related("course").first()
+        enrollment = self._get_enrollment(obj)
         return enrollment.course.title if enrollment and enrollment.course else None
 
-
-class CourseInCenterSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Course
-        fields = ["id", "title", "total_fee", "is_active"]
+    def get_batch(self, obj):
+        enrollment = self._get_enrollment(obj)
+        return enrollment.batch.batch_number if enrollment and enrollment.batch else None
 
 
-class FacultyInCenterSerializer(serializers.ModelSerializer):
+class FacultyInSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
     department = serializers.CharField(source="department.name", default=None)
 
@@ -441,6 +415,30 @@ class FacultyInCenterSerializer(serializers.ModelSerializer):
         return obj.get_full_name()
 
 
+class CourseInSerializer(serializers.ModelSerializer):  # reuse ചെയ്യാം
+    class Meta:
+        model = Course
+        fields = ["id", "title", "total_fee", "is_active"]
+
+
+# ── Center Serializers ────────────────────────────────────────
+
+class CenterReportsSerializer(serializers.ModelSerializer):
+    total_students = serializers.IntegerField(read_only=True)
+    active_students = serializers.IntegerField(read_only=True)
+    inactive_students = serializers.IntegerField(read_only=True)
+    total_courses = serializers.IntegerField(read_only=True)
+    faculties = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Center
+        fields = [
+            "id", "name", "country_name", "state_name", "address",
+            "total_students", "active_students", "inactive_students",
+            "total_courses", "faculties",
+        ]
+
+
 class CenterDetailReportSerializer(serializers.ModelSerializer):
     active_students = serializers.SerializerMethodField()
     inactive_students = serializers.SerializerMethodField()
@@ -450,43 +448,30 @@ class CenterDetailReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = Center
         fields = [
-            "id",
-            "name",
-            "country_name",
-            "state_name",
-            "address",
-            "active_students",
-            "inactive_students",
-            "courses",
-            "faculties",
+            "id", "name", "country_name", "state_name", "address",
+            "active_students", "inactive_students", "courses", "faculties",
         ]
 
     def get_active_students(self, obj):
-        qs = obj.students.filter(is_active=True).select_related(
-            "profile__user", "course"
-        )
-        return StudentInSerializer(qs, many=True).data
+        qs = obj.students.filter(is_active=True).select_related("profile__user")
+        return StudentInSerializer(qs, many=True).data  # reuse
 
     def get_inactive_students(self, obj):
-        qs = obj.students.filter(is_active=False).select_related(
-            "profile__user", "course"
-        )
-        return StudentInSerializer(qs, many=True).data
+        qs = obj.students.filter(is_active=False).select_related("profile__user")
+        return StudentInSerializer(qs, many=True).data  # reuse
 
     def get_courses(self, obj):
-        courses = Course.objects.filter(
-            students__center=obj
-        ).distinct()
-        return CourseInCenterSerializer(courses, many=True).data
+        courses = Course.objects.filter(students__center=obj).distinct()
+        return CourseInSerializer(courses, many=True).data  # reuse
 
     def get_faculties(self, obj):
         faculties = Faculty.objects.filter(
             batches__students__center=obj
         ).distinct().select_related("user__user", "department")
-        return FacultyInCenterSerializer(faculties, many=True).data
+        return FacultyInSerializer(faculties, many=True).data  # reuse
 
 
-from ..models import Batch
+# ── Batch Serializers ─────────────────────────────────────────
 
 class BatchReportSerializer(serializers.ModelSerializer):
     course_name = serializers.CharField(source="course.title", read_only=True)
@@ -495,16 +480,8 @@ class BatchReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = Batch
         fields = [
-            "id",
-            "batch_number",
-            "description",
-            "course",
-            "course_name",
-            "start_date",
-            "end_date",
-            "is_active",
-            "created_at",
-            "student_count",
+            "id", "batch_number", "description", "course", "course_name",
+            "start_date", "end_date", "is_active", "created_at", "student_count",
         ]
 
 
@@ -515,26 +492,63 @@ class BatchDetailReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = Batch
         fields = [
-            "id",
-            "batch_number",
-            "description",
-            "course",
-            "course_name",
-            "start_date",
-            "end_date",
-            "is_active",
-            "created_at",
-            "students",
+            "id", "batch_number", "description", "course", "course_name",
+            "start_date", "end_date", "is_active", "created_at", "students",
         ]
 
     def get_students(self, obj):
-        # StudentCourseEnrollment → student (batch വഴി)
         students = Student.objects.filter(
             enrollments__batch=obj
-        ).select_related(
-            "profile__user"
-        ).prefetch_related(
+        ).select_related("profile__user").prefetch_related(
             "enrollments__course"
         ).distinct()
-        return StudentInSerializer(students, many=True).data
+        return StudentInSerializer(students, many=True).data  # reuse
 
+
+# ── Course Serializers ────────────────────────────────────────
+
+class CourseReportSerializer(serializers.ModelSerializer):
+    department = serializers.CharField(source="department.name", default=None)
+    total_students = serializers.IntegerField(read_only=True)
+    active_students = serializers.IntegerField(read_only=True)
+    inactive_students = serializers.IntegerField(read_only=True)
+    total_batches = serializers.IntegerField(read_only=True)
+    active_batches = serializers.IntegerField(read_only=True)
+    total_faculties = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Course
+        fields = [
+            "id", "title", "description", "department", "total_fee",
+            "is_active", "created_at", "total_students", "active_students",
+            "inactive_students", "total_batches", "active_batches", "total_faculties",
+        ]
+
+
+class CourseDetailReportSerializer(serializers.ModelSerializer):
+    department = serializers.CharField(source="department.name", default=None)
+    batches = serializers.SerializerMethodField()
+    students = serializers.SerializerMethodField()
+    faculties = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Course
+        fields = [
+            "id", "title", "description", "department", "total_fee",
+            "is_active", "created_at", "batches", "students", "faculties",
+        ]
+
+    def get_batches(self, obj):
+        return obj.batches.values(
+            "id", "batch_number", "start_date", "end_date", "is_active"
+        )
+
+    def get_students(self, obj):
+        students = Student.objects.filter(
+            enrollments__course=obj
+        ).select_related("profile__user").distinct()
+        return StudentInSerializer(students, many=True).data  # reuse
+
+    def get_faculties(self, obj):
+        faculties = obj.faculties.select_related("user__user", "department").all()
+        return FacultyInSerializer(faculties, many=True).data  # reuse

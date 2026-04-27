@@ -319,8 +319,8 @@ class CenterDetailReportView(generics.RetrieveAPIView):
     queryset = Center.objects.all()
 
 
-from ..models import Batch
-from ..serializers.report_serializers import BatchDetailReportSerializer, BatchReportSerializer
+from ..models import Batch, Course
+from ..serializers.report_serializers import BatchDetailReportSerializer, BatchReportSerializer, CourseDetailReportSerializer, CourseReportSerializer
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -367,3 +367,55 @@ class BatchDetailReportAPIView(generics.RetrieveAPIView):
     serializer_class = BatchDetailReportSerializer
     permission_classes = [IsAuthenticated]
     queryset = Batch.objects.select_related("course").all()
+
+
+
+class CourseReportAPIView(generics.ListAPIView):
+    serializer_class = CourseReportSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = Course.objects.select_related(
+            "department"
+        ).annotate(
+            total_students=Count("enrollments__student", distinct=True),
+            active_students=Count(
+                "enrollments__student",
+                filter=Q(enrollments__student__is_active=True),
+                distinct=True
+            ),
+            inactive_students=Count(
+                "enrollments__student",
+                filter=Q(enrollments__student__is_active=False),
+                distinct=True
+            ),
+            total_batches=Count("batches", distinct=True),
+            active_batches=Count(
+                "batches",
+                filter=Q(batches__is_active=True),
+                distinct=True
+            ),
+            total_faculties=Count("faculties", distinct=True),
+        )
+
+        # Filters
+        is_active = self.request.query_params.get("is_active")
+        department_id = self.request.query_params.get("department_id")
+        search = self.request.query_params.get("search")
+
+        if is_active is not None:
+            queryset = queryset.filter(is_active=is_active.lower() == "true")
+        if department_id:
+            queryset = queryset.filter(department_id=department_id)
+        if search:
+            queryset = queryset.filter(title__icontains=search)
+
+        return queryset.order_by("-created_at")
+
+
+class CourseDetailReportAPIView(generics.RetrieveAPIView):
+    serializer_class = CourseDetailReportSerializer
+    permission_classes = [IsAuthenticated]
+    queryset = Course.objects.select_related("department").prefetch_related(
+        "batches", "faculties__user__user", "faculties__department"
+    ).all()

@@ -74,26 +74,28 @@ PARENT_MODULE_MAP = [
             "hr_reports"
         ]
     },
+
     {
-        "name": "Task Management",
+        "name": "Academy",
         "submodules": [
-            "Dashboard",
+            "dashboard",
             "courses",
-            "interns",
+            "academy_interns",
             "faculty",
-            "payments",
-            "center",
+            "academy_payments",
+            "centers",
             "classes",
-            "form_submissions"
+            "form_submissions",
+            "internship_reports"
         ]
     },
 
     {
         "name": "Faculty Management",
         "submodules": [
-            "all_taskd",
+            "all_tasks",
             "my_courses",
-            "interns",
+            "faculty_interns",
             "submissions"
         ]
     },
@@ -103,9 +105,10 @@ PARENT_MODULE_MAP = [
         "submodules": [
             "my_tasks",
             "study_materials",
-            "payments"
+            "intern_payments"
         ]
     },
+    
     {
         "name": "accounts",
         "submodules": [

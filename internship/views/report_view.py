@@ -9,7 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.db.models import Count, Q, F, Sum
 from django.shortcuts import get_object_or_404
 from accounts.models import StaffProfile, SalesPerson
-from internship.serializers.report_serializers import SalesPersonSerializer
+from internship.serializers.report_serializers import SalesPersonSerializer, RegistrationReportSerializer
 from accounts.permissions import HasModulePermission
 from internship.models import Center, Task, TaskSubmission, AssignedStaffCourse, TaskAssignment, CoursePayment, Student
 from internship.serializers.report_serializers import CenterDetailReportSerializer, CenterReportsSerializer, TaskReportSerializer, InternTaskPerformanceReportSerializer, \
@@ -512,3 +512,68 @@ class FacultyDetailReportAPIView(generics.RetrieveAPIView):
     ).prefetch_related(
         "courses", "batches__course"
     ).all()
+
+
+from decimal import Decimal
+
+
+class RegistrationReportAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        queryset = Student.objects.select_related(
+            "profile__user",
+            "center",
+            "councellor__assigned_staff__user",  # councellor__user → councellor__assigned_staff__user
+        ).prefetch_related(
+            "enrollments__course",
+            "enrollments__batch",
+            "enrollments__installment_plan__items__course_payments",
+            "course_payments",
+        )
+
+        # filters same...
+        center_id = request.query_params.get("center_id")
+        counsellor_id = request.query_params.get("counsellor_id")
+        course_id = request.query_params.get("course_id")
+        is_active = request.query_params.get("is_active")
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
+
+        if center_id:
+            queryset = queryset.filter(center_id=center_id)
+        if counsellor_id:
+            queryset = queryset.filter(councellor_id=counsellor_id)
+        if course_id:
+            queryset = queryset.filter(enrollments__course_id=course_id)
+        if is_active is not None:
+            queryset = queryset.filter(is_active=is_active.lower() == "true")
+        if start_date:
+            queryset = queryset.filter(start_date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(start_date__lte=end_date)
+
+        queryset = queryset.distinct().order_by("start_date")
+
+
+        # ── Summary totals ──
+        totals = queryset.aggregate(
+            total_paid=Sum("course_payments__amount_paid"),
+        )
+
+        students_data = RegistrationReportSerializer(queryset, many=True).data
+
+        total_paid = totals["total_paid"] or Decimal("0.00")
+
+        total_course_fee = sum(
+            Decimal(str(s["course_fee"] or 0)) for s in students_data
+        )
+        total_balance = total_course_fee - total_paid
+
+        return Response({
+            "total_students": queryset.count(),
+            "total_course_fee": total_course_fee,
+            "total_paid": total_paid,
+            "total_balance": total_balance,
+            "students": students_data,
+        })

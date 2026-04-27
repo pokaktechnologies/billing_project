@@ -1,11 +1,12 @@
 from datetime import timedelta
+from decimal import Decimal
 
 from django.db.models import Sum
 from django.utils.timezone import now
 from rest_framework import serializers
 
 from accounts.models import StaffProfile, SalesPerson
-from internship.models import Batch, Center, Course, Student, TaskSubmission, AssignedStaffCourse, CoursePayment, TaskAssignment, Faculty
+from internship.models import Batch, Center, Course, Student, TaskSubmission, AssignedStaffCourse, CoursePayment, TaskAssignment, Faculty, InstallmentItem
 from internship.serializers.internship_admin import InstallmentPlanSerializer
 from internship.utils import (
     get_installment_due_date_for_staff,
@@ -643,5 +644,151 @@ class FacultyDetailReportSerializer(serializers.ModelSerializer):
             "enrollments__course", "enrollments__batch"
         ).distinct()
         return StudentInSerializer(students, many=True).data
+
+
+
+
+class InstallmentItemReportSerializer(serializers.ModelSerializer):
+    paid_amount = serializers.SerializerMethodField()
+    balance = serializers.SerializerMethodField()
+    is_paid = serializers.SerializerMethodField()
+
+    class Meta:
+        model = InstallmentItem
+        fields = [
+            "id",
+            "installment_number",
+            "amount",
+            "due_days",
+            "paid_amount",
+            "balance",
+            "is_paid",
+        ]
+
+    def get_paid_amount(self, obj):
+        total = obj.course_payments.aggregate(
+            total=Sum("amount_paid")
+        )["total"] or Decimal("0.00")  # 0 → Decimal("0.00")
+        return total
+
+    def get_balance(self, obj):
+        return obj.amount - self.get_paid_amount(obj)
+
+    def get_is_paid(self, obj):
+        return self.get_balance(obj) <= 0
+
+
+from ..utils import (
+    get_student_enrollments,
+    get_next_unpaid_installment_item,
+    get_installment_due_date_for_staff,
+)
+
+class RegistrationReportSerializer(serializers.ModelSerializer):
+    student_name = serializers.SerializerMethodField()
+    place = serializers.SerializerMethodField()
+    counsellor = serializers.SerializerMethodField()
+    course = serializers.SerializerMethodField()
+    center = serializers.CharField(source="center.name", default=None)
+    duration = serializers.SerializerMethodField()
+    course_fee = serializers.SerializerMethodField()
+    paid_amount = serializers.SerializerMethodField()
+    balance = serializers.SerializerMethodField()
+    installments = serializers.SerializerMethodField()
+    batch_end_date = serializers.SerializerMethodField()
+    next_due_installment = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Student
+        fields = [
+            "id",
+            "student_id",
+            "student_name",
+            "place",
+            "counsellor",
+            "course",
+            "start_date",
+            "center",
+            "duration",
+            "course_fee",
+            "paid_amount",
+            "balance",
+            "batch_end_date",
+            "next_due_installment",
+            "installments",
+        ]
+
+    def _get_enrollment(self, obj):
+        if not hasattr(obj, '_cached_enrollment'):
+            obj._cached_enrollment = get_student_enrollments(obj).first()
+        return obj._cached_enrollment
+
+    def get_student_name(self, obj):
+        return obj.get_full_name()
+
+    def get_place(self, obj):
+        return obj.center.address if obj.center else None
+
+    def get_counsellor(self, obj):
+        if obj.councellor:
+            user = obj.councellor.assigned_staff.user  # .user → .assigned_staff.user
+            return f"{user.first_name} {user.last_name}"
+        return None
+
+    def get_course(self, obj):
+        enrollment = self._get_enrollment(obj)
+        return enrollment.course.title if enrollment and enrollment.course else None
+
+    def get_duration(self, obj):
+        enrollment = self._get_enrollment(obj)
+        if enrollment and enrollment.batch:
+            delta = enrollment.batch.end_date - enrollment.batch.start_date
+            return delta.days
+        return None
+
+    def get_course_fee(self, obj):
+        enrollment = self._get_enrollment(obj)
+        return enrollment.course.total_fee if enrollment and enrollment.course else None
+
+    def get_paid_amount(self, obj):
+        return obj.course_payments.aggregate(
+            total=Sum("amount_paid")
+        )["total"] or Decimal("0.00")  # 0 → Decimal("0.00")
+
+    def get_balance(self, obj):
+        course_fee = self.get_course_fee(obj)
+        if course_fee is None:
+            return None
+        return course_fee - self.get_paid_amount(obj)
+
+    def get_batch_end_date(self, obj):
+        enrollment = self._get_enrollment(obj)
+        return enrollment.batch.end_date if enrollment and enrollment.batch else None
+
+    def get_next_due_installment(self, obj):
+        enrollment = self._get_enrollment(obj)
+        if not enrollment:
+            return None
+
+        next_item = get_next_unpaid_installment_item(obj, enrollment.course)
+        if not next_item:
+            return None
+
+        due_date = get_installment_due_date_for_staff(obj, next_item)
+
+        return {
+            "installment_number": next_item.installment_number,
+            "amount": next_item.amount,
+            "due_date": due_date,
+        }
+
+    def get_installments(self, obj):
+        enrollment = self._get_enrollment(obj)
+        if not enrollment or not enrollment.installment_plan:
+            return []
+        items = enrollment.installment_plan.items.prefetch_related(
+            "course_payments"
+        ).all()
+        return InstallmentItemReportSerializer(items, many=True).data
 
 

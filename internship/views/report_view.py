@@ -7,13 +7,14 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 
 from django.db.models import Count, Q, F, Sum
-
-from accounts.models import StaffProfile
+from django.shortcuts import get_object_or_404
+from accounts.models import StaffProfile, SalesPerson
+from internship.serializers.report_serializers import SalesPersonSerializer
 from accounts.permissions import HasModulePermission
-from internship.models import Center, Task, TaskSubmission, AssignedStaffCourse, TaskAssignment, CoursePayment
+from internship.models import Center, Task, TaskSubmission, AssignedStaffCourse, TaskAssignment, CoursePayment, Student
 from internship.serializers.report_serializers import CenterDetailReportSerializer, CenterReportsSerializer, TaskReportSerializer, InternTaskPerformanceReportSerializer, \
     TaskSubmissionReportSerializer, InternPaymentSummaryReportSerializer, InternSummaryReportSerializer, \
-    EnrollmentReportSerializer
+    EnrollmentReportSerializer, StudentInSerializer
 from internship.utils import get_installment_due_date_for_staff, get_next_unpaid_installment_item
 
 
@@ -419,3 +420,40 @@ class CourseDetailReportAPIView(generics.RetrieveAPIView):
     queryset = Course.objects.select_related("department").prefetch_related(
         "batches", "faculties__user__user", "faculties__department"
     ).all()
+
+
+#councellor list view
+class CounsellorListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        counsellors = SalesPerson.objects.annotate(
+            total_students=Count("counselled_students")
+        )
+
+        serializer = SalesPersonSerializer(counsellors, many=True)
+        return Response(serializer.data)
+
+
+# students under counsellr
+class CounsellorStudentsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, counsellor_id):
+        counsellor = get_object_or_404(SalesPerson, id=counsellor_id)
+
+        students = Student.objects.select_related(
+            "profile__user"
+        ).prefetch_related(
+            "enrollments__course",
+            "enrollments__batch"
+        ).filter(
+            councellor=counsellor
+        )
+
+        serializer = StudentInSerializer(students, many=True)
+        return Response({
+            "counsellor": counsellor.get_full_name(),
+            "total_students": students.count(),
+            "students": serializer.data
+        })

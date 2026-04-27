@@ -4,7 +4,7 @@ from django.db.models import Sum
 from django.utils.timezone import now
 from rest_framework import serializers
 
-from accounts.models import StaffProfile
+from accounts.models import StaffProfile, SalesPerson
 from internship.models import Batch, Center, Course, Student, TaskSubmission, AssignedStaffCourse, CoursePayment, TaskAssignment, Faculty
 from internship.serializers.internship_admin import InstallmentPlanSerializer
 from internship.utils import (
@@ -552,3 +552,23 @@ class CourseDetailReportSerializer(serializers.ModelSerializer):
     def get_faculties(self, obj):
         faculties = obj.faculties.select_related("user__user", "department").all()
         return FacultyInSerializer(faculties, many=True).data  # reuse
+
+
+# salesperson serilizer
+class SalesPersonSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
+    total_students = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = SalesPerson
+        fields = [
+            "id",
+            "full_name",
+            "email",
+            "phone",
+            "designation",
+            "total_students"
+        ]
+
+    def get_full_name(self, obj):
+        return obj.get_full_name()

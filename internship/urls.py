@@ -128,6 +128,9 @@ report_patterns = [
 
     path("course/", report_view.CourseReportAPIView.as_view(), name="course-reports"),
     path("course/<int:pk>/", report_view.CourseDetailReportAPIView.as_view(), name="course-detail-report"),
+
+    path('counsellors/', report_view.CounsellorListAPIView.as_view()),
+    path('counsellors/<int:counsellor_id>/students/', report_view.CounsellorStudentsAPIView.as_view()),
 ]
 
 urlpatterns = [

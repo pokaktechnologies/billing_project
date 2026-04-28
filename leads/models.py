@@ -64,6 +64,7 @@ class Lead(models.Model):
         default='new'
     )
     notes = models.TextField(blank=True, null=True)
+    lead_date = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(default=timezone.now)  # Date
 
     def __str__(self):

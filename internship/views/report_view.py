@@ -7,13 +7,14 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 
 from django.db.models import Count, Q, F, Sum
-
-from accounts.models import StaffProfile
+from django.shortcuts import get_object_or_404
+from accounts.models import StaffProfile, SalesPerson
+from internship.serializers.report_serializers import SalesPersonSerializer, RegistrationReportSerializer
 from accounts.permissions import HasModulePermission
-from internship.models import Task, TaskSubmission, AssignedStaffCourse, TaskAssignment, CoursePayment
-from internship.serializers.report_serializers import TaskReportSerializer, InternTaskPerformanceReportSerializer, \
+from internship.models import Center, Task, TaskSubmission, AssignedStaffCourse, TaskAssignment, CoursePayment, Student
+from internship.serializers.report_serializers import CenterDetailReportSerializer, CenterReportsSerializer, TaskReportSerializer, InternTaskPerformanceReportSerializer, \
     TaskSubmissionReportSerializer, InternPaymentSummaryReportSerializer, InternSummaryReportSerializer, \
-    EnrollmentReportSerializer
+    EnrollmentReportSerializer, StudentInSerializer
 from internship.utils import get_installment_due_date_for_staff, get_next_unpaid_installment_item
 
 
@@ -294,3 +295,285 @@ class EnrollmentReportAPIView(generics.ListAPIView):
                 Q(staff__user__last_name__icontains=name_clean)
             )
         return queryset.order_by("-assigned_date")
+
+
+
+
+class CenterReportsView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = CenterReportsSerializer
+
+    def get_queryset(self):
+        return Center.objects.annotate(
+            total_students=Count("students"),
+            active_students=Count("students", filter=Q(students__is_active=True)),
+            inactive_students=Count("students", filter=Q(students__is_active=False)),
+            total_courses=Count("students__course", distinct=True),
+            faculties=Count("students__batch__faculties", distinct=True),  # count annotate
+        )
+    
+
+
+class CenterDetailReportView(generics.RetrieveAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = CenterDetailReportSerializer
+    queryset = Center.objects.all()
+
+
+from ..models import Batch, Course, Faculty
+from ..serializers.report_serializers import BatchDetailReportSerializer, BatchReportSerializer, CourseDetailReportSerializer, CourseReportSerializer, FacultyDetailReportSerializer, FacultyReportSerializer
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from django.db.models import Count, Q
+
+
+class BatchReportAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        queryset = Batch.objects.select_related("course").annotate(
+            student_count=Count(
+                "enrollments__student",
+                filter=Q(enrollments__student__is_active=True),
+                distinct=True
+            )
+        )
+
+        course_id = request.query_params.get("course_id")
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
+        completed = request.query_params.get("completed")
+
+        if course_id:
+            queryset = queryset.filter(course_id=course_id)
+        if start_date:
+            queryset = queryset.filter(start_date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(end_date__lte=end_date)
+
+        if completed is not None:
+            if completed.lower() == "true":
+                queryset = queryset.filter(end_date__lt=now().date())
+        else:
+            queryset = queryset.filter(end_date__gte=now().date())
+
+        queryset = queryset.order_by("-created_at")
+
+        serializer = BatchReportSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+
+class BatchDetailReportAPIView(generics.RetrieveAPIView):
+    serializer_class = BatchDetailReportSerializer
+    permission_classes = [IsAuthenticated]
+    queryset = Batch.objects.select_related("course").all()
+
+
+
+class CourseReportAPIView(generics.ListAPIView):
+    serializer_class = CourseReportSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = Course.objects.select_related(
+            "department"
+        ).annotate(
+            total_students=Count("enrollments__student", distinct=True),
+            active_students=Count(
+                "enrollments__student",
+                filter=Q(enrollments__student__is_active=True),
+                distinct=True
+            ),
+            inactive_students=Count(
+                "enrollments__student",
+                filter=Q(enrollments__student__is_active=False),
+                distinct=True
+            ),
+            total_batches=Count("batches", distinct=True),
+            active_batches=Count(
+                "batches",
+                filter=Q(batches__is_active=True),
+                distinct=True
+            ),
+            total_faculties=Count("faculties", distinct=True),
+        )
+
+        # Filters
+        is_active = self.request.query_params.get("is_active")
+        department_id = self.request.query_params.get("department_id")
+        search = self.request.query_params.get("search")
+
+        if is_active is not None:
+            queryset = queryset.filter(is_active=is_active.lower() == "true")
+        if department_id:
+            queryset = queryset.filter(department_id=department_id)
+        if search:
+            queryset = queryset.filter(title__icontains=search)
+
+        return queryset.order_by("-created_at")
+
+
+class CourseDetailReportAPIView(generics.RetrieveAPIView):
+    serializer_class = CourseDetailReportSerializer
+    permission_classes = [IsAuthenticated]
+    queryset = Course.objects.select_related("department").prefetch_related(
+        "batches", "faculties__user__user", "faculties__department"
+    ).all()
+
+
+#councellor list view
+class CounsellorListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        counsellors = SalesPerson.objects.annotate(
+            total_students=Count("counselled_students")
+        )
+
+        serializer = SalesPersonSerializer(counsellors, many=True)
+        return Response(serializer.data)
+
+
+# students under counsellr
+class CounsellorStudentsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, counsellor_id):
+        counsellor = get_object_or_404(SalesPerson, id=counsellor_id)
+
+        students = Student.objects.select_related(
+            "profile__user"
+        ).prefetch_related(
+            "enrollments__course",
+            "enrollments__batch"
+        ).filter(
+            councellor=counsellor
+        )
+
+        serializer = StudentInSerializer(students, many=True)
+        return Response({
+            "counsellor": counsellor.get_full_name(),
+            "total_students": students.count(),
+            "students": serializer.data
+        })
+
+
+class FacultyReportAPIView(generics.ListAPIView):
+    serializer_class = FacultyReportSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        today = now().date()
+
+        queryset = Faculty.objects.select_related(
+            "user__user", "department"
+        ).annotate(
+            total_students=Count(
+                "batches__enrollments__student",
+                distinct=True
+            ),
+            active_students=Count(
+                "batches__enrollments__student",
+                filter=Q(batches__end_date__gte=today) & Q(batches__enrollments__student__is_active=True),
+                distinct=True
+            ),
+            completed_students=Count(
+                "batches__enrollments__student",
+                filter=Q(batches__end_date__lt=today),
+                distinct=True
+            ),
+            total_batches=Count("batches", distinct=True),
+            total_courses=Count("courses", distinct=True),
+        )
+
+        is_active = self.request.query_params.get("is_active")
+        department_id = self.request.query_params.get("department_id")
+        search = self.request.query_params.get("search")
+
+        if is_active is not None:
+            queryset = queryset.filter(is_active=is_active.lower() == "true")
+        if department_id:
+            queryset = queryset.filter(department_id=department_id)
+        if search:
+            queryset = queryset.filter(
+                Q(user__user__first_name__icontains=search) |
+                Q(user__user__last_name__icontains=search)
+            )
+
+        return queryset
+
+
+class FacultyDetailReportAPIView(generics.RetrieveAPIView):
+    serializer_class = FacultyDetailReportSerializer
+    permission_classes = [IsAuthenticated]
+    queryset = Faculty.objects.select_related(
+        "user__user", "department"
+    ).prefetch_related(
+        "courses", "batches__course"
+    ).all()
+
+
+from decimal import Decimal
+
+
+class RegistrationReportAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        queryset = Student.objects.select_related(
+            "profile__user",
+            "center",
+            "councellor__assigned_staff__user",  # councellor__user → councellor__assigned_staff__user
+        ).prefetch_related(
+            "enrollments__course",
+            "enrollments__batch",
+            "enrollments__installment_plan__items__course_payments",
+            "course_payments",
+        )
+
+        # filters same...
+        center_id = request.query_params.get("center_id")
+        counsellor_id = request.query_params.get("counsellor_id")
+        course_id = request.query_params.get("course_id")
+        is_active = request.query_params.get("is_active")
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
+
+        if center_id:
+            queryset = queryset.filter(center_id=center_id)
+        if counsellor_id:
+            queryset = queryset.filter(councellor_id=counsellor_id)
+        if course_id:
+            queryset = queryset.filter(enrollments__course_id=course_id)
+        if is_active is not None:
+            queryset = queryset.filter(is_active=is_active.lower() == "true")
+        if start_date:
+            queryset = queryset.filter(start_date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(start_date__lte=end_date)
+
+        queryset = queryset.distinct().order_by("start_date")
+
+
+        # ── Summary totals ──
+        totals = queryset.aggregate(
+            total_paid=Sum("course_payments__amount_paid"),
+        )
+
+        students_data = RegistrationReportSerializer(queryset, many=True).data
+
+        total_paid = totals["total_paid"] or Decimal("0.00")
+
+        total_course_fee = sum(
+            Decimal(str(s["course_fee"] or 0)) for s in students_data
+        )
+        total_balance = total_course_fee - total_paid
+
+        return Response({
+            "total_students": queryset.count(),
+            "total_course_fee": total_course_fee,
+            "total_paid": total_paid,
+            "total_balance": total_balance,
+            "students": students_data,
+        })

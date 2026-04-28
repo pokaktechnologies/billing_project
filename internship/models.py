@@ -13,9 +13,9 @@ class Student(models.Model):
     profile  = models.OneToOneField(StaffProfile, on_delete=models.CASCADE, related_name="student_profile")
     student_id = models.CharField(max_length=20, unique=True)
     center = models.ForeignKey(Center, on_delete=models.SET_NULL, null=True, blank=True, related_name="students")
-    course = models.ForeignKey('Course', on_delete=models.SET_NULL, null=True, blank=True, related_name="students")
-    batch = models.ForeignKey('Batch', on_delete=models.SET_NULL, null=True, blank=True, related_name="students")
-    payment_type = models.ForeignKey('InstallmentPlan', on_delete=models.SET_NULL, null=True, blank=True, related_name="students")
+    course = models.ForeignKey('Course', on_delete=models.SET_NULL, null=True, blank=True, related_name="students") # Unused
+    batch = models.ForeignKey('Batch', on_delete=models.SET_NULL, null=True, blank=True, related_name="students") # Unused
+    payment_type = models.ForeignKey('InstallmentPlan', on_delete=models.SET_NULL, null=True, blank=True, related_name="students") # Unused
     start_date = models.DateField()
     is_active = models.BooleanField(default=True)
     councellor = models.ForeignKey(SalesPerson, on_delete=models.SET_NULL, null=True, blank=True, related_name="counselled_students")

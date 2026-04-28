@@ -1239,26 +1239,26 @@ class ModulePermission(models.Model):
         ("project_manager_dashboard", "Project Manager Dashboard"),
         ("developer_dashboard", "Developer Dashboard"),
 
-        # TASK MANAGEMENT
+        # ACADEMY
         ('dashboard', "Dashboard"),
         ('courses', "Courses"),
-        ('interns', "Interns"),
+        ('academy_interns', "Academy Interns"),
         ('faculty', "Faculty"),
-        ('payments', "Payments"),
-        ('center', "Center"),
+        ('academy_payments', "Academy Payments"),
+        ('centers', "Centers"),
         ('classes', "Classes"),
         ('form_submissions', "Form Submissions"),
+        ('internship_reports', "Internship Reports"),
 
-        # Faculty Management
-        ("all_taskd", "All Tasks"),
-        ("my_courses", "My Courses"),
-        ("interns", "Interns"),
-        ("submissions", "Submissions"),
+        # FACULTY MANAGEMENT
+        ('all_tasks', "All Tasks"),
+        ('my_courses', "My Courses"),
+        ('faculty_interns', "Faculty Interns"),
 
-        # Internship Pro
-        ("my_tasks", "My Tasks"),
-        ("study_materials", "Study Materials"),
-        ("payments", "Payments")
+        # INTERNSHIP PRO
+        ('my_tasks', "My Tasks"),
+        ('study_materials', "Study Materials"),
+        ('intern_payments', "Intern Payments"),
     ]
 
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="module_permissions")

@@ -94,7 +94,7 @@ class StaffLeadView(APIView):
                     datetime.strptime(start_date, "%Y-%m-%d").date(),
                     time.min
                 ))
-                leads = leads.filter(created_at__gte=start_datetime)
+                leads = leads.filter(lead_date__gte=start_datetime)
             except ValueError:
                 return Response({"status": "0", "message": "Invalid start_date format"}, status=400)
 
@@ -104,12 +104,12 @@ class StaffLeadView(APIView):
                     datetime.strptime(end_date, "%Y-%m-%d").date(),
                     time.max
                 ))
-                leads = leads.filter(created_at__lte=end_datetime)
+                leads = leads.filter(lead_date__lte=end_datetime)
             except ValueError:
                 return Response({"status": "0", "message": "Invalid end_date format"}, status=400)
 
             
-        leads = leads.order_by('-created_at')
+        leads = leads.order_by('-lead_date')
 
         # Pagination 
         paginator = Pagination()

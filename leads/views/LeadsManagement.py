@@ -66,7 +66,7 @@ class AdminLeadsView(APIView):
                 start_date_parsed = datetime.strptime(start_date, "%Y-%m-%d").date()
                 # Full datetime at start of the day
                 start_dt = datetime.combine(start_date_parsed, time.min)
-                leads = leads.filter(created_at__gte=start_dt)
+                leads = leads.filter(lead_date__gte=start_dt)
             except Exception as e:
                 print("Start date parse error:", e)
 
@@ -75,12 +75,12 @@ class AdminLeadsView(APIView):
                 end_date_parsed = datetime.strptime(end_date, "%Y-%m-%d").date()
                 # Full datetime at end of the day
                 end_dt = datetime.combine(end_date_parsed, time.max)
-                leads = leads.filter(created_at__lte=end_dt)
+                leads = leads.filter(lead_date__lte=end_dt)
             except Exception as e:
                 print("End date parse error:", e)
 
         # Order
-        leads = leads.order_by('-created_at')
+        leads = leads.order_by('-lead_date')
 
         # Serialize
         serializer = LeadSerializerListDisplay(leads, many=True)

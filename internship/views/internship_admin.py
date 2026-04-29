@@ -115,7 +115,7 @@ class FacultyQuerysetMixin:
         "department",
     ).annotate(
         course_count=Count("batches__course", distinct=True),
-        students_count=Count("batches__students", distinct=True),
+        ststudents_count=Count("batches__enrollments__student", distinct=True),
     ).order_by("id")
 
 

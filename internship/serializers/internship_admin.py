@@ -4,6 +4,7 @@ from django.utils import timezone
 from django.db import IntegrityError, transaction
 from django.db.models import Sum
 from rest_framework import serializers
+from twisted.test import obj
 
 from accounts.models import CustomUser, ModulePermission, StaffProfile
 from ..models import (
@@ -369,7 +370,7 @@ class FacultySerializer(serializers.ModelSerializer):
         annotated_count = getattr(obj, "students_count", None)
         if annotated_count is not None:
             return annotated_count
-        return Student.objects.filter(batch__faculties=obj).distinct().count()
+        return Student.objects.filter(enrollments__batch__faculties=obj).distinct().count()
 
 
 #Batch

@@ -524,7 +524,7 @@ class RegistrationReportAPIView(APIView):
         queryset = Student.objects.select_related(
             "profile__user",
             "center",
-            "councellor__assigned_staff__user",  # councellor__user → councellor__assigned_staff__user
+            "councellor",
         ).prefetch_related(
             "enrollments__course",
             "enrollments__batch",

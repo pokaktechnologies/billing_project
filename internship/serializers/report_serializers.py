@@ -732,8 +732,10 @@ class RegistrationReportSerializer(serializers.ModelSerializer):
 
     def get_counsellor(self, obj):
         if obj.councellor:
-            user = obj.councellor.assigned_staff.user  # .user → .assigned_staff.user
-            return f"{user.first_name} {user.last_name}"
+            return {
+                "id": obj.councellor.id,
+                "name": obj.councellor.get_full_name()
+            }
         return None
 
     def get_course(self, obj):

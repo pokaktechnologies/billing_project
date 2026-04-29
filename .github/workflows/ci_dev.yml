@@ -118,3 +118,27 @@ jobs:
     secrets:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+ 
+  notify-slack-success:
+    name: Slack Success
+    needs: deploy
+    if: success()
+    uses: ./.github/workflows/notify-slack.yml
+    with:
+      status: success
+      project: "Billing backend dev"
+      environment: ${{ github.ref_name }}
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  notify-slack-failure:
+    name: Slack Failure
+    needs: deploy
+    if: failure()
+    uses: ./.github/workflows/notify-slack.yml
+    with:
+      status: failure
+      project: "Billing backend dev"
+      environment: ${{ github.ref_name }}
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

@@ -1,0 +1,53 @@
+name: Slack Notification
+
+on:
+  workflow_call:
+    inputs:
+      status:
+        required: true
+        type: string
+      project:
+        required: true
+        type: string
+      environment:
+        required: false
+        type: string
+        default: "production"
+    secrets:
+      SLACK_WEBHOOK_URL:
+        required: true
+
+jobs:
+  notify:
+    name: Send Slack Alert
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Slack message
+        run: |
+          if [ "${{ inputs.status }}" == "success" ]; then
+            ICON="✅"
+            TITLE="Deployment Successful"
+            COLOR="good"
+          else
+            ICON="❌"
+            TITLE="Deployment Failed"
+            COLOR="danger"
+          fi
+
+          curl -s -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H 'Content-type: application/json' \
+            --data "{
+              \"attachments\": [
+                {
+                  \"color\": \"${COLOR}\",
+                  \"title\": \"${ICON} ${TITLE}\",
+                  \"fields\": [
+                    { \"title\": \"Project\", \"value\": \"${{ inputs.project }}\", \"short\": true },
+                    { \"title\": \"Environment\", \"value\": \"${{ inputs.environment }}\", \"short\": true },
+                    { \"title\": \"Branch\", \"value\": \"${{ github.ref_name }}\", \"short\": true },
+                    { \"title\": \"Triggered by\", \"value\": \"${{ github.actor }}\", \"short\": true },
+                    { \"title\": \"View Run\", \"value\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\", \"short\": false }
+                  ]
+                }
+              ]
+            }"

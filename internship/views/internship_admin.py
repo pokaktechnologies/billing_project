@@ -200,14 +200,13 @@ class StudentListCreateAPIView(generics.ListCreateAPIView):
     ]
 
     filterset_fields = {
-        "enrollments__course": ["exact"],
-        "enrollments__batch": ["exact"],
         "center": ["exact"],
         "is_active": ["exact"],
     }
 
     def get_queryset(self):
-        return Student.objects.select_related(
+
+        qs = Student.objects.select_related(
             "profile__user",
             "center",
             "councellor"
@@ -221,6 +220,21 @@ class StudentListCreateAPIView(generics.ListCreateAPIView):
                 )
             )
         ).distinct()
+
+        course = self.request.query_params.get("course")
+        batch = self.request.query_params.get("batch")
+
+        if course:
+            qs = qs.filter(
+                enrollments__course_id=course
+            )
+
+        if batch:
+            qs = qs.filter(
+                enrollments__batch_id=batch
+            )
+
+        return qs.distinct()
 
 class StudentCredentialsAPIView(APIView):
     permission_classes = [IsAuthenticated]

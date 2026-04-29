@@ -512,22 +512,30 @@ class AcademicDashboardAPIView(APIView):
         ]
 
         # recent intern
-        recent_students = Student.objects.select_related("profile__user") \
-                              .order_by("-created_at")[:5]
+        recent_students = Student.objects.select_related(
+            "profile__user"
+        ).prefetch_related(
+            "enrollments__course"
+        ).order_by("-created_at")[:5]
 
-        recent_interns = [
-            {
+        recent_interns = []
+
+        for s in recent_students:
+            enrollment = s.enrollments.select_related("course").first()
+
+            recent_interns.append({
                 "name": s.get_full_name(),
-                "course": s.course.title if s.course else None,
+                "course": enrollment.course.title if enrollment and enrollment.course else None,
                 "status": "Active" if s.is_active else "Inactive"
-            }
-            for s in recent_students
-        ]
+            })
 
         # top faculty
         faculty_data = (
             Faculty.objects.annotate(
-                student_count=Count("batches__students")
+                student_count=Count(
+                    "batches__enrollments__student",
+                    distinct=True
+                )
             )
             .order_by("-student_count")[:5]
         )

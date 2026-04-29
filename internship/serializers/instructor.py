@@ -266,12 +266,64 @@ class StudyMaterialSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
     def validate(self, attrs):
+
         file = attrs.get("file")
         url = attrs.get("url")
+        batches = attrs.get("batches")
 
         if not file and not url:
-            raise serializers.ValidationError("Either file or url is required.")
+            raise serializers.ValidationError(
+                "Either file or url is required."
+            )
+
+        if not batches:
+            raise serializers.ValidationError({
+                "batches": "At least one batch is required."
+            })
+
+        # validate all batches belong same course
+        courses = set(batch.course_id for batch in batches)
+
+        if len(courses) > 1:
+            raise serializers.ValidationError({
+                "batches": "All batches must belong to same course."
+            })
+
         return attrs
+
+    def create(self, validated_data):
+
+        batches = validated_data.pop("batches", [])
+
+        # derive course from first batch
+        first_batch = batches[0]
+        validated_data["course"] = first_batch.course
+
+        study_material = StudyMaterial.objects.create(
+            **validated_data
+        )
+
+        study_material.batches.set(batches)
+
+        return study_material
+
+    def update(self, instance, validated_data):
+
+        batches = validated_data.pop("batches", None)
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        # update course from batches
+        if batches:
+            instance.course = batches[0].course
+
+        instance.save()
+
+        if batches is not None:
+            instance.batches.set(batches)
+
+        return instance
 
 
 class TaskAttachmentSerializer(serializers.ModelSerializer):

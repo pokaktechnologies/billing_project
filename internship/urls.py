@@ -53,6 +53,7 @@ intern_patterns = [
     path('course/<int:pk>/', intern.MyCourseDetailView.as_view(), name='intern-course-detail'),
     path('course/<int:course_id>/study-materials/', intern.MyCourseStudyMaterialListAPIView.as_view(), name='intern-course-study-material-list'),
     path('study-material/<int:pk>/', intern.MyStudyMaterialDetailView.as_view(), name='intern-study-material-detail'),
+    path("my-study-materials/", intern.MyStudyMaterialListAPIView.as_view()),
 
     path("tasks/", intern.MyTaskViewSet.as_view({'get': 'list'})),
     path("tasks/<int:pk>/", intern.MyTaskViewSet.as_view({'get': 'retrieve'})),

@@ -1,10 +1,10 @@
 from django.db.models import Sum
-
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import generics, serializers, status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
+from rest_framework.filters import SearchFilter
 from ..models import Course, CoursePayment, StudentCourseEnrollment, StudyMaterial, Task, TaskAssignment, TaskSubmissionAttachment
 from ..serializers import internship_admin
 from ..serializers.intern import (
@@ -103,6 +103,46 @@ class MyStudyMaterialDetailView(generics.RetrieveAPIView):
         ).select_related("course")
 
 
+class MyStudyMaterialListAPIView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = StudyMaterialSerializer
+
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+
+    filterset_fields = [
+        "material_type",
+        "course",
+        "batches",
+    ]
+
+    search_fields = [
+        "title",
+        "description"
+    ]
+
+    def get_queryset(self):
+
+        student = get_authenticated_student(self.request.user)
+
+        if not student:
+            return StudyMaterial.objects.none()
+
+        # enrolled courses
+        course_ids = get_student_course_ids(student)
+
+        queryset = (
+            StudyMaterial.objects
+            .filter(
+                is_public=True,
+                course_id__in=course_ids
+            )
+            .select_related("course")
+            .prefetch_related("batches")
+            .distinct()
+            .order_by("-created_at")
+        )
+
+        return queryset
 # === Task Views ===
 
 class MyTaskViewSet(viewsets.ReadOnlyModelViewSet):

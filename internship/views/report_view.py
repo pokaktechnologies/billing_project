@@ -572,8 +572,8 @@ class RegistrationReportAPIView(APIView):
 
         return Response({
             "total_students": queryset.count(),
-            "total_course_fee": total_course_fee,
-            "total_paid": total_paid,
-            "total_balance": total_balance,
+            "total_balance": f"{total_balance:.2f}",
+            "total_course_fee": f"{total_course_fee:.2f}",
+            "total_paid": f"{total_paid:.2f}",
             "students": students_data,
         })

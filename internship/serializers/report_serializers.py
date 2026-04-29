@@ -668,14 +668,15 @@ class InstallmentItemReportSerializer(serializers.ModelSerializer):
     def get_paid_amount(self, obj):
         total = obj.course_payments.aggregate(
             total=Sum("amount_paid")
-        )["total"] or Decimal("0.00")  # 0 → Decimal("0.00")
-        return total
+        )["total"] or Decimal("0.00")
+        return f"{total:.2f}"
 
     def get_balance(self, obj):
-        return obj.amount - self.get_paid_amount(obj)
+        balance = obj.amount - Decimal(self.get_paid_amount(obj))
+        return f"{balance:.2f}"
 
     def get_is_paid(self, obj):
-        return self.get_balance(obj) <= 0
+        return Decimal(self.get_paid_amount(obj)) <= 0
 
 
 from ..utils import (
@@ -751,15 +752,17 @@ class RegistrationReportSerializer(serializers.ModelSerializer):
         return enrollment.course.total_fee if enrollment and enrollment.course else None
 
     def get_paid_amount(self, obj):
-        return obj.course_payments.aggregate(
+        total = obj.course_payments.aggregate(
             total=Sum("amount_paid")
-        )["total"] or Decimal("0.00")  # 0 → Decimal("0.00")
+        )["total"] or Decimal("0.00")
+        return f"{total:.2f}"
 
     def get_balance(self, obj):
         course_fee = self.get_course_fee(obj)
         if course_fee is None:
             return None
-        return course_fee - self.get_paid_amount(obj)
+        balance = course_fee - Decimal(self.get_paid_amount(obj))
+        return f"{balance:.2f}"
 
     def get_batch_end_date(self, obj):
         enrollment = self._get_enrollment(obj)
@@ -769,19 +772,15 @@ class RegistrationReportSerializer(serializers.ModelSerializer):
         enrollment = self._get_enrollment(obj)
         if not enrollment:
             return None
-
         next_item = get_next_unpaid_installment_item(obj, enrollment.course)
         if not next_item:
             return None
-
         due_date = get_installment_due_date_for_staff(obj, next_item)
-
         return {
             "installment_number": next_item.installment_number,
-            "amount": next_item.amount,
+            "amount": f"{next_item.amount:.2f}",
             "due_date": due_date,
         }
-
     def get_installments(self, obj):
         enrollment = self._get_enrollment(obj)
         if not enrollment or not enrollment.installment_plan:

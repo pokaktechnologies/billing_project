@@ -14,7 +14,7 @@ from rest_framework import generics
 from datetime import datetime
 from django.db.models.functions import TruncMonth
 from ..models import Section, Class, Student, Course, Faculty, StudentCourseEnrollment, CoursePayment
-from ..serializers.internship_admin import SectionSerializer, ClassListCreateSerializer, StudentPaymentDetailSerializer, StudentPaymentSerializer
+from ..serializers.internship_admin import ClassDetailSerializer, SectionSerializer, ClassListCreateSerializer, StudentPaymentDetailSerializer, StudentPaymentSerializer
 
 from accounts.models import CustomUser
 from internship.utils import (
@@ -432,14 +432,19 @@ class ClassListCreateAPIView(generics.ListCreateAPIView):
         ).filter(is_active=True)
 
 class ClassRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
-    serializer_class   = ClassListCreateSerializer
+    serializer_class   = ClassDetailSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         return Class.objects.select_related("center").prefetch_related(
-            "sections__days", "sections__batch"
+            "sections__days", "sections__batch__course"
         )
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"] = self.request  # request serializer-ലേക്ക് pass ചെയ്യുന്നു
+        return context
+    
 class SectionListCreateAPIView(generics.ListCreateAPIView):
     serializer_class   = SectionSerializer
     permission_classes = [IsAuthenticated]

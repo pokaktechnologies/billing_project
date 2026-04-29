@@ -105,7 +105,7 @@ class Class(models.Model):
 
 class Section(models.Model):
     class_obj    = models.ForeignKey(Class, on_delete=models.CASCADE, related_name="sections")   
-    batch        = models.ForeignKey("Batch", on_delete=models.CASCADE)
+    batch        = models.ForeignKey(Batch, on_delete=models.CASCADE)
     start_time   = models.TimeField()
     end_time     = models.TimeField()
     created_at   = models.DateTimeField(auto_now_add=True)

@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django.utils import timezone
 from django.db import IntegrityError, transaction
-from django.db.models import Sum
+from django.db.models import Sum,Q
 from rest_framework import serializers
 from twisted.test import obj
 
@@ -1172,7 +1172,8 @@ class SectionSerializer(serializers.ModelSerializer):
         ]
 
     def get_students_count(self, obj):
-        return obj.batch.students.count()
+        return obj.batch.enrollments.count()
+        
 
     def get_days_display(self, obj):
         return [d.day for d in obj.days.all()]
@@ -1249,6 +1250,59 @@ class SectionSerializer(serializers.ModelSerializer):
             ])
         return instance
 
+
+class ClassDetailSerializer(serializers.ModelSerializer):
+    center_name    = serializers.CharField(source="center.name", read_only=True)
+    sections_count = serializers.SerializerMethodField()
+    sections       = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = Class
+        fields = ["id", "name", "center", "center_name", "sections_count", "sections", "is_active", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+    def _get_filtered_sections_qs(self, obj):
+        today   = timezone.now().date()
+        request = self.context.get("request")
+
+        qs = obj.sections.filter(
+            batch__is_active=True,
+            batch__end_date__gte=today
+        ).select_related("batch__course").prefetch_related("days")
+
+        if request:
+            # 1. Course filter
+            course_id = request.query_params.get("course")
+            if course_id:
+                qs = qs.filter(batch__course__id=course_id)
+
+            # 2. Batch filter
+            batch_id = request.query_params.get("batch")
+            if batch_id:
+                qs = qs.filter(batch__id=batch_id)
+
+            # 3. Day filter  (mon, tue, wed...)
+            day = request.query_params.get("day")
+            if day:
+                qs = qs.filter(days__day=day)
+
+            # 4. Search (course title or batch number)
+            search = request.query_params.get("search")
+            if search:
+                qs = qs.filter(
+                    Q(batch__course__title__icontains=search) |
+                    Q(batch__batch_number__icontains=search)
+                )
+
+        return qs
+
+    def get_sections_count(self, obj):
+        # filtered count ആണ് return ചെയ്യുന്നത്
+        return self._get_filtered_sections_qs(obj).count()
+
+    def get_sections(self, obj):
+        qs = self._get_filtered_sections_qs(obj)
+        return SectionSerializer(qs, many=True, context=self.context).data
 
 from rest_framework import serializers
 from decimal import Decimal

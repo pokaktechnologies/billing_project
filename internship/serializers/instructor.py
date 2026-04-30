@@ -41,7 +41,7 @@ class CourseSerializer(serializers.ModelSerializer):
     sgst = serializers.SerializerMethodField()
     cgst = serializers.SerializerMethodField()
     total_tax_percentage = serializers.SerializerMethodField()
-
+    enrolled_student_count = serializers.SerializerMethodField()
     class Meta:
         model = Course
         fields = [
@@ -58,9 +58,12 @@ class CourseSerializer(serializers.ModelSerializer):
             "sgst",
             "cgst",
             "total_tax_percentage",
+            "enrolled_student_count",
         ]
         read_only_fields = ["created_at", "sgst", "cgst", "total_tax_percentage"]
 
+    def get_enrolled_student_count(self, obj):
+        return obj.enrollments.values("student").distinct().count()
 
     # ---------- TAX LOGIC ----------
     def get_sgst(self, obj):

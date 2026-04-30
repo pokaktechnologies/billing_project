@@ -16,7 +16,7 @@ from datetime import timedelta
 from rest_framework.filters import SearchFilter
 from accounts.models import StaffProfile
 from internship.serializers.internship_admin import StudentSerializer
-
+from django.db.models import Count
 
 # ===== Course Views ======
 class InstructorCourseListCreateAPIView(generics.ListCreateAPIView):
@@ -591,15 +591,27 @@ class FacultyCourseListAPIView(APIView):
                 status=403
             )
 
-        courses = Course.objects.filter(
-            batches__faculties=faculty,
-            is_active=True
-        ).select_related(
-            "department", "tax_settings"
-        ).prefetch_related(
-            "batches__faculties",
-            "installment_plans__items"
-        ).distinct()
+        courses = (
+            Course.objects.filter(
+                batches__faculties=faculty,
+                is_active=True
+            )
+            .select_related(
+                "department",
+                "tax_settings"
+            )
+            .prefetch_related(
+                "batches__faculties",
+                "installment_plans__items"
+            )
+            .annotate(
+                enrolled_student_count=Count(
+                    "enrollments__student",
+                    distinct=True
+                )
+            )
+            .distinct()
+        )
 
         serializer = CourseSerializer(courses, many=True)
         return Response(serializer.data)

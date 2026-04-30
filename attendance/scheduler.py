@@ -4,6 +4,7 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from django.db import close_old_connections
 from django.utils import timezone
+from django.db.models import Q
 
 logger = logging.getLogger('scheduler')
 
@@ -45,7 +46,11 @@ def create_daily_attendance_records():
         logger.warning("⚠️ Database not ready yet, skipping this run.")
         return
 
-    staffs = StaffProfile.objects.filter(job_detail__status__in=["active", "probation"])
+    staffs = StaffProfile.objects.filter(
+        Q(job_detail__status__in=["active", "probation"]) |
+        Q(student_profile__is_active=True)
+    ).distinct()
+
     created_count = 0
 
     for staff in staffs:

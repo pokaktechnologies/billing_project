@@ -101,7 +101,7 @@ def get_student_courses_queryset(student):
         .select_related("department", "tax_settings")
         .prefetch_related("installment_plans__items", "batches__faculties__user__user")
         .annotate(
-            students_count=Count("students", distinct=True),
+            students_count=Count("enrollments__student", distinct=True),
             study_material_count=Count(
                 "studymaterial",
                 filter=Q(studymaterial__is_public=True),

@@ -55,7 +55,7 @@ class CourseListCreateAPIView(generics.ListCreateAPIView):
         "batches__faculties__user__user",
         "installment_plans__items",
     ).annotate(
-        students_count=Count('students', distinct=True)
+        students_count=Count("enrollments__student", distinct=True)
     ).order_by('-created_at')
 
     serializer_class = CourseSerializer
@@ -65,11 +65,18 @@ class CourseListCreateAPIView(generics.ListCreateAPIView):
     filterset_fields = {
         "department": ["exact"],
         "is_active": ["exact"],
-        "students": ["exact"],
+        "enrollments__student": ["exact"],
         "batches__faculties": ["exact"],
     }
 
     search_fields = ['title', 'description', 'department__name']
+
+    def filter_queryset(self, queryset):
+        queryset = super().filter_queryset(queryset)
+        student_id = self.request.query_params.get("students")
+        if student_id:
+            queryset = queryset.filter(enrollments__student_id=student_id)
+        return queryset.distinct()
 
 class CourseRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Course.objects.select_related(
@@ -79,7 +86,7 @@ class CourseRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
         "batches__faculties__user__user",
         "installment_plans__items"
     ).annotate(
-        students_count=Count('students', distinct=True)
+        students_count=Count("enrollments__student", distinct=True)
     )
 
     serializer_class = CourseSerializer
@@ -115,7 +122,7 @@ class FacultyQuerysetMixin:
         "department",
     ).annotate(
         course_count=Count("batches__course", distinct=True),
-        ststudents_count=Count("batches__enrollments__student", distinct=True),
+        students_count=Count("batches__enrollments__student", distinct=True),
     ).order_by("id")
 
 

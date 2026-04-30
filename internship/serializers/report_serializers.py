@@ -462,12 +462,14 @@ class CenterDetailReportSerializer(serializers.ModelSerializer):
         return StudentInSerializer(qs, many=True).data
 
     def get_courses(self, obj):
-        courses = Course.objects.filter(students__center=obj).distinct()
+        courses = Course.objects.filter(
+            enrollments__student__center=obj
+        ).distinct()
         return CourseInSerializer(courses, many=True).data
 
     def get_faculties(self, obj):
         faculties = Faculty.objects.filter(
-            batches__students__center=obj
+            batches__enrollments__student__center=obj
         ).distinct().select_related("user__user", "department")
         return FacultyInSerializer(faculties, many=True).data
 
@@ -666,7 +668,11 @@ class InstallmentItemReportSerializer(serializers.ModelSerializer):
         ]
 
     def get_paid_amount(self, obj):
-        total = obj.course_payments.aggregate(
+        student = self.context.get("student")
+        if not student:
+            return "0.00"
+
+        total = obj.course_payments.filter(student=student).aggregate(
             total=Sum("amount_paid")
         )["total"] or Decimal("0.00")
         return f"{total:.2f}"
@@ -676,7 +682,7 @@ class InstallmentItemReportSerializer(serializers.ModelSerializer):
         return f"{balance:.2f}"
 
     def get_is_paid(self, obj):
-        return Decimal(self.get_paid_amount(obj)) <= 0
+        return Decimal(self.get_paid_amount(obj)) >= obj.amount
 
 
 from ..utils import (
@@ -790,6 +796,10 @@ class RegistrationReportSerializer(serializers.ModelSerializer):
         items = enrollment.installment_plan.items.prefetch_related(
             "course_payments"
         ).all()
-        return InstallmentItemReportSerializer(items, many=True).data
+        return InstallmentItemReportSerializer(
+            items,
+            many=True,
+            context={"student": obj},
+        ).data
 
 

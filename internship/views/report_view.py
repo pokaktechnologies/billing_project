@@ -308,8 +308,8 @@ class CenterReportsView(generics.ListAPIView):
             total_students=Count("students"),
             active_students=Count("students", filter=Q(students__is_active=True)),
             inactive_students=Count("students", filter=Q(students__is_active=False)),
-            total_courses=Count("students__course", distinct=True),
-            faculties=Count("students__batch__faculties", distinct=True),  # count annotate
+            total_courses=Count("students__enrollments__course", distinct=True),
+            faculties=Count("students__enrollments__batch__faculties", distinct=True),
         )
     
 

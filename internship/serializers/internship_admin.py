@@ -127,7 +127,7 @@ class CourseSerializer(serializers.ModelSerializer):
         annotated_count = getattr(obj, "students_count", None)
         if annotated_count is not None:
             return annotated_count
-        return obj.students.count()
+        return obj.enrollments.values("student_id").distinct().count()
 
     def get_faculty_details(self, obj):
         faculties = set()

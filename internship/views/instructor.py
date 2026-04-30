@@ -198,12 +198,33 @@ class StudentsStatsAPIView(APIView):
 # ====== Study Material ViewSet ======
 
 class StudyMaterialAPIView(generics.ListCreateAPIView):
-    queryset = StudyMaterial.objects.all()
+
     serializer_class = StudyMaterialSerializer
     permission_classes = [IsAuthenticated]
+
     filter_backends = [DjangoFilterBackend, SearchFilter]
-    filterset_fields = ['course', 'batches', 'material_type']
-    search_fields = ['title', 'description']
+
+    filterset_fields = [
+        'course',
+        'batches',
+        'material_type'
+    ]
+
+    search_fields = [
+        'title',
+        'description'
+    ]
+
+    def get_queryset(self):
+
+        return (
+            StudyMaterial.objects
+            .filter(
+                batches__isnull=False
+            )
+            .distinct()
+            .order_by("-created_at")
+        )
 
 
 class StudyMaterialDetailAPIView(generics.RetrieveUpdateDestroyAPIView):

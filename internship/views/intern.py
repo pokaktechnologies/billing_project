@@ -106,6 +106,7 @@ class MyStudyMaterialDetailView(generics.RetrieveAPIView):
 
 
 class MyStudyMaterialListAPIView(generics.ListAPIView):
+
     permission_classes = [IsAuthenticated]
     serializer_class = StudyMaterialSerializer
 
@@ -124,19 +125,25 @@ class MyStudyMaterialListAPIView(generics.ListAPIView):
 
     def get_queryset(self):
 
-        student = get_authenticated_student(self.request.user)
+        student = get_authenticated_student(
+            self.request.user
+        )
 
         if not student:
             return StudyMaterial.objects.none()
 
-        # enrolled courses
-        course_ids = get_student_course_ids(student)
+        # enrolled batch ids
+        batch_ids = (
+            student.enrollments
+            .exclude(batch__isnull=True)
+            .values_list("batch_id", flat=True)
+        )
 
         queryset = (
             StudyMaterial.objects
             .filter(
                 is_public=True,
-                course_id__in=course_ids
+                batches__id__in=batch_ids
             )
             .select_related("course")
             .prefetch_related("batches")
@@ -145,6 +152,7 @@ class MyStudyMaterialListAPIView(generics.ListAPIView):
         )
 
         return queryset
+
 # === Task Views ===
 
 class MyTaskViewSet(viewsets.ReadOnlyModelViewSet):

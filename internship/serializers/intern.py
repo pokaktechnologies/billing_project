@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from ..models import StudyMaterial, TaskAttachment, TaskSubmission, TaskAssignment, Task, TaskSubmissionAttachment
+from ..models import Class, Section, StudyMaterial, TaskAttachment, TaskSubmission, TaskAssignment, Task, TaskSubmissionAttachment
 from ..utils import get_authenticated_student, get_student_task_assignment
 from datetime import date
 
@@ -244,6 +244,75 @@ class StudyMaterialMiniSerializer(serializers.ModelSerializer):
     class Meta:
         model = StudyMaterial
         fields = ["id", "title","course", "material_type", "file", "url"]
+
+
+class InternSectionSerializer(serializers.ModelSerializer):
+    batch_number = serializers.CharField(source="batch.batch_number", read_only=True)
+    course = serializers.IntegerField(source="batch.course_id", read_only=True)
+    course_title = serializers.CharField(source="batch.course.title", read_only=True)
+    days = serializers.SerializerMethodField()
+    duration_minutes = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Section
+        fields = [
+            "id",
+            "batch",
+            "batch_number",
+            "course",
+            "course_title",
+            "start_time",
+            "end_time",
+            "days",
+            "duration_minutes",
+        ]
+
+    def get_days(self, obj):
+        day_order = {
+            "mon": 1,
+            "tue": 2,
+            "wed": 3,
+            "thu": 4,
+            "fri": 5,
+            "sat": 6,
+            "sun": 7,
+        }
+        return sorted(
+            [day.day for day in obj.days.all()],
+            key=lambda day: day_order.get(day, 99),
+        )
+
+    def get_duration_minutes(self, obj):
+        from datetime import date, datetime
+
+        start = datetime.combine(date.today(), obj.start_time)
+        end = datetime.combine(date.today(), obj.end_time)
+        diff = int((end - start).total_seconds() / 60)
+        hours, mins = divmod(diff, 60)
+        return f"{hours} hr {mins} min" if mins else f"{hours} hr"
+
+
+class InternClassSectionSerializer(serializers.ModelSerializer):
+    center_name = serializers.CharField(source="center.name", read_only=True)
+    sections = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Class
+        fields = [
+            "id",
+            "name",
+            "center",
+            "center_name",
+            "sections",
+        ]
+
+    def get_sections(self, obj):
+        sections = getattr(obj, "student_sections", obj.sections.all())
+        return InternSectionSerializer(
+            sections,
+            many=True,
+            context=self.context,
+        ).data
 
 
 # class PaymentSummarySerializer(serializers.Serializer):

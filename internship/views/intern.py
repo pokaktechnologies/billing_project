@@ -1,13 +1,15 @@
-from django.db.models import Sum
+from django.db.models import Prefetch, Sum
+from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import generics, serializers, status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.filters import SearchFilter
-from ..models import Course, CoursePayment, StudentCourseEnrollment, StudyMaterial, Task, TaskAssignment, TaskSubmissionAttachment
+from ..models import Class, Course, CoursePayment, Section, SectionDay, StudentCourseEnrollment, StudyMaterial, Task, TaskAssignment, TaskSubmissionAttachment
 from ..serializers import internship_admin
 from ..serializers.intern import (
+    InternClassSectionSerializer,
     InternTaskMiniSerializer,
     InternTaskSerializer,
     StudyMaterialMiniSerializer,
@@ -281,6 +283,77 @@ class MyCoursePaymentListAPIView(APIView):
             )
 
         serializer = StudentPaymentDetailSerializer(enrollment)
+        return Response(serializer.data)
+
+
+class MyClassSectionListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        student = get_authenticated_student(request.user)
+        if not student:
+            return Response(
+                {"detail": "User has no student profile"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        class_id = request.query_params.get("class")
+        if class_id:
+            try:
+                class_id = int(class_id)
+            except (TypeError, ValueError):
+                return Response(
+                    {"class": "Class must be a valid integer."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        day = request.query_params.get("day")
+        valid_days = {value for value, _label in SectionDay.DAYS}
+        if day and day not in valid_days:
+            return Response(
+                {"day": f"Invalid day. Allowed values: {', '.join(sorted(valid_days))}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        today = timezone.now().date()
+        sections = (
+            Section.objects
+            .filter(
+                batch__enrollments__student=student,
+                batch__is_active=True,
+                batch__end_date__gte=today,
+            )
+            .select_related("class_obj", "class_obj__center", "batch", "batch__course")
+            .prefetch_related("days")
+            .order_by("class_obj__name", "class_obj_id", "start_time", "id")
+            .distinct()
+        )
+
+        if class_id:
+            sections = sections.filter(class_obj_id=class_id)
+
+        if day:
+            sections = sections.filter(days__day=day).distinct()
+
+        classes = (
+            Class.objects
+            .filter(id__in=sections.values("class_obj_id"))
+            .select_related("center")
+            .prefetch_related(
+                Prefetch(
+                    "sections",
+                    queryset=sections,
+                    to_attr="student_sections",
+                )
+            )
+            .order_by("name", "id")
+        )
+
+        serializer = InternClassSectionSerializer(
+            classes,
+            many=True,
+            context={"request": request},
+        )
         return Response(serializer.data)
 
 # === Dashboard ===

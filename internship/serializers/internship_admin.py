@@ -773,7 +773,7 @@ class StudentSerializer(serializers.ModelSerializer):
 
 
 class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
-    student_name = serializers.CharField(source="student.profile.get_full_name", read_only=True)
+    student_name = serializers.CharField(source="student.get_full_name", read_only=True)
     course_title = serializers.CharField(source="course.title", read_only=True)
     batch_number = serializers.CharField(source="batch.batch_number", read_only=True)
     total_installments = serializers.CharField(source="installment_plan.total_installments", read_only=True)
@@ -1416,3 +1416,23 @@ class AcademicDashboardSerializer(serializers.Serializer):
     charts = serializers.DictField()
     recent_interns = serializers.ListField()
     top_faculty = serializers.ListField()
+
+
+
+class AvailableStudentSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
+    email     = serializers.SerializerMethodField()
+    center_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = Student
+        fields = ['id', 'student_id', 'full_name', 'email', 'center_name']
+
+    def get_full_name(self, obj):
+        return obj.get_full_name()
+
+    def get_email(self, obj):
+        return obj.profile.user.email
+
+    def get_center_name(self, obj):
+        return obj.center.name if obj.center else None

@@ -14,7 +14,7 @@ from rest_framework import generics
 from datetime import datetime
 from django.db.models.functions import TruncMonth
 from ..models import Section, Class, Student, Course, Faculty, StudentCourseEnrollment, CoursePayment
-from ..serializers.internship_admin import ClassDetailSerializer, SectionSerializer, ClassListCreateSerializer, StudentPaymentDetailSerializer, StudentPaymentSerializer
+from ..serializers.internship_admin import AvailableStudentSerializer, ClassDetailSerializer, SectionSerializer, ClassListCreateSerializer, StudentPaymentDetailSerializer, StudentPaymentSerializer
 
 from accounts.models import CustomUser
 from internship.utils import (
@@ -576,3 +576,30 @@ class AcademicDashboardAPIView(APIView):
             "recent_interns": recent_interns,
             "top_faculty": top_faculty
         })
+    
+
+
+
+class AvailableStudentsView(APIView):
+
+    def get(self, request):
+        center_id = request.query_params.get('center_id')
+
+        already_enrolled_ids = StudentCourseEnrollment.objects.values_list(
+            'student_id', flat=True
+        ).distinct()
+
+        qs = Student.objects.filter(
+            is_active=True
+        ).exclude(
+            id__in=already_enrolled_ids
+        ).select_related(
+            'profile__user',
+            'center'
+        ).order_by('profile__user__first_name')
+
+        if center_id:
+            qs = qs.filter(center_id=center_id)
+
+        serializer = AvailableStudentSerializer(qs, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

@@ -659,3 +659,171 @@ class FacultyClassSectionSerializer(serializers.ModelSerializer):
         return InternSectionSerializer(  # Same serializer reuse cheyyam
             sections, many=True, context=self.context
         ).data
+    
+
+# serializers.py
+
+from rest_framework import serializers
+from ..models import Test, TestSection, TestQuestion, QuestionOption
+
+
+class QuestionOptionSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(required=False)  # update-ന് വേണം
+
+    class Meta:
+        model = QuestionOption
+        fields = ['id', 'label', 'option_text', 'is_correct']
+
+
+class TestQuestionSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(required=False)  # update-ന് വേണം
+    options = QuestionOptionSerializer(many=True, required=False)
+
+    class Meta:
+        model = TestQuestion
+        fields = [
+            'id', 'question_text', 'marks', 'file',
+            'order', 'word_limit', 'manual_evaluation', 'options'
+        ]
+        read_only_fields = ['file']  # file separate API വഴി
+
+
+class TestSectionSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(required=False)  # update-ന് വേണം
+    questions = TestQuestionSerializer(many=True, required=False)
+
+    class Meta:
+        model = TestSection
+        fields = [
+            'id', 'name', 'section_type',
+            'marks', 'duration_minutes', 'order', 'questions'
+        ]
+
+
+class TestSerializer(serializers.ModelSerializer):
+    sections = TestSectionSerializer(many=True, required=False)
+
+    class Meta:
+        model = Test
+        fields = [
+            'id', 'name', 'test_type', 'course', 'batch',
+            'duration_minutes', 'total_marks', 'instructions',
+            'status', 'sections', 'created_at'
+        ]
+        read_only_fields = ['created_at']
+
+    def validate_batch(self, batch):
+        if not batch:
+            raise serializers.ValidationError("Batch is required.")
+        return batch
+
+    # ─── CREATE ───────────────────────────────────────────
+    def create(self, validated_data):
+        sections_data = validated_data.pop('sections', [])
+        test = Test.objects.create(**validated_data)
+        self._create_sections(test, sections_data)
+        return test
+
+    # ─── UPDATE (Upsert) ──────────────────────────────────
+    def update(self, instance, validated_data):
+        # sections payload-ൽ ഇല്ലെങ്കിൽ None ആകും — [] അല്ല
+        sections_data = validated_data.pop('sections', None)
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        # None ആണെങ്കിൽ skip — sections തൊടില്ല
+        if sections_data is not None:
+            self._upsert_sections(instance, sections_data)
+
+        return instance
+
+    # ─── Helpers ──────────────────────────────────────────
+    def _create_sections(self, test, sections_data):
+        for section_data in sections_data:
+            questions_data = section_data.pop('questions', [])
+            section = TestSection.objects.create(test=test, **section_data)
+            self._create_questions(section, questions_data)
+
+    def _create_questions(self, section, questions_data):
+        for question_data in questions_data:
+            options_data = question_data.pop('options', [])
+            question = TestQuestion.objects.create(section=section, **question_data)
+            for option_data in options_data:
+                QuestionOption.objects.create(question=question, **option_data)
+
+    def _upsert_sections(self, test, sections_data):
+        existing_ids = set(test.sections.values_list('id', flat=True))
+        incoming_ids = set()
+
+        for section_data in sections_data:
+            questions_data = section_data.pop('questions', [])
+            section_id = section_data.pop('id', None)
+
+            if section_id and section_id in existing_ids:
+                # UPDATE
+                section = TestSection.objects.get(id=section_id)
+                for attr, value in section_data.items():
+                    setattr(section, attr, value)
+                section.save()
+                incoming_ids.add(section_id)
+            else:
+                # CREATE
+                section = TestSection.objects.create(test=test, **section_data)
+                incoming_ids.add(section.id)
+
+            self._upsert_questions(section, questions_data)
+
+        # DELETE removed sections
+        TestSection.objects.filter(id__in=existing_ids - incoming_ids).delete()
+
+    def _upsert_questions(self, section, questions_data):
+        existing_ids = set(section.questions.values_list('id', flat=True))
+        incoming_ids = set()
+
+        for question_data in questions_data:
+            options_data = question_data.pop('options', [])
+            question_id = question_data.pop('id', None)
+
+            if question_id and question_id in existing_ids:
+                # UPDATE
+                question = TestQuestion.objects.get(id=question_id)
+                for attr, value in question_data.items():
+                    setattr(question, attr, value)
+                question.save()
+                incoming_ids.add(question_id)
+            else:
+                # CREATE
+                question = TestQuestion.objects.create(section=section, **question_data)
+                incoming_ids.add(question.id)
+
+            self._upsert_options(question, options_data)
+
+        # DELETE removed questions + file cleanup
+        for q in TestQuestion.objects.filter(id__in=existing_ids - incoming_ids):
+            if q.file:
+                q.file.delete(save=False)
+            q.delete()
+
+    def _upsert_options(self, question, options_data):
+        existing_ids = set(question.options.values_list('id', flat=True))
+        incoming_ids = set()
+
+        for option_data in options_data:
+            option_id = option_data.pop('id', None)
+
+            if option_id and option_id in existing_ids:
+                # UPDATE
+                option = QuestionOption.objects.get(id=option_id)
+                for attr, value in option_data.items():
+                    setattr(option, attr, value)
+                option.save()
+                incoming_ids.add(option_id)
+            else:
+                # CREATE
+                option = QuestionOption.objects.create(question=question, **option_data)
+                incoming_ids.add(option.id)
+
+        # DELETE removed options
+        QuestionOption.objects.filter(id__in=existing_ids - incoming_ids).delete()

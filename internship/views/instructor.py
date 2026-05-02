@@ -791,3 +791,116 @@ class MyFacultyClassSectionListAPIView(APIView):
             context={"request": request},
         )
         return Response(serializer.data)
+    
+
+# views.py
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import JSONParser, MultiPartParser
+from django.shortcuts import get_object_or_404
+from ..serializers.instructor import TestSerializer
+
+
+class TestListCreateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser]
+
+    def get(self, request):
+        tests = Test.objects.select_related('course', 'batch') \
+                            .prefetch_related(
+                                'sections__questions__options'
+                            )
+
+        # Filters
+        course_id = request.query_params.get('course')
+        batch_id = request.query_params.get('batch')
+        status_filter = request.query_params.get('status')
+
+        if course_id:
+            tests = tests.filter(course_id=course_id)
+        if batch_id:
+            tests = tests.filter(batch_id=batch_id)
+        if status_filter:
+            tests = tests.filter(status=status_filter)
+
+        serializer = TestSerializer(tests, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = TestSerializer(data=request.data)
+        if serializer.is_valid():
+            test = serializer.save()
+            return Response(TestSerializer(test).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class TestDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser]
+
+    def _get_test(self, pk):
+        return get_object_or_404(
+            Test.objects.prefetch_related('sections__questions__options'),
+            pk=pk
+        )
+
+    def get(self, request, pk):
+        test = self._get_test(pk)
+        return Response(TestSerializer(test).data)
+
+    def patch(self, request, pk):
+        test = self._get_test(pk)
+        serializer = TestSerializer(test, data=request.data, partial=True)
+        if serializer.is_valid():
+            test = serializer.save()
+            return Response(TestSerializer(test).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        test = get_object_or_404(Test, pk=pk)
+        test.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class QuestionFileUploadAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser]
+
+    def post(self, request, test_id, question_id):
+        question = get_object_or_404(
+            TestQuestion,
+            id=question_id,
+            section__test_id=test_id  # security check
+        )
+
+        file = request.FILES.get('file')
+        if not file:
+            return Response(
+                {"detail": "file is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Old file cleanup
+        if question.file:
+            question.file.delete(save=False)
+
+        question.file = file
+        question.save()
+        return Response({"file_url": question.file.url})
+
+    def delete(self, request, test_id, question_id):
+        question = get_object_or_404(
+            TestQuestion,
+            id=question_id,
+            section__test_id=test_id
+        )
+
+        if question.file:
+            question.file.delete(save=False)
+            question.file = None
+            question.save()
+
+        return Response(status=status.HTTP_204_NO_CONTENT)

@@ -47,6 +47,10 @@ instructor_patterns = [
     # path("payments/<int:pk>/detail/", instructor.CoursePaymentDetailAPIView.as_view()),
 
     path('classes/', instructor.MyFacultyClassSectionListAPIView.as_view(), name='faculty-class-section-list'),
+
+    path('tests/', instructor.TestListCreateAPIView.as_view(), name='test-list-create'),
+    path('tests/<int:pk>/', instructor.TestDetailAPIView.as_view(), name='test-detail'),
+    path('tests/<int:test_id>/questions/<int:question_id>/upload/', instructor.QuestionFileUploadAPIView.as_view(), name='question-file-upload'),
 ]
 
 

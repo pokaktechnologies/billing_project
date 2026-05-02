@@ -314,9 +314,3 @@ class InternClassSectionSerializer(serializers.ModelSerializer):
             context=self.context,
         ).data
 
-
-# class PaymentSummarySerializer(serializers.Serializer):
-#     total_fee = serializers.DecimalField(max_digits=10, decimal_places=2)
-#     paid_amount = serializers.DecimalField(max_digits=10, decimal_places=2)
-#     balance_amount = serializers.DecimalField(max_digits=10, decimal_places=2)
-#     status = serializers.CharField()

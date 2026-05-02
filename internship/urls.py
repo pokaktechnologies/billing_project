@@ -45,6 +45,8 @@ instructor_patterns = [
     # path("payments/<int:pk>/delete/", instructor.CoursePaymentDestroyAPIView.as_view()),
 
     # path("payments/<int:pk>/detail/", instructor.CoursePaymentDetailAPIView.as_view()),
+
+    path('classes/', instructor.MyFacultyClassSectionListAPIView.as_view(), name='faculty-class-section-list'),
 ]
 
 

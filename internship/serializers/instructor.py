@@ -642,3 +642,20 @@ class InternProfileSerializer(serializers.ModelSerializer):
 
     def get_intern_name(self, obj):
         return f"{obj.user.first_name} {obj.user.last_name}"
+
+
+from internship.serializers.intern import InternSectionSerializer
+
+class FacultyClassSectionSerializer(serializers.ModelSerializer):
+    center_name = serializers.CharField(source="center.name", read_only=True)
+    sections = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Class
+        fields = ["id", "name", "center", "center_name", "sections"]
+
+    def get_sections(self, obj):
+        sections = getattr(obj, "faculty_sections", obj.sections.all())
+        return InternSectionSerializer(  # Same serializer reuse cheyyam
+            sections, many=True, context=self.context
+        ).data

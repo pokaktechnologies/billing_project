@@ -8,7 +8,7 @@ from internship.serializers.instructor import *
 from accounts.permissions import HasModulePermission
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
-from django.db.models import Q
+from django.db.models import Q, Prefetch
 from attendance.models import DailyAttendance
 from django_filters.rest_framework import DjangoFilterBackend
 from decimal import Decimal
@@ -717,4 +717,77 @@ class FacultyStudentsAPIView(APIView):
             students = students.filter(enrollments__batch_id=batch)
 
         serializer = StudentSerializer(students.distinct(), many=True)
+        return Response(serializer.data)
+    
+
+class MyFacultyClassSectionListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # Get faculty profile for logged-in user
+        try:
+            faculty = Faculty.objects.get(user__user=request.user, is_active=True)
+        except Faculty.DoesNotExist:
+            return Response(
+                {"detail": "User has no faculty profile"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        class_id = request.query_params.get("class")
+        if class_id:
+            try:
+                class_id = int(class_id)
+            except (TypeError, ValueError):
+                return Response(
+                    {"class": "Class must be a valid integer."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        day = request.query_params.get("day")
+        valid_days = {value for value, _label in SectionDay.DAYS}
+        if day and day not in valid_days:
+            return Response(
+                {"day": f"Invalid day. Allowed values: {', '.join(sorted(valid_days))}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        today = timezone.now().date()
+        sections = (
+            Section.objects
+            .filter(
+                batch__faculties=faculty,        # Faculty assigned to batch
+                batch__is_active=True,
+                batch__end_date__gte=today,
+            )
+            .select_related("class_obj", "class_obj__center", "batch", "batch__course")
+            .prefetch_related("days")
+            .order_by("class_obj__name", "class_obj_id", "start_time", "id")
+            .distinct()
+        )
+
+        if class_id:
+            sections = sections.filter(class_obj_id=class_id)
+
+        if day:
+            sections = sections.filter(days__day=day).distinct()
+
+        classes = (
+            Class.objects
+            .filter(id__in=sections.values("class_obj_id"))
+            .select_related("center")
+            .prefetch_related(
+                Prefetch(
+                    "sections",
+                    queryset=sections,
+                    to_attr="faculty_sections",
+                )
+            )
+            .order_by("name", "id")
+        )
+
+        serializer = FacultyClassSectionSerializer(
+            classes,
+            many=True,
+            context={"request": request},
+        )
         return Response(serializer.data)

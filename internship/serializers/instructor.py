@@ -656,7 +656,7 @@ class FacultyClassSectionSerializer(serializers.ModelSerializer):
 
     def get_sections(self, obj):
         sections = getattr(obj, "faculty_sections", obj.sections.all())
-        return InternSectionSerializer(  # Same serializer reuse cheyyam
+        return InternSectionSerializer(
             sections, many=True, context=self.context
         ).data
     
@@ -668,7 +668,7 @@ from ..models import Test, TestSection, TestQuestion, QuestionOption
 
 
 class QuestionOptionSerializer(serializers.ModelSerializer):
-    id = serializers.IntegerField(required=False)  # update-ന് വേണം
+    id = serializers.IntegerField(required=False)
 
     class Meta:
         model = QuestionOption
@@ -676,7 +676,7 @@ class QuestionOptionSerializer(serializers.ModelSerializer):
 
 
 class TestQuestionSerializer(serializers.ModelSerializer):
-    id = serializers.IntegerField(required=False)  # update-ന് വേണം
+    id = serializers.IntegerField(required=False)
     options = QuestionOptionSerializer(many=True, required=False)
 
     class Meta:
@@ -685,11 +685,11 @@ class TestQuestionSerializer(serializers.ModelSerializer):
             'id', 'question_text', 'marks', 'file',
             'order', 'word_limit', 'manual_evaluation', 'options'
         ]
-        read_only_fields = ['file']  # file separate API വഴി
+        read_only_fields = ['file']
 
 
 class TestSectionSerializer(serializers.ModelSerializer):
-    id = serializers.IntegerField(required=False)  # update-ന് വേണം
+    id = serializers.IntegerField(required=False)
     questions = TestQuestionSerializer(many=True, required=False)
 
     class Meta:
@@ -710,7 +710,7 @@ class TestSerializer(serializers.ModelSerializer):
             'duration_minutes', 'total_marks', 'instructions',
             'status', 'sections', 'created_at'
         ]
-        read_only_fields = ['created_at']
+        read_only_fields = ['created_at', 'course']
 
     def validate_batch(self, batch):
         if not batch:
@@ -726,14 +726,12 @@ class TestSerializer(serializers.ModelSerializer):
 
     # ─── UPDATE (Upsert) ──────────────────────────────────
     def update(self, instance, validated_data):
-        # sections payload-ൽ ഇല്ലെങ്കിൽ None ആകും — [] അല്ല
         sections_data = validated_data.pop('sections', None)
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
 
-        # None ആണെങ്കിൽ skip — sections തൊടില്ല
         if sections_data is not None:
             self._upsert_sections(instance, sections_data)
 

@@ -427,9 +427,8 @@ class Test(models.Model):
     ]
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     def save(self, *args, **kwargs):
-        # batch-ൽ നിന്ന് course auto set
         if self.batch_id:
             self.course = self.batch.course
         super().save(*args, **kwargs)

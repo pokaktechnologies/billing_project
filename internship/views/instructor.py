@@ -397,7 +397,7 @@ class StudentPerformanceStatsAPIView(APIView):
         revision = qs.filter(status="revision_required").count()
 
         # ---- Attendance (if students have attendance) ----
-        attendance_qs = DailyAttendance.objects.filter(staff=student_id)
+        attendance_qs = DailyAttendance.objects.filter(staff=student.profile)
 
         total_days = attendance_qs.count()
 
@@ -489,14 +489,33 @@ class InternTaskStatsAPIView(APIView):
 # ===== Submission Views ======
 
 class InstructorSubmissionListAPIView(generics.ListAPIView):
+
     serializer_class = InstructorSubmissionSerializer
-    permission_classes = [IsAuthenticated]   # add your instructor permission
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+
+        try:
+            faculty = self.request.user.staff_profile.faculty_profile
+
+        except AttributeError:
+            return TaskSubmission.objects.none()
+
+        # faculty batches
+        faculty_batches = faculty.batches.all()
+
+        # students under faculty batches
+        student_ids = Student.objects.filter(
+            enrollments__batch__in=faculty_batches
+        ).values_list("id", flat=True)
+
+        # submissions only from those students
         qs = TaskSubmission.objects.select_related(
             "assignment__task",
             "assignment__student__profile__user",
             "assignment__staff__user"
+        ).filter(
+            assignment__student_id__in=student_ids
         )
 
         title = self.request.query_params.get("title")
@@ -504,39 +523,54 @@ class InstructorSubmissionListAPIView(generics.ListAPIView):
         status = self.request.query_params.get("status")
         search = self.request.query_params.get("search")
 
-        # 🔹 title filter
+        # title filter
         if title:
-            qs = qs.filter(assignment__task__title__icontains=title)
-
-        # 🔹 status filter
-        if status:
-            qs = qs.filter(assignment__status=status)
-
-        # 🔹 student filter (hybrid)
-        if student:
-            if student.isdigit():
-                qs = qs.filter(
-                    Q(assignment__student_id=int(student)) |
-                    Q(assignment__staff_id=int(student))
-                )
-            else:
-                qs = qs.filter(
-                    Q(assignment__student__profile__user__first_name__icontains=student) |
-                    Q(assignment__student__profile__user__last_name__icontains=student) |
-                    Q(assignment__student__profile__user__email__icontains=student) |
-                    Q(assignment__staff__user__first_name__icontains=student) |
-                    Q(assignment__staff__user__last_name__icontains=student) |
-                    Q(assignment__staff__user__email__icontains=student)
-                )
-
-        # 🔍 GLOBAL SEARCH (title + student name)
-        if search:
             qs = qs.filter(
-                Q(assignment__task__title__icontains=search) |
-                Q(assignment__student__profile__user__first_name__icontains=search) |
-                Q(assignment__student__profile__user__last_name__icontains=search) |
-                Q(assignment__staff__user__first_name__icontains=search) |
-                Q(assignment__staff__user__last_name__icontains=search)
+                assignment__task__title__icontains=title
+            )
+
+        # status filter
+        if status:
+            qs = qs.filter(
+                assignment__status=status
+            )
+
+        # student filter
+        if student:
+
+            if student.isdigit():
+
+                qs = qs.filter(
+                    assignment__student_id=int(student)
+                )
+
+            else:
+
+                qs = qs.filter(
+                    Q(
+                        assignment__student__profile__user__first_name__icontains=student
+                    ) |
+                    Q(
+                        assignment__student__profile__user__last_name__icontains=student
+                    ) |
+                    Q(
+                        assignment__student__profile__user__email__icontains=student
+                    )
+                )
+
+        # global search
+        if search:
+
+            qs = qs.filter(
+                Q(
+                    assignment__task__title__icontains=search
+                ) |
+                Q(
+                    assignment__student__profile__user__first_name__icontains=search
+                ) |
+                Q(
+                    assignment__student__profile__user__last_name__icontains=search
+                )
             )
 
         return qs.order_by("-id").distinct()

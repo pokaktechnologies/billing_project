@@ -428,3 +428,237 @@ class InternDashboardAPIView(APIView):
                 "payments": payment_summary,
             },
         })
+
+
+
+# views.py
+from django.shortcuts import get_object_or_404
+from ..models import Test, TestAttempt, TestAnswer, TestQuestion, QuestionOption
+from ..serializers.intern import (
+    StudentTestListSerializer, StudentTestDetailSerializer,
+    StudentSectionWithQuestionsSerializer, TestAnswerSaveSerializer,
+    TestSubmitSerializer, TestResultSerializer
+)
+
+
+def get_authenticated_student(user):
+    try:
+        return user.staff_profile.student_profile
+    except Exception:
+        return None
+
+
+# ─── Test List ────────────────────────────────────────────────────
+class StudentTestListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        student = get_authenticated_student(request.user)
+        if not student:
+            return Response(
+                {"detail": "User has no student profile."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Student enrolled ആയ batch-ലെ published tests
+        tests = Test.objects.filter(
+            batch__enrollments__student=student,
+            status='published'
+        ).select_related('course', 'batch').prefetch_related(
+            'attempts', 'sections__questions'
+        ).distinct()
+
+        serializer = StudentTestListSerializer(
+            tests, many=True, context={'student': student}
+        )
+        return Response(serializer.data)
+
+
+# ─── Test Detail ──────────────────────────────────────────────────
+class StudentTestDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, test_id):
+        student = get_authenticated_student(request.user)
+        if not student:
+            return Response(
+                {"detail": "User has no student profile."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        test = get_object_or_404(
+            Test.objects.prefetch_related('sections'),
+            id=test_id,
+            status='published',
+            batch__enrollments__student=student
+        )
+
+        serializer = StudentTestDetailSerializer(
+            test, context={'student': student}
+        )
+        return Response(serializer.data)
+
+
+# ─── Start Test ───────────────────────────────────────────────────
+class StartTestAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, test_id):
+        student = get_authenticated_student(request.user)
+        if not student:
+            return Response(
+                {"detail": "User has no student profile."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        test = get_object_or_404(
+            Test,
+            id=test_id,
+            status='published',
+            batch__enrollments__student=student
+        )
+
+        # Already submitted 
+        existing = TestAttempt.objects.filter(student=student, test=test).first()
+        if existing and existing.status == 'submitted':
+            return Response(
+                {"detail": "Test already submitted."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # attempt create or get (resume support)
+        attempt, created = TestAttempt.objects.get_or_create(
+            student=student,
+            test=test,
+            defaults={'status': 'in_progress'}
+        )
+
+        # Sections + questions with saved answers
+        sections = test.sections.prefetch_related(
+            'questions__options',
+            'questions__answers'
+        ).all()
+
+        serializer = StudentSectionWithQuestionsSerializer(
+            sections, many=True, context={'attempt': attempt}
+        )
+
+        return Response({
+            "attempt_id": attempt.id,
+            "test_name": test.name,
+            "duration_minutes": test.duration_minutes,
+            "sections": serializer.data
+        })
+
+
+# ─── Save Answer (Auto-save) ──────────────────────────────────────
+class SaveAnswerAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, attempt_id):
+        student = get_authenticated_student(request.user)
+        if not student:
+            return Response(
+                {"detail": "User has no student profile."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        attempt = get_object_or_404(
+            TestAttempt, id=attempt_id, student=student
+        )
+
+        if attempt.status == 'submitted':
+            return Response(
+                {"detail": "Test already submitted."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = TestAnswerSaveSerializer(
+            data=request.data, context={'attempt': attempt}
+        )
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        data = serializer.validated_data
+        question = data['question']
+
+        selected_option = None
+        if data.get('selected_option'):
+            selected_option = QuestionOption.objects.get(id=data['selected_option'])
+
+        # Upsert — create or update
+        TestAnswer.objects.update_or_create(
+            attempt=attempt,
+            question=question,
+            defaults={
+                'selected_option': selected_option,
+                'text_answer': data.get('text_answer'),
+                'is_marked_for_review': data.get('is_marked_for_review', False),
+            }
+        )
+
+        return Response({"detail": "Answer saved."})
+
+
+# ─── Submit Test ──────────────────────────────────────────────────
+class SubmitTestAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, attempt_id):
+        student = get_authenticated_student(request.user)
+        if not student:
+            return Response(
+                {"detail": "User has no student profile."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        attempt = get_object_or_404(
+            TestAttempt, id=attempt_id, student=student
+        )
+
+        if attempt.status == 'submitted':
+            return Response(
+                {"detail": "Test already submitted."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = TestSubmitSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        attempt.status = 'submitted'
+        attempt.submitted_at = timezone.now()
+        attempt.time_taken_seconds = serializer.validated_data['time_taken_seconds']
+        attempt.save()
+
+        return Response({
+            "detail": "Test submitted successfully.",
+            "attempt_id": attempt.id
+        })
+
+
+# ─── Result ───────────────────────────────────────────────────────
+class TestResultAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, attempt_id):
+        student = get_authenticated_student(request.user)
+        if not student:
+            return Response(
+                {"detail": "User has no student profile."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        attempt = get_object_or_404(
+            TestAttempt.objects.select_related('test').prefetch_related(
+                'test__sections__questions__options',
+                'answers__question__section',
+                'answers__selected_option',
+            ),
+            id=attempt_id,
+            student=student,
+            status='submitted'
+        )
+
+        serializer = TestResultSerializer(attempt)
+        return Response(serializer.data)

@@ -492,6 +492,63 @@ class QuestionOption(models.Model):
         return f"{self.question} - {self.label}"
 
 
+# models.py
+
+class TestAttempt(models.Model):
+    STATUS_CHOICES = [
+        ('in_progress', 'In Progress'),
+        ('submitted', 'Submitted'),
+    ]
+
+    student = models.ForeignKey(
+        Student, on_delete=models.CASCADE, related_name='test_attempts'
+    )
+    test = models.ForeignKey(
+        Test, on_delete=models.CASCADE, related_name='attempts'
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='in_progress')
+    started_at = models.DateTimeField(auto_now_add=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    time_taken_seconds = models.PositiveIntegerField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ['student', 'test']
+
+    def __str__(self):
+        return f"{self.student} - {self.test.name} [{self.status}]"
+
+
+class TestAnswer(models.Model):
+    attempt = models.ForeignKey(
+        TestAttempt, on_delete=models.CASCADE, related_name='answers'
+    )
+    question = models.ForeignKey(
+        TestQuestion, on_delete=models.CASCADE, related_name='answers'
+    )
+
+    # MCQ — selected option
+    selected_option = models.ForeignKey(
+        QuestionOption, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='answers'
+    )
+
+    # Descriptive — text answer
+    text_answer = models.TextField(null=True, blank=True)
+
+    # Instructor feedback (descriptive)
+    marks_awarded = models.PositiveIntegerField(null=True, blank=True)
+    feedback = models.TextField(null=True, blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    is_marked_for_review = models.BooleanField(default=False)
+    answered_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ['attempt', 'question']  # per question ഒരു answer
+
+    def __str__(self):
+        return f"{self.attempt} - Q{self.question.id}"
+
 #  Internship Application
 
 from django.db import models

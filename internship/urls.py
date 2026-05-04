@@ -72,6 +72,14 @@ intern_patterns = [
     path('payments/', intern.MyCoursePaymentListAPIView.as_view()),
     path('classes/', intern.MyClassSectionListAPIView.as_view(), name='intern-class-section-list'),
 
+
+    path('tests/', intern.StudentTestListAPIView.as_view(), name='student-test-list'),
+    path('tests/<int:test_id>/', intern.StudentTestDetailAPIView.as_view(), name='student-test-detail'),
+    path('tests/<int:test_id>/start/', intern.StartTestAPIView.as_view(), name='student-test-start'),
+    path('attempts/<int:attempt_id>/answer/', intern.SaveAnswerAPIView.as_view(), name='student-save-answer'),
+    path('attempts/<int:attempt_id>/submit/', intern.SubmitTestAPIView.as_view(), name='student-submit-test'),
+    path('attempts/<int:attempt_id>/result/', intern.TestResultAPIView.as_view(), name='student-test-result'),
+    
     #Dashboard
     path('dashaboard/',intern.InternDashboardAPIView.as_view()),
 ]

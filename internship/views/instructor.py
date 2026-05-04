@@ -181,7 +181,22 @@ class StudentsStatsAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        students = Student.objects.all()
+
+        try:
+            faculty = request.user.staff_profile.faculty_profile
+        except AttributeError:
+            return Response(
+                {"error": "Logged-in user is not a faculty"},
+                status=403
+            )
+
+        # faculty batches
+        faculty_batches = faculty.batches.all()
+
+        # students under faculty
+        students = Student.objects.filter(
+            enrollments__batch__in=faculty_batches
+        ).distinct()
 
         total = students.count()
         active = students.filter(is_active=True).count()
@@ -192,7 +207,6 @@ class StudentsStatsAPIView(APIView):
             "active_students": active,
             "inactive_students": inactive,
         })
-
 
 
 # ====== Study Material ViewSet ======

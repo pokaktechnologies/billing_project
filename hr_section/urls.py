@@ -8,6 +8,11 @@ urlpatterns = [
     path('enquiry/statistics/', EnquiryStatisticsView.as_view(), name='enquiry_statistics'),
     path('enquiry/search/', SearchEnquiryView.as_view(), name='enquiry_search'),
 
+    path('erp/enquiry/', ErpEnquiryListCreateView.as_view(), name='erp-enquiry'),
+    path('erp/enquiry/<int:pk>/', ErpEnquiryDetailView.as_view(), name='erp-enquiry-detail'),
+    path('erp/enquiry/<int:pk>/status/', ErpEnquiryStatusUpdateView.as_view(), name='erp-enquiry-status-update'),
+    path('erp/enquiry/statistics/', ErpEnquiryStatisticsView.as_view(), name='erp-enquiry-statistics'),
+
 
     path('designation/', DesignationView.as_view(), name='designation_list'),
     path('designation/<int:pk>/', DesignationDetailView.as_view(), name='designation_detail'),

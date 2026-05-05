@@ -1,6 +1,6 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status, permissions
+from rest_framework import generics, status, permissions
 from rest_framework.pagination import PageNumberPagination
 from django.utils import timezone
 from rest_framework import permissions, status as drf_status
@@ -627,3 +627,88 @@ class HrDashaboardView(APIView):
             'attendance': attendance_data
             },
             status=status.HTTP_200_OK)
+
+
+
+# ERP Enquiry
+
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import SearchFilter
+class ErpEnquiryListCreateView(generics.ListCreateAPIView):
+    queryset = ErpEnquiry.objects.all()
+    serializer_class = ErpEnquirySerializer
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    filterset_fields = ['status', 'heard_about']
+    search_fields = ['full_name', 'work_email', 'company_name']
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        start_date = self.request.query_params.get('start_date')
+        end_date = self.request.query_params.get('end_date')
+        if start_date:
+            queryset = queryset.filter(created_at__date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(created_at__date__lte=end_date)
+
+        return queryset
+
+
+class ErpEnquiryDetailView(generics.RetrieveAPIView):
+    queryset = ErpEnquiry.objects.all()
+    serializer_class = ErpEnquirySerializer
+
+class ErpEnquiryStatusUpdateView(generics.UpdateAPIView):
+    queryset = ErpEnquiry.objects.all()
+    serializer_class = ErpEnquiryStatusUpdateSerializer
+    http_method_names = ['patch']
+
+
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.utils import timezone
+from datetime import timedelta
+from .models import ErpEnquiry
+
+
+class ErpEnquiryStatisticsView(APIView):
+
+    def get(self, request):
+        now = timezone.now()
+
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = now
+
+        yesterday_start = today_start - timedelta(days=1)
+        yesterday_end = today_start
+
+        total_today = ErpEnquiry.objects.filter(
+            created_at__range=(today_start, today_end)
+        ).count()
+
+        total_yesterday = ErpEnquiry.objects.filter(
+            created_at__range=(yesterday_start, yesterday_end)
+        ).count()
+
+        if total_yesterday > 0:
+            percentage_change = (
+                (total_today - total_yesterday) / total_yesterday
+            ) * 100
+        else:
+            percentage_change = 0
+
+        statistics = {
+            'total_enquiries': {
+                'today': total_today,
+                'yesterday': total_yesterday,
+                'percentage_change': round(percentage_change, 2),
+            },
+            'by_status': {
+                'new': ErpEnquiry.objects.filter(status='new').count(),
+                'reviewed': ErpEnquiry.objects.filter(status='reviewed').count(),
+                'responded': ErpEnquiry.objects.filter(status='responded').count(),
+            }
+        }
+
+        return Response(statistics, status=status.HTTP_200_OK)

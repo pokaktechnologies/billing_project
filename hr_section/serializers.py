@@ -210,3 +210,20 @@ class JobApplicationStatusUpdateSerializer(ModelSerializer):
         instance.status = validated_data.get('status', instance.status)
         instance.save()
         return instance
+
+
+
+# ERP Enquiry
+from .models import ErpEnquiry
+
+
+class ErpEnquirySerializer(ModelSerializer):
+    class Meta:
+        model = ErpEnquiry
+        fields = '__all__'
+        read_only_fields = ['status', 'created_at', 'updated_at']
+
+class ErpEnquiryStatusUpdateSerializer(ModelSerializer):
+    class Meta:
+        model = ErpEnquiry
+        fields = ['status']

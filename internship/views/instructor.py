@@ -1,6 +1,7 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import generics,filters, status
 from rest_framework.response import Response
+from internship.serializers.intern import TestResultSerializer
 from internship.models import Course, Student, Faculty
 from internship.serializers.instructor import CourseSerializer
 from internship.models import AssignedStaffCourse
@@ -952,3 +953,134 @@ class QuestionFileUploadAPIView(APIView):
             question.save()
 
         return Response(status=status.HTTP_204_NO_CONTENT)
+    
+
+# full mcq based aanel auto evaluation descriptive and mixed aaaneel manual setup
+def is_attempt_fully_evaluated(attempt):
+    descriptive_questions = TestQuestion.objects.filter(
+        section__test=attempt.test,
+        section__section_type='descriptive'
+    )
+
+    if not descriptive_questions.exists():
+        return True
+
+    for question in descriptive_questions:
+        answer = attempt.answers.filter(question=question).first()
+
+        if not answer or answer.marks_awarded is None:
+            return False
+
+    return True
+
+class InstructorTestSubmissionListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, test_id):
+
+        faculty = request.user.staff_profile.faculty_profile
+
+        test = get_object_or_404(
+            Test,
+            id=test_id,
+            batch__faculties=faculty
+        )
+
+        attempts = TestAttempt.objects.filter(
+            test=test,
+            status='submitted'
+        ).select_related(
+            "student__profile__user"
+        ).prefetch_related(
+            "answers__selected_option",
+            "answers__question"
+        )
+
+        # search
+        search = request.query_params.get("search")
+        if search:
+            attempts = attempts.filter(
+                Q(student__profile__user__first_name__icontains=search) |
+                Q(student__profile__user__last_name__icontains=search) |
+                Q(student__profile__user__email__icontains=search)
+            )
+
+        total = attempts.count()
+        evaluated_count = 0
+
+        response_data = []
+
+        total_questions = TestQuestion.objects.filter(
+            section__test=test
+        ).count()
+
+        for attempt in attempts:
+
+            user = attempt.student.profile.user
+
+            # MCQ score
+            correct = 0
+            for answer in attempt.answers.all():
+                if answer.selected_option and answer.selected_option.is_correct:
+                    correct += 1
+
+            # evaluation check 
+            evaluated = is_attempt_fully_evaluated(attempt)
+
+            if evaluated:
+                evaluated_count += 1
+
+            response_data.append({
+                "attempt_id": attempt.id,
+                "student_name": f"{user.first_name} {user.last_name}",
+                "email": user.email,
+                "score": f"{correct}/{total_questions}",
+                "time_taken": attempt.time_taken_seconds,
+                "status": "evaluated" if evaluated else "pending",
+                "submitted_at": attempt.submitted_at
+            })
+
+        return Response({
+            "summary": {
+                "total": total,
+                "evaluated": evaluated_count,
+                "pending": total - evaluated_count
+            },
+            "submissions": response_data
+        })
+    
+
+class InstructorTestSubmissionDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, attempt_id):
+
+        faculty = request.user.staff_profile.faculty_profile
+
+        attempt = get_object_or_404(
+            TestAttempt.objects.select_related(
+                "test",
+                "student__profile__user"
+            ).prefetch_related(
+                'test__sections__questions__options',
+                'answers__question__section',
+                'answers__selected_option',
+            ),
+            id=attempt_id,
+            test__batch__faculties=faculty,
+            status='submitted'
+        )
+
+        serializer = TestResultSerializer(attempt)
+
+        user = attempt.student.profile.user
+
+        return Response({
+            "student": {
+                "name": f"{user.first_name} {user.last_name}",
+                "email": user.email
+            },
+            "test": serializer.data,
+            "final_score": f"{serializer.data['scored_marks']}/{serializer.data['total_marks']}"
+        })
+    

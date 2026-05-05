@@ -3,22 +3,30 @@ from datetime import datetime, timedelta
 from django.db.models import Count, OuterRef, Prefetch, Q, Subquery, Sum
 
 
-def generate_batch_number(model, field_name: str, prefix: str, length: int, course):
-    year = datetime.now().year
+from django.db.models import IntegerField
+from django.db.models.functions import Cast, Right
+
+def generate_batch_number(model, field_name: str, prefix: str, length: int, use_lock=False):
+    year_short = str(datetime.now().year)[-2:]
     start = 1
 
-    latest = model.objects.select_for_update().filter(
-        course=course,
-        **{f"{field_name}__startswith": f"{prefix}{year}"}
-    ).order_by(f"-{field_name}").first()
+    queryset = model.objects.filter(
+        **{f"{field_name}__startswith": prefix}
+    )
+
+    if use_lock:
+        queryset = queryset.select_for_update()  # annotate-ന് മുമ്പ്
+
+    latest = queryset.annotate(
+        num_part=Cast(Right(field_name, length), output_field=IntegerField())
+    ).order_by("-num_part").first()
 
     if latest:
-        latest_number_str = getattr(latest, field_name)[-length:]
-        next_number = int(latest_number_str) + 1
+        next_number = latest.num_part + 1
     else:
         next_number = start
 
-    return f"{prefix}{year}{next_number:0{length}d}"
+    return f"{prefix}{year_short}{next_number:0{length}d}"
 
 def generate_student_id(model, field_name: str, prefix: str, length: int):
     year = datetime.now().year

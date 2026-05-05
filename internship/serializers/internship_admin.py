@@ -512,8 +512,7 @@ class BatchSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         faculties = validated_data.pop("faculties", [])
-        course    = validated_data.get("course")
-        # prefix    = get_clean_prefix(course.title)
+
 
         with transaction.atomic():
             validated_data["batch_number"] = generate_batch_number(
@@ -521,7 +520,7 @@ class BatchSerializer(serializers.ModelSerializer):
                 field_name="batch_number",
                 prefix="BAT",
                 length=4,
-                course=course,
+                use_lock=True
             )
             batch = Batch.objects.create(**validated_data)
             batch.faculties.set(faculties)

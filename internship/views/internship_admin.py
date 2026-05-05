@@ -152,23 +152,17 @@ class FacultyRetrieveUpdateDestroyAPIView(
     permission_classes = [IsAuthenticated]
 
 #Batch
+# Preview view
 class BatchNumberPreviewAPIView(APIView):
     def get(self, request):
-        course_id = request.query_params.get("course")
 
-        if not course_id:
-            return Response({"error": "course required"}, status=400)
-
-        course = get_object_or_404(Course, id=course_id)
-
-        prefix = get_clean_prefix(course.title)
 
         batch_number = generate_batch_number(
             model=Batch,
             field_name="batch_number",
-            prefix=prefix,
-            length=3,
-            course=course
+            prefix="BAT",
+            length=4,
+            use_lock=False
         )
 
         return Response({"batch_number": batch_number})

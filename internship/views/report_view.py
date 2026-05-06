@@ -424,7 +424,7 @@ class CourseDetailReportAPIView(generics.RetrieveAPIView):
     serializer_class = CourseDetailReportSerializer
     permission_classes = [IsAuthenticated]
     queryset = Course.objects.select_related("department").prefetch_related(
-        "batches", "faculties__user__user", "faculties__department"
+        "batches", "faculties__user__user", "faculties__departments"
     ).all()
 
 
@@ -473,7 +473,9 @@ class FacultyReportAPIView(generics.ListAPIView):
         today = now().date()
 
         queryset = Faculty.objects.select_related(
-            "user__user", "department"
+            "user__user"
+        ).prefetch_related(
+            "departments"
         ).annotate(
             total_students=Count(
                 "batches__enrollments__student",
@@ -500,23 +502,23 @@ class FacultyReportAPIView(generics.ListAPIView):
         if is_active is not None:
             queryset = queryset.filter(is_active=is_active.lower() == "true")
         if department_id:
-            queryset = queryset.filter(department_id=department_id)
+            queryset = queryset.filter(departments__id=department_id)
         if search:
             queryset = queryset.filter(
                 Q(user__user__first_name__icontains=search) |
                 Q(user__user__last_name__icontains=search)
             )
 
-        return queryset
+        return queryset.distinct()
 
 
 class FacultyDetailReportAPIView(generics.RetrieveAPIView):
     serializer_class = FacultyDetailReportSerializer
     permission_classes = [IsAuthenticated]
     queryset = Faculty.objects.select_related(
-        "user__user", "department"
+        "user__user"
     ).prefetch_related(
-        "courses", "batches__course"
+        "departments", "courses", "batches__course"
     ).all()
 
 

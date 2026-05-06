@@ -118,8 +118,9 @@ class InstallmentSelectionListAPIView(generics.ListAPIView):
 
 class FacultyQuerysetMixin:
     queryset = Faculty.objects.select_related(
-        "user__user",
-        "department",
+        "user__user"
+    ).prefetch_related(
+        "departments",
     ).annotate(
         course_count=Count("batches__course", distinct=True),
         students_count=Count("batches__enrollments__student", distinct=True),
@@ -132,7 +133,7 @@ class FacultyListCreateAPIView(FacultyQuerysetMixin, generics.ListCreateAPIView)
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_fields = {
-        "department": ["exact"],
+        "departments": ["exact"],
         "batches__course": ["exact"],
         "batches": ["exact"],
         "is_active": ["exact"],
@@ -140,8 +141,11 @@ class FacultyListCreateAPIView(FacultyQuerysetMixin, generics.ListCreateAPIView)
     search_fields = [
         "user__user__first_name",
         "user__user__last_name",
-        "department__name",
+        "departments__name",
     ]
+
+    def filter_queryset(self, queryset):
+        return super().filter_queryset(queryset).distinct()
 
 
 class FacultyRetrieveUpdateDestroyAPIView(

@@ -6,7 +6,7 @@ from django.db.models import Sum,Q
 from rest_framework import serializers
 from twisted.test import obj
 
-from accounts.models import CustomUser, ModulePermission, StaffProfile
+from accounts.models import CustomUser, Department, ModulePermission, StaffProfile
 from ..models import (
     Batch,
     Center,
@@ -427,7 +427,13 @@ class FacultySerializer(serializers.ModelSerializer):
     faculty = serializers.IntegerField(source="id", read_only=True)
     name = serializers.CharField(source="get_full_name", read_only=True)
     faculty_name = serializers.CharField(source="get_full_name", read_only=True)
-    department_name = serializers.CharField(source="department.name", read_only=True)
+    departments = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Department.objects.all(),
+        required=False
+    )
+    department_names = serializers.SerializerMethodField()
+    department_details = serializers.SerializerMethodField()
     email = serializers.CharField(source="user.staff_email", read_only=True)
     phone_number = serializers.CharField(source="user.phone_number", read_only=True)
     course_count = serializers.SerializerMethodField()
@@ -441,13 +447,26 @@ class FacultySerializer(serializers.ModelSerializer):
             "user",
             "name",
             "faculty_name",
-            "department",
-            "department_name",
+            "departments",
+            "department_names",
+            "department_details",
             "email",
             "phone_number",
             "course_count",
             "students_count",
             "is_active",
+        ]
+
+    def get_department_names(self, obj):
+        return [department.name for department in obj.departments.all()]
+
+    def get_department_details(self, obj):
+        return [
+            {
+                "id": department.id,
+                "name": department.name,
+            }
+            for department in obj.departments.all()
         ]
 
     def get_course_count(self, obj):

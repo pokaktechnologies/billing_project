@@ -38,7 +38,8 @@ class Student(models.Model):
 
 class Faculty(models.Model):
     user = models.OneToOneField(StaffProfile, on_delete=models.CASCADE, related_name="faculty_profile")
-    department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name="faculties", null=True, blank=True)
+    department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name="legacy_faculties", null=True, blank=True)
+    departments = models.ManyToManyField(Department, related_name="faculties", blank=True)
     is_active = models.BooleanField(default=True)
     def get_full_name(self):
         user = self.user.user
@@ -47,16 +48,16 @@ class Faculty(models.Model):
     def __str__(self):
         return self.user.user.first_name
 
-class CourseFaculty(models.Model):
-    faculty = models.ForeignKey(Faculty, on_delete=models.CASCADE, related_name="course_faculties")
-    department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name="course_faculties")
-    is_active = models.BooleanField(default=True)
-    def __str__(self):
-        return self.faculty.user.user.first_name
+# class CourseFaculty(models.Model):
+#     faculty = models.ForeignKey(Faculty, on_delete=models.CASCADE, related_name="course_faculties")
+#     department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name="course_faculties")
+#     is_active = models.BooleanField(default=True)
+#     def __str__(self):
+#         return self.faculty.user.user.first_name
     
-    def get_full_name(self):
-        user = self.faculty.user.user
-        return f"{user.first_name} {user.last_name}"
+#     def get_full_name(self):
+#         user = self.faculty.user.user
+#         return f"{user.first_name} {user.last_name}"
 
 class Course(models.Model):
     title = models.CharField(max_length=200)

@@ -406,14 +406,38 @@ class StudentInSerializer(serializers.ModelSerializer):
 
 class FacultyInSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
-    department = serializers.CharField(source="department.name", default=None)
+    departments = serializers.SerializerMethodField()
+    department_names = serializers.SerializerMethodField()
+    department_details = serializers.SerializerMethodField()
 
     class Meta:
         model = Faculty
-        fields = ["id", "name", "department", "is_active"]
+        fields = [
+            "id",
+            "name",
+            "departments",
+            "department_names",
+            "department_details",
+            "is_active",
+        ]
 
     def get_name(self, obj):
         return obj.get_full_name()
+
+    def get_departments(self, obj):
+        return [department.id for department in obj.departments.all()]
+
+    def get_department_names(self, obj):
+        return [department.name for department in obj.departments.all()]
+
+    def get_department_details(self, obj):
+        return [
+            {
+                "id": department.id,
+                "name": department.name,
+            }
+            for department in obj.departments.all()
+        ]
 
 
 class CourseInSerializer(serializers.ModelSerializer):
@@ -476,7 +500,7 @@ class CenterDetailReportSerializer(serializers.ModelSerializer):
     def get_faculties(self, obj):
         faculties = Faculty.objects.filter(
             batches__enrollments__student__center=obj
-        ).distinct().select_related("user__user", "department")
+        ).distinct().select_related("user__user").prefetch_related("departments")
         return FacultyInSerializer(faculties, many=True).data
 
 
@@ -560,7 +584,7 @@ class CourseDetailReportSerializer(serializers.ModelSerializer):
         return StudentInSerializer(students, many=True).data
 
     def get_faculties(self, obj):
-        faculties = obj.faculties.select_related("user__user", "department").all()
+        faculties = obj.faculties.select_related("user__user").prefetch_related("departments").all()
         return FacultyInSerializer(faculties, many=True).data
 
 
@@ -589,7 +613,9 @@ from django.utils.timezone import now
 
 class FacultyReportSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
-    department = serializers.CharField(source="department.name", default=None)
+    departments = serializers.SerializerMethodField()
+    department_names = serializers.SerializerMethodField()
+    department_details = serializers.SerializerMethodField()
     total_students = serializers.IntegerField(read_only=True)
     active_students = serializers.IntegerField(read_only=True)
     completed_students = serializers.IntegerField(read_only=True)
@@ -599,7 +625,7 @@ class FacultyReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = Faculty
         fields = [
-            "id", "name", "department", "is_active",
+            "id", "name", "departments", "department_names", "department_details", "is_active",
             "total_courses", "total_batches",
             "total_students", "active_students", "completed_students",
         ]
@@ -607,10 +633,27 @@ class FacultyReportSerializer(serializers.ModelSerializer):
     def get_name(self, obj):
         return obj.get_full_name()
 
+    def get_departments(self, obj):
+        return [department.id for department in obj.departments.all()]
+
+    def get_department_names(self, obj):
+        return [department.name for department in obj.departments.all()]
+
+    def get_department_details(self, obj):
+        return [
+            {
+                "id": department.id,
+                "name": department.name,
+            }
+            for department in obj.departments.all()
+        ]
+
 
 class FacultyDetailReportSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
-    department = serializers.CharField(source="department.name", default=None)
+    departments = serializers.SerializerMethodField()
+    department_names = serializers.SerializerMethodField()
+    department_details = serializers.SerializerMethodField()
     courses = serializers.SerializerMethodField()
     batches = serializers.SerializerMethodField()
     active_students = serializers.SerializerMethodField()
@@ -619,13 +662,28 @@ class FacultyDetailReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = Faculty
         fields = [
-            "id", "name", "department", "is_active",
+            "id", "name", "departments", "department_names", "department_details", "is_active",
             "courses", "batches",
             "active_students", "completed_students",
         ]
 
     def get_name(self, obj):
         return obj.get_full_name()
+
+    def get_departments(self, obj):
+        return [department.id for department in obj.departments.all()]
+
+    def get_department_names(self, obj):
+        return [department.name for department in obj.departments.all()]
+
+    def get_department_details(self, obj):
+        return [
+            {
+                "id": department.id,
+                "name": department.name,
+            }
+            for department in obj.departments.all()
+        ]
 
     def get_courses(self, obj):
         return obj.courses.values("id", "title", "total_fee", "is_active")

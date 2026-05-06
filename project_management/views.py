@@ -1952,10 +1952,6 @@ class ManagerWeeklyReportSummaryView(APIView):
             report_type="weekly"
         )
 
-        report_map = {
-            (r.submitted_by_id, r.week_start, r.week_end): r
-            for r in reports
-        }
 
         weeks = []
 
@@ -1994,8 +1990,14 @@ class ManagerWeeklyReportSummaryView(APIView):
 
                 user = pm.member.user
 
-                report = report_map.get(
-                    (user.id, week_start, week_end)
+                report = next(
+                   (
+                        r for r in reports
+                        if r.submitted_by_id == user.id
+                        and r.week_start <= week_end
+                        and r.week_end >= week_start
+                    ),
+                    None
                 )
 
                 if report:

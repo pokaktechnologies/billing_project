@@ -137,3 +137,41 @@ class JobApplication(models.Model):
 # ========== End of Models for Job Application ==========
 
 
+
+
+class ErpEnquiry(models.Model):
+
+    HEARD_ABOUT_CHOICES = (
+        ('google', 'Google Search'),
+        ('social_media', 'Social Media'),
+        ('referral', 'Referral'),
+        ('advertisement', 'Advertisement'),
+        ('other', 'Other'),
+    )
+
+    STATUS = (
+        ('new', 'New'),
+        ('reviewed', 'Reviewed'),
+        ('responded', 'Responded'),
+    )
+
+    # ───── Form Fields ─────
+    full_name = models.CharField(max_length=255)
+    work_email = models.EmailField()
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
+    company_name = models.CharField(max_length=255)
+    company_website = models.URLField(blank=True, null=True)
+    heard_about = models.CharField(max_length=50, choices=HEARD_ABOUT_CHOICES, blank=True, null=True)
+    key_business_challenge = models.TextField(blank=True, null=True)
+    preferred_datetime = models.DateTimeField(blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+
+    # ───── Admin / Tracking Fields ─────
+    status = models.CharField(max_length=20, choices=STATUS, default='new')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.full_name} - {self.company_name} ({self.created_at.date()})"

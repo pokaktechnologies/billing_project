@@ -45,6 +45,14 @@ instructor_patterns = [
     # path("payments/<int:pk>/delete/", instructor.CoursePaymentDestroyAPIView.as_view()),
 
     # path("payments/<int:pk>/detail/", instructor.CoursePaymentDetailAPIView.as_view()),
+
+    path('classes/', instructor.MyFacultyClassSectionListAPIView.as_view(), name='faculty-class-section-list'),
+
+    path('tests/', instructor.TestListCreateAPIView.as_view(), name='test-list-create'),
+    path('tests/<int:pk>/', instructor.TestDetailAPIView.as_view(), name='test-detail'),
+    path('tests/<int:test_id>/questions/<int:question_id>/upload/', instructor.QuestionFileUploadAPIView.as_view(), name='question-file-upload'),
+    path('tests/<int:test_id>/submissions/', instructor.InstructorTestSubmissionListAPIView.as_view(), name='instructor-test-submissions'),
+    path('tests/submissions/<int:attempt_id>/', instructor.InstructorTestSubmissionDetailAPIView.as_view(),name='instructor-test-submission-detail'),
 ]
 
 
@@ -53,6 +61,7 @@ intern_patterns = [
     path('course/<int:pk>/', intern.MyCourseDetailView.as_view(), name='intern-course-detail'),
     path('course/<int:course_id>/study-materials/', intern.MyCourseStudyMaterialListAPIView.as_view(), name='intern-course-study-material-list'),
     path('study-material/<int:pk>/', intern.MyStudyMaterialDetailView.as_view(), name='intern-study-material-detail'),
+    path("my-study-materials/", intern.MyStudyMaterialListAPIView.as_view()),
 
     path("tasks/", intern.MyTaskViewSet.as_view({'get': 'list'})),
     path("tasks/<int:pk>/", intern.MyTaskViewSet.as_view({'get': 'retrieve'})),
@@ -63,7 +72,16 @@ intern_patterns = [
     path('submission-attachments/<int:pk>/', intern.DeleteTaskSubmissionAttachmentAPI.as_view()),
 
     path('payments/', intern.MyCoursePaymentListAPIView.as_view()),
+    path('classes/', intern.MyClassSectionListAPIView.as_view(), name='intern-class-section-list'),
 
+
+    path('tests/', intern.StudentTestListAPIView.as_view(), name='student-test-list'),
+    path('tests/<int:test_id>/', intern.StudentTestDetailAPIView.as_view(), name='student-test-detail'),
+    path('tests/<int:test_id>/start/', intern.StartTestAPIView.as_view(), name='student-test-start'),
+    path('attempts/<int:attempt_id>/answer/', intern.SaveAnswerAPIView.as_view(), name='student-save-answer'),
+    path('attempts/<int:attempt_id>/submit/', intern.SubmitTestAPIView.as_view(), name='student-submit-test'),
+    path('attempts/<int:attempt_id>/result/', intern.TestResultAPIView.as_view(), name='student-test-result'),
+    
     #Dashboard
     path('dashaboard/',intern.InternDashboardAPIView.as_view()),
 ]
@@ -107,6 +125,9 @@ internship_admin_patterns = [
     path("class/<int:pk>/", internship_admin.ClassRetrieveUpdateDestroyAPIView.as_view()),
     path("sections/", internship_admin.SectionListCreateAPIView.as_view()),
     path("sections/<int:pk>/", internship_admin.SectionRetrieveUpdateDeleteAPIView.as_view()),
+
+    path('students/available/', internship_admin.AvailableStudentsView.as_view(), name='available-students'),
+
 
     # dashboard
     path("dashboard/academic/", internship_admin.AcademicDashboardAPIView.as_view()),

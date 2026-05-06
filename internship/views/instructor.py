@@ -1,6 +1,7 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import generics,filters, status
 from rest_framework.response import Response
+from internship.serializers.intern import TestResultSerializer
 from internship.models import Course, Student, Faculty
 from internship.serializers.instructor import CourseSerializer
 from internship.models import AssignedStaffCourse
@@ -8,7 +9,7 @@ from internship.serializers.instructor import *
 from accounts.permissions import HasModulePermission
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
-from django.db.models import Q
+from django.db.models import Q, Prefetch
 from attendance.models import DailyAttendance
 from django_filters.rest_framework import DjangoFilterBackend
 from decimal import Decimal
@@ -16,7 +17,7 @@ from datetime import timedelta
 from rest_framework.filters import SearchFilter
 from accounts.models import StaffProfile
 from internship.serializers.internship_admin import StudentSerializer
-
+from django.db.models import Count
 
 # ===== Course Views ======
 class InstructorCourseListCreateAPIView(generics.ListCreateAPIView):
@@ -147,9 +148,11 @@ class StudentListAPIView(APIView):
         if status:
 
             if status == "active":
-                qs = qs.filter(is_active=True)
+                qs = qs.filter(status='active')
             elif status == "inactive":
-                qs = qs.filter(is_active=False)
+                qs = qs.filter(status='inactive')
+            elif status == "completed":
+                qs = qs.filter(status='completed')
 
         # name filter
         if name:
@@ -181,29 +184,66 @@ class StudentsStatsAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        students = Student.objects.all()
+
+        try:
+            faculty = request.user.staff_profile.faculty_profile
+        except AttributeError:
+            return Response(
+                {"error": "Logged-in user is not a faculty"},
+                status=403
+            )
+
+        # faculty batches
+        faculty_batches = faculty.batches.all()
+
+        # students under faculty
+        students = Student.objects.filter(
+            enrollments__batch__in=faculty_batches
+        ).distinct()
 
         total = students.count()
-        active = students.filter(is_active=True).count()
-        inactive = students.filter(is_active=False).count()
+        active = students.filter(status='active').count()
+        inactive = students.filter(status='inactive').count()
+        completed = students.filter(status='completed').count()
 
         return Response({
             "total_students": total,
             "active_students": active,
             "inactive_students": inactive,
+            "completed_students": completed,
         })
-
 
 
 # ====== Study Material ViewSet ======
 
 class StudyMaterialAPIView(generics.ListCreateAPIView):
-    queryset = StudyMaterial.objects.all()
+
     serializer_class = StudyMaterialSerializer
     permission_classes = [IsAuthenticated]
+
     filter_backends = [DjangoFilterBackend, SearchFilter]
-    filterset_fields = ['course', 'batches', 'material_type']
-    search_fields = ['title', 'description']
+
+    filterset_fields = [
+        'course',
+        'batches',
+        'material_type'
+    ]
+
+    search_fields = [
+        'title',
+        'description'
+    ]
+
+    def get_queryset(self):
+
+        return (
+            StudyMaterial.objects
+            .filter(
+                batches__isnull=False
+            )
+            .distinct()
+            .order_by("-created_at")
+        )
 
 
 class StudyMaterialDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
@@ -376,7 +416,7 @@ class StudentPerformanceStatsAPIView(APIView):
         revision = qs.filter(status="revision_required").count()
 
         # ---- Attendance (if students have attendance) ----
-        attendance_qs = DailyAttendance.objects.filter(staff=student_id)
+        attendance_qs = DailyAttendance.objects.filter(staff=student.profile)
 
         total_days = attendance_qs.count()
 
@@ -468,14 +508,33 @@ class InternTaskStatsAPIView(APIView):
 # ===== Submission Views ======
 
 class InstructorSubmissionListAPIView(generics.ListAPIView):
+
     serializer_class = InstructorSubmissionSerializer
-    permission_classes = [IsAuthenticated]   # add your instructor permission
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+
+        try:
+            faculty = self.request.user.staff_profile.faculty_profile
+
+        except AttributeError:
+            return TaskSubmission.objects.none()
+
+        # faculty batches
+        faculty_batches = faculty.batches.all()
+
+        # students under faculty batches
+        student_ids = Student.objects.filter(
+            enrollments__batch__in=faculty_batches
+        ).values_list("id", flat=True)
+
+        # submissions only from those students
         qs = TaskSubmission.objects.select_related(
             "assignment__task",
             "assignment__student__profile__user",
             "assignment__staff__user"
+        ).filter(
+            assignment__student_id__in=student_ids
         )
 
         title = self.request.query_params.get("title")
@@ -483,39 +542,54 @@ class InstructorSubmissionListAPIView(generics.ListAPIView):
         status = self.request.query_params.get("status")
         search = self.request.query_params.get("search")
 
-        # 🔹 title filter
+        # title filter
         if title:
-            qs = qs.filter(assignment__task__title__icontains=title)
-
-        # 🔹 status filter
-        if status:
-            qs = qs.filter(assignment__status=status)
-
-        # 🔹 student filter (hybrid)
-        if student:
-            if student.isdigit():
-                qs = qs.filter(
-                    Q(assignment__student_id=int(student)) |
-                    Q(assignment__staff_id=int(student))
-                )
-            else:
-                qs = qs.filter(
-                    Q(assignment__student__profile__user__first_name__icontains=student) |
-                    Q(assignment__student__profile__user__last_name__icontains=student) |
-                    Q(assignment__student__profile__user__email__icontains=student) |
-                    Q(assignment__staff__user__first_name__icontains=student) |
-                    Q(assignment__staff__user__last_name__icontains=student) |
-                    Q(assignment__staff__user__email__icontains=student)
-                )
-
-        # 🔍 GLOBAL SEARCH (title + student name)
-        if search:
             qs = qs.filter(
-                Q(assignment__task__title__icontains=search) |
-                Q(assignment__student__profile__user__first_name__icontains=search) |
-                Q(assignment__student__profile__user__last_name__icontains=search) |
-                Q(assignment__staff__user__first_name__icontains=search) |
-                Q(assignment__staff__user__last_name__icontains=search)
+                assignment__task__title__icontains=title
+            )
+
+        # status filter
+        if status:
+            qs = qs.filter(
+                assignment__status=status
+            )
+
+        # student filter
+        if student:
+
+            if student.isdigit():
+
+                qs = qs.filter(
+                    assignment__student_id=int(student)
+                )
+
+            else:
+
+                qs = qs.filter(
+                    Q(
+                        assignment__student__profile__user__first_name__icontains=student
+                    ) |
+                    Q(
+                        assignment__student__profile__user__last_name__icontains=student
+                    ) |
+                    Q(
+                        assignment__student__profile__user__email__icontains=student
+                    )
+                )
+
+        # global search
+        if search:
+
+            qs = qs.filter(
+                Q(
+                    assignment__task__title__icontains=search
+                ) |
+                Q(
+                    assignment__student__profile__user__first_name__icontains=search
+                ) |
+                Q(
+                    assignment__student__profile__user__last_name__icontains=search
+                )
             )
 
         return qs.order_by("-id").distinct()
@@ -591,15 +665,27 @@ class FacultyCourseListAPIView(APIView):
                 status=403
             )
 
-        courses = Course.objects.filter(
-            batches__faculties=faculty,
-            is_active=True
-        ).select_related(
-            "department", "tax_settings"
-        ).prefetch_related(
-            "batches__faculties",
-            "installment_plans__items"
-        ).distinct()
+        courses = (
+            Course.objects.filter(
+                batches__faculties=faculty,
+                is_active=True
+            )
+            .select_related(
+                "department",
+                "tax_settings"
+            )
+            .prefetch_related(
+                "batches__faculties",
+                "installment_plans__items"
+            )
+            .annotate(
+                enrolled_student_count=Count(
+                    "enrollments__student",
+                    distinct=True
+                )
+            )
+            .distinct()
+        )
 
         serializer = CourseSerializer(courses, many=True)
         return Response(serializer.data)
@@ -670,9 +756,11 @@ class FacultyStudentsAPIView(APIView):
 
         if status:
             if status.lower() == "active":
-                students = students.filter(is_active=True)
+                students = students.filter(status='active')
             elif status.lower() == "inactive":
-                students = students.filter(is_active=False)
+                students = students.filter(status='inactive')
+            elif status.lower() == "completed":
+                students = students.filter(status='completed')
 
         if course:
             students = students.filter(enrollments__course_id=course)
@@ -685,3 +773,320 @@ class FacultyStudentsAPIView(APIView):
 
         serializer = StudentSerializer(students.distinct(), many=True)
         return Response(serializer.data)
+    
+
+class MyFacultyClassSectionListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # Get faculty profile for logged-in user
+        try:
+            faculty = Faculty.objects.get(user__user=request.user, is_active=True)
+        except Faculty.DoesNotExist:
+            return Response(
+                {"detail": "User has no faculty profile"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        class_id = request.query_params.get("class")
+        if class_id:
+            try:
+                class_id = int(class_id)
+            except (TypeError, ValueError):
+                return Response(
+                    {"class": "Class must be a valid integer."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        day = request.query_params.get("day")
+        valid_days = {value for value, _label in SectionDay.DAYS}
+        if day and day not in valid_days:
+            return Response(
+                {"day": f"Invalid day. Allowed values: {', '.join(sorted(valid_days))}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        today = timezone.now().date()
+        sections = (
+            Section.objects
+            .filter(
+                batch__faculties=faculty,        # Faculty assigned to batch
+                batch__is_active=True,
+                batch__end_date__gte=today,
+            )
+            .select_related("class_obj", "class_obj__center", "batch", "batch__course")
+            .prefetch_related("days")
+            .order_by("class_obj__name", "class_obj_id", "start_time", "id")
+            .distinct()
+        )
+
+        if class_id:
+            sections = sections.filter(class_obj_id=class_id)
+
+        if day:
+            sections = sections.filter(days__day=day).distinct()
+
+        classes = (
+            Class.objects
+            .filter(id__in=sections.values("class_obj_id"))
+            .select_related("center")
+            .prefetch_related(
+                Prefetch(
+                    "sections",
+                    queryset=sections,
+                    to_attr="faculty_sections",
+                )
+            )
+            .order_by("name", "id")
+        )
+
+        serializer = FacultyClassSectionSerializer(
+            classes,
+            many=True,
+            context={"request": request},
+        )
+        return Response(serializer.data)
+    
+
+# views.py
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import JSONParser, MultiPartParser
+from django.shortcuts import get_object_or_404
+from ..serializers.instructor import TestSerializer
+
+
+class TestListCreateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser]
+
+    def get(self, request):
+        tests = Test.objects.select_related('course', 'batch') \
+                            .prefetch_related(
+                                'sections__questions__options'
+                            )
+
+        # Filters
+        course_id = request.query_params.get('course')
+        batch_id = request.query_params.get('batch')
+        status_filter = request.query_params.get('status')
+
+        if course_id:
+            tests = tests.filter(course_id=course_id)
+        if batch_id:
+            tests = tests.filter(batch_id=batch_id)
+        if status_filter:
+            tests = tests.filter(status=status_filter)
+
+        serializer = TestSerializer(tests, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = TestSerializer(data=request.data)
+        if serializer.is_valid():
+            test = serializer.save()
+            return Response(TestSerializer(test).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class TestDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser]
+
+    def _get_test(self, pk):
+        return get_object_or_404(
+            Test.objects.prefetch_related('sections__questions__options'),
+            pk=pk
+        )
+
+    def get(self, request, pk):
+        test = self._get_test(pk)
+        return Response(TestSerializer(test).data)
+
+    def patch(self, request, pk):
+        test = self._get_test(pk)
+        serializer = TestSerializer(test, data=request.data, partial=True)
+        if serializer.is_valid():
+            test = serializer.save()
+            return Response(TestSerializer(test).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        test = get_object_or_404(Test, pk=pk)
+        test.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class QuestionFileUploadAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser]
+
+    def post(self, request, test_id, question_id):
+        question = get_object_or_404(
+            TestQuestion,
+            id=question_id,
+            section__test_id=test_id  # security check
+        )
+
+        file = request.FILES.get('file')
+        if not file:
+            return Response(
+                {"detail": "file is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Old file cleanup
+        if question.file:
+            question.file.delete(save=False)
+
+        question.file = file
+        question.save()
+        return Response({"file_url": question.file.url})
+
+    def delete(self, request, test_id, question_id):
+        question = get_object_or_404(
+            TestQuestion,
+            id=question_id,
+            section__test_id=test_id
+        )
+
+        if question.file:
+            question.file.delete(save=False)
+            question.file = None
+            question.save()
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    
+
+# full mcq based aanel auto evaluation descriptive and mixed aaaneel manual setup
+def is_attempt_fully_evaluated(attempt):
+    descriptive_questions = TestQuestion.objects.filter(
+        section__test=attempt.test,
+        section__section_type='descriptive'
+    )
+
+    if not descriptive_questions.exists():
+        return True
+
+    for question in descriptive_questions:
+        answer = attempt.answers.filter(question=question).first()
+
+        if not answer or answer.marks_awarded is None:
+            return False
+
+    return True
+
+class InstructorTestSubmissionListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, test_id):
+
+        faculty = request.user.staff_profile.faculty_profile
+
+        test = get_object_or_404(
+            Test,
+            id=test_id,
+            batch__faculties=faculty
+        )
+
+        attempts = TestAttempt.objects.filter(
+            test=test,
+            status='submitted'
+        ).select_related(
+            "student__profile__user"
+        ).prefetch_related(
+            "answers__selected_option",
+            "answers__question"
+        )
+
+        # search
+        search = request.query_params.get("search")
+        if search:
+            attempts = attempts.filter(
+                Q(student__profile__user__first_name__icontains=search) |
+                Q(student__profile__user__last_name__icontains=search) |
+                Q(student__profile__user__email__icontains=search)
+            )
+
+        total = attempts.count()
+        evaluated_count = 0
+
+        response_data = []
+
+        total_questions = TestQuestion.objects.filter(
+            section__test=test
+        ).count()
+
+        for attempt in attempts:
+
+            user = attempt.student.profile.user
+
+            # MCQ score
+            correct = 0
+            for answer in attempt.answers.all():
+                if answer.selected_option and answer.selected_option.is_correct:
+                    correct += 1
+
+            # evaluation check 
+            evaluated = is_attempt_fully_evaluated(attempt)
+
+            if evaluated:
+                evaluated_count += 1
+
+            response_data.append({
+                "attempt_id": attempt.id,
+                "student_name": f"{user.first_name} {user.last_name}",
+                "email": user.email,
+                "score": f"{correct}/{total_questions}",
+                "time_taken": attempt.time_taken_seconds,
+                "status": "evaluated" if evaluated else "pending",
+                "submitted_at": attempt.submitted_at
+            })
+
+        return Response({
+            "summary": {
+                "total": total,
+                "evaluated": evaluated_count,
+                "pending": total - evaluated_count
+            },
+            "submissions": response_data
+        })
+    
+
+class InstructorTestSubmissionDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, attempt_id):
+
+        faculty = request.user.staff_profile.faculty_profile
+
+        attempt = get_object_or_404(
+            TestAttempt.objects.select_related(
+                "test",
+                "student__profile__user"
+            ).prefetch_related(
+                'test__sections__questions__options',
+                'answers__question__section',
+                'answers__selected_option',
+            ),
+            id=attempt_id,
+            test__batch__faculties=faculty,
+            status='submitted'
+        )
+
+        serializer = TestResultSerializer(attempt)
+
+        user = attempt.student.profile.user
+
+        return Response({
+            "student": {
+                "name": f"{user.first_name} {user.last_name}",
+                "email": user.email
+            },
+            "test": serializer.data,
+            "final_score": f"{serializer.data['scored_marks']}/{serializer.data['total_marks']}"
+        })
+    

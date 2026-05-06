@@ -1,5 +1,6 @@
 from django.db import models
 from accounts.models import Department, SalesPerson, StaffProfile
+from project_management.models import STATUS_CHOICES
 
 
 class Center(models.Model):
@@ -18,6 +19,13 @@ class Student(models.Model):
     payment_type = models.ForeignKey('InstallmentPlan', on_delete=models.SET_NULL, null=True, blank=True, related_name="students") # Unused
     start_date = models.DateField()
     is_active = models.BooleanField(default=True)
+    
+    STATUS_CHOICES = [
+    ('active', 'Active'),
+    ('completed', 'Completed'),
+    ('inactive', 'Inactive'),
+    ]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
     councellor = models.ForeignKey(SalesPerson, on_delete=models.SET_NULL, null=True, blank=True, related_name="counselled_students")
     created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
 
@@ -30,7 +38,8 @@ class Student(models.Model):
 
 class Faculty(models.Model):
     user = models.OneToOneField(StaffProfile, on_delete=models.CASCADE, related_name="faculty_profile")
-    department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name="faculties", null=True, blank=True)
+    department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name="legacy_faculties", null=True, blank=True)
+    departments = models.ManyToManyField(Department, related_name="faculties", blank=True)
     is_active = models.BooleanField(default=True)
     def get_full_name(self):
         user = self.user.user
@@ -39,16 +48,16 @@ class Faculty(models.Model):
     def __str__(self):
         return self.user.user.first_name
 
-class CourseFaculty(models.Model):
-    faculty = models.ForeignKey(Faculty, on_delete=models.CASCADE, related_name="course_faculties")
-    department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name="course_faculties")
-    is_active = models.BooleanField(default=True)
-    def __str__(self):
-        return self.faculty.user.user.first_name
+# class CourseFaculty(models.Model):
+#     faculty = models.ForeignKey(Faculty, on_delete=models.CASCADE, related_name="course_faculties")
+#     department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name="course_faculties")
+#     is_active = models.BooleanField(default=True)
+#     def __str__(self):
+#         return self.faculty.user.user.first_name
     
-    def get_full_name(self):
-        user = self.faculty.user.user
-        return f"{user.first_name} {user.last_name}"
+#     def get_full_name(self):
+#         user = self.faculty.user.user
+#         return f"{user.first_name} {user.last_name}"
 
 class Course(models.Model):
     title = models.CharField(max_length=200)
@@ -105,7 +114,7 @@ class Class(models.Model):
 
 class Section(models.Model):
     class_obj    = models.ForeignKey(Class, on_delete=models.CASCADE, related_name="sections")   
-    batch        = models.ForeignKey("Batch", on_delete=models.CASCADE)
+    batch        = models.ForeignKey(Batch, on_delete=models.CASCADE)
     start_time   = models.TimeField()
     end_time     = models.TimeField()
     created_at   = models.DateTimeField(auto_now_add=True)
@@ -397,6 +406,157 @@ class TaskSubmissionAttachment(models.Model):
 
     def __str__(self):
         return self.file.name
+
+
+
+# Test models
+
+class Test(models.Model):
+    TEST_TYPE_CHOICES = [
+        ('mcq', 'MCQ'),
+        ('descriptive', 'Descriptive'),
+        ('mixed', 'Mixed'),
+    ]
+
+    name = models.CharField(max_length=200)
+    test_type = models.CharField(max_length=20, choices=TEST_TYPE_CHOICES)
+    course = models.ForeignKey(
+        'Course', on_delete=models.CASCADE, related_name='tests'
+    )
+    batch = models.ForeignKey(
+        'Batch', on_delete=models.CASCADE, related_name='tests'
+    )
+    duration_minutes = models.PositiveIntegerField()
+    total_marks = models.PositiveIntegerField()
+    instructions = models.TextField(blank=True, null=True)
+
+    STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('published', 'Published'),
+    ]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        if self.batch_id:
+            self.course = self.batch.course
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
+
+
+class TestSection(models.Model):
+    SECTION_TYPE_CHOICES = [
+        ('mcq', 'MCQ'),
+        ('descriptive', 'Descriptive'),
+    ]
+
+    test = models.ForeignKey(Test, on_delete=models.CASCADE, related_name='sections')
+    name = models.CharField(max_length=100)          # Part A, Part B ...
+    section_type = models.CharField(max_length=20, choices=SECTION_TYPE_CHOICES)
+    marks = models.PositiveIntegerField(null=True, blank=True)
+    duration_minutes = models.PositiveIntegerField(null=True, blank=True)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['order']
+
+    def __str__(self):
+        return f"{self.test.name} - {self.name}"
+
+
+class TestQuestion(models.Model):
+    section = models.ForeignKey(
+        TestSection, on_delete=models.CASCADE, related_name='questions'
+    )
+    question_text = models.TextField()
+    marks = models.PositiveIntegerField(null=True, blank=True)
+    file = models.FileField(upload_to='test_questions/', null=True, blank=True)
+    order = models.PositiveIntegerField(default=0)
+
+    # Descriptive specific
+    word_limit = models.PositiveIntegerField(null=True, blank=True)
+    manual_evaluation = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['order']
+
+    def __str__(self):
+        return f"Q{self.order} - {self.section.name}"
+
+
+class QuestionOption(models.Model):
+    question = models.ForeignKey(
+        TestQuestion, on_delete=models.CASCADE, related_name='options'
+    )
+    label = models.CharField(max_length=5)       # A, B, C, D
+    option_text = models.CharField(max_length=500)
+    is_correct = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['label']
+
+    def __str__(self):
+        return f"{self.question} - {self.label}"
+
+
+# models.py
+
+class TestAttempt(models.Model):
+    STATUS_CHOICES = [
+        ('in_progress', 'In Progress'),
+        ('submitted', 'Submitted'),
+    ]
+
+    student = models.ForeignKey(
+        Student, on_delete=models.CASCADE, related_name='test_attempts'
+    )
+    test = models.ForeignKey(
+        Test, on_delete=models.CASCADE, related_name='attempts'
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='in_progress')
+    started_at = models.DateTimeField(auto_now_add=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    time_taken_seconds = models.PositiveIntegerField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ['student', 'test']
+
+    def __str__(self):
+        return f"{self.student} - {self.test.name} [{self.status}]"
+
+
+class TestAnswer(models.Model):
+    attempt = models.ForeignKey(
+        TestAttempt, on_delete=models.CASCADE, related_name='answers'
+    )
+    question = models.ForeignKey(
+        TestQuestion, on_delete=models.CASCADE, related_name='answers'
+    )
+
+    # MCQ — selected option
+    selected_option = models.ForeignKey(
+        QuestionOption, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='answers'
+    )
+
+    # Descriptive — text answer
+    text_answer = models.TextField(null=True, blank=True)
+
+    # Instructor feedback (descriptive)
+    marks_awarded = models.PositiveIntegerField(null=True, blank=True)
+    feedback = models.TextField(null=True, blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    is_marked_for_review = models.BooleanField(default=False)
+    answered_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ['attempt', 'question']  # per question ഒരു answer
+
+    def __str__(self):
+        return f"{self.attempt} - Q{self.question.id}"
 
 #  Internship Application
 

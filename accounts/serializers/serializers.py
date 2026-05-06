@@ -1748,6 +1748,7 @@ class InvoiceListSerializer(serializers.ModelSerializer):
     pending_amount = serializers.SerializerMethodField()
     effective_tax_rate = serializers.SerializerMethodField()
     tax_rate = serializers.SerializerMethodField()
+    gst_number = serializers.SerializerMethodField()
     tax_amount = serializers.SerializerMethodField()
     total_amount_without_tax = serializers.SerializerMethodField() # total without tax
     class Meta:
@@ -1765,6 +1766,7 @@ class InvoiceListSerializer(serializers.ModelSerializer):
             "pending_amount",
             "effective_tax_rate",
             "tax_rate",
+            "gst_number",
             "tax_amount",
             "total_amount_without_tax",
             "created_at",
@@ -1821,6 +1823,9 @@ class InvoiceListSerializer(serializers.ModelSerializer):
             return round_decimal((totals["tax"] / totals["base"]) * Decimal("100"))
 
         return Decimal("0.00")
+    
+    def get_gst_number(self, obj):
+        return obj.client.gst_number if obj.client else None
 
         
     def get_tax_amount(self, obj):

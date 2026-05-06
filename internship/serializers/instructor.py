@@ -41,7 +41,7 @@ class CourseSerializer(serializers.ModelSerializer):
     sgst = serializers.SerializerMethodField()
     cgst = serializers.SerializerMethodField()
     total_tax_percentage = serializers.SerializerMethodField()
-
+    enrolled_student_count = serializers.SerializerMethodField()
     class Meta:
         model = Course
         fields = [
@@ -58,9 +58,12 @@ class CourseSerializer(serializers.ModelSerializer):
             "sgst",
             "cgst",
             "total_tax_percentage",
+            "enrolled_student_count",
         ]
         read_only_fields = ["created_at", "sgst", "cgst", "total_tax_percentage"]
 
+    def get_enrolled_student_count(self, obj):
+        return obj.enrollments.values("student").distinct().count()
 
     # ---------- TAX LOGIC ----------
     def get_sgst(self, obj):
@@ -266,12 +269,64 @@ class StudyMaterialSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
     def validate(self, attrs):
+
         file = attrs.get("file")
         url = attrs.get("url")
+        batches = attrs.get("batches")
 
         if not file and not url:
-            raise serializers.ValidationError("Either file or url is required.")
+            raise serializers.ValidationError(
+                "Either file or url is required."
+            )
+
+        if not batches:
+            raise serializers.ValidationError({
+                "batches": "At least one batch is required."
+            })
+
+        # validate all batches belong same course
+        courses = set(batch.course_id for batch in batches)
+
+        if len(courses) > 1:
+            raise serializers.ValidationError({
+                "batches": "All batches must belong to same course."
+            })
+
         return attrs
+
+    def create(self, validated_data):
+
+        batches = validated_data.pop("batches", [])
+
+        # derive course from first batch
+        first_batch = batches[0]
+        validated_data["course"] = first_batch.course
+
+        study_material = StudyMaterial.objects.create(
+            **validated_data
+        )
+
+        study_material.batches.set(batches)
+
+        return study_material
+
+    def update(self, instance, validated_data):
+
+        batches = validated_data.pop("batches", None)
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        # update course from batches
+        if batches:
+            instance.course = batches[0].course
+
+        instance.save()
+
+        if batches is not None:
+            instance.batches.set(batches)
+
+        return instance
 
 
 class TaskAttachmentSerializer(serializers.ModelSerializer):
@@ -587,3 +642,186 @@ class InternProfileSerializer(serializers.ModelSerializer):
 
     def get_intern_name(self, obj):
         return f"{obj.user.first_name} {obj.user.last_name}"
+
+
+from internship.serializers.intern import InternSectionSerializer
+
+class FacultyClassSectionSerializer(serializers.ModelSerializer):
+    center_name = serializers.CharField(source="center.name", read_only=True)
+    sections = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Class
+        fields = ["id", "name", "center", "center_name", "sections"]
+
+    def get_sections(self, obj):
+        sections = getattr(obj, "faculty_sections", obj.sections.all())
+        return InternSectionSerializer(
+            sections, many=True, context=self.context
+        ).data
+    
+
+# serializers.py
+
+from rest_framework import serializers
+from ..models import Test, TestSection, TestQuestion, QuestionOption
+
+
+class QuestionOptionSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(required=False)
+
+    class Meta:
+        model = QuestionOption
+        fields = ['id', 'label', 'option_text', 'is_correct']
+
+
+class TestQuestionSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(required=False)
+    options = QuestionOptionSerializer(many=True, required=False)
+
+    class Meta:
+        model = TestQuestion
+        fields = [
+            'id', 'question_text', 'marks', 'file',
+            'order', 'word_limit', 'manual_evaluation', 'options'
+        ]
+        read_only_fields = ['file']
+
+
+class TestSectionSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(required=False)
+    questions = TestQuestionSerializer(many=True, required=False)
+
+    class Meta:
+        model = TestSection
+        fields = [
+            'id', 'name', 'section_type',
+            'marks', 'duration_minutes', 'order', 'questions'
+        ]
+
+
+class TestSerializer(serializers.ModelSerializer):
+    sections = TestSectionSerializer(many=True, required=False)
+
+    class Meta:
+        model = Test
+        fields = [
+            'id', 'name', 'test_type', 'course', 'batch',
+            'duration_minutes', 'total_marks', 'instructions',
+            'status', 'sections', 'created_at'
+        ]
+        read_only_fields = ['created_at', 'course']
+
+    def validate_batch(self, batch):
+        if not batch:
+            raise serializers.ValidationError("Batch is required.")
+        return batch
+
+    # ─── CREATE ───────────────────────────────────────────
+    def create(self, validated_data):
+        sections_data = validated_data.pop('sections', [])
+        test = Test.objects.create(**validated_data)
+        self._create_sections(test, sections_data)
+        return test
+
+    # ─── UPDATE (Upsert) ──────────────────────────────────
+    def update(self, instance, validated_data):
+        sections_data = validated_data.pop('sections', None)
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        if sections_data is not None:
+            self._upsert_sections(instance, sections_data)
+
+        return instance
+
+    # ─── Helpers ──────────────────────────────────────────
+    def _create_sections(self, test, sections_data):
+        for section_data in sections_data:
+            questions_data = section_data.pop('questions', [])
+            section = TestSection.objects.create(test=test, **section_data)
+            self._create_questions(section, questions_data)
+
+    def _create_questions(self, section, questions_data):
+        for question_data in questions_data:
+            options_data = question_data.pop('options', [])
+            question = TestQuestion.objects.create(section=section, **question_data)
+            for option_data in options_data:
+                QuestionOption.objects.create(question=question, **option_data)
+
+    def _upsert_sections(self, test, sections_data):
+        existing_ids = set(test.sections.values_list('id', flat=True))
+        incoming_ids = set()
+
+        for section_data in sections_data:
+            questions_data = section_data.pop('questions', [])
+            section_id = section_data.pop('id', None)
+
+            if section_id and section_id in existing_ids:
+                # UPDATE
+                section = TestSection.objects.get(id=section_id)
+                for attr, value in section_data.items():
+                    setattr(section, attr, value)
+                section.save()
+                incoming_ids.add(section_id)
+            else:
+                # CREATE
+                section = TestSection.objects.create(test=test, **section_data)
+                incoming_ids.add(section.id)
+
+            self._upsert_questions(section, questions_data)
+
+        # DELETE removed sections
+        TestSection.objects.filter(id__in=existing_ids - incoming_ids).delete()
+
+    def _upsert_questions(self, section, questions_data):
+        existing_ids = set(section.questions.values_list('id', flat=True))
+        incoming_ids = set()
+
+        for question_data in questions_data:
+            options_data = question_data.pop('options', [])
+            question_id = question_data.pop('id', None)
+
+            if question_id and question_id in existing_ids:
+                # UPDATE
+                question = TestQuestion.objects.get(id=question_id)
+                for attr, value in question_data.items():
+                    setattr(question, attr, value)
+                question.save()
+                incoming_ids.add(question_id)
+            else:
+                # CREATE
+                question = TestQuestion.objects.create(section=section, **question_data)
+                incoming_ids.add(question.id)
+
+            self._upsert_options(question, options_data)
+
+        # DELETE removed questions + file cleanup
+        for q in TestQuestion.objects.filter(id__in=existing_ids - incoming_ids):
+            if q.file:
+                q.file.delete(save=False)
+            q.delete()
+
+    def _upsert_options(self, question, options_data):
+        existing_ids = set(question.options.values_list('id', flat=True))
+        incoming_ids = set()
+
+        for option_data in options_data:
+            option_id = option_data.pop('id', None)
+
+            if option_id and option_id in existing_ids:
+                # UPDATE
+                option = QuestionOption.objects.get(id=option_id)
+                for attr, value in option_data.items():
+                    setattr(option, attr, value)
+                option.save()
+                incoming_ids.add(option_id)
+            else:
+                # CREATE
+                option = QuestionOption.objects.create(question=question, **option_data)
+                incoming_ids.add(option.id)
+
+        # DELETE removed options
+        QuestionOption.objects.filter(id__in=existing_ids - incoming_ids).delete()

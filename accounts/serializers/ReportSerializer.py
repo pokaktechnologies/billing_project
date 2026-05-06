@@ -380,7 +380,7 @@ class InternStatementReportSerializer(serializers.ModelSerializer):
     balance = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     intern_name = serializers.SerializerMethodField()
     intern_id = serializers.SerializerMethodField()
-    employee_id = serializers.SerializerMethodField()
+    student_id = serializers.SerializerMethodField()
 
 
     class Meta:
@@ -389,7 +389,7 @@ class InternStatementReportSerializer(serializers.ModelSerializer):
             'id',
             'intern_name',
             'intern_id',
-            'employee_id',
+            'student_id',
             'invoice_date',
             'invoice_number',
             'description',
@@ -407,10 +407,10 @@ class InternStatementReportSerializer(serializers.ModelSerializer):
     def get_intern_id(self, obj):
         return obj.intern.id if obj.intern else None
 
-    def get_employee_id(self, obj):
+    def get_student_id(self, obj):
         intern = obj.intern
-        if intern and intern.job_detail:
-            return intern.job_detail.employee_id
+        if intern and hasattr(intern, 'student_profile'):
+            return intern.student_profile.student_id
         return None
 
 

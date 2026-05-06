@@ -14,7 +14,7 @@ from rest_framework import generics
 from datetime import datetime
 from django.db.models.functions import TruncMonth
 from ..models import Section, Class, Student, Course, Faculty, StudentCourseEnrollment, CoursePayment
-from ..serializers.internship_admin import SectionSerializer, ClassListCreateSerializer, StudentPaymentDetailSerializer, StudentPaymentSerializer
+from ..serializers.internship_admin import AvailableStudentSerializer, ClassDetailSerializer, SectionSerializer, ClassListCreateSerializer, StudentPaymentDetailSerializer, StudentPaymentSerializer
 
 from accounts.models import CustomUser
 from internship.utils import (
@@ -55,7 +55,7 @@ class CourseListCreateAPIView(generics.ListCreateAPIView):
         "batches__faculties__user__user",
         "installment_plans__items",
     ).annotate(
-        students_count=Count('students', distinct=True)
+        students_count=Count("enrollments__student", distinct=True)
     ).order_by('-created_at')
 
     serializer_class = CourseSerializer
@@ -65,11 +65,18 @@ class CourseListCreateAPIView(generics.ListCreateAPIView):
     filterset_fields = {
         "department": ["exact"],
         "is_active": ["exact"],
-        "students": ["exact"],
+        "enrollments__student": ["exact"],
         "batches__faculties": ["exact"],
     }
 
     search_fields = ['title', 'description', 'department__name']
+
+    def filter_queryset(self, queryset):
+        queryset = super().filter_queryset(queryset)
+        student_id = self.request.query_params.get("students")
+        if student_id:
+            queryset = queryset.filter(enrollments__student_id=student_id)
+        return queryset.distinct()
 
 class CourseRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Course.objects.select_related(
@@ -79,7 +86,7 @@ class CourseRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
         "batches__faculties__user__user",
         "installment_plans__items"
     ).annotate(
-        students_count=Count('students', distinct=True)
+        students_count=Count("enrollments__student", distinct=True)
     )
 
     serializer_class = CourseSerializer
@@ -111,11 +118,12 @@ class InstallmentSelectionListAPIView(generics.ListAPIView):
 
 class FacultyQuerysetMixin:
     queryset = Faculty.objects.select_related(
-        "user__user",
-        "department",
+        "user__user"
+    ).prefetch_related(
+        "departments",
     ).annotate(
         course_count=Count("batches__course", distinct=True),
-        students_count=Count("batches__students", distinct=True),
+        students_count=Count("batches__enrollments__student", distinct=True),
     ).order_by("id")
 
 
@@ -125,7 +133,7 @@ class FacultyListCreateAPIView(FacultyQuerysetMixin, generics.ListCreateAPIView)
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_fields = {
-        "department": ["exact"],
+        "departments": ["exact"],
         "batches__course": ["exact"],
         "batches": ["exact"],
         "is_active": ["exact"],
@@ -133,8 +141,11 @@ class FacultyListCreateAPIView(FacultyQuerysetMixin, generics.ListCreateAPIView)
     search_fields = [
         "user__user__first_name",
         "user__user__last_name",
-        "department__name",
+        "departments__name",
     ]
+
+    def filter_queryset(self, queryset):
+        return super().filter_queryset(queryset).distinct()
 
 
 class FacultyRetrieveUpdateDestroyAPIView(
@@ -145,23 +156,17 @@ class FacultyRetrieveUpdateDestroyAPIView(
     permission_classes = [IsAuthenticated]
 
 #Batch
+# Preview view
 class BatchNumberPreviewAPIView(APIView):
     def get(self, request):
-        course_id = request.query_params.get("course")
 
-        if not course_id:
-            return Response({"error": "course required"}, status=400)
-
-        course = get_object_or_404(Course, id=course_id)
-
-        prefix = get_clean_prefix(course.title)
 
         batch_number = generate_batch_number(
             model=Batch,
             field_name="batch_number",
-            prefix=prefix,
-            length=3,
-            course=course
+            prefix="BAT",
+            length=4,
+            use_lock=False
         )
 
         return Response({"batch_number": batch_number})
@@ -200,14 +205,13 @@ class StudentListCreateAPIView(generics.ListCreateAPIView):
     ]
 
     filterset_fields = {
-        "enrollments__course": ["exact"],
-        "enrollments__batch": ["exact"],
         "center": ["exact"],
-        "is_active": ["exact"],
+        "status": ["exact"],
     }
 
     def get_queryset(self):
-        return Student.objects.select_related(
+
+        qs = Student.objects.select_related(
             "profile__user",
             "center",
             "councellor"
@@ -221,6 +225,21 @@ class StudentListCreateAPIView(generics.ListCreateAPIView):
                 )
             )
         ).distinct()
+
+        course = self.request.query_params.get("course")
+        batch = self.request.query_params.get("batch")
+
+        if course:
+            qs = qs.filter(
+                enrollments__course_id=course
+            )
+
+        if batch:
+            qs = qs.filter(
+                enrollments__batch_id=batch
+            )
+
+        return qs.distinct()
 
 class StudentCredentialsAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -418,14 +437,19 @@ class ClassListCreateAPIView(generics.ListCreateAPIView):
         ).filter(is_active=True)
 
 class ClassRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
-    serializer_class   = ClassListCreateSerializer
+    serializer_class   = ClassDetailSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         return Class.objects.select_related("center").prefetch_related(
-            "sections__days", "sections__batch"
+            "sections__days", "sections__batch__course"
         )
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"] = self.request  # request serializer-ലേക്ക് pass ചെയ്യുന്നു
+        return context
+    
 class SectionListCreateAPIView(generics.ListCreateAPIView):
     serializer_class   = SectionSerializer
     permission_classes = [IsAuthenticated]
@@ -461,7 +485,7 @@ class AcademicDashboardAPIView(APIView):
         year = int(request.GET.get("year", datetime.now().year))
 
         # status
-        active_students = Student.objects.filter(is_active=True).count()
+        active_students = Student.objects.filter(status='active').count()
         active_courses = Course.objects.filter(is_active=True).count()
         faculty_count = Faculty.objects.filter(is_active=True).count()
 
@@ -512,22 +536,30 @@ class AcademicDashboardAPIView(APIView):
         ]
 
         # recent intern
-        recent_students = Student.objects.select_related("profile__user") \
-                              .order_by("-created_at")[:5]
+        recent_students = Student.objects.select_related(
+            "profile__user"
+        ).prefetch_related(
+            "enrollments__course"
+        ).order_by("-created_at")[:5]
 
-        recent_interns = [
-            {
+        recent_interns = []
+
+        for s in recent_students:
+            enrollment = s.enrollments.select_related("course").first()
+
+            recent_interns.append({
                 "name": s.get_full_name(),
-                "course": s.course.title if s.course else None,
-                "status": "Active" if s.is_active else "Inactive"
-            }
-            for s in recent_students
-        ]
+                "course": enrollment.course.title if enrollment and enrollment.course else None,
+                "status": s.get_status_display()
+            })
 
         # top faculty
         faculty_data = (
             Faculty.objects.annotate(
-                student_count=Count("batches__students")
+                student_count=Count(
+                    "batches__enrollments__student",
+                    distinct=True
+                )
             )
             .order_by("-student_count")[:5]
         )
@@ -549,3 +581,30 @@ class AcademicDashboardAPIView(APIView):
             "recent_interns": recent_interns,
             "top_faculty": top_faculty
         })
+    
+
+
+
+class AvailableStudentsView(APIView):
+
+    def get(self, request):
+        center_id = request.query_params.get('center_id')
+
+        already_enrolled_ids = StudentCourseEnrollment.objects.values_list(
+            'student_id', flat=True
+        ).distinct()
+
+        qs = Student.objects.filter(
+            status='active'
+        ).exclude(
+            id__in=already_enrolled_ids
+        ).select_related(
+            'profile__user',
+            'center'
+        ).order_by('profile__user__first_name')
+
+        if center_id:
+            qs = qs.filter(center_id=center_id)
+
+        serializer = AvailableStudentSerializer(qs, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

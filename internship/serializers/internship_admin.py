@@ -2,10 +2,11 @@ from decimal import Decimal
 
 from django.utils import timezone
 from django.db import IntegrityError, transaction
-from django.db.models import Sum
+from django.db.models import Sum,Q
 from rest_framework import serializers
+from twisted.test import obj
 
-from accounts.models import CustomUser, ModulePermission, StaffProfile
+from accounts.models import CustomUser, Department, ModulePermission, StaffProfile
 from ..models import (
     Batch,
     Center,
@@ -30,6 +31,8 @@ from internship.utils import (
 from ..utils import generate_batch_number, generate_student_id, get_clean_prefix
 
 class InstallmentItemSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(required=False)
+
     class Meta:
         model = InstallmentItem
         fields = [
@@ -42,6 +45,7 @@ class InstallmentItemSerializer(serializers.ModelSerializer):
         read_only_fields = ["plan"]
 
 class InstallmentPlanSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(required=False)
     items = InstallmentItemSerializer(many=True)
     course_total_fee = serializers.DecimalField(
         source="course.total_fee",
@@ -123,7 +127,7 @@ class CourseSerializer(serializers.ModelSerializer):
         annotated_count = getattr(obj, "students_count", None)
         if annotated_count is not None:
             return annotated_count
-        return obj.students.count()
+        return obj.enrollments.values("student_id").distinct().count()
 
     def get_faculty_details(self, obj):
         faculties = set()
@@ -218,11 +222,98 @@ class CourseSerializer(serializers.ModelSerializer):
 
     # ---------- UPDATE ----------
     def update(self, instance, validated_data):
-        validated_data.pop("installment_plans", None)
+        plans_data = validated_data.pop("installment_plans", None)
+
+        # Update course fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
+
+        # If plans not sent in request, skip sync (partial update)
+        if plans_data is None:
+            return instance
+
+        with transaction.atomic():
+            existing_plans = {p.id: p for p in instance.installment_plans.all()}
+            request_plan_ids = set()
+
+            for plan_data in plans_data:
+                items_data = plan_data.pop("items")
+                plan_id = plan_data.get("id")
+
+                if plan_id and plan_id in existing_plans:
+                    # ── CASE 1: Update existing plan (ID preserved) ──
+                    plan = existing_plans[plan_id]
+
+                    # Block modification if students enrolled
+                    if plan.enrollments.exists():
+                        raise serializers.ValidationError(
+                            f"Plan '{plan.total_installments} installments' is assigned "
+                            f"to students. Modification not allowed."
+                        )
+
+                    plan.total_installments = plan_data.get(
+                        "total_installments", plan.total_installments
+                    )
+                    plan.is_active = plan_data.get("is_active", plan.is_active)
+                    plan.save()
+
+                    # Sync items within this plan
+                    self._sync_items(plan, items_data)
+                    request_plan_ids.add(plan.id)
+
+                else:
+                    # ── CASE 2: Create new plan ──
+                    plan = InstallmentPlan.objects.create(
+                        course=instance, **plan_data
+                    )
+                    for item in items_data:
+                        InstallmentItem.objects.create(plan=plan, **item)
+                    request_plan_ids.add(plan.id)
+
+            # ── CASE 3: Delete plans not in request ──
+            for plan_id, plan in existing_plans.items():
+                if plan_id not in request_plan_ids:
+                    if plan.enrollments.exists():
+                        raise serializers.ValidationError(
+                            f"Cannot remove plan '{plan.total_installments} installments' — "
+                            f"students are enrolled with it."
+                        )
+                    plan.delete()
+
         return instance
+
+    def _sync_items(self, plan, items_data):
+        """Sync installment items within a plan (in-place update, preserving IDs)."""
+        existing_items = {item.id: item for item in plan.items.all()}
+        request_item_ids = set()
+
+        for item_data in items_data:
+            item_id = item_data.get("id")
+
+            if item_id and item_id in existing_items:
+                # Update existing item (same ID)
+                item = existing_items[item_id]
+                item.installment_number = item_data["installment_number"]
+                item.amount = item_data["amount"]
+                item.due_days = item_data["due_days"]
+                item.save()
+                request_item_ids.add(item.id)
+            else:
+                # Create new item
+                item = InstallmentItem.objects.create(
+                    plan=plan,
+                    installment_number=item_data["installment_number"],
+                    amount=item_data["amount"],
+                    due_days=item_data["due_days"],
+                )
+                request_item_ids.add(item.id)
+
+        # Delete items not in request
+        for item_id, item in existing_items.items():
+            if item_id not in request_item_ids:
+                item.delete()
+
     
 class InstallmentItemUpdateSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(required=False)
@@ -336,7 +427,13 @@ class FacultySerializer(serializers.ModelSerializer):
     faculty = serializers.IntegerField(source="id", read_only=True)
     name = serializers.CharField(source="get_full_name", read_only=True)
     faculty_name = serializers.CharField(source="get_full_name", read_only=True)
-    department_name = serializers.CharField(source="department.name", read_only=True)
+    departments = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Department.objects.all(),
+        required=False
+    )
+    department_names = serializers.SerializerMethodField()
+    department_details = serializers.SerializerMethodField()
     email = serializers.CharField(source="user.staff_email", read_only=True)
     phone_number = serializers.CharField(source="user.phone_number", read_only=True)
     course_count = serializers.SerializerMethodField()
@@ -350,13 +447,26 @@ class FacultySerializer(serializers.ModelSerializer):
             "user",
             "name",
             "faculty_name",
-            "department",
-            "department_name",
+            "departments",
+            "department_names",
+            "department_details",
             "email",
             "phone_number",
             "course_count",
             "students_count",
             "is_active",
+        ]
+
+    def get_department_names(self, obj):
+        return [department.name for department in obj.departments.all()]
+
+    def get_department_details(self, obj):
+        return [
+            {
+                "id": department.id,
+                "name": department.name,
+            }
+            for department in obj.departments.all()
         ]
 
     def get_course_count(self, obj):
@@ -369,7 +479,7 @@ class FacultySerializer(serializers.ModelSerializer):
         annotated_count = getattr(obj, "students_count", None)
         if annotated_count is not None:
             return annotated_count
-        return Student.objects.filter(batch__faculties=obj).distinct().count()
+        return Student.objects.filter(enrollments__batch__faculties=obj).distinct().count()
 
 
 #Batch
@@ -421,8 +531,7 @@ class BatchSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         faculties = validated_data.pop("faculties", [])
-        course    = validated_data.get("course")
-        # prefix    = get_clean_prefix(course.title)
+
 
         with transaction.atomic():
             validated_data["batch_number"] = generate_batch_number(
@@ -430,7 +539,7 @@ class BatchSerializer(serializers.ModelSerializer):
                 field_name="batch_number",
                 prefix="BAT",
                 length=4,
-                course=course,
+                use_lock=True
             )
             batch = Batch.objects.create(**validated_data)
             batch.faculties.set(faculties)
@@ -516,7 +625,7 @@ class StudentSerializer(serializers.ModelSerializer):
             "councellor",
             "councellor_name",
             "modules",
-            "is_active",
+            "status",
             "created_at"
         ]
         extra_kwargs = {
@@ -682,7 +791,7 @@ class StudentSerializer(serializers.ModelSerializer):
 
 
 class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
-    student_name = serializers.CharField(source="student.profile.get_full_name", read_only=True)
+    student_name = serializers.CharField(source="student.get_full_name", read_only=True)
     course_title = serializers.CharField(source="course.title", read_only=True)
     batch_number = serializers.CharField(source="batch.batch_number", read_only=True)
     total_installments = serializers.CharField(source="installment_plan.total_installments", read_only=True)
@@ -1081,7 +1190,8 @@ class SectionSerializer(serializers.ModelSerializer):
         ]
 
     def get_students_count(self, obj):
-        return obj.batch.students.count()
+        return obj.batch.enrollments.count()
+        
 
     def get_days_display(self, obj):
         return [d.day for d in obj.days.all()]
@@ -1158,6 +1268,59 @@ class SectionSerializer(serializers.ModelSerializer):
             ])
         return instance
 
+
+class ClassDetailSerializer(serializers.ModelSerializer):
+    center_name    = serializers.CharField(source="center.name", read_only=True)
+    sections_count = serializers.SerializerMethodField()
+    sections       = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = Class
+        fields = ["id", "name", "center", "center_name", "sections_count", "sections", "is_active", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+    def _get_filtered_sections_qs(self, obj):
+        today   = timezone.now().date()
+        request = self.context.get("request")
+
+        qs = obj.sections.filter(
+            batch__is_active=True,
+            batch__end_date__gte=today
+        ).select_related("batch__course").prefetch_related("days")
+
+        if request:
+            # 1. Course filter
+            course_id = request.query_params.get("course")
+            if course_id:
+                qs = qs.filter(batch__course__id=course_id)
+
+            # 2. Batch filter
+            batch_id = request.query_params.get("batch")
+            if batch_id:
+                qs = qs.filter(batch__id=batch_id)
+
+            # 3. Day filter  (mon, tue, wed...)
+            day = request.query_params.get("day")
+            if day:
+                qs = qs.filter(days__day=day)
+
+            # 4. Search (course title or batch number)
+            search = request.query_params.get("search")
+            if search:
+                qs = qs.filter(
+                    Q(batch__course__title__icontains=search) |
+                    Q(batch__batch_number__icontains=search)
+                )
+
+        return qs
+
+    def get_sections_count(self, obj):
+        # filtered count ആണ് return ചെയ്യുന്നത്
+        return self._get_filtered_sections_qs(obj).count()
+
+    def get_sections(self, obj):
+        qs = self._get_filtered_sections_qs(obj)
+        return SectionSerializer(qs, many=True, context=self.context).data
 
 from rest_framework import serializers
 from decimal import Decimal
@@ -1271,3 +1434,23 @@ class AcademicDashboardSerializer(serializers.Serializer):
     charts = serializers.DictField()
     recent_interns = serializers.ListField()
     top_faculty = serializers.ListField()
+
+
+
+class AvailableStudentSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
+    email     = serializers.SerializerMethodField()
+    center_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = Student
+        fields = ['id', 'student_id', 'full_name', 'email', 'center_name']
+
+    def get_full_name(self, obj):
+        return obj.get_full_name()
+
+    def get_email(self, obj):
+        return obj.profile.user.email
+
+    def get_center_name(self, obj):
+        return obj.center.name if obj.center else None

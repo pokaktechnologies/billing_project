@@ -1668,7 +1668,9 @@ class InternStatementReportView(APIView):
 
 
         invoices = InvoiceModel.objects.select_related('intern__user', 'intern__job_detail').filter(
-            invoice_type='intern').annotate(
+            invoice_type='intern',
+            intern__student_profile__isnull=False
+        ).annotate(
             receipt_total_amount=Coalesce(
                 Sum('receipts__total_amount'),
                 Value(0, output_field=DecimalField())
@@ -1677,7 +1679,7 @@ class InternStatementReportView(APIView):
                 Sum('receipts__total_amount'),
                 Value(0, output_field=DecimalField())
             )
-            ).order_by('-invoice_date')
+        ).order_by('-invoice_date')
 
         if date_from and date_to:
             invoices = invoices.filter(invoice_date__range=[date_from, date_to])
@@ -1686,15 +1688,11 @@ class InternStatementReportView(APIView):
         elif date_to:
             invoices = invoices.filter(invoice_date__lte=date_to)
 
-        if  intern_id:
-
+        if intern_id:
             try:
-                intern = StaffProfile.objects.filter(job_detail__job_type='internship').get(id=intern_id)
+                intern = StaffProfile.objects.filter(student_profile__isnull=False).get(id=intern_id)
             except StaffProfile.DoesNotExist:
-                return Response({
-                    "Status": "0",
-                    "Message": "Intern not found."
-                }, status=404)
+                return Response({"Status": "0", "Message": "Intern not found."}, status=404)
 
             invoices = invoices.filter(intern=intern)
 

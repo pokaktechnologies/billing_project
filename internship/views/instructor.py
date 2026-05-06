@@ -148,11 +148,9 @@ class StudentListAPIView(APIView):
         if status:
 
             if status == "active":
-                qs = qs.filter(status='active')
+                qs = qs.filter(is_active=True)
             elif status == "inactive":
-                qs = qs.filter(status='inactive')
-            elif status == "completed":
-                qs = qs.filter(status='completed')
+                qs = qs.filter(is_active=False)
 
         # name filter
         if name:
@@ -202,15 +200,13 @@ class StudentsStatsAPIView(APIView):
         ).distinct()
 
         total = students.count()
-        active = students.filter(status='active').count()
-        inactive = students.filter(status='inactive').count()
-        completed = students.filter(status='completed').count()
+        active = students.filter(is_active=True).count()
+        inactive = students.filter(is_active=False).count()
 
         return Response({
             "total_students": total,
             "active_students": active,
             "inactive_students": inactive,
-            "completed_students": completed,
         })
 
 
@@ -756,11 +752,9 @@ class FacultyStudentsAPIView(APIView):
 
         if status:
             if status.lower() == "active":
-                students = students.filter(status='active')
+                students = students.filter(is_active=True)
             elif status.lower() == "inactive":
-                students = students.filter(status='inactive')
-            elif status.lower() == "completed":
-                students = students.filter(status='completed')
+                students = students.filter(is_active=False)
 
         if course:
             students = students.filter(enrollments__course_id=course)

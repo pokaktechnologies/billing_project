@@ -606,7 +606,7 @@ class StudentSerializer(serializers.ModelSerializer):
             "councellor",
             "councellor_name",
             "modules",
-            "is_active",
+            "status",
             "created_at"
         ]
         extra_kwargs = {

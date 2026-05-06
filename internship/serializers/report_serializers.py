@@ -380,7 +380,7 @@ class StudentInSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Student
-        fields = ["id", "student_id", "name", "email", "course", "batch", "is_active"]
+        fields = ["id", "student_id", "name", "email", "course", "batch", "status"]
 
     def get_name(self, obj):
         return obj.get_full_name()
@@ -427,6 +427,7 @@ class CourseInSerializer(serializers.ModelSerializer):
 class CenterReportsSerializer(serializers.ModelSerializer):
     total_students = serializers.IntegerField(read_only=True)
     active_students = serializers.IntegerField(read_only=True)
+    completed_students = serializers.IntegerField(read_only=True)
     inactive_students = serializers.IntegerField(read_only=True)
     total_courses = serializers.IntegerField(read_only=True)
     faculties = serializers.IntegerField(read_only=True)
@@ -435,7 +436,7 @@ class CenterReportsSerializer(serializers.ModelSerializer):
         model = Center
         fields = [
             "id", "name", "country_name", "state_name", "address",
-            "total_students", "active_students", "inactive_students",
+            "total_students", "active_students", "completed_students", "inactive_students",
             "total_courses", "faculties",
         ]
 
@@ -443,6 +444,7 @@ class CenterReportsSerializer(serializers.ModelSerializer):
 class CenterDetailReportSerializer(serializers.ModelSerializer):
     active_students = serializers.SerializerMethodField()
     inactive_students = serializers.SerializerMethodField()
+    completed_students = serializers.SerializerMethodField()
     courses = serializers.SerializerMethodField()
     faculties = serializers.SerializerMethodField()
 
@@ -450,15 +452,19 @@ class CenterDetailReportSerializer(serializers.ModelSerializer):
         model = Center
         fields = [
             "id", "name", "country_name", "state_name", "address",
-            "active_students", "inactive_students", "courses", "faculties",
+            "active_students", "inactive_students", "completed_students", "courses", "faculties",
         ]
 
     def get_active_students(self, obj):
-        qs = obj.students.filter(is_active=True).select_related("profile__user")
+        qs = obj.students.filter(status='active').select_related("profile__user")
         return StudentInSerializer(qs, many=True).data
 
     def get_inactive_students(self, obj):
-        qs = obj.students.filter(is_active=False).select_related("profile__user")
+        qs = obj.students.filter(status='inactive').select_related("profile__user")
+        return StudentInSerializer(qs, many=True).data
+    
+    def get_completed_students(self, obj):
+        qs = obj.students.filter(status='completed').select_related("profile__user")
         return StudentInSerializer(qs, many=True).data
 
     def get_courses(self, obj):
@@ -515,6 +521,7 @@ class CourseReportSerializer(serializers.ModelSerializer):
     total_students = serializers.IntegerField(read_only=True)
     active_students = serializers.IntegerField(read_only=True)
     inactive_students = serializers.IntegerField(read_only=True)
+    completed_students = serializers.IntegerField(read_only=True)
     total_batches = serializers.IntegerField(read_only=True)
     active_batches = serializers.IntegerField(read_only=True)
     total_faculties = serializers.IntegerField(read_only=True)
@@ -524,7 +531,7 @@ class CourseReportSerializer(serializers.ModelSerializer):
         fields = [
             "id", "title", "description", "department", "total_fee",
             "is_active", "created_at", "total_students", "active_students",
-            "inactive_students", "total_batches", "active_batches", "total_faculties",
+            "inactive_students", "completed_students", "total_batches", "active_batches", "total_faculties",
         ]
 
 
@@ -632,7 +639,7 @@ class FacultyDetailReportSerializer(serializers.ModelSerializer):
         students = Student.objects.filter(
             enrollments__batch__faculties=obj,
             enrollments__batch__end_date__gte=now().date(),
-            is_active=True
+            status='active'
         ).select_related("profile__user").prefetch_related(
             "enrollments__course", "enrollments__batch"
         ).distinct()
@@ -641,7 +648,8 @@ class FacultyDetailReportSerializer(serializers.ModelSerializer):
     def get_completed_students(self, obj):
         students = Student.objects.filter(
             enrollments__batch__faculties=obj,
-            enrollments__batch__end_date__lt=now().date()
+            enrollments__batch__end_date__lt=now().date(),
+            status='completed'
         ).select_related("profile__user").prefetch_related(
             "enrollments__course", "enrollments__batch"
         ).distinct()

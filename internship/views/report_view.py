@@ -306,8 +306,9 @@ class CenterReportsView(generics.ListAPIView):
     def get_queryset(self):
         return Center.objects.annotate(
             total_students=Count("students"),
-            active_students=Count("students", filter=Q(students__is_active=True)),
-            inactive_students=Count("students", filter=Q(students__is_active=False)),
+            active_students=Count("students", filter=Q(students__status='active')),
+            completed_students=Count("students", filter=Q(students__status='completed')),
+            inactive_students=Count("students", filter=Q(students__status='inactive')),
             total_courses=Count("students__enrollments__course", distinct=True),
             faculties=Count("students__enrollments__batch__faculties", distinct=True),
         )
@@ -335,7 +336,7 @@ class BatchReportAPIView(APIView):
         queryset = Batch.objects.select_related("course").annotate(
             student_count=Count(
                 "enrollments__student",
-                filter=Q(enrollments__student__is_active=True),
+                filter=Q(enrollments__student__status='active'),
                 distinct=True
             )
         )
@@ -382,12 +383,17 @@ class CourseReportAPIView(generics.ListAPIView):
             total_students=Count("enrollments__student", distinct=True),
             active_students=Count(
                 "enrollments__student",
-                filter=Q(enrollments__student__is_active=True),
+                filter=Q(enrollments__student__status='active'),
                 distinct=True
             ),
             inactive_students=Count(
                 "enrollments__student",
-                filter=Q(enrollments__student__is_active=False),
+                filter=Q(enrollments__student__status='inactive'),
+                distinct=True
+            ),
+            completed_students=Count(
+                "enrollments__student",
+                filter=Q(enrollments__student__status='completed'),
                 distinct=True
             ),
             total_batches=Count("batches", distinct=True),
@@ -475,12 +481,12 @@ class FacultyReportAPIView(generics.ListAPIView):
             ),
             active_students=Count(
                 "batches__enrollments__student",
-                filter=Q(batches__end_date__gte=today) & Q(batches__enrollments__student__is_active=True),
+                filter=Q(batches__end_date__gte=today) & Q(batches__enrollments__student__status='active'),
                 distinct=True
             ),
             completed_students=Count(
                 "batches__enrollments__student",
-                filter=Q(batches__end_date__lt=today),
+                filter=Q(batches__end_date__lt=today) & Q(batches__enrollments__student__status='completed'),
                 distinct=True
             ),
             total_batches=Count("batches", distinct=True),
@@ -536,7 +542,7 @@ class RegistrationReportAPIView(APIView):
         center_id = request.query_params.get("center_id")
         counsellor_id = request.query_params.get("counsellor_id")
         course_id = request.query_params.get("course_id")
-        is_active = request.query_params.get("is_active")
+        status = request.query_params.get("status")
         start_date = request.query_params.get("start_date")
         end_date = request.query_params.get("end_date")
 
@@ -546,8 +552,8 @@ class RegistrationReportAPIView(APIView):
             queryset = queryset.filter(councellor_id=counsellor_id)
         if course_id:
             queryset = queryset.filter(enrollments__course_id=course_id)
-        if is_active is not None:
-            queryset = queryset.filter(is_active=is_active.lower() == "true")
+        if status is not None:
+            queryset = queryset.filter(status=status)
         if start_date:
             queryset = queryset.filter(start_date__gte=start_date)
         if end_date:

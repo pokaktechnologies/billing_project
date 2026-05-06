@@ -202,7 +202,7 @@ class StudentListCreateAPIView(generics.ListCreateAPIView):
 
     filterset_fields = {
         "center": ["exact"],
-        "is_active": ["exact"],
+        "status": ["exact"],
     }
 
     def get_queryset(self):
@@ -481,7 +481,7 @@ class AcademicDashboardAPIView(APIView):
         year = int(request.GET.get("year", datetime.now().year))
 
         # status
-        active_students = Student.objects.filter(is_active=True).count()
+        active_students = Student.objects.filter(status='active').count()
         active_courses = Course.objects.filter(is_active=True).count()
         faculty_count = Faculty.objects.filter(is_active=True).count()
 
@@ -546,7 +546,7 @@ class AcademicDashboardAPIView(APIView):
             recent_interns.append({
                 "name": s.get_full_name(),
                 "course": enrollment.course.title if enrollment and enrollment.course else None,
-                "status": "Active" if s.is_active else "Inactive"
+                "status": s.get_status_display()
             })
 
         # top faculty
@@ -591,7 +591,7 @@ class AvailableStudentsView(APIView):
         ).distinct()
 
         qs = Student.objects.filter(
-            is_active=True
+            status='active'
         ).exclude(
             id__in=already_enrolled_ids
         ).select_related(

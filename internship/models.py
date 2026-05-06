@@ -1,5 +1,6 @@
 from django.db import models
 from accounts.models import Department, SalesPerson, StaffProfile
+from project_management.models import STATUS_CHOICES
 
 
 class Center(models.Model):
@@ -18,6 +19,13 @@ class Student(models.Model):
     payment_type = models.ForeignKey('InstallmentPlan', on_delete=models.SET_NULL, null=True, blank=True, related_name="students") # Unused
     start_date = models.DateField()
     is_active = models.BooleanField(default=True)
+    
+    STATUS_CHOICES = [
+    ('active', 'Active'),
+    ('completed', 'Completed'),
+    ('inactive', 'Inactive'),
+    ]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
     councellor = models.ForeignKey(SalesPerson, on_delete=models.SET_NULL, null=True, blank=True, related_name="counselled_students")
     created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
 

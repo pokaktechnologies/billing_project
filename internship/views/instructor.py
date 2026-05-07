@@ -408,7 +408,7 @@ class StudentPerformanceStatsAPIView(APIView):
 
     def get(self, request, student_id):
         qs = TaskAssignment.objects.filter(student_id=student_id)
-
+        student = Student.objects.select_related("profile").get(id=student_id)
         total = qs.count()
         completed = qs.filter(status="completed").count()
         pending = qs.filter(status="pending").count()

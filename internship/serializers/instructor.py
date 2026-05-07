@@ -825,3 +825,86 @@ class TestSerializer(serializers.ModelSerializer):
 
         # DELETE removed options
         QuestionOption.objects.filter(id__in=existing_ids - incoming_ids).delete()
+
+
+
+# serializers.py
+
+from rest_framework import serializers
+from ..models import ReportTemplate, TemplateSection, TemplateField
+from ..constants import FIELD_CONFIG_DEFAULTS
+
+
+
+# ─────────────────────────────────────────
+# TemplateField
+# ─────────────────────────────────────────
+class TemplateFieldSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model  = TemplateField
+        fields = [
+            'id', 'label', 'field_type',
+            'placeholder', 'is_required',
+            'order', 'config',
+        ]
+
+    def validate(self, attrs):
+        field_type = attrs.get('field_type') or (
+            self.instance.field_type if self.instance else None
+        )
+        # Auto-set default config if not provided
+        if not attrs.get('config') and field_type in FIELD_CONFIG_DEFAULTS:
+            attrs['config'] = FIELD_CONFIG_DEFAULTS[field_type]
+        return attrs
+
+
+# ─────────────────────────────────────────
+# TemplateSection
+# ─────────────────────────────────────────
+class TemplateSectionSerializer(serializers.ModelSerializer):
+    fields = TemplateFieldSerializer(many=True, read_only=True)
+    field_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = TemplateSection
+        fields = ['id', 'title', 'order', 'field_count', 'fields']
+
+    def get_field_count(self, obj):
+        return obj.fields.count()
+
+
+# ─────────────────────────────────────────
+# ReportTemplate — List (lightweight)
+# ─────────────────────────────────────────
+class ReportTemplateListSerializer(serializers.ModelSerializer):
+    section_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = ReportTemplate
+        fields = [
+            'id', 'name', 'description',
+            'is_active', 'section_count', 'created_at',
+        ]
+
+    def get_section_count(self, obj):
+        return obj.sections.count()
+
+
+# ─────────────────────────────────────────
+# ReportTemplate — Detail (full nested)
+# ─────────────────────────────────────────
+class ReportTemplateDetailSerializer(serializers.ModelSerializer):
+    sections = TemplateSectionSerializer(many=True, read_only=True)
+    section_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = ReportTemplate
+        fields = [
+            'id', 'name', 'description', 'course',
+            'is_active', 'section_count',
+            'created_at', 'updated_at', 'sections',
+        ]
+
+    def get_section_count(self, obj):
+        return obj.sections.count()

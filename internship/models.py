@@ -519,6 +519,7 @@ class TestAttempt(models.Model):
     started_at = models.DateTimeField(auto_now_add=True)
     submitted_at = models.DateTimeField(null=True, blank=True)
     time_taken_seconds = models.PositiveIntegerField(null=True, blank=True)
+    overall_feedback = models.TextField(null=True, blank=True)
 
     class Meta:
         unique_together = ['student', 'test']

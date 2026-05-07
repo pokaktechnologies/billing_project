@@ -826,6 +826,27 @@ class TestSerializer(serializers.ModelSerializer):
         # DELETE removed options
         QuestionOption.objects.filter(id__in=existing_ids - incoming_ids).delete()
 
+class TestAnswerEvaluationSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = TestAnswer
+        fields = [
+            "id",
+            "marks_awarded",
+            "feedback"
+        ]
+
+    def validate(self, attrs):
+
+        marks = attrs.get("marks_awarded")
+        question_marks = self.instance.question.marks or 0
+
+        if marks is not None and marks > question_marks:
+            raise serializers.ValidationError({
+                "marks_awarded": f"Maximum marks is {question_marks}"
+            })
+
+        return attrs
 
 
 # serializers.py

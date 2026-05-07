@@ -53,7 +53,7 @@ instructor_patterns = [
     path('tests/<int:test_id>/questions/<int:question_id>/upload/', instructor.QuestionFileUploadAPIView.as_view(), name='question-file-upload'),
     path('tests/<int:test_id>/submissions/', instructor.InstructorTestSubmissionListAPIView.as_view(), name='instructor-test-submissions'),
     path('tests/submissions/<int:attempt_id>/', instructor.InstructorTestSubmissionDetailAPIView.as_view(),name='instructor-test-submission-detail'),
-
+    path('tests/submissions/<int:attempt_id>/evaluate/', instructor.InstructorEvaluateSubmissionAPIView.as_view(), name='instructor-evaluate-submission'),
 
     # Template
     path('templates/',         instructor.ReportTemplateListCreateView.as_view()),

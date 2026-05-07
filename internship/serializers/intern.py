@@ -1,4 +1,5 @@
 from rest_framework import serializers
+
 from ..models import Class, Section, StudyMaterial, TaskAttachment, TaskSubmission, TaskAssignment, Task, TaskSubmissionAttachment
 from ..utils import get_authenticated_student, get_student_task_assignment
 from datetime import date
@@ -483,7 +484,7 @@ class ResultAnswerSerializer(serializers.ModelSerializer):
     selected_option_label = serializers.SerializerMethodField()
     max_marks = serializers.IntegerField(source='question.marks')
     is_correct = serializers.SerializerMethodField()
-
+    reviewed_at = serializers.DateTimeField(read_only=True)
     class Meta:
         model = TestAnswer
         fields = [
@@ -491,15 +492,26 @@ class ResultAnswerSerializer(serializers.ModelSerializer):
             'selected_option', 'selected_option_label',
             'correct_option', 'text_answer',
             'max_marks', 'marks_awarded', 'feedback',
-            'is_marked_for_review', 'is_correct'
+            'is_marked_for_review', 'is_correct', 'reviewed_at',
         ]
 
     def get_correct_option(self, obj):
-        if obj.question.section.section_type == 'mcq':
-            correct = obj.question.options.filter(is_correct=True).first()
-            if correct:
-                return {'id': correct.id, 'label': correct.label}
-        return None
+
+        if obj.question.section.section_type != 'mcq':
+            return None
+
+        correct = obj.question.options.filter(
+            is_correct=True
+        ).first()
+
+        if not correct:
+            return None
+
+        return {
+            "id": correct.id,
+            "label": correct.label,
+            "option_text": correct.option_text
+        }
 
     def get_selected_option_label(self, obj):
         if obj.selected_option:
@@ -568,7 +580,7 @@ class SectionResultSerializer(serializers.ModelSerializer):
                 count += 1
         return count
 
-
+from internship.views.instructor import is_attempt_fully_evaluated
 class TestResultSerializer(serializers.ModelSerializer):
     test_name = serializers.CharField(source='test.name')
     total_marks = serializers.IntegerField(source='test.total_marks')
@@ -576,26 +588,37 @@ class TestResultSerializer(serializers.ModelSerializer):
     percentage = serializers.SerializerMethodField()
     section_breakdown = serializers.SerializerMethodField()
     answers = serializers.SerializerMethodField()
+    evaluated = serializers.SerializerMethodField()
 
     class Meta:
         model = TestAttempt
         fields = [
             'id', 'test_name', 'total_marks', 'scored_marks',
-            'percentage', 'time_taken_seconds',
-            'started_at', 'submitted_at',
+            'percentage', 'time_taken_seconds', 'overall_feedback',
+            'started_at', 'submitted_at', 'evaluated',
             'section_breakdown', 'answers'
         ]
+
+    def get_evaluated(self, obj):
+        return is_attempt_fully_evaluated(obj)
 
     def get_scored_marks(self, obj):
         total = 0
         for answer in obj.answers.select_related(
-            'question', 'selected_option', 'question__section'
+                'question',
+                'selected_option',
+                'question__section'
         ).all():
-            if answer.question.section.section_type == 'mcq':
-                if answer.selected_option and answer.selected_option.is_correct:
-                    total += answer.question.marks or 0
-            else:
-                total += answer.marks_awarded or 0
+
+            # manual evaluated answer
+            if answer.marks_awarded is not None:
+                total += answer.marks_awarded
+            # auto mcq
+            elif (
+                    answer.selected_option and
+                    answer.selected_option.is_correct
+            ):
+                total += answer.question.marks or 0
         return total
 
     def get_percentage(self, obj):

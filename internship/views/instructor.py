@@ -1,6 +1,7 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import generics,filters, status
 from rest_framework.response import Response
+from internship.utils import is_attempt_fully_evaluated
 from internship.serializers.intern import TestResultSerializer
 from internship.models import Course, Student, Faculty
 from internship.serializers.instructor import CourseSerializer
@@ -959,25 +960,7 @@ class QuestionFileUploadAPIView(APIView):
             question.save()
 
         return Response(status=status.HTTP_204_NO_CONTENT)
-    
 
-# full mcq based aanel auto evaluation descriptive and mixed aaaneel manual setup
-def is_attempt_fully_evaluated(attempt):
-    descriptive_questions = TestQuestion.objects.filter(
-        section__test=attempt.test,
-        section__section_type='descriptive'
-    )
-
-    if not descriptive_questions.exists():
-        return True
-
-    for question in descriptive_questions:
-        answer = attempt.answers.filter(question=question).first()
-
-        if not answer or answer.marks_awarded is None:
-            return False
-
-    return True
 
 class InstructorTestSubmissionListAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -1070,6 +1053,7 @@ class InstructorTestSubmissionDetailAPIView(APIView):
             ).prefetch_related(
                 'test__sections__questions__options',
                 'answers__question__section',
+                'answers__question__options',
                 'answers__selected_option',
             ),
             id=attempt_id,
@@ -1091,6 +1075,51 @@ class InstructorTestSubmissionDetailAPIView(APIView):
         })
     
 
+class InstructorEvaluateSubmissionAPIView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, attempt_id):
+
+        faculty = request.user.staff_profile.faculty_profile
+        attempt = get_object_or_404(
+            TestAttempt,
+            id=attempt_id,
+            test__batch__faculties=faculty,
+            status='submitted'
+        )
+        answers_data = request.data.get("answers", [])
+        overall_feedback = request.data.get("overall_feedback")
+
+        for item in answers_data:
+            answer = get_object_or_404(
+                TestAnswer,
+                id=item.get("answer_id"),
+                attempt=attempt
+            )
+            serializer = TestAnswerEvaluationSerializer(
+                answer,
+                data={
+                    "marks_awarded": item.get("marks_awarded"),
+                    "feedback": item.get("feedback"),
+                },
+                partial=True
+            )
+
+            serializer.is_valid(raise_exception=True)
+            updated_answer = serializer.save(
+                reviewed_at=timezone.now()
+            )
+
+        # overall remarks
+        if overall_feedback is not None:
+            attempt.overall_feedback = overall_feedback
+            attempt.save()
+
+        return Response({
+            "message": "Evaluation completed successfully",
+            "evaluated": is_attempt_fully_evaluated(attempt)
+        })
 
 # Template
 

@@ -908,3 +908,77 @@ class ReportTemplateDetailSerializer(serializers.ModelSerializer):
 
     def get_section_count(self, obj):
         return obj.sections.count()
+
+
+class ReportFieldValueSerializer(serializers.ModelSerializer):
+    field_label = serializers.CharField(source='field.label', read_only=True)
+    field_type = serializers.CharField(source='field.field_type', read_only=True)
+
+    class Meta:
+        model = ReportFieldValue
+        fields = [
+            'id',
+            'field',
+            'field_label',
+            'field_type',
+            'value',
+        ]
+
+
+class StudentReportSerializer(serializers.ModelSerializer):
+    field_values = ReportFieldValueSerializer(many=True)
+    student_name = serializers.CharField(source='student.get_full_name', read_only=True)
+    batch_name = serializers.CharField(source='batch.batch_number', read_only=True)
+    template_name = serializers.CharField(source='template.name', read_only=True)
+    faculty_name = serializers.CharField(source='faculty.get_full_name', read_only=True)
+
+    class Meta:
+        model = StudentReport
+        fields = [
+            'id',
+            'student',
+            'student_name',
+            'batch',
+            'batch_name',
+            'template',
+            'template_name',
+            'faculty',
+            'faculty_name',
+            # 'remarks',
+            'submitted_at',
+            'field_values',
+        ]
+
+    def validate(self, attrs):
+
+        template = attrs.get("template")
+        field_values = self.initial_data.get("field_values", [])
+        valid_field_ids = set(
+            TemplateField.objects.filter(
+                section__template=template
+            ).values_list("id", flat=True)
+        )
+        incoming_field_ids = {
+            item.get("field")
+            for item in field_values
+        }
+        invalid_fields = incoming_field_ids - valid_field_ids
+
+        if invalid_fields:
+            raise serializers.ValidationError({
+                "field_values":
+                    f"Invalid fields for this template: {list(invalid_fields)}"
+            })
+
+        return attrs
+
+    def create(self, validated_data):
+
+        field_values_data = validated_data.pop('field_values')
+        request = self.context.get('request')
+        faculty = request.user.staff_profile.faculty_profile
+        report = StudentReport.objects.create(faculty=faculty, **validated_data)
+
+        for item in field_values_data:
+            ReportFieldValue.objects.create(report=report, **item)
+        return report

@@ -67,6 +67,9 @@ instructor_patterns = [
     path('sections/<int:section_id>/fields/', instructor.FieldCreateView.as_view()),
     path('fields/<int:pk>/',                  instructor.FieldDetailView.as_view()),
 
+    path('reports/',instructor.StudentReportListCreateAPIView.as_view()),
+    path('reports/<int:pk>/',instructor.StudentReportDetailAPIView.as_view()),
+
 ]
 
 

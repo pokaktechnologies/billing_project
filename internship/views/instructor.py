@@ -1227,3 +1227,44 @@ class FieldDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = TemplateField.objects.all()
     serializer_class = TemplateFieldSerializer
     http_method_names = ['patch', 'delete']
+
+
+class StudentReportListCreateAPIView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = StudentReportSerializer
+
+    def get_queryset(self):
+        faculty = (self.request.user.staff_profile.faculty_profile)
+        qs = StudentReport.objects.select_related(
+            'student',
+            'batch',
+            'template',
+            'faculty'
+        ).prefetch_related(
+            'field_values__field'
+        ).filter(
+            faculty=faculty
+        ).order_by('-submitted_at')
+
+        student = self.request.query_params.get('student')
+        batch = self.request.query_params.get('batch')
+
+        if student:
+            qs = qs.filter(student_id=student)
+
+        if batch:
+            qs = qs.filter(batch_id=batch)
+
+        return qs
+
+class StudentReportDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = StudentReportSerializer
+    queryset = StudentReport.objects.select_related(
+        'student',
+        'batch',
+        'template',
+        'faculty'
+    ).prefetch_related(
+        'field_values__field'
+    )

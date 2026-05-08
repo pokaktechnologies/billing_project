@@ -98,7 +98,11 @@ intern_patterns = [
     path('attempts/<int:attempt_id>/answer/', intern.SaveAnswerAPIView.as_view(), name='student-save-answer'),
     path('attempts/<int:attempt_id>/submit/', intern.SubmitTestAPIView.as_view(), name='student-submit-test'),
     path('attempts/<int:attempt_id>/result/', intern.TestResultAPIView.as_view(), name='student-test-result'),
-    
+
+
+    path('my-reports/', intern.MyStudentReportListAPIView.as_view(), name='my-student-reports'),
+
+
     #Dashboard
     path('dashaboard/',intern.InternDashboardAPIView.as_view()),
 ]

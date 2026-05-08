@@ -333,13 +333,14 @@ class StudentTestListSerializer(serializers.ModelSerializer):
     batch_number = serializers.CharField(source='batch.batch_number', read_only=True)
     total_questions = serializers.SerializerMethodField()
     attempt_status = serializers.SerializerMethodField()
+    attempt_id = serializers.SerializerMethodField()
 
     class Meta:
         model = Test
         fields = [
             'id', 'name', 'test_type', 'course_title', 'batch_number',
             'duration_minutes', 'total_marks', 'total_questions',
-            'status', 'attempt_status'
+            'status', 'attempt_status', 'attempt_id'
         ]
 
     def get_total_questions(self, obj):
@@ -351,6 +352,11 @@ class StudentTestListSerializer(serializers.ModelSerializer):
         if not attempt:
             return 'not_attempted'
         return attempt.status  # in_progress / submitted
+    
+    def get_attempt_id(self, obj):
+        student = self.context.get('student')
+        attempt = obj.attempts.filter(student=student).first()
+        return attempt.id if attempt else None
 
 
 # ─── Test Detail (Before Start) ───────────────────────────────────

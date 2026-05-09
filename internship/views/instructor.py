@@ -1120,35 +1120,32 @@ class InstructorEvaluateSubmissionAPIView(APIView):
             "message": "Evaluation completed successfully",
             "evaluated": is_attempt_fully_evaluated(attempt)
         })
+    
 
-# Template
 
-from rest_framework import generics, status
-from rest_framework.response import Response
+
+# views/instructor.py
+
+from rest_framework import generics
 from rest_framework.exceptions import ValidationError
-from ..constants import FIELD_CONFIG_DEFAULTS
 
-from ..models import ReportTemplate, TemplateSection, TemplateField
+from ..models import ReportTemplate
 from ..serializers.instructor import (
     ReportTemplateListSerializer,
     ReportTemplateDetailSerializer,
-    TemplateSectionSerializer,
-    TemplateFieldSerializer,
+    ReportTemplateWriteSerializer,
 )
 
 
-# ─────────────────────────────────────────
-# ReportTemplate — List & Create
-# ─────────────────────────────────────────
 class ReportTemplateListCreateView(generics.ListCreateAPIView):
     """
-    GET  /api/templates/?course=<id>   → list templates
-    POST /api/templates/               → create template
+    GET  /api/templates/?course=<id>  → list
+    POST /api/templates/              → create (with sections & fields)
     """
 
     def get_serializer_class(self):
         if self.request.method == 'POST':
-            return ReportTemplateDetailSerializer
+            return ReportTemplateWriteSerializer
         return ReportTemplateListSerializer
 
     def get_queryset(self):
@@ -1159,103 +1156,161 @@ class ReportTemplateListCreateView(generics.ListCreateAPIView):
         return qs
 
 
-# ─────────────────────────────────────────
-# ReportTemplate — Retrieve, Update, Delete
-# ─────────────────────────────────────────
 class ReportTemplateDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
-    GET    /api/templates/<id>/   → full detail with sections & fields
-    PATCH  /api/templates/<id>/   → update name / description / is_active
-    DELETE /api/templates/<id>/   → delete template
+    GET    /api/templates/<id>/  → full detail
+    PATCH  /api/templates/<id>/  → update (sections recreated)
+    DELETE /api/templates/<id>/  → delete
     """
-    queryset = ReportTemplate.objects.prefetch_related(
-        'sections__fields'          # single DB query for nested data
-    )
-    serializer_class = ReportTemplateDetailSerializer
+
+    def get_queryset(self):
+        return ReportTemplate.objects.prefetch_related('sections__fields')
+
+    def get_serializer_class(self):
+        if self.request.method in ['PUT', 'PATCH']:
+            return ReportTemplateWriteSerializer
+        return ReportTemplateDetailSerializer
+
     http_method_names = ['get', 'patch', 'delete']
 
 
-# ─────────────────────────────────────────
-# TemplateSection — Add to Template
-# ─────────────────────────────────────────
-class SectionCreateView(generics.CreateAPIView):
-    """
-    POST /api/templates/<template_id>/sections/
-    body: { "title": "Code Quality Metrics" }
-    """
-    serializer_class = TemplateSectionSerializer
-
-    def perform_create(self, serializer):
-        template_id = self.kwargs['template_id']
-        try:
-            template = ReportTemplate.objects.get(id=template_id)
-        except ReportTemplate.DoesNotExist:
-            raise ValidationError("Template not found.")
-
-        # Auto order — next number
-        next_order = template.sections.count() + 1
-        serializer.save(template=template, order=next_order)
 
 
-# ─────────────────────────────────────────
-# TemplateSection — Update & Delete
-# ─────────────────────────────────────────
-class SectionDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """
-    PATCH  /api/sections/<id>/   → update title or order
-    DELETE /api/sections/<id>/   → delete section (fields cascade)
-    """
-    queryset = TemplateSection.objects.all()
-    serializer_class = TemplateSectionSerializer
-    http_method_names = ['patch', 'delete']
+    # # Template
+
+    # from rest_framework import generics, status
+    # from rest_framework.response import Response
+    # from rest_framework.exceptions import ValidationError
+    # from ..constants import FIELD_CONFIG_DEFAULTS
+
+    # from ..models import ReportTemplate, TemplateSection, TemplateField
+    # from ..serializers.instructor import (
+    #     ReportTemplateListSerializer,
+    #     ReportTemplateDetailSerializer,
+    #     TemplateSectionSerializer,
+    #     TemplateFieldSerializer,
+    # )
 
 
-# ─────────────────────────────────────────
-# TemplateField — Add to Section
-# ─────────────────────────────────────────
-class FieldCreateView(generics.CreateAPIView):
-    """
-    POST /api/sections/<section_id>/fields/
-    body: { "label": "", "field_type": "rating" }
+    # # ─────────────────────────────────────────
+    # # ReportTemplate — List & Create
+    # # ─────────────────────────────────────────
+    # class ReportTemplateListCreateView(generics.ListCreateAPIView):
+    #     """
+    #     GET  /api/templates/?course=<id>   → list templates
+    #     POST /api/templates/               → create template
+    #     """
 
-    Shortcut buttons (+text, +rating...) hit this endpoint
-    with field_type pre-filled.
-    """
-    serializer_class = TemplateFieldSerializer
+    #     def get_serializer_class(self):
+    #         if self.request.method == 'POST':
+    #             return ReportTemplateDetailSerializer
+    #         return ReportTemplateListSerializer
 
-    def perform_create(self, serializer):
-        section_id = self.kwargs['section_id']
-        try:
-            section = TemplateSection.objects.get(id=section_id)
-        except TemplateSection.DoesNotExist:
-            raise ValidationError("Section not found.")
-
-        field_type = self.request.data.get('field_type', 'text')
-
-        # Auto order
-        next_order = section.fields.count() + 1
-
-        # Auto config default
-        config = self.request.data.get('config') or FIELD_CONFIG_DEFAULTS.get(field_type, {})
-
-        serializer.save(
-            section=section,
-            order=next_order,
-            config=config,
-        )
+    #     def get_queryset(self):
+    #         qs = ReportTemplate.objects.all().order_by('-created_at')
+    #         course_id = self.request.query_params.get('course')
+    #         if course_id:
+    #             qs = qs.filter(course_id=course_id)
+    #         return qs
 
 
-# ─────────────────────────────────────────
-# TemplateField — Update & Delete
-# ─────────────────────────────────────────
-class FieldDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """
-    PATCH  /api/fields/<id>/   → update label, config, is_required
-    DELETE /api/fields/<id>/   → delete field
-    """
-    queryset = TemplateField.objects.all()
-    serializer_class = TemplateFieldSerializer
-    http_method_names = ['patch', 'delete']
+    # # ─────────────────────────────────────────
+    # # ReportTemplate — Retrieve, Update, Delete
+    # # ─────────────────────────────────────────
+    # class ReportTemplateDetailView(generics.RetrieveUpdateDestroyAPIView):
+    #     """
+    #     GET    /api/templates/<id>/   → full detail with sections & fields
+    #     PATCH  /api/templates/<id>/   → update name / description / is_active
+    #     DELETE /api/templates/<id>/   → delete template
+    #     """
+    #     queryset = ReportTemplate.objects.prefetch_related(
+    #         'sections__fields'          # single DB query for nested data
+    #     )
+    #     serializer_class = ReportTemplateDetailSerializer
+    #     http_method_names = ['get', 'patch', 'delete']
+
+
+    # # ─────────────────────────────────────────
+    # # TemplateSection — Add to Template
+    # # ─────────────────────────────────────────
+    # class SectionCreateView(generics.CreateAPIView):
+    #     """
+    #     POST /api/templates/<template_id>/sections/
+    #     body: { "title": "Code Quality Metrics" }
+    #     """
+    #     serializer_class = TemplateSectionSerializer
+
+    #     def perform_create(self, serializer):
+    #         template_id = self.kwargs['template_id']
+    #         try:
+    #             template = ReportTemplate.objects.get(id=template_id)
+    #         except ReportTemplate.DoesNotExist:
+    #             raise ValidationError("Template not found.")
+
+    #         # Auto order — next number
+    #         next_order = template.sections.count() + 1
+    #         serializer.save(template=template, order=next_order)
+
+
+    # # ─────────────────────────────────────────
+    # # TemplateSection — Update & Delete
+    # # ─────────────────────────────────────────
+    # class SectionDetailView(generics.RetrieveUpdateDestroyAPIView):
+    #     """
+    #     PATCH  /api/sections/<id>/   → update title or order
+    #     DELETE /api/sections/<id>/   → delete section (fields cascade)
+    #     """
+    #     queryset = TemplateSection.objects.all()
+    #     serializer_class = TemplateSectionSerializer
+    #     http_method_names = ['patch', 'delete']
+
+
+    # # ─────────────────────────────────────────
+    # # TemplateField — Add to Section
+    # # ─────────────────────────────────────────
+    # class FieldCreateView(generics.CreateAPIView):
+    #     """
+    #     POST /api/sections/<section_id>/fields/
+    #     body: { "label": "", "field_type": "rating" }
+
+    #     Shortcut buttons (+text, +rating...) hit this endpoint
+    #     with field_type pre-filled.
+    #     """
+    #     serializer_class = TemplateFieldSerializer
+
+    #     def perform_create(self, serializer):
+    #         section_id = self.kwargs['section_id']
+    #         try:
+    #             section = TemplateSection.objects.get(id=section_id)
+    #         except TemplateSection.DoesNotExist:
+    #             raise ValidationError("Section not found.")
+
+    #         field_type = self.request.data.get('field_type', 'text')
+
+    #         # Auto order
+    #         next_order = section.fields.count() + 1
+
+    #         # Auto config default
+    #         config = self.request.data.get('config') or FIELD_CONFIG_DEFAULTS.get(field_type, {})
+
+    #         serializer.save(
+    #             section=section,
+    #             order=next_order,
+    #             config=config,
+    #         )
+
+
+    # # ─────────────────────────────────────────
+    # # TemplateField — Update & Delete
+    # # ─────────────────────────────────────────
+    # class FieldDetailView(generics.RetrieveUpdateDestroyAPIView):
+    #     """
+    #     PATCH  /api/fields/<id>/   → update label, config, is_required
+    #     DELETE /api/fields/<id>/   → delete field
+    #     """
+    #     queryset = TemplateField.objects.all()
+    #     serializer_class = TemplateFieldSerializer
+    #     http_method_names = ['patch', 'delete']
 
 
 class StudentReportListCreateAPIView(generics.ListCreateAPIView):

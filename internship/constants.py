@@ -8,3 +8,13 @@ FIELD_CONFIG_DEFAULTS = {
     "table":         {"rows": [], "columns": []},
     "checkbox_grid": {"rows": [], "columns": []},
 }
+
+FIELD_CONFIG_REQUIRED_KEYS = {
+    "rating":        ["max_stars"],
+    "number":        ["min", "max", "unit"],
+    "dropdown":      ["options"],
+    "table":         ["rows", "columns"],
+    "checkbox_grid": ["rows", "columns"],
+    "text":          [],
+    "textarea":      [],
+}

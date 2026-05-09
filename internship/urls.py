@@ -55,17 +55,21 @@ instructor_patterns = [
     path('tests/submissions/<int:attempt_id>/', instructor.InstructorTestSubmissionDetailAPIView.as_view(),name='instructor-test-submission-detail'),
     path('tests/submissions/<int:attempt_id>/evaluate/', instructor.InstructorEvaluateSubmissionAPIView.as_view(), name='instructor-evaluate-submission'),
 
-    # Template
-    path('templates/',         instructor.ReportTemplateListCreateView.as_view()),
-    path('templates/<int:pk>/', instructor.ReportTemplateDetailView.as_view()),
 
-    # Section
-    path('templates/<int:template_id>/sections/', instructor.SectionCreateView.as_view()),
-    path('sections/<int:pk>/',                    instructor.SectionDetailView.as_view()),
+    path('templates/',            instructor.ReportTemplateListCreateView.as_view()),
+    path('templates/<int:pk>/',   instructor.ReportTemplateDetailView.as_view()),
+    
+    # # Template
+    # path('templates/',         instructor.ReportTemplateListCreateView.as_view()),
+    # path('templates/<int:pk>/', instructor.ReportTemplateDetailView.as_view()),
 
-    # Field
-    path('sections/<int:section_id>/fields/', instructor.FieldCreateView.as_view()),
-    path('fields/<int:pk>/',                  instructor.FieldDetailView.as_view()),
+    # # Section
+    # path('templates/<int:template_id>/sections/', instructor.SectionCreateView.as_view()),
+    # path('sections/<int:pk>/',                    instructor.SectionDetailView.as_view()),
+
+    # # Field
+    # path('sections/<int:section_id>/fields/', instructor.FieldCreateView.as_view()),
+    # path('fields/<int:pk>/',                  instructor.FieldDetailView.as_view()),
 
     path('reports/',instructor.StudentReportListCreateAPIView.as_view()),
     path('reports/<int:pk>/',instructor.StudentReportDetailAPIView.as_view()),

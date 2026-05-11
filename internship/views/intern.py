@@ -702,3 +702,38 @@ class MyStudentReportListAPIView(generics.ListAPIView):
         #     qs = qs.filter(batch_id=batch)
 
         return qs
+
+
+class MyStudentReportDetailAPIView(generics.RetrieveAPIView):
+
+    permission_classes = [IsAuthenticated]
+
+    serializer_class = StudentReportSerializer
+
+    def get_queryset(self):
+
+        try:
+            student = (
+                self.request.user
+                .staff_profile
+                .student_profile
+            )
+
+        except AttributeError:
+            return StudentReport.objects.none()
+
+        return (
+            StudentReport.objects
+            .select_related(
+                'student',
+                'batch',
+                'template',
+                'faculty'
+            )
+            .prefetch_related(
+                'field_values__field'
+            )
+            .filter(
+                student=student
+            )
+        )

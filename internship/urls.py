@@ -71,6 +71,9 @@ instructor_patterns = [
     # path('sections/<int:section_id>/fields/', instructor.FieldCreateView.as_view()),
     # path('fields/<int:pk>/',                  instructor.FieldDetailView.as_view()),
 
+
+    path('report-batches/', instructor.FacultyReportBatchListAPIView.as_view()),
+    path('report-batches/<int:batch_id>/students/', instructor.FacultyBatchStudentReportAPIView.as_view()),
     path('reports/',instructor.StudentReportListCreateAPIView.as_view()),
     path('reports/<int:pk>/',instructor.StudentReportDetailAPIView.as_view()),
 
@@ -105,7 +108,7 @@ intern_patterns = [
 
 
     path('my-reports/', intern.MyStudentReportListAPIView.as_view(), name='my-student-reports'),
-
+    path('my-reports/<int:pk>/', intern.MyStudentReportDetailAPIView.as_view(), name='my-student-report-detail'),
 
     #Dashboard
     path('dashaboard/',intern.InternDashboardAPIView.as_view()),
@@ -153,6 +156,9 @@ internship_admin_patterns = [
 
     path('students/available/', internship_admin.AvailableStudentsView.as_view(), name='available-students'),
 
+    # report 
+    path('admin/reports/', internship_admin.AdminStudentReportListAPIView.as_view()),
+    path('admin/reports/<int:pk>/', internship_admin.AdminStudentReportDetailAPIView.as_view()),
 
     # dashboard
     path("dashboard/academic/", internship_admin.AcademicDashboardAPIView.as_view()),

@@ -1344,11 +1344,95 @@ class StudentReportListCreateAPIView(generics.ListCreateAPIView):
 class StudentReportDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = StudentReportSerializer
-    queryset = StudentReport.objects.select_related(
-        'student',
-        'batch',
-        'template',
-        'faculty'
-    ).prefetch_related(
-        'field_values__field'
-    )
+
+    def get_queryset(self):
+        faculty = self.request.user.staff_profile.faculty_profile
+        return (
+            StudentReport.objects
+            .select_related(
+                'student',
+                'batch',
+                'template',
+                'faculty'
+            )
+            .prefetch_related(
+                'field_values__field'
+            )
+            .filter(
+                faculty=faculty
+            )
+        )
+
+# faculty de under el ulla batch listing
+class FacultyReportBatchListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        faculty = request.user.staff_profile.faculty_profile
+        batches = Batch.objects.filter(
+            faculties=faculty
+        ).select_related(
+            "course"
+        ).prefetch_related(
+            "students"
+        ).distinct()
+
+        response_data = []
+        for batch in batches:
+            student_count = StudentCourseEnrollment.objects.filter(
+                batch=batch
+            ).count()
+            report_count = StudentReport.objects.filter(
+                batch=batch,
+                faculty=faculty
+            ).count()
+
+            response_data.append({
+                "id": batch.id,
+                "batch_name": batch.batch_number,
+                "course_name": batch.course.title,
+                "student_count": student_count,
+                "report_count": report_count
+            })
+
+        return Response(response_data)
+        
+
+# batch nte under el ulla students listing with report bool
+class FacultyBatchStudentReportAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, batch_id):
+
+        faculty = request.user.staff_profile.faculty_profile
+        batch = get_object_or_404(
+            Batch,
+            id=batch_id,
+            faculties=faculty
+        )
+        enrollments = StudentCourseEnrollment.objects.select_related(
+            "student__profile__user"
+        ).filter(
+            batch=batch
+        )
+
+        response_data = []
+        for enrollment in enrollments:
+            student = enrollment.student
+            report = StudentReport.objects.filter(
+                student=student,
+                batch=batch,
+                faculty=faculty
+            ).first()
+
+            user = student.profile.user
+            response_data.append({
+                "student_id": student.id,
+                "student_name": f"{user.first_name} {user.last_name}",
+                "student_code": student.student_id,
+                "has_report": bool(report),
+                "report_id": report.id if report else None
+            })
+
+        return Response(response_data)

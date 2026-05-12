@@ -1154,6 +1154,9 @@ class ReportTemplateListCreateView(generics.ListCreateAPIView):
         if course_id:
             qs = qs.filter(course_id=course_id)
         return qs
+    
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['course']
 
 
 class ReportTemplateDetailView(generics.RetrieveUpdateDestroyAPIView):

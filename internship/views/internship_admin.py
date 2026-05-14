@@ -13,7 +13,9 @@ from rest_framework.views import APIView
 from rest_framework import generics
 from datetime import datetime
 from django.db.models.functions import TruncMonth
-from ..models import Section, Class, Student, Course, Faculty, StudentCourseEnrollment, CoursePayment
+
+from internship.serializers.instructor import StudentReportSerializer
+from ..models import Section, Class, Student, Course, Faculty, StudentCourseEnrollment, CoursePayment, StudentReport
 from ..serializers.internship_admin import AvailableStudentSerializer, ClassDetailSerializer, SectionSerializer, ClassListCreateSerializer, StudentPaymentDetailSerializer, StudentPaymentSerializer
 
 from accounts.models import CustomUser
@@ -608,3 +610,59 @@ class AvailableStudentsView(APIView):
 
         serializer = AvailableStudentSerializer(qs, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+# admin side report view , 
+class AdminStudentReportListAPIView(generics.ListAPIView):
+
+    permission_classes = [IsAuthenticated]
+
+    serializer_class = StudentReportSerializer
+
+    def get_queryset(self):
+
+        qs = (
+            StudentReport.objects
+            .select_related(
+                'student',
+                'batch',
+                'template',
+                'faculty'
+            )
+            .prefetch_related(
+                'field_values__field'
+            )
+            .order_by('-submitted_at')
+        )
+
+        student = self.request.query_params.get('student')
+        batch = self.request.query_params.get('batch')
+        faculty = self.request.query_params.get('faculty')
+
+        if student:
+            qs = qs.filter(student_id=student)
+
+        if batch:
+            qs = qs.filter(batch_id=batch)
+
+        if faculty:
+            qs = qs.filter(faculty_id=faculty)
+
+        return qs
+    
+class AdminStudentReportDetailAPIView(generics.RetrieveAPIView):
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = StudentReportSerializer
+
+    queryset = (
+        StudentReport.objects
+        .select_related(
+            'student',
+            'batch',
+            'template',
+            'faculty'
+        )
+        .prefetch_related(
+            'field_values__field'
+        )
+    )

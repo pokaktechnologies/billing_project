@@ -23,6 +23,16 @@ class LeadSerializer(serializers.ModelSerializer):
 
     def get_lead_category_display(self, obj):
         return obj.get_lead_category_display()
+    
+    def validate(self, data):
+        category = data.get('lead_category', getattr(self.instance, 'lead_category', None))
+        detail = data.get('other_category_detail', getattr(self.instance, 'other_category_detail', None))
+        
+        if category == 'other' and not detail:
+            raise serializers.ValidationError({
+                'other_category_detail': "This field is required when category is 'Other'."
+            })
+        return data
 
 
 class LeadSerializerListDisplay(serializers.ModelSerializer):

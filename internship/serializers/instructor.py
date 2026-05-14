@@ -825,3 +825,420 @@ class TestSerializer(serializers.ModelSerializer):
 
         # DELETE removed options
         QuestionOption.objects.filter(id__in=existing_ids - incoming_ids).delete()
+
+class TestAnswerEvaluationSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = TestAnswer
+        fields = [
+            "id",
+            "marks_awarded",
+            "feedback"
+        ]
+
+    def validate(self, attrs):
+
+        marks = attrs.get("marks_awarded")
+        question_marks = self.instance.question.marks or 0
+
+        if marks is not None and marks > question_marks:
+            raise serializers.ValidationError({
+                "marks_awarded": f"Maximum marks is {question_marks}"
+            })
+
+        return attrs
+
+
+
+# serializers/instructor.py
+
+from rest_framework import serializers
+from ..models import ReportTemplate, TemplateSection, TemplateField
+from ..constants import FIELD_CONFIG_DEFAULTS, FIELD_CONFIG_REQUIRED_KEYS
+
+
+# ─────────────────────────────────────────
+# READ Serializers (List & Detail)
+# ─────────────────────────────────────────
+
+class TemplateFieldReadSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = TemplateField
+        fields = ['id', 'label', 'field_type', 'placeholder',
+                  'is_required', 'order', 'config']
+
+
+class TemplateSectionReadSerializer(serializers.ModelSerializer):
+    fields      = TemplateFieldReadSerializer(many=True, read_only=True)
+    field_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = TemplateSection
+        fields = ['id', 'title', 'order', 'field_count', 'fields']
+
+    def get_field_count(self, obj):
+        return obj.fields.count()
+
+
+class ReportTemplateListSerializer(serializers.ModelSerializer):
+    section_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = ReportTemplate
+        fields = ['id', 'name', 'description', 'course',
+                  'is_active', 'section_count', 'created_at']
+
+    def get_section_count(self, obj):
+        return obj.sections.count()
+
+
+class ReportTemplateDetailSerializer(serializers.ModelSerializer):
+    sections      = TemplateSectionReadSerializer(many=True, read_only=True)
+    section_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = ReportTemplate
+        fields = ['id', 'name', 'description', 'course', 'is_active',
+                  'section_count', 'sections', 'created_at', 'updated_at']
+
+    def get_section_count(self, obj):
+        return obj.sections.count()
+
+
+# ─────────────────────────────────────────
+# WRITE Serializers (Create & Update)
+# ─────────────────────────────────────────
+
+class TemplateFieldWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = TemplateField
+        fields = ['label', 'field_type', 'order',
+                  'is_required', 'placeholder', 'config']
+
+    def validate(self, attrs):
+        field_type = attrs.get('field_type')
+        config     = attrs.get('config') or {}
+
+        required_keys = FIELD_CONFIG_REQUIRED_KEYS.get(field_type, [])
+
+        # ── 1. Required keys missing check ──────────────────────────
+        missing = [k for k in required_keys if k not in config]
+        if missing:
+            # Auto-fill from defaults instead of error
+            defaults = FIELD_CONFIG_DEFAULTS.get(field_type, {})
+            for key in missing:
+                config[key] = defaults[key]
+
+        # ── 2. Invalid/extra keys check ─────────────────────────────
+        if required_keys:  # only for typed fields
+            invalid_keys = [k for k in config if k not in required_keys]
+            if invalid_keys:
+                raise serializers.ValidationError({
+                    "config": f"Invalid config keys: {invalid_keys}. "
+                              f"Allowed keys for '{field_type}': {required_keys}"
+                })
+
+        # ── 3. Type-specific value validation ───────────────────────
+        if field_type == "rating":
+            max_stars = config.get("max_stars", 5)
+            if not isinstance(max_stars, int) or not (1 <= max_stars <= 10):
+                raise serializers.ValidationError({
+                    "config": "max_stars must be an integer between 1 and 10."
+                })
+
+        if field_type == "dropdown":
+            options = config.get("options", [])
+            if not isinstance(options, list) or len(options) == 0:
+                raise serializers.ValidationError({
+                    "config": "dropdown options must be a non-empty list."
+                })
+
+        if field_type in ("table", "checkbox_grid"):
+            rows    = config.get("rows", [])
+            columns = config.get("columns", [])
+            if not isinstance(rows, list) or len(rows) == 0:
+                raise serializers.ValidationError({
+                    "config": "rows must be a non-empty list."
+                })
+            if not isinstance(columns, list) or len(columns) == 0:
+                raise serializers.ValidationError({
+                    "config": "columns must be a non-empty list."
+                })
+
+        attrs['config'] = config
+        return attrs
+
+
+class TemplateSectionWriteSerializer(serializers.ModelSerializer):
+    fields = TemplateFieldWriteSerializer(many=True)
+
+    class Meta:
+        model  = TemplateSection
+        fields = ['title', 'order', 'fields']
+
+
+class ReportTemplateWriteSerializer(serializers.ModelSerializer):
+    sections = TemplateSectionWriteSerializer(many=True)
+
+    class Meta:
+        model  = ReportTemplate
+        fields = ['name', 'description', 'course', 'is_active', 'sections']
+
+    # ── Validation ───────────────────────────────────────────────────
+    def validate_sections(self, sections):
+        if not sections:
+            raise serializers.ValidationError("At least one section is required.")
+        for section in sections:
+            if not section.get('title', '').strip():
+                raise serializers.ValidationError("Section title cannot be empty.")
+            fields = section.get('fields', [])
+            if not fields:
+                raise serializers.ValidationError(
+                    f"Section '{section['title']}' must have at least one field."
+                )
+            for field in fields:
+                if not field.get('label', '').strip():
+                    raise serializers.ValidationError("Field label cannot be empty.")
+        return sections
+
+    # ── Helpers ───────────────────────────────────────────────────────
+    def _set_config_defaults(self, field_data):
+        if not field_data.get('config'):
+            field_data['config'] = FIELD_CONFIG_DEFAULTS.get(
+                field_data['field_type'], {}
+            )
+        return field_data
+
+    def _create_sections_and_fields(self, template, sections_data):
+        for section_data in sections_data:
+            fields_data = section_data.pop('fields', [])
+            section = TemplateSection.objects.create(
+                template=template, **section_data
+            )
+            for field_data in fields_data:
+                field_data = self._set_config_defaults(field_data)
+                TemplateField.objects.create(section=section, **field_data)
+
+    # ── Create ────────────────────────────────────────────────────────
+    def create(self, validated_data):
+        sections_data = validated_data.pop('sections', [])
+        template = ReportTemplate.objects.create(**validated_data)
+        self._create_sections_and_fields(template, sections_data)
+        return template
+
+    # ── Update ────────────────────────────────────────────────────────
+    def update(self, instance, validated_data):
+        sections_data = validated_data.pop('sections', [])
+
+        # Update template fields
+        instance.name        = validated_data.get('name', instance.name)
+        instance.description = validated_data.get('description', instance.description)
+        instance.is_active   = validated_data.get('is_active', instance.is_active)
+        instance.save()
+
+        # Delete old sections & recreate
+        instance.sections.all().delete()
+        self._create_sections_and_fields(instance, sections_data)
+
+        return instance
+
+    # ── Response — return full detail after save ──────────────────────
+    def to_representation(self, instance):
+        return ReportTemplateDetailSerializer(instance).data
+
+
+
+# # serializers.py
+
+# from rest_framework import serializers
+# from ..models import ReportTemplate, TemplateSection, TemplateField
+# from ..constants import FIELD_CONFIG_DEFAULTS
+
+
+
+# # ─────────────────────────────────────────
+# # TemplateField
+# # ─────────────────────────────────────────
+# class TemplateFieldSerializer(serializers.ModelSerializer):
+
+#     class Meta:
+#         model  = TemplateField
+#         fields = [
+#             'id', 'label', 'field_type',
+#             'placeholder', 'is_required',
+#             'order', 'config',
+#         ]
+
+#     def validate(self, attrs):
+#         field_type = attrs.get('field_type') or (
+#             self.instance.field_type if self.instance else None
+#         )
+#         # Auto-set default config if not provided
+#         if not attrs.get('config') and field_type in FIELD_CONFIG_DEFAULTS:
+#             attrs['config'] = FIELD_CONFIG_DEFAULTS[field_type]
+#         return attrs
+
+
+# # ─────────────────────────────────────────
+# # TemplateSection
+# # ─────────────────────────────────────────
+# class TemplateSectionSerializer(serializers.ModelSerializer):
+#     fields = TemplateFieldSerializer(many=True, read_only=True)
+#     field_count = serializers.SerializerMethodField()
+
+#     class Meta:
+#         model  = TemplateSection
+#         fields = ['id', 'title', 'order', 'field_count', 'fields']
+
+#     def get_field_count(self, obj):
+#         return obj.fields.count()
+
+
+# # ─────────────────────────────────────────
+# # ReportTemplate — List (lightweight)
+# # ─────────────────────────────────────────
+# class ReportTemplateListSerializer(serializers.ModelSerializer):
+#     section_count = serializers.SerializerMethodField()
+
+#     class Meta:
+#         model  = ReportTemplate
+#         fields = [
+#             'id', 'name', 'description',
+#             'is_active', 'section_count', 'created_at',
+#         ]
+
+#     def get_section_count(self, obj):
+#         return obj.sections.count()
+
+
+# # ─────────────────────────────────────────
+# # ReportTemplate — Detail (full nested)
+# # ─────────────────────────────────────────
+# class ReportTemplateDetailSerializer(serializers.ModelSerializer):
+#     sections = TemplateSectionSerializer(many=True, read_only=True)
+#     section_count = serializers.SerializerMethodField()
+
+#     class Meta:
+#         model  = ReportTemplate
+#         fields = [
+#             'id', 'name', 'description', 'course',
+#             'is_active', 'section_count',
+#             'created_at', 'updated_at', 'sections',
+#         ]
+
+#     def get_section_count(self, obj):
+#         return obj.sections.count()
+
+
+class ReportFieldValueSerializer(serializers.ModelSerializer):
+    field_label = serializers.CharField(source='field.label', read_only=True)
+    field_type = serializers.CharField(source='field.field_type', read_only=True)
+
+    class Meta:
+        model = ReportFieldValue
+        fields = [
+            'id',
+            'field',
+            'field_label',
+            'field_type',
+            'value',
+        ]
+
+
+class StudentReportSerializer(serializers.ModelSerializer):
+    field_values = ReportFieldValueSerializer(many=True)
+    student_name = serializers.CharField(source='student.get_full_name', read_only=True)
+    batch_name = serializers.CharField(source='batch.batch_number', read_only=True)
+    template_name = serializers.CharField(source='template.name', read_only=True)
+    faculty_name = serializers.CharField(source='faculty.get_full_name', read_only=True)
+
+    class Meta:
+        model = StudentReport
+        fields = [
+            'id',
+            'student',
+            'student_name',
+            'batch',
+            'batch_name',
+            'template',
+            'template_name',
+            'faculty',
+            'faculty_name',
+            # 'remarks',
+            'submitted_at',
+            'field_values',
+        ]
+
+    def validate(self, attrs):
+
+        template = attrs.get(
+            "template",
+            getattr(self.instance, "template", None)
+        )
+
+        field_values = self.initial_data.get(
+            "field_values",
+            []
+        )
+
+        valid_field_ids = set(
+            TemplateField.objects.filter(
+                section__template=template
+            ).values_list("id", flat=True)
+        )
+
+        incoming_field_ids = {
+            item.get("field")
+            for item in field_values
+        }
+
+        invalid_fields = (
+            incoming_field_ids - valid_field_ids
+        )
+
+        if invalid_fields:
+
+            raise serializers.ValidationError({
+                "field_values":
+                    f"Invalid fields for this template: "
+                    f"{list(invalid_fields)}"
+            })
+
+        return attrs
+    def update(self, instance, validated_data):
+
+        field_values_data = validated_data.pop(
+            'field_values',
+            []
+        )
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        instance.save()
+
+        for item in field_values_data:
+
+            field = item.get("field")
+            value = item.get("value")
+
+            ReportFieldValue.objects.update_or_create(
+                report=instance,
+                field=field,
+                defaults={
+                    "value": value
+                }
+            )
+
+        return instance
+
+    def create(self, validated_data):
+
+        field_values_data = validated_data.pop('field_values')
+        request = self.context.get('request')
+        faculty = request.user.staff_profile.faculty_profile
+        report = StudentReport.objects.create(faculty=faculty, **validated_data)
+
+        for item in field_values_data:
+            ReportFieldValue.objects.create(report=report, **item)
+        return report

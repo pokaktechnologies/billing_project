@@ -53,6 +53,30 @@ instructor_patterns = [
     path('tests/<int:test_id>/questions/<int:question_id>/upload/', instructor.QuestionFileUploadAPIView.as_view(), name='question-file-upload'),
     path('tests/<int:test_id>/submissions/', instructor.InstructorTestSubmissionListAPIView.as_view(), name='instructor-test-submissions'),
     path('tests/submissions/<int:attempt_id>/', instructor.InstructorTestSubmissionDetailAPIView.as_view(),name='instructor-test-submission-detail'),
+    path('tests/submissions/<int:attempt_id>/evaluate/', instructor.InstructorEvaluateSubmissionAPIView.as_view(), name='instructor-evaluate-submission'),
+
+
+    path('templates/',            instructor.ReportTemplateListCreateView.as_view()),
+    path('templates/<int:pk>/',   instructor.ReportTemplateDetailView.as_view()),
+    
+    # # Template
+    # path('templates/',         instructor.ReportTemplateListCreateView.as_view()),
+    # path('templates/<int:pk>/', instructor.ReportTemplateDetailView.as_view()),
+
+    # # Section
+    # path('templates/<int:template_id>/sections/', instructor.SectionCreateView.as_view()),
+    # path('sections/<int:pk>/',                    instructor.SectionDetailView.as_view()),
+
+    # # Field
+    # path('sections/<int:section_id>/fields/', instructor.FieldCreateView.as_view()),
+    # path('fields/<int:pk>/',                  instructor.FieldDetailView.as_view()),
+
+
+    path('report-batches/', instructor.FacultyReportBatchListAPIView.as_view()),
+    path('report-batches/<int:batch_id>/students/', instructor.FacultyBatchStudentReportAPIView.as_view()),
+    path('reports/',instructor.StudentReportListCreateAPIView.as_view()),
+    path('reports/<int:pk>/',instructor.StudentReportDetailAPIView.as_view()),
+
 ]
 
 
@@ -81,7 +105,11 @@ intern_patterns = [
     path('attempts/<int:attempt_id>/answer/', intern.SaveAnswerAPIView.as_view(), name='student-save-answer'),
     path('attempts/<int:attempt_id>/submit/', intern.SubmitTestAPIView.as_view(), name='student-submit-test'),
     path('attempts/<int:attempt_id>/result/', intern.TestResultAPIView.as_view(), name='student-test-result'),
-    
+
+
+    path('my-reports/', intern.MyStudentReportListAPIView.as_view(), name='my-student-reports'),
+    path('my-reports/<int:pk>/', intern.MyStudentReportDetailAPIView.as_view(), name='my-student-report-detail'),
+
     #Dashboard
     path('dashaboard/',intern.InternDashboardAPIView.as_view()),
 ]
@@ -128,6 +156,9 @@ internship_admin_patterns = [
 
     path('students/available/', internship_admin.AvailableStudentsView.as_view(), name='available-students'),
 
+    # report 
+    path('admin/reports/', internship_admin.AdminStudentReportListAPIView.as_view()),
+    path('admin/reports/<int:pk>/', internship_admin.AdminStudentReportDetailAPIView.as_view()),
 
     # dashboard
     path("dashboard/academic/", internship_admin.AcademicDashboardAPIView.as_view()),

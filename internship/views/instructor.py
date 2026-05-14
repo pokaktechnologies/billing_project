@@ -1,6 +1,7 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import generics,filters, status
 from rest_framework.response import Response
+from internship.utils import is_attempt_fully_evaluated
 from internship.serializers.intern import TestResultSerializer
 from internship.models import Course, Student, Faculty
 from internship.serializers.instructor import CourseSerializer
@@ -408,7 +409,7 @@ class StudentPerformanceStatsAPIView(APIView):
 
     def get(self, request, student_id):
         qs = TaskAssignment.objects.filter(student_id=student_id)
-
+        student = Student.objects.select_related("profile").get(id=student_id)
         total = qs.count()
         completed = qs.filter(status="completed").count()
         pending = qs.filter(status="pending").count()
@@ -959,25 +960,7 @@ class QuestionFileUploadAPIView(APIView):
             question.save()
 
         return Response(status=status.HTTP_204_NO_CONTENT)
-    
 
-# full mcq based aanel auto evaluation descriptive and mixed aaaneel manual setup
-def is_attempt_fully_evaluated(attempt):
-    descriptive_questions = TestQuestion.objects.filter(
-        section__test=attempt.test,
-        section__section_type='descriptive'
-    )
-
-    if not descriptive_questions.exists():
-        return True
-
-    for question in descriptive_questions:
-        answer = attempt.answers.filter(question=question).first()
-
-        if not answer or answer.marks_awarded is None:
-            return False
-
-    return True
 
 class InstructorTestSubmissionListAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -1070,6 +1053,7 @@ class InstructorTestSubmissionDetailAPIView(APIView):
             ).prefetch_related(
                 'test__sections__questions__options',
                 'answers__question__section',
+                'answers__question__options',
                 'answers__selected_option',
             ),
             id=attempt_id,
@@ -1090,3 +1074,368 @@ class InstructorTestSubmissionDetailAPIView(APIView):
             "final_score": f"{serializer.data['scored_marks']}/{serializer.data['total_marks']}"
         })
     
+
+class InstructorEvaluateSubmissionAPIView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, attempt_id):
+
+        faculty = request.user.staff_profile.faculty_profile
+        attempt = get_object_or_404(
+            TestAttempt,
+            id=attempt_id,
+            test__batch__faculties=faculty,
+            status='submitted'
+        )
+        answers_data = request.data.get("answers", [])
+        overall_feedback = request.data.get("overall_feedback")
+
+        for item in answers_data:
+            answer = get_object_or_404(
+                TestAnswer,
+                id=item.get("answer_id"),
+                attempt=attempt
+            )
+            serializer = TestAnswerEvaluationSerializer(
+                answer,
+                data={
+                    "marks_awarded": item.get("marks_awarded"),
+                    "feedback": item.get("feedback"),
+                },
+                partial=True
+            )
+
+            serializer.is_valid(raise_exception=True)
+            updated_answer = serializer.save(
+                reviewed_at=timezone.now()
+            )
+
+        # overall remarks
+        if overall_feedback is not None:
+            attempt.overall_feedback = overall_feedback
+            attempt.save()
+
+        return Response({
+            "message": "Evaluation completed successfully",
+            "evaluated": is_attempt_fully_evaluated(attempt)
+        })
+    
+
+
+
+# views/instructor.py
+
+from rest_framework import generics
+from rest_framework.exceptions import ValidationError
+
+from ..models import ReportTemplate
+from ..serializers.instructor import (
+    ReportTemplateListSerializer,
+    ReportTemplateDetailSerializer,
+    ReportTemplateWriteSerializer,
+)
+
+
+class ReportTemplateListCreateView(generics.ListCreateAPIView):
+    """
+    GET  /api/templates/?course=<id>  → list
+    POST /api/templates/              → create (with sections & fields)
+    """
+
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return ReportTemplateWriteSerializer
+        return ReportTemplateListSerializer
+
+    def get_queryset(self):
+        qs = ReportTemplate.objects.all().order_by('-created_at')
+        course_id = self.request.query_params.get('course')
+        if course_id:
+            qs = qs.filter(course_id=course_id)
+        return qs
+    
+    # filter_backends = [DjangoFilterBackend]
+    # filterset_fields = ['course']
+
+
+class ReportTemplateDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    GET    /api/templates/<id>/  → full detail
+    PATCH  /api/templates/<id>/  → update (sections recreated)
+    DELETE /api/templates/<id>/  → delete
+    """
+
+    def get_queryset(self):
+        return ReportTemplate.objects.prefetch_related('sections__fields')
+
+    def get_serializer_class(self):
+        if self.request.method in ['PUT', 'PATCH']:
+            return ReportTemplateWriteSerializer
+        return ReportTemplateDetailSerializer
+
+    http_method_names = ['get', 'patch', 'delete']
+
+
+
+
+    # # Template
+
+    # from rest_framework import generics, status
+    # from rest_framework.response import Response
+    # from rest_framework.exceptions import ValidationError
+    # from ..constants import FIELD_CONFIG_DEFAULTS
+
+    # from ..models import ReportTemplate, TemplateSection, TemplateField
+    # from ..serializers.instructor import (
+    #     ReportTemplateListSerializer,
+    #     ReportTemplateDetailSerializer,
+    #     TemplateSectionSerializer,
+    #     TemplateFieldSerializer,
+    # )
+
+
+    # # ─────────────────────────────────────────
+    # # ReportTemplate — List & Create
+    # # ─────────────────────────────────────────
+    # class ReportTemplateListCreateView(generics.ListCreateAPIView):
+    #     """
+    #     GET  /api/templates/?course=<id>   → list templates
+    #     POST /api/templates/               → create template
+    #     """
+
+    #     def get_serializer_class(self):
+    #         if self.request.method == 'POST':
+    #             return ReportTemplateDetailSerializer
+    #         return ReportTemplateListSerializer
+
+    #     def get_queryset(self):
+    #         qs = ReportTemplate.objects.all().order_by('-created_at')
+    #         course_id = self.request.query_params.get('course')
+    #         if course_id:
+    #             qs = qs.filter(course_id=course_id)
+    #         return qs
+
+
+    # # ─────────────────────────────────────────
+    # # ReportTemplate — Retrieve, Update, Delete
+    # # ─────────────────────────────────────────
+    # class ReportTemplateDetailView(generics.RetrieveUpdateDestroyAPIView):
+    #     """
+    #     GET    /api/templates/<id>/   → full detail with sections & fields
+    #     PATCH  /api/templates/<id>/   → update name / description / is_active
+    #     DELETE /api/templates/<id>/   → delete template
+    #     """
+    #     queryset = ReportTemplate.objects.prefetch_related(
+    #         'sections__fields'          # single DB query for nested data
+    #     )
+    #     serializer_class = ReportTemplateDetailSerializer
+    #     http_method_names = ['get', 'patch', 'delete']
+
+
+    # # ─────────────────────────────────────────
+    # # TemplateSection — Add to Template
+    # # ─────────────────────────────────────────
+    # class SectionCreateView(generics.CreateAPIView):
+    #     """
+    #     POST /api/templates/<template_id>/sections/
+    #     body: { "title": "Code Quality Metrics" }
+    #     """
+    #     serializer_class = TemplateSectionSerializer
+
+    #     def perform_create(self, serializer):
+    #         template_id = self.kwargs['template_id']
+    #         try:
+    #             template = ReportTemplate.objects.get(id=template_id)
+    #         except ReportTemplate.DoesNotExist:
+    #             raise ValidationError("Template not found.")
+
+    #         # Auto order — next number
+    #         next_order = template.sections.count() + 1
+    #         serializer.save(template=template, order=next_order)
+
+
+    # # ─────────────────────────────────────────
+    # # TemplateSection — Update & Delete
+    # # ─────────────────────────────────────────
+    # class SectionDetailView(generics.RetrieveUpdateDestroyAPIView):
+    #     """
+    #     PATCH  /api/sections/<id>/   → update title or order
+    #     DELETE /api/sections/<id>/   → delete section (fields cascade)
+    #     """
+    #     queryset = TemplateSection.objects.all()
+    #     serializer_class = TemplateSectionSerializer
+    #     http_method_names = ['patch', 'delete']
+
+
+    # # ─────────────────────────────────────────
+    # # TemplateField — Add to Section
+    # # ─────────────────────────────────────────
+    # class FieldCreateView(generics.CreateAPIView):
+    #     """
+    #     POST /api/sections/<section_id>/fields/
+    #     body: { "label": "", "field_type": "rating" }
+
+    #     Shortcut buttons (+text, +rating...) hit this endpoint
+    #     with field_type pre-filled.
+    #     """
+    #     serializer_class = TemplateFieldSerializer
+
+    #     def perform_create(self, serializer):
+    #         section_id = self.kwargs['section_id']
+    #         try:
+    #             section = TemplateSection.objects.get(id=section_id)
+    #         except TemplateSection.DoesNotExist:
+    #             raise ValidationError("Section not found.")
+
+    #         field_type = self.request.data.get('field_type', 'text')
+
+    #         # Auto order
+    #         next_order = section.fields.count() + 1
+
+    #         # Auto config default
+    #         config = self.request.data.get('config') or FIELD_CONFIG_DEFAULTS.get(field_type, {})
+
+    #         serializer.save(
+    #             section=section,
+    #             order=next_order,
+    #             config=config,
+    #         )
+
+
+    # # ─────────────────────────────────────────
+    # # TemplateField — Update & Delete
+    # # ─────────────────────────────────────────
+    # class FieldDetailView(generics.RetrieveUpdateDestroyAPIView):
+    #     """
+    #     PATCH  /api/fields/<id>/   → update label, config, is_required
+    #     DELETE /api/fields/<id>/   → delete field
+    #     """
+    #     queryset = TemplateField.objects.all()
+    #     serializer_class = TemplateFieldSerializer
+    #     http_method_names = ['patch', 'delete']
+
+
+class StudentReportListCreateAPIView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = StudentReportSerializer
+
+    def get_queryset(self):
+        faculty = (self.request.user.staff_profile.faculty_profile)
+        qs = StudentReport.objects.select_related(
+            'student',
+            'batch',
+            'template',
+            'faculty'
+        ).prefetch_related(
+            'field_values__field'
+        ).filter(
+            faculty=faculty
+        ).order_by('-submitted_at')
+
+        student = self.request.query_params.get('student')
+        batch = self.request.query_params.get('batch')
+
+        if student:
+            qs = qs.filter(student_id=student)
+
+        if batch:
+            qs = qs.filter(batch_id=batch)
+
+        return qs
+
+class StudentReportDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = StudentReportSerializer
+
+    def get_queryset(self):
+        faculty = self.request.user.staff_profile.faculty_profile
+        return (
+            StudentReport.objects
+            .select_related(
+                'student',
+                'batch',
+                'template',
+                'faculty'
+            )
+            .prefetch_related(
+                'field_values__field'
+            )
+            .filter(
+                faculty=faculty
+            )
+        )
+
+# faculty de under el ulla batch listing
+class FacultyReportBatchListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        faculty = request.user.staff_profile.faculty_profile
+        batches = Batch.objects.filter(
+            faculties=faculty
+        ).select_related(
+            "course"
+        ).prefetch_related(
+            "students"
+        ).distinct()
+
+        response_data = []
+        for batch in batches:
+            student_count = StudentCourseEnrollment.objects.filter(
+                batch=batch
+            ).count()
+            report_count = StudentReport.objects.filter(
+                batch=batch,
+                faculty=faculty
+            ).count()
+
+            response_data.append({
+                "id": batch.id,
+                "batch_name": batch.batch_number,
+                "course_name": batch.course.title,
+                "student_count": student_count,
+                "report_count": report_count
+            })
+
+        return Response(response_data)
+        
+
+# batch nte under el ulla students listing with report bool
+class FacultyBatchStudentReportAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, batch_id):
+
+        faculty = request.user.staff_profile.faculty_profile
+        batch = get_object_or_404(
+            Batch,
+            id=batch_id,
+            faculties=faculty
+        )
+        enrollments = StudentCourseEnrollment.objects.select_related(
+            "student__profile__user"
+        ).filter(
+            batch=batch
+        )
+
+        response_data = []
+        for enrollment in enrollments:
+            student = enrollment.student
+            report = StudentReport.objects.filter(
+                student=student,
+                batch=batch,
+                faculty=faculty
+            ).first()
+
+            user = student.profile.user
+            response_data.append({
+                "student_id": student.id,
+                "student_name": f"{user.first_name} {user.last_name}",
+                "student_code": student.student_id,
+                "has_report": bool(report),
+                "report_id": report.id if report else None
+            })
+
+        return Response(response_data)

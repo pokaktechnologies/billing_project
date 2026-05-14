@@ -16,6 +16,7 @@ from ..serializers.intern import (
     TaskSubmissionAttachmentSerializer,
     TaskSubmissionSerializer,
 )
+from ..serializers.instructor import StudentReportSerializer, StudentReport
 from ..serializers.instructor import StudyMaterialSerializer
 from ..serializers.internship_admin import StudentPaymentDetailSerializer
 from ..utils import (
@@ -662,3 +663,77 @@ class TestResultAPIView(APIView):
 
         serializer = TestResultSerializer(attempt)
         return Response(serializer.data)
+
+
+class MyStudentReportListAPIView(generics.ListAPIView):
+
+    permission_classes = [IsAuthenticated]
+
+    serializer_class = StudentReportSerializer
+
+    def get_queryset(self):
+
+        try:
+            student = self.request.user.staff_profile.student_profile
+
+        except AttributeError:
+            return StudentReport.objects.none()
+
+        qs = (
+            StudentReport.objects
+            .select_related(
+                'student',
+                'batch',
+                'template',
+                'faculty'
+            )
+            .prefetch_related(
+                'field_values__field'
+            )
+            .filter(
+                student=student
+            )
+            .order_by('-submitted_at')
+        )
+
+        # batch = self.request.query_params.get("batch")
+        #
+        # if batch:
+        #     qs = qs.filter(batch_id=batch)
+
+        return qs
+
+
+class MyStudentReportDetailAPIView(generics.RetrieveAPIView):
+
+    permission_classes = [IsAuthenticated]
+
+    serializer_class = StudentReportSerializer
+
+    def get_queryset(self):
+
+        try:
+            student = (
+                self.request.user
+                .staff_profile
+                .student_profile
+            )
+
+        except AttributeError:
+            return StudentReport.objects.none()
+
+        return (
+            StudentReport.objects
+            .select_related(
+                'student',
+                'batch',
+                'template',
+                'faculty'
+            )
+            .prefetch_related(
+                'field_values__field'
+            )
+            .filter(
+                student=student
+            )
+        )

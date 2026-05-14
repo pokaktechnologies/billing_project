@@ -21,10 +21,18 @@ class Lead(models.Model):
         choices=[
             ('client', 'Client'),
             ('intern', 'Intern'),
+            ('other', 'Other'),
+
         ],
         default='client'
     )
-    
+    other_category_detail = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Specify details if category is 'Other'"
+    )
+
     lead_contact = models.BooleanField(default=False)
     
     # -------------------

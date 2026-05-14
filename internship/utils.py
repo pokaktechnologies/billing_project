@@ -6,6 +6,8 @@ from django.db.models import Count, OuterRef, Prefetch, Q, Subquery, Sum
 from django.db.models import IntegerField
 from django.db.models.functions import Cast, Right
 
+from internship.models import TestQuestion
+
 def generate_batch_number(model, field_name: str, prefix: str, length: int, use_lock=False):
     year_short = str(datetime.now().year)[-2:]
     start = 1
@@ -330,3 +332,28 @@ def get_installment_due_date_for_staff(staff, installment):
         return None
 
     return start_date + timedelta(days=installment.due_days)
+
+
+# test part utils
+# full mcq based aanel auto evaluation descriptive and mixed aaaneel manual setup
+def is_attempt_fully_evaluated(attempt):
+
+    manual_questions = TestQuestion.objects.filter(
+        section__test=attempt.test,
+        manual_evaluation=True
+    )
+
+    # no manual evaluation needed
+    if not manual_questions.exists():
+        return True
+
+    for question in manual_questions:
+
+        answer = attempt.answers.filter(
+            question=question
+        ).first()
+
+        if not answer or answer.marks_awarded is None:
+            return False
+
+    return True

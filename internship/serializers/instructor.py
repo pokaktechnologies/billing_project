@@ -1171,26 +1171,66 @@ class StudentReportSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
 
-        template = attrs.get("template")
-        field_values = self.initial_data.get("field_values", [])
+        template = attrs.get(
+            "template",
+            getattr(self.instance, "template", None)
+        )
+
+        field_values = self.initial_data.get(
+            "field_values",
+            []
+        )
+
         valid_field_ids = set(
             TemplateField.objects.filter(
                 section__template=template
             ).values_list("id", flat=True)
         )
+
         incoming_field_ids = {
             item.get("field")
             for item in field_values
         }
-        invalid_fields = incoming_field_ids - valid_field_ids
+
+        invalid_fields = (
+            incoming_field_ids - valid_field_ids
+        )
 
         if invalid_fields:
+
             raise serializers.ValidationError({
                 "field_values":
-                    f"Invalid fields for this template: {list(invalid_fields)}"
+                    f"Invalid fields for this template: "
+                    f"{list(invalid_fields)}"
             })
 
         return attrs
+    def update(self, instance, validated_data):
+
+        field_values_data = validated_data.pop(
+            'field_values',
+            []
+        )
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        instance.save()
+
+        for item in field_values_data:
+
+            field = item.get("field")
+            value = item.get("value")
+
+            ReportFieldValue.objects.update_or_create(
+                report=instance,
+                field=field,
+                defaults={
+                    "value": value
+                }
+            )
+
+        return instance
 
     def create(self, validated_data):
 

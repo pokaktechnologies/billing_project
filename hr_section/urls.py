@@ -31,6 +31,10 @@ urlpatterns = [
     path('job_application/search/', JobApplicationSearchView.as_view(), name='job_application_resume'),
     path('job_application/stats/', JobApplicationStatsAPIView.as_view(), name='job_application_stats'),
 
+    # Offer Letter
+    path("offer-letters/", OfferLetterListCreateAPIView.as_view(), name="offer-letter-list-create"),
+    path("offer-letters/<int:pk>/", OfferLetterDetailAPIView.as_view(), name="offer-letter-detail"),
+    
     #Dashaboard
     path('dashboard/', HrDashaboardView.as_view(), name='hr_dashboard_overview'),
 ]

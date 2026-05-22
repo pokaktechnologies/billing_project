@@ -1,5 +1,5 @@
 from django.db import models
-from accounts.models import CustomUser  # Import CustomUser for the ForeignKey
+from accounts.models import CustomUser, StaffProfile  # Import CustomUser for the ForeignKey
 
 class Certificate(models.Model):
     CATEGORY_CHOICES = [
@@ -43,3 +43,109 @@ class CertificateHistory(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, help_text="Date and time the certificate was created")
     def __str__(self):
         return f"{self.name} - {self.certificate_type} Certificate"
+
+
+
+
+class SignatoryPerson(models.Model):
+    name        = models.CharField(max_length=255)
+    designation = models.CharField(max_length=255)
+    signature   = models.ImageField(upload_to='signatures/', null=True, blank=True)
+    is_active   = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.name} — {self.designation}"
+
+
+class CertificateSignatory(models.Model):
+    certificate = models.ForeignKey('CertificateRecord', on_delete=models.CASCADE, related_name='signatories')
+    signatory = models.ForeignKey(
+        'SignatoryPerson',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='certificate_signatories'
+    )
+    order = models.PositiveSmallIntegerField(default=1)
+
+    class Meta:
+        ordering = ['order']
+        unique_together = ('certificate', 'order')
+
+    def __str__(self):
+        return f"{self.certificate} — Signatory {self.order}: {self.signatory}"
+    
+
+
+class CertificateRecord(models.Model):
+    class CertificateType(models.TextChoices):
+        INTERNSHIP = 'Internship', 'Internship'
+        JOB_TRAINING = 'Job Training', 'Job Training'
+        EXPERIENCE = 'Experience', 'Experience'
+        EMPLOYEE = 'Employee', 'Employee'
+        WEBINAR = 'Webinar', 'Webinar'
+        INTERNSHIP_COLLEGE = 'Internship College', 'Internship College'
+    
+    class DurationUnit(models.TextChoices):
+        HOURS = 'Hours', 'Hours'
+        DAYS = 'Days', 'Days'
+
+    # ── User link ──────────────────────────────────────────────────────────
+    user = models.ForeignKey(
+        'accounts.StaffProfile',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='certificates'
+    )
+
+    # ── Common fields (all types) ──────────────────────────────────────────
+    certificate_type = models.CharField(max_length=50, choices=CertificateType.choices)
+    full_name        = models.CharField(max_length=255)
+    designation      = models.CharField(max_length=255, null=True, blank=True)
+    issue_date       = models.DateField(auto_now_add=True)
+
+    # ── Date fields (not used in Webinar) ─────────────────────────────────
+    start_date = models.DateField(null=True, blank=True)
+    end_date   = models.DateField(null=True, blank=True)
+
+    # ── Webinar-specific ───────────────────────────────────────────────────
+    webinar_title  = models.CharField(max_length=255, null=True, blank=True)
+    topics_covered = models.TextField(null=True, blank=True)
+    webinar_date   = models.DateField(null=True, blank=True)
+
+    # ── Internship College-specific ────────────────────────────────────────
+    college_name   = models.CharField(max_length=255, null=True, blank=True)
+    duration_value = models.PositiveIntegerField(null=True, blank=True)
+    duration_unit  = models.CharField(max_length=20, choices=DurationUnit.choices, null=True, blank=True)
+
+    # ── Internship / College shared ────────────────────────────────────────
+    course = models.CharField(max_length=255, null=True, blank=True)
+
+    # ── Job Training-specific ──────────────────────────────────────────────
+    training_topic = models.CharField(max_length=255, null=True, blank=True)
+
+    # ── Experience / Employee-specific ─────────────────────────────────────
+    department         = models.CharField(max_length=255, null=True, blank=True)
+    employee_id        = models.CharField(max_length=100, null=True, blank=True)
+    reason_for_leaving = models.TextField(null=True, blank=True)
+
+    # ── Meta ───────────────────────────────────────────────────────────────
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.certificate_type != 'Webinar' and self.user is None:
+            raise ValidationError("User is required for non-Webinar certificates.")
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Certificate Record'
+        verbose_name_plural = 'Certificate Records'
+
+    def __str__(self):
+        return f"{self.full_name} — {self.certificate_type} ({self.issue_date})"

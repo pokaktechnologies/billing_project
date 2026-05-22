@@ -67,3 +67,67 @@ class CertificateHistorySerializer(serializers.ModelSerializer):
     class Meta:
         model = CertificateHistory
         fields = '__all__'
+
+
+#-------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+from rest_framework import serializers
+from .models import CertificateRecord, CertificateSignatory, SignatoryPerson
+
+
+class SignatoryPersonSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SignatoryPerson
+        fields = ['id', 'name', 'designation', 'signature', 'is_active']
+
+
+class CertificateSignatorySerializer(serializers.ModelSerializer):
+    signatory_detail = SignatoryPersonSerializer(source='signatory', read_only=True)
+
+    class Meta:
+        model = CertificateSignatory
+        fields = ['id', 'signatory', 'signatory_detail', 'order']
+
+
+class CertificateRecordSerializer(serializers.ModelSerializer):
+    signatories = CertificateSignatorySerializer(many=True, required=False)
+
+    class Meta:
+        model = CertificateRecord
+        fields = '__all__'
+        read_only_fields = ['id', 'issue_date', 'created_at', 'updated_at']
+
+    def create(self, validated_data):
+        signatories_data = validated_data.pop('signatories', [])
+        certificate = CertificateRecord.objects.create(**validated_data)
+        for sig_data in signatories_data:
+            CertificateSignatory.objects.create(certificate=certificate, **sig_data)
+        return certificate
+
+    def update(self, instance, validated_data):
+        signatories_data = validated_data.pop('signatories', None)
+
+        # Update certificate fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        # Update signatories if provided
+        if signatories_data is not None:
+            instance.signatories.all().delete()
+            for sig_data in signatories_data:
+                CertificateSignatory.objects.create(certificate=instance, **sig_data)
+
+        return instance
+
+    def validate(self, data):
+        certificate_type = data.get('certificate_type')
+        user = data.get('user')
+
+        if certificate_type != 'Webinar' and user is None:
+            raise serializers.ValidationError(
+                {"user": "User is required for non-Webinar certificates."}
+            )
+        return data

@@ -314,3 +314,130 @@ class CertificateHistoryListCreateView(BaseGenericAPIView, generics.ListCreateAP
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = 'certificate'
 
+
+
+#-------------------------------------------------------------------------------------------------------------------------------------
+
+
+from rest_framework import status
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from django.shortcuts import get_object_or_404
+from .models import CertificateRecord, SignatoryPerson
+from .serializers import CertificateRecordSerializer, SignatoryPersonSerializer
+
+
+# ── Certificate CRUD ───────────────────────────────────────────────────────
+
+class CertificateListCreateAPIView(APIView):
+    """
+    GET  /api/certificates/       → list all
+    POST /api/certificates/       → create new
+    """
+    def get(self, request):
+        certificates = CertificateRecord.objects.select_related(
+            'user'
+        ).prefetch_related(
+            'signatories__signatory'
+        ).all()
+        serializer = CertificateRecordSerializer(certificates, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = CertificateRecordSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CertificateDetailAPIView(APIView):
+    """
+    GET    /api/certificates/<id>/  → retrieve
+    PUT    /api/certificates/<id>/  → update
+    DELETE /api/certificates/<id>/  → delete
+    """
+    def get_object(self, pk):
+        return get_object_or_404(CertificateRecord, pk=pk)
+
+    def get(self, request, pk):
+        certificate = self.get_object(pk)
+        serializer = CertificateRecordSerializer(certificate)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request, pk):
+        certificate = self.get_object(pk)
+        serializer = CertificateRecordSerializer(
+            certificate, data=request.data, partial=True
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        certificate = self.get_object(pk)
+        certificate.delete()
+        return Response(
+            {"message": "Certificate deleted successfully."},
+            status=status.HTTP_204_NO_CONTENT
+        )
+
+
+# ── Signatory Person CRUD ──────────────────────────────────────────────────
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+
+class SignatoryPersonListCreateAPIView(APIView):
+    """
+    GET  /api/signatories/   → list all active
+    POST /api/signatories/   → create new
+    """
+    parser_classes = [MultiPartParser, FormParser, JSONParser] 
+    
+    def get(self, request):
+        signatories = SignatoryPerson.objects.filter(is_active=True)
+        serializer = SignatoryPersonSerializer(signatories, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = SignatoryPersonSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class SignatoryPersonDetailAPIView(APIView):
+    """
+    GET    /api/signatories/<id>/  → retrieve
+    PUT    /api/signatories/<id>/  → update
+    DELETE /api/signatories/<id>/  → soft delete (is_active=False)
+    """
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+    
+    def get_object(self, pk):
+        return get_object_or_404(SignatoryPerson, pk=pk)
+
+    def get(self, request, pk):
+        signatory = self.get_object(pk)
+        serializer = SignatoryPersonSerializer(signatory)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request, pk):
+        signatory = self.get_object(pk)
+        serializer = SignatoryPersonSerializer(
+            signatory, data=request.data, partial=True
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        signatory = self.get_object(pk)
+        signatory.is_active = False  # soft delete
+        signatory.save()
+        return Response(
+            {"message": "Signatory deactivated successfully."},
+            status=status.HTTP_200_OK
+        )

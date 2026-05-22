@@ -24,4 +24,13 @@ urlpatterns = [
     # Certificate History
     path('history/', views.CertificateHistoryListCreateView.as_view(), name='certificate-history-list-create'),
 
+
+        # Certificate
+    path('certificates/', views.CertificateListCreateAPIView.as_view()),
+    path('certificates/<int:pk>/', views.CertificateDetailAPIView.as_view()),
+
+    # Signatory
+    path('signatories/', views.SignatoryPersonListCreateAPIView.as_view()),
+    path('signatories/<int:pk>/', views.SignatoryPersonDetailAPIView.as_view()),
+
 ]

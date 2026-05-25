@@ -7,6 +7,7 @@ from django.http import HttpResponse
 from rest_framework.permissions import IsAuthenticated
 
 from activity_logs.base_view import BaseAPIView, BaseGenericAPIView
+from internship.models import Student
 from .models import Certificate, CertificateHistory
 from .serializers import (
     CertificateSerializer, 
@@ -458,9 +459,7 @@ class SignatoryPersonDetailAPIView(APIView):
 from .utils import generate_certificate_number
 
 class CertificateNumberPreviewView(APIView):
-    """
-    GET /api/certificates/number-preview/?type=Internship
-    """
+
     def get(self, request):
         certificate_type = request.query_params.get('type')
 
@@ -485,3 +484,51 @@ class CertificateNumberPreviewView(APIView):
             },
             status=status.HTTP_200_OK
         )
+
+
+from .serializers import EligibleStudentSerializer
+class CompletedStudentsForCertificateView(APIView):
+
+    def get(self, request):
+        certified_staff_ids = CertificateRecord.objects.filter(
+            user__isnull=False
+        ).values_list('user_id', flat=True).distinct()
+
+        eligible_students = Student.objects.filter(
+            status='completed'
+        ).exclude(
+            profile_id__in=certified_staff_ids
+        ).select_related(
+            'profile__user',
+            'center',
+        )
+
+        serializer = EligibleStudentSerializer(eligible_students, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+
+from .serializers import EligibleStaffSerializer
+class EligibleStaffForCertificateView(APIView):
+
+    def get(self, request):
+        certified_staff_ids = CertificateRecord.objects.filter(
+            user__isnull=False
+        ).values_list('user_id', flat=True).distinct()
+
+        student_staff_ids = Student.objects.values_list(
+            'profile_id', flat=True
+        ).distinct()
+
+        eligible_staff = StaffProfile.objects.filter(
+            job_detail__status='active'
+        ).exclude(
+            id__in=certified_staff_ids
+        ).exclude(
+            id__in=student_staff_ids
+        ).select_related(
+            'user',
+            'job_detail__department'
+        )
+
+        serializer = EligibleStaffSerializer(eligible_staff, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

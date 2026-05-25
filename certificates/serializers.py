@@ -1,8 +1,10 @@
 from rest_framework import serializers
+
+from internship.models import Student
 from .models import Certificate, CertificateHistory
 from django.utils import timezone
 import logging
-from accounts.models import JobDetail
+from accounts.models import JobDetail, StaffProfile
 
 logger = logging.getLogger(__name__)
 
@@ -131,3 +133,66 @@ class CertificateRecordSerializer(serializers.ModelSerializer):
                 {"user": "User is required for non-Webinar certificates."}
             )
         return data
+    
+
+
+class EligibleStudentSerializer(serializers.ModelSerializer):
+    full_name  = serializers.SerializerMethodField()
+    email      = serializers.SerializerMethodField()
+    profile_id = serializers.IntegerField(source='profile.id')
+    center     = serializers.StringRelatedField()
+
+    class Meta:
+        model = Student
+        fields = [
+            'id',
+            'student_id',
+            'profile_id',
+            'full_name',
+            'email',
+            'center',
+            'start_date',
+            'status',
+        ]
+
+    def get_full_name(self, obj):
+        return obj.get_full_name()
+
+    def get_email(self, obj):
+        return obj.profile.user.email
+    
+class EligibleStaffSerializer(serializers.ModelSerializer):
+    full_name   = serializers.SerializerMethodField()
+    email       = serializers.SerializerMethodField()
+    employee_id = serializers.SerializerMethodField()
+    department  = serializers.SerializerMethodField()
+    role        = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StaffProfile
+        fields = [
+            'id',
+            'full_name',
+            'email',
+            'employee_id',
+            'department',
+            'role',
+        ]
+
+    def get_full_name(self, obj):
+        return obj.get_full_name()
+
+    def get_email(self, obj):
+        return obj.user.email
+
+    def get_employee_id(self, obj):
+        return getattr(obj.job_detail, 'employee_id', None)
+
+    def get_department(self, obj):
+        job = getattr(obj, 'job_detail', None)
+        if job and job.department:
+            return job.department.name
+        return None
+
+    def get_role(self, obj):
+        return getattr(obj.job_detail, 'role', None)

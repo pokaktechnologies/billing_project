@@ -34,4 +34,7 @@ urlpatterns = [
     path('signatories/', views.SignatoryPersonListCreateAPIView.as_view()),
     path('signatories/<int:pk>/', views.SignatoryPersonDetailAPIView.as_view()),
 
+    path('eligible-students/', views.CompletedStudentsForCertificateView.as_view()),
+    path('eligible-staff/', views.EligibleStaffForCertificateView.as_view()),
+
 ]

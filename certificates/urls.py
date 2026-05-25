@@ -28,6 +28,7 @@ urlpatterns = [
         # Certificate
     path('certificates/', views.CertificateListCreateAPIView.as_view()),
     path('certificates/<int:pk>/', views.CertificateDetailAPIView.as_view()),
+    path('certificates/number-preview/', views.CertificateNumberPreviewView.as_view()),
 
     # Signatory
     path('signatories/', views.SignatoryPersonListCreateAPIView.as_view()),

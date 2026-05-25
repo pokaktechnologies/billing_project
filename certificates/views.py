@@ -335,11 +335,23 @@ class CertificateListCreateAPIView(APIView):
     POST /api/certificates/       → create new
     """
     def get(self, request):
+        certificate_type = request.query_params.get('type')
+
         certificates = CertificateRecord.objects.select_related(
             'user'
         ).prefetch_related(
             'signatories__signatory'
         ).all()
+
+        if certificate_type:
+            valid_types = [choice[0] for choice in CertificateRecord.CertificateType.choices]
+            if certificate_type not in valid_types:
+                return Response(
+                    {"error": f"Invalid type. Choices are: {valid_types}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            certificates = certificates.filter(certificate_type=certificate_type)
+
         serializer = CertificateRecordSerializer(certificates, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -439,5 +451,37 @@ class SignatoryPersonDetailAPIView(APIView):
         signatory.save()
         return Response(
             {"message": "Signatory deactivated successfully."},
+            status=status.HTTP_200_OK
+        )
+    
+
+from .utils import generate_certificate_number
+
+class CertificateNumberPreviewView(APIView):
+    """
+    GET /api/certificates/number-preview/?type=Internship
+    """
+    def get(self, request):
+        certificate_type = request.query_params.get('type')
+
+        if not certificate_type:
+            return Response(
+                {"error": "type parameter is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        valid_types = [choice[0] for choice in CertificateRecord.CertificateType.choices]
+        if certificate_type not in valid_types:
+            return Response(
+                {"error": f"Invalid type. Choices are: {valid_types}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        preview_number = generate_certificate_number(certificate_type)
+        return Response(
+            {
+                "certificate_type": certificate_type,
+                "preview_number": preview_number
+            },
             status=status.HTTP_200_OK
         )

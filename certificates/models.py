@@ -1,6 +1,5 @@
 from django.db import models
-from accounts.models import CustomUser, StaffProfile  # Import CustomUser for the ForeignKey
-
+from accounts.models import CustomUser, StaffProfile
 class Certificate(models.Model):
     CATEGORY_CHOICES = [
         ('Internship', 'Internship'),
@@ -104,6 +103,7 @@ class CertificateRecord(models.Model):
 
     # ── Common fields (all types) ──────────────────────────────────────────
     certificate_type = models.CharField(max_length=50, choices=CertificateType.choices)
+    certificate_number = models.CharField(max_length=100, unique=True, blank=True)
     full_name        = models.CharField(max_length=255)
     designation      = models.CharField(max_length=255, null=True, blank=True)
     issue_date       = models.DateField(auto_now_add=True)
@@ -141,6 +141,12 @@ class CertificateRecord(models.Model):
         from django.core.exceptions import ValidationError
         if self.certificate_type != 'Webinar' and self.user is None:
             raise ValidationError("User is required for non-Webinar certificates.")
+        
+    def save(self, *args, **kwargs):
+        if not self.certificate_number:
+            from certificates.utils import generate_certificate_number
+            self.certificate_number = generate_certificate_number(self.certificate_type)
+        super().save(*args, **kwargs)
 
     class Meta:
         ordering = ['-created_at']

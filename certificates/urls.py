@@ -37,4 +37,6 @@ urlpatterns = [
     path('eligible-students/', views.CompletedStudentsForCertificateView.as_view()),
     path('eligible-staff/', views.EligibleStaffForCertificateView.as_view()),
 
+    # NEW REPORT
+    path('certificate-report/', views.CertificateRecordReportView.as_view(), name='certificate-report'),
 ]

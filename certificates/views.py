@@ -490,20 +490,25 @@ from .serializers import EligibleStudentSerializer
 class CompletedStudentsForCertificateView(APIView):
 
     def get(self, request):
+        filter_param = request.query_params.get('filter')
+
         certified_staff_ids = CertificateRecord.objects.filter(
             user__isnull=False
         ).values_list('user_id', flat=True).distinct()
 
-        eligible_students = Student.objects.filter(
+        students = Student.objects.filter(
             status='completed'
-        ).exclude(
-            profile_id__in=certified_staff_ids
         ).select_related(
             'profile__user',
             'center',
         )
 
-        serializer = EligibleStudentSerializer(eligible_students, many=True)
+        if filter_param == 'certified':
+            students = students.filter(profile_id__in=certified_staff_ids)
+        elif filter_param == 'not_certified':
+            students = students.exclude(profile_id__in=certified_staff_ids)
+
+        serializer = EligibleStudentSerializer(students, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
 
@@ -511,6 +516,8 @@ from .serializers import EligibleStaffSerializer
 class EligibleStaffForCertificateView(APIView):
 
     def get(self, request):
+        filter_param = request.query_params.get('filter')
+
         certified_staff_ids = CertificateRecord.objects.filter(
             user__isnull=False
         ).values_list('user_id', flat=True).distinct()
@@ -522,13 +529,16 @@ class EligibleStaffForCertificateView(APIView):
         eligible_staff = StaffProfile.objects.filter(
             job_detail__status='active'
         ).exclude(
-            id__in=certified_staff_ids
-        ).exclude(
             id__in=student_staff_ids
         ).select_related(
             'user',
             'job_detail__department'
         )
+
+        if filter_param == 'certified':
+            eligible_staff = eligible_staff.filter(id__in=certified_staff_ids)
+        elif filter_param == 'not_certified':
+            eligible_staff = eligible_staff.exclude(id__in=certified_staff_ids)
 
         serializer = EligibleStaffSerializer(eligible_staff, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)

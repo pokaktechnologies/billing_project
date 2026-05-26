@@ -139,8 +139,9 @@ class CertificateRecord(models.Model):
 
     def clean(self):
         from django.core.exceptions import ValidationError
-        if self.certificate_type != 'Webinar' and self.user is None:
-            raise ValidationError("User is required for non-Webinar certificates.")
+        no_user_types = ['Webinar', 'Internship College']
+        if self.certificate_type not in no_user_types and self.user is None:
+            raise ValidationError("User is required for this certificate type.")
         
     def save(self, *args, **kwargs):
         if not self.certificate_number:

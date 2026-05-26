@@ -128,12 +128,17 @@ class CertificateRecordSerializer(serializers.ModelSerializer):
         certificate_type = data.get('certificate_type')
         user = data.get('user')
 
-        if certificate_type != 'Webinar' and user is None:
-            raise serializers.ValidationError(
-                {"user": "User is required for non-Webinar certificates."}
-            )
+        no_user_types = ['Webinar', 'Internship College']
+
+        if certificate_type not in no_user_types and certificate_type != 'Job Training':
+            if user is None:
+                raise serializers.ValidationError(
+                    {"user": "User is required for this certificate type."}
+                )
+        
+        # Job Training — optional, Webinar & Internship College — not needed
         return data
-    
+        
 
 
 class EligibleStudentSerializer(serializers.ModelSerializer):

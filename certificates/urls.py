@@ -28,9 +28,15 @@ urlpatterns = [
         # Certificate
     path('certificates/', views.CertificateListCreateAPIView.as_view()),
     path('certificates/<int:pk>/', views.CertificateDetailAPIView.as_view()),
+    path('certificates/number-preview/', views.CertificateNumberPreviewView.as_view()),
 
     # Signatory
     path('signatories/', views.SignatoryPersonListCreateAPIView.as_view()),
     path('signatories/<int:pk>/', views.SignatoryPersonDetailAPIView.as_view()),
 
+    path('eligible-students/', views.CompletedStudentsForCertificateView.as_view()),
+    path('eligible-staff/', views.EligibleStaffForCertificateView.as_view()),
+
+    # NEW REPORT
+    path('certificate-report/', views.CertificateRecordReportView.as_view(), name='certificate-report'),
 ]

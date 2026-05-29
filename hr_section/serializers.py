@@ -227,3 +227,122 @@ class ErpEnquiryStatusUpdateSerializer(ModelSerializer):
     class Meta:
         model = ErpEnquiry
         fields = ['status']
+
+
+#OFFER LETTER
+
+from rest_framework import serializers
+from .models import OfferLetter, StatusChoices, DutyTypeChoices
+
+
+class OfferLetterCreateSerializer(serializers.ModelSerializer):
+    """
+    Used for POST (create) — all writable fields.
+    """
+
+    class Meta:
+        model = OfferLetter
+        exclude = ["created_by", "created_at", "updated_at"]
+
+    # ── Validations ──────────────────────────────────────────────────────────
+
+    def validate_responsibilities(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError("responsibilities must be a list of strings.")
+        if any(not isinstance(item, str) for item in value):
+            raise serializers.ValidationError("Each responsibility must be a string.")
+        return value
+
+    def validate(self, attrs):
+        # If target-based, target_details should be provided
+        if attrs.get("is_target_based") and not attrs.get("target_details"):
+            raise serializers.ValidationError(
+                {"target_details": "target_details is required when is_target_based is True."}
+            )
+        # basic_salary should not exceed monthly_salary
+        basic = attrs.get("basic_salary")
+        monthly = attrs.get("monthly_salary")
+        if basic and monthly and basic > monthly:
+            raise serializers.ValidationError(
+                {"basic_salary": "basic_salary cannot be greater than monthly_salary."}
+            )
+        return attrs
+
+    def create(self, validated_data):
+        request = self.context.get("request")
+        validated_data["created_by"] = request.user if request else None
+        return super().create(validated_data)
+
+
+class OfferLetterPatchSerializer(serializers.ModelSerializer):
+    """
+    Used for PATCH (partial update) — same fields, all optional.
+    """
+
+    class Meta:
+        model = OfferLetter
+        exclude = ["created_by", "created_at", "updated_at"]
+        extra_kwargs = {field: {"required": False} for field in [
+            "candidate_name", "job_title", "monthly_salary", "joining_date", "company_name"
+        ]}
+
+    def validate_responsibilities(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError("responsibilities must be a list of strings.")
+        if any(not isinstance(item, str) for item in value):
+            raise serializers.ValidationError("Each responsibility must be a string.")
+        return value
+
+    def validate(self, attrs):
+        instance = self.instance
+
+        is_target_based = attrs.get("is_target_based", instance.is_target_based)
+        target_details  = attrs.get("target_details", instance.target_details)
+        if is_target_based and not target_details:
+            raise serializers.ValidationError(
+                {"target_details": "target_details is required when is_target_based is True."}
+            )
+
+        basic   = attrs.get("basic_salary", instance.basic_salary)
+        monthly = attrs.get("monthly_salary", instance.monthly_salary)
+        if basic and monthly and basic > monthly:
+            raise serializers.ValidationError(
+                {"basic_salary": "basic_salary cannot be greater than monthly_salary."}
+            )
+        return attrs
+
+
+class OfferLetterListSerializer(serializers.ModelSerializer):
+    """
+    Lightweight serializer for list endpoint.
+    """
+    created_by = serializers.StringRelatedField()
+
+    class Meta:
+        model = OfferLetter
+        fields = [
+            "id",
+            "candidate_name",
+            "candidate_email",
+            "job_title",
+            "status",
+            "duty_type",
+            "monthly_salary",
+            "joining_date",
+            "company_name",
+            "created_by",
+            "created_at",
+        ]
+
+
+class OfferLetterDetailSerializer(serializers.ModelSerializer):
+    """
+    Full serializer for retrieve endpoint.
+    """
+    created_by      = serializers.StringRelatedField()
+    status_display   = serializers.CharField(source="get_status_display", read_only=True)
+    duty_type_display = serializers.CharField(source="get_duty_type_display", read_only=True)
+
+    class Meta:
+        model = OfferLetter
+        fields = "__all__"

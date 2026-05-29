@@ -712,3 +712,111 @@ class ErpEnquiryStatisticsView(APIView):
         }
 
         return Response(statistics, status=status.HTTP_200_OK)
+
+
+# Offer Letter Views
+from rest_framework import generics
+from rest_framework.permissions import IsAuthenticated
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import SearchFilter, OrderingFilter
+
+from .models import OfferLetter
+from .serializers import (
+    OfferLetterCreateSerializer,
+    OfferLetterPatchSerializer,
+    OfferLetterListSerializer,
+    OfferLetterDetailSerializer,
+)
+from .filters import OfferLetterFilter
+from accounts.services.pagination import api_response, paginate_response
+
+
+# ── List + Create ─────────────────────────────────────────────────────────────
+
+class OfferLetterListCreateAPIView(generics.ListCreateAPIView):
+    permission_classes  = [IsAuthenticated]
+    queryset            = OfferLetter.objects.select_related("created_by").all()
+    filter_backends     = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_class     = OfferLetterFilter
+    search_fields       = ["candidate_name", "candidate_email", "job_title", "company_name"]
+    ordering_fields     = ["created_at", "updated_at", "joining_date", "monthly_salary"]
+    ordering            = ["-created_at"]
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return OfferLetterCreateSerializer
+        return OfferLetterListSerializer
+
+    # ── GET — list with optional pagination ──────────────────────────────────
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        return paginate_response(queryset, request, OfferLetterListSerializer)
+
+    # ── POST — create ─────────────────────────────────────────────────────────
+    def create(self, request, *args, **kwargs):
+        serializer = OfferLetterCreateSerializer(
+            data=request.data, context={"request": request}
+        )
+        if serializer.is_valid():
+            offer = serializer.save()
+            return api_response(
+                message="Offer letter created successfully.",
+                data=OfferLetterDetailSerializer(offer).data,
+            )
+        return api_response(
+            status="0",
+            message="Validation failed.",
+            data=serializer.errors,
+        )
+
+
+# ── Retrieve + Patch + Delete ─────────────────────────────────────────────────
+
+class OfferLetterDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated]
+    queryset           = OfferLetter.objects.select_related("created_by").all()
+    # Disable PUT — PATCH only
+    http_method_names  = ["get", "patch", "delete", "head", "options"]
+
+    def get_serializer_class(self):
+        if self.request.method == "PATCH":
+            return OfferLetterPatchSerializer
+        return OfferLetterDetailSerializer
+
+    # ── GET — retrieve ────────────────────────────────────────────────────────
+    def retrieve(self, request, *args, **kwargs):
+        offer = self.get_object()
+        return api_response(
+            data=OfferLetterDetailSerializer(offer).data
+        )
+
+    # ── PATCH — partial update ────────────────────────────────────────────────
+    def partial_update(self, request, *args, **kwargs):
+        offer = self.get_object()
+
+        if offer.status == "accepted":
+            return api_response(
+                status="0",
+                message="Cannot modify an accepted offer letter.",
+            )
+
+        serializer = OfferLetterPatchSerializer(
+            offer, data=request.data, partial=True, context={"request": request}
+        )
+        if serializer.is_valid():
+            updated = serializer.save()
+            return api_response(
+                message="Offer letter updated successfully.",
+                data=OfferLetterDetailSerializer(updated).data,
+            )
+        return api_response(
+            status="0",
+            message="Validation failed.",
+            data=serializer.errors,
+        )
+
+    # ── DELETE ────────────────────────────────────────────────────────────────
+    def destroy(self, request, *args, **kwargs):
+        offer = self.get_object()
+        offer.delete()
+        return api_response(message="Offer letter deleted successfully.")

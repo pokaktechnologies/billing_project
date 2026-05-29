@@ -5,8 +5,10 @@ from django.utils import timezone
 from django.core.mail import EmailMessage
 from django.http import HttpResponse
 from rest_framework.permissions import IsAuthenticated
-
+from django.utils.dateparse import parse_date
 from activity_logs.base_view import BaseAPIView, BaseGenericAPIView
+from accounts.services.pagination import paginate_response, api_response
+from internship.models import Student
 from .models import Certificate, CertificateHistory
 from .serializers import (
     CertificateSerializer, 
@@ -335,11 +337,23 @@ class CertificateListCreateAPIView(APIView):
     POST /api/certificates/       → create new
     """
     def get(self, request):
+        certificate_type = request.query_params.get('type')
+
         certificates = CertificateRecord.objects.select_related(
             'user'
         ).prefetch_related(
             'signatories__signatory'
         ).all()
+
+        if certificate_type:
+            valid_types = [choice[0] for choice in CertificateRecord.CertificateType.choices]
+            if certificate_type not in valid_types:
+                return Response(
+                    {"error": f"Invalid type. Choices are: {valid_types}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            certificates = certificates.filter(certificate_type=certificate_type)
+
         serializer = CertificateRecordSerializer(certificates, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -441,3 +455,282 @@ class SignatoryPersonDetailAPIView(APIView):
             {"message": "Signatory deactivated successfully."},
             status=status.HTTP_200_OK
         )
+    
+
+from .utils import generate_certificate_number
+
+class CertificateNumberPreviewView(APIView):
+
+    def get(self, request):
+        certificate_type = request.query_params.get('type')
+
+        if not certificate_type:
+            return Response(
+                {"error": "type parameter is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        valid_types = [choice[0] for choice in CertificateRecord.CertificateType.choices]
+        if certificate_type not in valid_types:
+            return Response(
+                {"error": f"Invalid type. Choices are: {valid_types}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        preview_number = generate_certificate_number(certificate_type)
+        return Response(
+            {
+                "certificate_type": certificate_type,
+                "preview_number": preview_number
+            },
+            status=status.HTTP_200_OK
+        )
+
+
+from .serializers import EligibleStudentSerializer
+class CompletedStudentsForCertificateView(APIView):
+
+    def get(self, request):
+        filter_param = request.query_params.get('filter')
+
+        certified_staff_ids = CertificateRecord.objects.filter(
+            user__isnull=False
+        ).values_list('user_id', flat=True).distinct()
+
+        students = Student.objects.filter(
+            status='completed'
+        ).select_related(
+            'profile__user',
+            'center',
+        )
+
+        if filter_param == 'certified':
+            students = students.filter(profile_id__in=certified_staff_ids)
+        elif filter_param == 'not_certified':
+            students = students.exclude(profile_id__in=certified_staff_ids)
+
+        serializer = EligibleStudentSerializer(students, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+
+from .serializers import EligibleStaffSerializer
+class EligibleStaffForCertificateView(APIView):
+
+    def get(self, request):
+        filter_param = request.query_params.get('filter')
+
+        certified_staff_ids = CertificateRecord.objects.filter(
+            user__isnull=False
+        ).values_list('user_id', flat=True).distinct()
+
+        student_staff_ids = Student.objects.values_list(
+            'profile_id', flat=True
+        ).distinct()
+
+        eligible_staff = StaffProfile.objects.filter(
+            job_detail__status='active'
+        ).exclude(
+            id__in=student_staff_ids
+        ).select_related(
+            'user',
+            'job_detail__department'
+        )
+
+        if filter_param == 'certified':
+            eligible_staff = eligible_staff.filter(id__in=certified_staff_ids)
+        elif filter_param == 'not_certified':
+            eligible_staff = eligible_staff.exclude(id__in=certified_staff_ids)
+
+        serializer = EligibleStaffSerializer(eligible_staff, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+
+# REPORT NEW
+
+class CertificateRecordReportView(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        certificates = CertificateRecord.objects.select_related(
+            'user',
+            'user__user'
+        ).prefetch_related(
+            'signatories',
+            'signatories__signatory'
+        ).all()
+
+        # QUERY PARAMS
+
+        certificate_type = request.query_params.get('certificate_type')
+        search = request.query_params.get('search')
+
+        department = request.query_params.get('department')
+        employee_id = request.query_params.get('employee_id')
+
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+
+        issue_from = request.query_params.get('issue_from')
+        issue_to = request.query_params.get('issue_to')
+
+        # FILTER : CERTIFICATE TYPE
+
+
+        if certificate_type:
+            certificates = certificates.filter(
+                certificate_type=certificate_type
+            )
+
+        # FILTER : SEARCH
+
+        if search:
+            certificates = certificates.filter(
+                Q(full_name__icontains=search) |
+                Q(certificate_number__icontains=search) |
+                Q(designation__icontains=search) |
+                Q(course__icontains=search) |
+                Q(training_topic__icontains=search) |
+                Q(webinar_title__icontains=search) |
+                Q(employee_id__icontains=search) |
+                Q(department__icontains=search)
+            )
+
+        # FILTER : DEPARTMENT
+
+
+        if department:
+            certificates = certificates.filter(
+                department__icontains=department
+            )
+
+        # FILTER : EMPLOYEE ID
+
+        if employee_id:
+            certificates = certificates.filter(
+                employee_id__icontains=employee_id
+            )
+
+        # FILTER : START DATE
+
+        if start_date:
+
+            parsed_start_date = parse_date(start_date)
+
+            if not parsed_start_date:
+                return Response(
+                    {
+                        "Status": "0",
+                        "message": "Invalid start_date format. Use YYYY-MM-DD"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            certificates = certificates.filter(
+                start_date__gte=parsed_start_date
+            )
+
+        # FILTER : END DATE
+
+        if end_date:
+
+            parsed_end_date = parse_date(end_date)
+
+            if not parsed_end_date:
+                return Response(
+                    {
+                        "Status": "0",
+                        "message": "Invalid end_date format. Use YYYY-MM-DD"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            certificates = certificates.filter(
+                end_date__lte=parsed_end_date
+            )
+
+        # FILTER : ISSUE FROM
+
+        if issue_from:
+
+            parsed_issue_from = parse_date(issue_from)
+
+            if not parsed_issue_from:
+                return Response(
+                    {
+                        "Status": "0",
+                        "message": "Invalid issue_from format. Use YYYY-MM-DD"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            certificates = certificates.filter(
+                issue_date__gte=parsed_issue_from
+            )
+
+        # FILTER : ISSUE TO
+
+        if issue_to:
+
+            parsed_issue_to = parse_date(issue_to)
+
+            if not parsed_issue_to:
+                return Response(
+                    {
+                        "Status": "0",
+                        "message": "Invalid issue_to format. Use YYYY-MM-DD"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            certificates = certificates.filter(
+                issue_date__lte=parsed_issue_to
+            )
+
+        # ORDERING
+        certificates = certificates.order_by('-created_at')
+
+        # SUMMARY
+        summary = {
+            "total_certificates": certificates.count(),
+
+            "internship_count": certificates.filter(
+                certificate_type='Internship'
+            ).count(),
+
+            "job_training_count": certificates.filter(
+                certificate_type='Job Training'
+            ).count(),
+
+            "experience_count": certificates.filter(
+                certificate_type='Experience'
+            ).count(),
+
+            "employee_count": certificates.filter(
+                certificate_type='Employee'
+            ).count(),
+
+            "webinar_count": certificates.filter(
+                certificate_type='Webinar'
+            ).count(),
+
+            "internship_college_count": certificates.filter(
+                certificate_type='Internship College'
+            ).count(),
+        }
+
+        # ---------------------------------------------------
+        # PAGINATION RESPONSE
+        # ---------------------------------------------------
+
+        response = paginate_response(
+            queryset=certificates,
+            request=request,
+            serializer_class=CertificateRecordSerializer
+        )
+
+        # Inject summary
+        response.data["summary"] = summary
+
+        return response

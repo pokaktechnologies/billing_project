@@ -16,12 +16,13 @@ from internship.utils import (
 
 # report based on task
 class TaskReportSerializer(serializers.ModelSerializer):
-    intern_id = serializers.IntegerField(source="staff.id", read_only=True)
+    student_id = serializers.IntegerField(source="student.id", read_only=True)
     task_id = serializers.IntegerField(source="task.id")
     task_title = serializers.CharField(source="task.title")
     description = serializers.CharField(source="task.description")
     assigned_to = serializers.SerializerMethodField()
     course = serializers.CharField(source="task.course.title")
+    batch = serializers.SerializerMethodField()
     assigned_date = serializers.DateTimeField(source="assigned_at")
     due_date = serializers.DateField(source="task.due_date")
     status = serializers.CharField()
@@ -30,19 +31,49 @@ class TaskReportSerializer(serializers.ModelSerializer):
         model = TaskAssignment
 
         fields = [
-            "intern_id",
+            "student_id",
             "task_id",
             "task_title",
             "description",
             "assigned_to",
             "course",
+            "batch",
             "assigned_date",
             "due_date",
             "status",
         ]
 
     def get_assigned_to(self, obj):
-        return f"{obj.staff.user.first_name} {obj.staff.user.last_name}"
+        if not obj.student:
+            return None
+        
+        return obj.student.get_full_name()
+    
+    def get_batch(self, obj):
+
+        if not obj.student:
+            return None
+
+        enrollment = obj.student.enrollments.first()
+
+        if enrollment and enrollment.batch:
+            return enrollment.batch.batch_number
+
+        return None
+
+
+    def get_course(self, obj):
+
+        if not obj.student:
+            return None
+
+        enrollment = obj.student.enrollments.first()
+
+        if enrollment and enrollment.course:
+            return enrollment.course.title
+
+        return None
+
 
 
 # report based on per intern task performance
@@ -125,22 +156,57 @@ class InternTaskPerformanceReportSerializer(serializers.ModelSerializer):
 
 # reports based on task submission reports
 class TaskSubmissionReportSerializer(serializers.ModelSerializer):
-    intern_id = serializers.IntegerField(source="assignment.staff.id", read_only=True)
-    task_title = serializers.CharField(source="assignment.task.title", read_only=True)
-    intern_name = serializers.SerializerMethodField()
-    submission_date = serializers.DateTimeField(source="submitted_at", read_only=True)
-    due_date = serializers.DateField(source="assignment.task.due_date", read_only=True)
-    status = serializers.CharField(source="assignment.status", read_only=True)
-    feedback = serializers.CharField(source="instructor_feedback", read_only=True)
-    review_date = serializers.DateTimeField(source="reviewed_at", read_only=True)
+
+    student_id = serializers.IntegerField(
+        source="assignment.student.id",
+        read_only=True
+    )
+
+    task_title = serializers.CharField(
+        source="assignment.task.title",
+        read_only=True
+    )
+
+    student_name = serializers.SerializerMethodField()
+
+    course = serializers.SerializerMethodField()
+
+    batch = serializers.SerializerMethodField()
+
+    submission_date = serializers.DateTimeField(
+        source="submitted_at",
+        read_only=True
+    )
+
+    due_date = serializers.DateField(
+        source="assignment.task.due_date",
+        read_only=True
+    )
+
+    status = serializers.CharField(
+        source="assignment.status",
+        read_only=True
+    )
+
+    feedback = serializers.CharField(
+        source="instructor_feedback",
+        read_only=True
+    )
+
+    review_date = serializers.DateTimeField(
+        source="reviewed_at",
+        read_only=True
+    )
 
     class Meta:
         model = TaskSubmission
 
         fields = [
-            "intern_id",
+            "student_id",
+            "student_name",
             "task_title",
-            "intern_name",
+            "course",
+            "batch",
             "submission_date",
             "due_date",
             "status",
@@ -148,9 +214,40 @@ class TaskSubmissionReportSerializer(serializers.ModelSerializer):
             "review_date",
         ]
 
-    def get_intern_name(self, obj):
-        staff = obj.assignment.staff
-        return f"{staff.user.first_name} {staff.user.last_name}"
+    def get_student_name(self, obj):
+
+        if not obj.assignment.student:
+            return None
+
+        return obj.assignment.student.get_full_name()
+
+    def get_course(self, obj):
+
+        student = obj.assignment.student
+
+        if not student:
+            return None
+
+        enrollment = student.enrollments.first()
+
+        if enrollment and enrollment.course:
+            return enrollment.course.title
+
+        return None
+
+    def get_batch(self, obj):
+
+        student = obj.assignment.student
+
+        if not student:
+            return None
+
+        enrollment = student.enrollments.first()
+
+        if enrollment and enrollment.batch:
+            return enrollment.batch.batch_number
+
+        return None
 
 
 # report based on intern payment details

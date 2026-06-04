@@ -1,48 +1,47 @@
-from accounts.models import JobDetail
-from internship.models import Student
-from django.db import transaction
-from datetime import date, datetime
+import datetime
+from django.utils import timezone
+from attendance.models import AttendanceSession, DailyAttendance
 
-year = datetime.now().year
-prefix = f"ST{year}"
-length = 3
+target_date = datetime.date(2026, 6, 4)
+logout_time_local = datetime.datetime.combine(target_date, datetime.time(15, 0, 0))
 
-latest = Student.objects.filter(
-    student_id__startswith=prefix
-).order_by("-student_id").first()
+aware_logout_time = timezone.make_aware(logout_time_local, timezone.get_current_timezone())
 
-if latest:
-    current_number = int(latest.student_id[-length:])
-else:
-    current_number = 0
+sessions_to_update = AttendanceSession.objects.filter(
+    daily_attendance__date=target_date,
+    session='session2',
+    login_time__isnull=False,
+    logout_time__isnull=True 
+)
 
-interns = JobDetail.objects.select_related("staff__user").filter(job_type="internship")
+print(f"Found {sessions_to_update.count()} sessions to update.")
 
-internship_staff = JobDetail.objects.filter(job_type="internship").count()
-print(f"Total internship staff: {internship_staff}")
+for session in sessions_to_update:
+    session.logout_time = aware_logout_time
+    
+    if session.status == 'leave' and session.login_time:
+        local_login_time = timezone.localtime(session.login_time)
+        if local_login_time.time() <= datetime.time(12, 15, 0):
+            session.status = 'present'
+        else:
+            session.status = 'late'
+            
+    session.save()
+    print(f"Updated session2 logout for: {session.daily_attendance.staff.user.email} (Session Status: {session.status})")
 
-created = 0
-skipped = 0
+daily_records = DailyAttendance.objects.filter(date=target_date)
+for daily_attendance in daily_records:
+    sessions = daily_attendance.sessions.all()
+    if sessions.exists():
+        total_hours = sum(s.session_duration() for s in sessions)
+        daily_attendance.total_working_hours = total_hours
 
-with transaction.atomic():
-    for job in interns:
-        profile = job.staff
+        if total_hours >= 7:
+            daily_attendance.status = "full_day"
+        elif total_hours >= 4:
+            daily_attendance.status = "half_day"
+        else:
+            daily_attendance.status = "leave"
 
-        if hasattr(profile, "student_profile"):
-            skipped += 1
-            continue
-
-        current_number += 1
-        student_id = f"{prefix}{current_number:0{length}d}"
-
-        Student.objects.create(
-            student_id=student_id,
-            profile=profile,
-            start_date=job.start_date or date.today(),
-            is_active=True
-        )
-
-        created += 1
-        print(profile.user.email)
-
-print(f"Created: {created}, Skipped: {skipped}")
+        daily_attendance.save()
+        print(f"Updated DailyAttendance for {daily_attendance.staff.user.email}: Hours={total_hours:.2f}, Status={daily_attendance.status}")

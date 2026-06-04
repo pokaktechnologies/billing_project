@@ -165,9 +165,9 @@ internship_admin_patterns = [
 ]
 
 report_patterns = [
-    path('reports-task/', report_view.TaskReportAPIView.as_view()),
+    path('reports-task/', report_view.TaskReportAPIView.as_view()),  # changed to student based
     path('reports-intern_performance/', report_view.InternTaskPerformanceReportView.as_view()),
-    path('report-task-submission/', report_view.TaskSubmissionReportAPIView.as_view()),
+    path('report-task-submission/', report_view.TaskSubmissionReportAPIView.as_view()), # changed to student based
     path("reports-intern-payment-summary/", report_view.InternPaymentSummaryReportAPIView.as_view()),
     path("reports-intern-summary/", report_view.InternSummaryReportAPIView.as_view()),
     path("report-enrollment/", report_view.EnrollmentReportAPIView.as_view()),

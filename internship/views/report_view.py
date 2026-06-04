@@ -26,15 +26,17 @@ class TaskReportAPIView(generics.ListAPIView):
     def get_queryset(self):
         queryset = TaskAssignment.objects.select_related(
             "task",
-            "task__course",
-            "staff",
-            "staff__user"
+            "student",
+            "student__profile__user"
+        ).prefetch_related(
+            "student__enrollments__course",
+            "student__enrollments__batch"
         ).order_by("-assigned_at")
 
-        # filter with intern_id
-        intern_id = self.request.query_params.get("intern_id")
-        if intern_id and intern_id.strip().lower() != "all":
-            queryset = queryset.filter(staff_id=int(intern_id))
+        # filter with student_id
+        student_id = self.request.query_params.get("student")
+        if student_id and student_id.strip().lower() != "all":
+            queryset = queryset.filter(student_id=int(student_id))
 
         # Assigned Date filter
         assigned_date = self.request.query_params.get("assigned_date")
@@ -65,9 +67,18 @@ class TaskReportAPIView(generics.ListAPIView):
         course = self.request.query_params.get("course")
         if course and course.lower() != "all":
             queryset = queryset.filter(
-                task__course_id=course
+                student__enrollments__course_id=course
             )
-        return queryset
+
+        # batch filter
+        batch = self.request.query_params.get("batch")
+
+        if batch and batch.lower() != "all":
+            queryset = queryset.filter(
+                student__enrollments__batch_id=batch
+            )
+
+        return queryset.distinct()
 
 
 # report based on per intern task performance
@@ -105,51 +116,99 @@ class InternTaskPerformanceReportView(generics.ListAPIView):
 
 # reports based on task submission
 class TaskSubmissionReportAPIView(generics.ListAPIView):
+
     serializer_class = TaskSubmissionReportSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        queryset = TaskSubmission.objects.select_related(
-            "assignment",
-            "assignment__staff",
-            "assignment__staff__user",
-            "assignment__task",
-            "assignment__task__course"
+
+        queryset = (
+            TaskSubmission.objects
+            .select_related(
+                "assignment",
+                "assignment__student",
+                "assignment__student__profile__user",
+                "assignment__task",
+            )
+            .prefetch_related(
+                "assignment__student__enrollments__course",
+                "assignment__student__enrollments__batch",
+            )
         )
 
-        # filter with intern_id
-        intern_id = self.request.query_params.get("intern_id")
-        if intern_id and intern_id.strip().lower() not in ["", "all"]:
+        # Student Filter
+        student_id = self.request.query_params.get("student")
+
+        if student_id and student_id.strip().lower() not in ["", "all"]:
             queryset = queryset.filter(
-                assignment__staff_id=int(intern_id)
+                assignment__student_id=int(student_id)
             )
 
-        # filter with submission date
-        submission_date = self.request.query_params.get("submission_date")
+        # Submission Date Filter
+        submission_date = self.request.query_params.get(
+            "submission_date"
+        )
+
         if submission_date:
+
             start = make_aware(
-                datetime.strptime(submission_date, "%Y-%m-%d")
+                datetime.strptime(
+                    submission_date,
+                    "%Y-%m-%d"
+                )
             )
+
             end = start + timedelta(days=1)
+
             queryset = queryset.filter(
                 submitted_at__gte=start,
                 submitted_at__lt=end
             )
 
-        # filter with status
+        # Status Filter
         status = self.request.query_params.get("status")
+
         if status:
+
             status = status.strip().lower()
+
             if status == "approved":
-                queryset = queryset.filter(assignment__status="completed")
+                queryset = queryset.filter(
+                    assignment__status="completed"
+                )
+
             elif status == "revision":
-                queryset = queryset.filter(assignment__status="revision_required")
+                queryset = queryset.filter(
+                    assignment__status="revision_required"
+                )
+
             elif status == "submitted":
-                queryset = queryset.filter(assignment__status="submitted")
+                queryset = queryset.filter(
+                    assignment__status="submitted"
+                )
+
             elif status == "pending":
-                queryset = queryset.filter(assignment__status="pending")
-        print(self.request.query_params)
-        return queryset.order_by("-submitted_at")
+                queryset = queryset.filter(
+                    assignment__status="pending"
+                )
+
+        # Course Filter
+        course = self.request.query_params.get("course")
+
+        if course and course.lower() not in ["", "all"]:
+            queryset = queryset.filter(
+                assignment__student__enrollments__course_id=course
+            )
+
+        # Batch Filter
+        batch = self.request.query_params.get("batch")
+
+        if batch and batch.lower() not in ["", "all"]:
+            queryset = queryset.filter(
+                assignment__student__enrollments__batch_id=batch
+            )
+
+        return queryset.distinct().order_by("-submitted_at")
 
 
 # report based on intern payment details

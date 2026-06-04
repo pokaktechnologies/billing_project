@@ -1254,6 +1254,7 @@ class ModulePermission(models.Model):
         ('all_tasks', "All Tasks"),
         ('my_courses', "My Courses"),
         ('faculty_interns', "Faculty Interns"),
+        ('submissions', "Submissions"),
 
         # INTERNSHIP PRO
         ('my_tasks', "My Tasks"),

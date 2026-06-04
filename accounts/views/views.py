@@ -2134,6 +2134,9 @@ class ReceiptView(BaseAPIView):
 
     def get(self, request, rec_id=None):
         receipt_type = request.query_params.get('type')
+        client_id = request.query_params.get('client_id')
+        intern_id = request.query_params.get('intern_id')
+        search = request.query_params.get('search')
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date')
 
@@ -2156,6 +2159,25 @@ class ReceiptView(BaseAPIView):
 
             if receipt_type:
                 receipts = receipts.filter(receipt_type=receipt_type)
+
+            if receipt_type == 'intern':
+                if intern_id:
+                    receipts = receipts.filter(intern_id=intern_id)
+                if search:
+                    receipts = receipts.filter(
+                        Q(intern__user__first_name__icontains=search) |
+                        Q(intern__user__last_name__icontains=search)
+                    )
+
+            elif receipt_type == 'client':
+                if client_id:
+                    receipts = receipts.filter(client_id=client_id)
+                if search:
+                    receipts = receipts.filter(
+                        Q(client__first_name__icontains=search) |
+                        Q(client__last_name__icontains=search) |
+                        Q(client__company_name__icontains=search)
+                    )
 
             if start_date:
                 start_date = datetime.strptime(start_date, "%Y-%m-%d")
@@ -3320,6 +3342,8 @@ class InvoiceAPI(BaseAPIView):
     def get(self, request):
         invoice_type = request.query_params.get('type')
         client_id = request.query_params.get('client_id')
+        intern_id = request.query_params.get('intern_id')
+        search = request.query_params.get('search')
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date')
 
@@ -3331,8 +3355,24 @@ class InvoiceAPI(BaseAPIView):
         if invoice_type:
             qs = qs.filter(invoice_type=invoice_type)
 
-        if client_id:
-            qs = qs.filter(client_id=client_id)
+        if invoice_type == 'intern':
+            if intern_id:
+                qs = qs.filter(intern_id=intern_id)
+            if search:
+                qs = qs.filter(
+                    Q(intern__user__first_name__icontains=search) |
+                    Q(intern__user__last_name__icontains=search)
+                )
+
+        elif invoice_type == 'client':
+            if client_id:
+                qs = qs.filter(client_id=client_id)
+            if search:
+                qs = qs.filter(
+                    Q(client__first_name__icontains=search) |
+                    Q(client__last_name__icontains=search) |
+                    Q(client__company_name__icontains=search)
+                )
 
 
         if start_date:

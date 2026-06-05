@@ -595,6 +595,7 @@ class RegistrationReportAPIView(APIView):
         ).prefetch_related(
             "enrollments__course",
             "enrollments__batch",
+            "enrollments__batch__faculties__user__user",
             "enrollments__installment_plan__items__course_payments",
             "course_payments",
         )
@@ -622,15 +623,11 @@ class RegistrationReportAPIView(APIView):
 
         queryset = queryset.distinct().order_by("start_date")
 
-
-        # ── Summary totals ──
-        totals = queryset.aggregate(
-            total_paid=Sum("course_payments__amount_paid"),
-        )
-
         students_data = RegistrationReportSerializer(queryset, many=True).data
 
-        total_paid = totals["total_paid"] or Decimal("0.00")
+        total_paid = sum(
+            Decimal(str(s["paid_amount"] or 0)) for s in students_data
+        )
 
         total_course_fee = sum(
             Decimal(str(s["course_fee"] or 0)) for s in students_data

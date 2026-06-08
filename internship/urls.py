@@ -127,6 +127,7 @@ internship_admin_patterns = [
     path('faculty/<int:pk>/', internship_admin.FacultyRetrieveUpdateDestroyAPIView.as_view(), name='faculty-detail'),
     # path('course-faculty/', internship_admin.FacultyListCreateAPIView.as_view(), name='course-faculty-list'),
     # path('course-faculty/<int:pk>/', internship_admin.FacultyRetrieveUpdateDestroyAPIView.as_view(), name='course-faculty-detail'),
+    path('faculties/dropdown/', internship_admin.AvailableFacultyListAPIView.as_view(), name='available-faculty-list'),
 
     #Batch
     path('batch/preview/', internship_admin.BatchNumberPreviewAPIView.as_view(), name='batch-number-preview'),

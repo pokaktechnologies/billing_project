@@ -666,3 +666,21 @@ class AdminStudentReportDetailAPIView(generics.RetrieveAPIView):
             'field_values__field'
         )
     )
+
+#get count of total students, active and inaactive for admin view
+class StudentCountAPIView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        total_students = Student.objects.count()
+        active_students = Student.objects.filter(status='active').count()
+        inactive_students = Student.objects.filter(status='inactive').count()
+
+        return Response({
+            'total_students': total_students,
+            'active_students': active_students,
+            'inactive_students': inactive_students
+        })
+
+   

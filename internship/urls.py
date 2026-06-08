@@ -189,6 +189,8 @@ report_patterns = [
     path("faculty/", report_view.FacultyReportAPIView.as_view(), name="faculty-reports"),
     path("faculty/<int:pk>/", report_view.FacultyDetailReportAPIView.as_view(), name="faculty-detail-report"),
 
+    
+
     path("registration/", report_view.RegistrationReportAPIView.as_view(), name="registration-report"),
 
 ]

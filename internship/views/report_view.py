@@ -607,6 +607,7 @@ class RegistrationReportAPIView(APIView):
         status = request.query_params.get("status")
         start_date = request.query_params.get("start_date")
         end_date = request.query_params.get("end_date")
+        faculty_id = request.query_params.get("faculty_id")
 
         if center_id:
             queryset = queryset.filter(center_id=center_id)
@@ -620,6 +621,8 @@ class RegistrationReportAPIView(APIView):
             queryset = queryset.filter(start_date__gte=start_date)
         if end_date:
             queryset = queryset.filter(start_date__lte=end_date)
+        if faculty_id:
+            queryset = queryset.filter(enrollments__batch__faculties__id=faculty_id)
 
         queryset = queryset.distinct().order_by("start_date")
 

@@ -626,7 +626,20 @@ class RegistrationReportAPIView(APIView):
 
         queryset = queryset.distinct().order_by("start_date")
 
-        students_data = RegistrationReportSerializer(queryset, many=True).data
+        students_list = list(queryset)
+
+        student_profile_ids = [student.profile_id for student in students_list]
+        from certificates.models import CertificateRecord
+        certified_profile_ids = set(
+            CertificateRecord.objects.filter(user_id__in=student_profile_ids)
+            .values_list('user_id', flat=True)
+        )
+
+        students_data = RegistrationReportSerializer(
+            students_list,
+            many=True,
+            context={"certified_profile_ids": certified_profile_ids}
+        ).data
 
         total_paid = sum(
             Decimal(str(s["paid_amount"] or 0)) for s in students_data

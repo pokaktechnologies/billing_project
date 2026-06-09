@@ -867,6 +867,7 @@ class RegistrationReportSerializer(serializers.ModelSerializer):
     batch_end_date = serializers.SerializerMethodField()
     next_due_installment = serializers.SerializerMethodField()
     faculties = serializers.SerializerMethodField()
+    certificate_received = serializers.SerializerMethodField()
 
     class Meta:
         model = Student
@@ -887,6 +888,7 @@ class RegistrationReportSerializer(serializers.ModelSerializer):
             "next_due_installment",
             "installments",
             "faculties",
+            "certificate_received",
         ]
 
     def _get_enrollment(self, obj):
@@ -990,5 +992,12 @@ class RegistrationReportSerializer(serializers.ModelSerializer):
             }
             for faculty in faculties
         ]
+
+    def get_certificate_received(self, obj):
+        certified_ids = self.context.get("certified_profile_ids")
+        if certified_ids is not None:
+            return obj.profile_id in certified_ids
+        from certificates.models import CertificateRecord
+        return CertificateRecord.objects.filter(user_id=obj.profile_id).exists()
 
 

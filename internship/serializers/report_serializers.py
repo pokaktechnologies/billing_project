@@ -6,7 +6,7 @@ from django.utils.timezone import now
 from rest_framework import serializers
 
 from accounts.models import StaffProfile, SalesPerson
-from internship.models import Batch, Center, Course, Student, TaskSubmission, AssignedStaffCourse, CoursePayment, TaskAssignment, Faculty, InstallmentItem
+from internship.models import Batch, Center, Course, Student, TaskSubmission, AssignedStaffCourse, CoursePayment, TaskAssignment, Faculty, InstallmentItem, StudentInstallmentItem
 from internship.serializers.internship_admin import InstallmentPlanSerializer
 from internship.utils import (
     get_installment_due_date_for_staff,
@@ -285,7 +285,7 @@ class InternPaymentSummaryReportSerializer(serializers.ModelSerializer):
 
         total = CoursePayment.objects.filter(
             student__profile=obj.staff,
-            installments__plan__course=obj.course
+            installments__enrollment__course=obj.course
         ).aggregate(
             total=Sum("amount_paid")
         )["total"]
@@ -396,7 +396,7 @@ class InternSummaryReportSerializer(serializers.ModelSerializer):
 
         paid = CoursePayment.objects.filter(
             student__profile=obj.staff,
-            installments__plan__course=obj.course
+            installments__enrollment__course=obj.course
         ).aggregate(
             total=Sum("amount_paid")
         )["total"] or 0
@@ -819,7 +819,7 @@ class InstallmentItemReportSerializer(serializers.ModelSerializer):
     is_paid = serializers.SerializerMethodField()
 
     class Meta:
-        model = InstallmentItem
+        model = StudentInstallmentItem
         fields = [
             "id",
             "installment_number",
@@ -944,10 +944,10 @@ class RegistrationReportSerializer(serializers.ModelSerializer):
 
     def get_next_due_installment(self, obj):
         enrollment = self._get_enrollment(obj)
-        if not enrollment or not enrollment.installment_plan:
+        if not enrollment:
             return None
         
-        items = list(enrollment.installment_plan.items.all())
+        items = list(enrollment.student_installment_items.all())
         next_item = None
         for item in items:
             payments = [p for p in item.course_payments.all() if p.student_id == obj.id]
@@ -971,9 +971,9 @@ class RegistrationReportSerializer(serializers.ModelSerializer):
 
     def get_installments(self, obj):
         enrollment = self._get_enrollment(obj)
-        if not enrollment or not enrollment.installment_plan:
+        if not enrollment:
             return []
-        items = enrollment.installment_plan.items.all()
+        items = enrollment.student_installment_items.all()
         return InstallmentItemReportSerializer(
             items,
             many=True,

@@ -296,37 +296,46 @@ def get_staff_course_start_date(staff, course, installment_plan=None):
 
 def get_next_unpaid_installment_item(staff, course, preferred_plan=None):
     student = get_payment_student(staff)
-    plan = get_staff_installment_plan(staff, course, preferred_plan=preferred_plan)
-    if not plan or not student:
+    if not student or not course:
         return None
 
-    # "course_payments" related_name use ചെയ്യുക
-    # Fully paid items exclude ചെയ്യുക (partial ആയവ still show ചെയ്യണം)
+    from .models import StudentCourseEnrollment, StudentInstallmentItem
+    enrollment = StudentCourseEnrollment.objects.filter(student=student, course=course).first()
+    if not enrollment:
+        return None
+
+    student_items = StudentInstallmentItem.objects.filter(enrollment=enrollment)
+    
     fully_paid_item_ids = []
-    for item in plan.items.all():
+    for item in student_items:
         paid = item.course_payments.filter(
             student=student
         ).aggregate(t=Sum("amount_paid"))["t"] or 0
         if paid >= item.amount:
             fully_paid_item_ids.append(item.id)
 
-    return plan.items.exclude(
+    return student_items.exclude(
         id__in=fully_paid_item_ids
     ).order_by("installment_number", "due_days", "id").first()
-
 
 def get_installment_due_date_for_staff(staff, installment):
     if not installment:
         return None
 
-    course = getattr(getattr(installment, "plan", None), "course", None)
+    if hasattr(installment, 'enrollment'):
+        course = installment.enrollment.course
+        plan = installment.enrollment.installment_plan
+    else:
+        plan = getattr(installment, "plan", None)
+        course = getattr(plan, "course", None) if plan else None
+
     if not course:
         return None
 
     start_date = get_staff_course_start_date(
         staff,
         course,
-        installment_plan=installment.plan,
+        installment_plan=plan,
     )
     if not start_date:
         return None

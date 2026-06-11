@@ -1,7 +1,7 @@
 from decimal import Decimal
 from django.utils import timezone
 from django.db import transaction
-from django.db.models import Count, Prefetch, Sum
+from django.db.models import Q, Count, Prefetch, Sum
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import generics, status
@@ -16,9 +16,9 @@ from django.db.models.functions import TruncMonth
 
 from internship.serializers.instructor import StudentReportSerializer
 from ..models import Section, Class, Student, Course, Faculty, StudentCourseEnrollment, CoursePayment, StudentReport
-from ..serializers.internship_admin import AvailableStudentSerializer, ClassDetailSerializer, SectionSerializer, ClassListCreateSerializer, StudentPaymentDetailSerializer, StudentPaymentSerializer
+from ..serializers.internship_admin import AvailableFacultySerializer, AvailableStudentSerializer, ClassDetailSerializer, SectionSerializer, ClassListCreateSerializer, StudentPaymentDetailSerializer, StudentPaymentSerializer
 
-from accounts.models import CustomUser
+from accounts.models import CustomUser, StaffProfile
 from internship.utils import (
     get_installment_due_date_for_staff,
     get_next_unpaid_installment_item,
@@ -666,3 +666,46 @@ class AdminStudentReportDetailAPIView(generics.RetrieveAPIView):
             'field_values__field'
         )
     )
+
+#get count of total students, active and inaactive for admin view
+class StudentCountAPIView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        total_students = Student.objects.count()
+        active_students = Student.objects.filter(status='active').count()
+        inactive_students = Student.objects.filter(status='inactive').count()
+
+        return Response({
+            'total_students': total_students,
+            'active_students': active_students,
+            'inactive_students': inactive_students
+        })
+
+
+class AvailableFacultyListAPIView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = AvailableFacultySerializer
+
+    def get_queryset(self):
+
+        queryset = (
+            StaffProfile.objects
+            .select_related("user")
+            .filter(
+                faculty_profile__isnull=True
+            )
+            .order_by("user__first_name")
+        )
+
+        search = self.request.query_params.get("search")
+
+        if search:
+            queryset = queryset.filter(
+                Q(user__first_name__icontains=search) |
+                Q(user__last_name__icontains=search) |
+                Q(staff_email__icontains=search)
+            )
+
+        return queryset

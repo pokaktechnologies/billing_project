@@ -127,6 +127,7 @@ internship_admin_patterns = [
     path('faculty/<int:pk>/', internship_admin.FacultyRetrieveUpdateDestroyAPIView.as_view(), name='faculty-detail'),
     # path('course-faculty/', internship_admin.FacultyListCreateAPIView.as_view(), name='course-faculty-list'),
     # path('course-faculty/<int:pk>/', internship_admin.FacultyRetrieveUpdateDestroyAPIView.as_view(), name='course-faculty-detail'),
+    path('faculties/dropdown/', internship_admin.AvailableFacultyListAPIView.as_view(), name='available-faculty-list'),
 
     #Batch
     path('batch/preview/', internship_admin.BatchNumberPreviewAPIView.as_view(), name='batch-number-preview'),
@@ -136,6 +137,8 @@ internship_admin_patterns = [
     path("students/", internship_admin.StudentListCreateAPIView.as_view(), name="student-list-create"),
     path("students/<int:id>/", internship_admin.StudentRetrieveUpdateDestroyAPIView.as_view(), name="student-detail"),
     path("students/<int:pk>/credentials/", internship_admin.StudentCredentialsAPIView.as_view(), name="student-credentials"),
+    path("students-count/", internship_admin.StudentCountAPIView.as_view(), name="student-count"),
+
 
     path("enrollments/", internship_admin.StudentCourseEnrollmentView.as_view(), name="student-course-enrollment-list-create"),
     path("enrollments/<int:pk>/", internship_admin.StudentCourseEnrollmentDetailView.as_view(), name="student-course-enrollment-detail"),
@@ -186,6 +189,8 @@ report_patterns = [
 
     path("faculty/", report_view.FacultyReportAPIView.as_view(), name="faculty-reports"),
     path("faculty/<int:pk>/", report_view.FacultyDetailReportAPIView.as_view(), name="faculty-detail-report"),
+
+    
 
     path("registration/", report_view.RegistrationReportAPIView.as_view(), name="registration-report"),
 

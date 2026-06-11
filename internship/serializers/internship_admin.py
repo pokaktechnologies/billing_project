@@ -481,6 +481,22 @@ class FacultySerializer(serializers.ModelSerializer):
             return annotated_count
         return Student.objects.filter(enrollments__batch__faculties=obj).distinct().count()
 
+# for dropdown
+class AvailableFacultySerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StaffProfile
+        fields = [
+            "id",
+            "name",
+            "staff_email",
+            "phone_number",
+        ]
+
+    def get_name(self, obj):
+        return f"{obj.user.first_name} {obj.user.last_name}"
+
 
 #Batch
 class BatchSerializer(serializers.ModelSerializer):

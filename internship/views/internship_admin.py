@@ -693,11 +693,12 @@ class AvailableFacultyListAPIView(generics.ListAPIView):
 
         queryset = (
             StaffProfile.objects
-            .select_related("user")
+            .select_related("user", "job_detail")
             .filter(
-                faculty_profile__isnull=True
+                faculty_profile__isnull=True,
+                job_detail__job_type="full_day", # staff prifile e ulla  job type full day aayittulla users ne maathram drop down cheyyaan
+                job_detail__status__in=["active", "probation"] 
             )
-            .order_by("user__first_name")
         )
 
         search = self.request.query_params.get("search")

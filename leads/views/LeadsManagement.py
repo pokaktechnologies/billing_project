@@ -29,6 +29,7 @@ class AdminLeadsView(APIView):
         lead_status = request.query_params.get("status")
         lead_category = request.query_params.get('lead_category')
         lead_type = request.query_params.get('lead_type')  # my_lead / assigned_lead
+        course = request.query_params.get("course") 
 
 
         # Filter by lead category
@@ -78,6 +79,10 @@ class AdminLeadsView(APIView):
                 leads = leads.filter(lead_date__lte=end_dt)
             except Exception as e:
                 print("End date parse error:", e)
+        
+        if course:
+            leads = leads.filter(course_id=course)
+            
 
         # Order
         leads = leads.order_by('-lead_date')

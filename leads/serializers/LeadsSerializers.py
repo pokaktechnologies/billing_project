@@ -27,11 +27,23 @@ class LeadSerializer(serializers.ModelSerializer):
     def validate(self, data):
         category = data.get('lead_category', getattr(self.instance, 'lead_category', None))
         detail = data.get('other_category_detail', getattr(self.instance, 'other_category_detail', None))
-        
+        course = data.get('course', getattr(self.instance, 'course', None))
+
         if category == 'other' and not detail:
             raise serializers.ValidationError({
                 'other_category_detail': "This field is required when category is 'Other'."
             })
+        
+        # course validation
+        if category == "intern" and not course:
+            raise serializers.ValidationError({
+                "course": "Course is required for intern leads."
+            })
+
+        if category != "intern" and course:
+            raise serializers.ValidationError({
+                "course": "Course can only be selected for intern leads."
+        })
         return data
 
 

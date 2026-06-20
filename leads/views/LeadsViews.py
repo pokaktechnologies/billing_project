@@ -66,6 +66,7 @@ class StaffLeadView(APIView):
         name = request.query_params.get('name')
         lead_status = request.query_params.get('lead_status')
         lead_category = request.query_params.get('lead_category')
+        course = request.query_params.get("course")
 
         
         if lead_category:
@@ -85,6 +86,9 @@ class StaffLeadView(APIView):
 
         if lead_type:
             leads = leads.filter(lead_type=lead_type)
+        
+        if course:
+            leads = leads.filter(course_id=course)
 
 
 

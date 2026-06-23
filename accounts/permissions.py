@@ -154,9 +154,9 @@ PARENT_MODULE_MAP = [
     },
 
     {
-        "name": "client",
+        "name": "contacts",
         "submodules": [
-            "client"
+            "contacts"
         ]
     },
 

@@ -1224,7 +1224,7 @@ class ModulePermission(models.Model):
         # extras
         ("home", "Home"),
         ("setup", "Set up"),
-        ("client", "Client"),
+        ("contacts", "Contacts"),
         ("sales_person", "Sales Person"),
 
         # REPORTS

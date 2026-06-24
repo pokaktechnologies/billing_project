@@ -357,8 +357,8 @@ class CoursePaymentListCreateAPIView(generics.ListCreateAPIView):
         "student__profile",
         "student__profile__user",
         "installments",
-        "installments__plan",
-        "installments__plan__course"
+        "installments__enrollment",
+        "installments__enrollment__course"
     )
     serializer_class = CoursePaymentSerializer
     permission_classes = [IsAuthenticated]
@@ -381,7 +381,7 @@ class StudentPaymentListAPIView(generics.ListAPIView):
                     "installment_plan",
                 )
             ),
-            "course_payments__installments__plan",
+            "course_payments__installments__enrollment",
         ).filter(
             enrollments__isnull=False
         ).distinct()
@@ -398,6 +398,7 @@ class StudentPaymentDetailAPIView(APIView):
                 "installment_plan",
             ).prefetch_related(
                 "installment_plan__items",
+                "student_installment_items",
                 "student__course_payments__installments",
             ),
             student_id=pk,
@@ -417,8 +418,8 @@ class CoursePaymentRetrieveAPIView(generics.RetrieveAPIView):
         "student__profile",
         "student__profile__user",
         "installments",
-        "installments__plan",
-        "installments__plan__course"
+        "installments__enrollment",
+        "installments__enrollment__course"
     )
     serializer_class = CoursePaymentSerializer
     permission_classes = [IsAuthenticated]
@@ -692,11 +693,12 @@ class AvailableFacultyListAPIView(generics.ListAPIView):
 
         queryset = (
             StaffProfile.objects
-            .select_related("user")
+            .select_related("user", "job_detail")
             .filter(
-                faculty_profile__isnull=True
+                faculty_profile__isnull=True,
+                job_detail__job_type="full_day", # staff prifile e ulla  job type full day aayittulla users ne maathram drop down cheyyaan
+                job_detail__status__in=["active", "probation"] 
             )
-            .order_by("user__first_name")
         )
 
         search = self.request.query_params.get("search")

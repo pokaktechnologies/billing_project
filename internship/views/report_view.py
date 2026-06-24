@@ -243,7 +243,7 @@ class InternPaymentSummaryReportAPIView(generics.ListAPIView):
                 total_fee = obj.course.total_fee
                 paid = CoursePayment.objects.filter(
                     student__profile=obj.staff,
-                    installments__plan__course=obj.course
+                    installments__enrollment__course=obj.course
                 ).aggregate(total=Sum("amount_paid"))["total"] or 0
                 pending = total_fee - paid
                 next_installment = get_next_unpaid_installment_item(
@@ -596,7 +596,7 @@ class RegistrationReportAPIView(APIView):
             "enrollments__course",
             "enrollments__batch",
             "enrollments__batch__faculties__user__user",
-            "enrollments__installment_plan__items__course_payments",
+            "enrollments__student_installment_items__course_payments",
             "course_payments",
         )
 

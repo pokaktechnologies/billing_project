@@ -217,14 +217,70 @@ class StudentCourseEnrollment(models.Model):
         unique_together = ['student', 'course']
 
     def save(self, *args, **kwargs):
+        old_plan_id = None
+        if self.pk:
+            try:
+                old_plan_id = StudentCourseEnrollment.objects.filter(pk=self.pk).values_list('installment_plan_id', flat=True).first()
+            except Exception:
+                pass
+
+        if old_plan_id and old_plan_id != self.installment_plan_id:
+            from .models import CoursePayment
+            has_payments = CoursePayment.objects.filter(
+                student_installment__enrollment=self
+            ).exists()
+            
+            if has_payments:
+                raise ValidationError(
+                    "Cannot change installment plan because payments have already been made under the current plan."
+                )
+
         if self.batch:
             self.course = self.batch.course
         elif not self.course:
             raise ValueError("Course must be set either directly or via batch.")
+        
         super().save(*args, **kwargs)
+
+        if old_plan_id and old_plan_id != self.installment_plan_id:
+            self.student_installment_items.all().delete()
+
+        if self.installment_plan and not self.student_installment_items.exists():
+            from .models import StudentInstallmentItem
+            global_items = self.installment_plan.items.all()
+            
+            student_items = [
+                StudentInstallmentItem(
+                    enrollment=self,
+                    installment_number=item.installment_number,
+                    amount=item.amount,
+                    due_days=item.due_days
+                )
+                for item in global_items
+            ]
+            StudentInstallmentItem.objects.bulk_create(student_items)
 
     def __str__(self):
         return f"{self.student.profile.user.email} - {self.course.title}"
+
+
+class StudentInstallmentItem(models.Model):
+    enrollment = models.ForeignKey(
+        'StudentCourseEnrollment',
+        on_delete=models.CASCADE,
+        related_name="student_installment_items"
+    )
+    installment_number = models.PositiveIntegerField()
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    due_days = models.PositiveIntegerField()
+
+    class Meta:
+        ordering = ['installment_number']
+        unique_together = ['enrollment', 'installment_number']
+
+    def __str__(self):
+        return f"{self.enrollment.student} - Installment {self.installment_number} ({self.amount})"
+
 
 class CoursePayment(models.Model):
     PAYMENT_METHODS = [
@@ -242,13 +298,15 @@ class CoursePayment(models.Model):
         blank=True
     )
 
-    installments = models.ForeignKey(
-        InstallmentItem,
-        on_delete=models.CASCADE,
-        related_name="course_payments",
-        null=True,
-        blank=True
-    )
+    # installments = models.ForeignKey(
+    #     InstallmentItem,
+    #     on_delete=models.CASCADE,
+    #     related_name="course_payments",
+    #     null=True,
+    #     blank=True
+    # )
+
+    installments = models.ForeignKey(StudentInstallmentItem, on_delete=models.PROTECT, related_name="course_payments", null=True, blank=True)
 
     amount_paid = models.DecimalField(
         max_digits=10,

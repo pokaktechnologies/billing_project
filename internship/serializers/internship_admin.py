@@ -245,12 +245,6 @@ class CourseSerializer(serializers.ModelSerializer):
                     # ── CASE 1: Update existing plan (ID preserved) ──
                     plan = existing_plans[plan_id]
 
-                    # Block modification if students enrolled
-                    if plan.enrollments.exists():
-                        raise serializers.ValidationError(
-                            f"Plan '{plan.total_installments} installments' is assigned "
-                            f"to students. Modification not allowed."
-                        )
 
                     plan.total_installments = plan_data.get(
                         "total_installments", plan.total_installments
@@ -274,11 +268,6 @@ class CourseSerializer(serializers.ModelSerializer):
             # ── CASE 3: Delete plans not in request ──
             for plan_id, plan in existing_plans.items():
                 if plan_id not in request_plan_ids:
-                    if plan.enrollments.exists():
-                        raise serializers.ValidationError(
-                            f"Cannot remove plan '{plan.total_installments} installments' — "
-                            f"students are enrolled with it."
-                        )
                     plan.delete()
 
         return instance
@@ -337,10 +326,6 @@ class InstallmentPlanUpdateSerializer(serializers.ModelSerializer):
             "total_installments",
             instance.total_installments
         )
-        if instance.enrollments.exists():
-            raise serializers.ValidationError(
-                "This installment plan is already assigned to students. Modification not allowed."
-            )
 
         #  1. Prevent duplicate plan (course + total_installments)
         if InstallmentPlan.objects.filter(
@@ -874,7 +859,7 @@ class CenterSerializer(serializers.ModelSerializer):
 
 class CoursePaymentSerializer(serializers.ModelSerializer):
     course_title = serializers.CharField(
-        source="installments.plan.course.title",
+        source="installments.enrollment.course.title",
         read_only=True
     )
     installment_amount = serializers.DecimalField(
@@ -924,7 +909,7 @@ class CoursePaymentSerializer(serializers.ModelSerializer):
         payment_method = data["payment_method"]
         transaction_id = data.get("transaction_id")
 
-        course = installments.plan.course
+        course = installments.enrollment.course
 
         #  Enrollment check
         enrollment = StudentCourseEnrollment.objects.filter(
@@ -937,9 +922,9 @@ class CoursePaymentSerializer(serializers.ModelSerializer):
                 "Student not enrolled in this course."
             )
 
-        if enrollment.installment_plan and enrollment.installment_plan_id != installments.plan_id:
+        if installments.enrollment_id != enrollment.id:
             raise serializers.ValidationError(
-                "This installment plan is not assigned to this student."
+                "This installment item does not belong to this student's enrollment."
             )
 
         if payment_method != "cash" and not transaction_id:
@@ -1086,11 +1071,11 @@ class StudentPaymentDetailSerializer(serializers.ModelSerializer):
     def get_total_paid(self, obj):
         payments = [
             p for p in obj.student.course_payments.all()
-            if p.installments and p.installments.plan_id == obj.installment_plan_id
+            if p.installments and p.installments.enrollment_id == obj.id
         ]
         total = sum((p.amount_paid for p in payments), Decimal("0.00"))
         return self.format_decimal(total)
-
+    
     # Pending fee
     def get_pending_fee(self, obj):
         total = Decimal(str(obj.course.total_fee))
@@ -1118,16 +1103,12 @@ class StudentPaymentDetailSerializer(serializers.ModelSerializer):
 
     # Installment list
     def get_installment_list(self, obj):
-        plan = obj.installment_plan
-        if not plan:
-            return []
-
         student = obj.student
         all_payments = list(student.course_payments.all())
 
         result = []
 
-        for item in plan.items.all():
+        for item in obj.student_installment_items.all():
             payments = [
                 p for p in all_payments
                 if p.installments_id == item.id
@@ -1136,7 +1117,6 @@ class StudentPaymentDetailSerializer(serializers.ModelSerializer):
             total_paid = sum((p.amount_paid for p in payments), Decimal("0.00"))
             item_amount = Decimal(str(item.amount))
 
-            # Status logic
             if total_paid == 0:
                 status = "Pending"
             elif total_paid < item_amount:
@@ -1397,12 +1377,12 @@ class StudentPaymentSerializer(serializers.ModelSerializer):
     # Paid amount
     def get_paid_amount(self, obj):
         enrollment = self.get_enrollment(obj)
-        if not enrollment or not enrollment.installment_plan:
+        if not enrollment:
             return self.format_decimal(Decimal("0.00"))
 
         payments = [
             p for p in obj.course_payments.all()
-            if p.installments and p.installments.plan_id == enrollment.installment_plan_id
+            if p.installments and p.installments.enrollment_id == enrollment.id
         ]
 
         total = sum((p.amount_paid for p in payments), Decimal("0.00"))

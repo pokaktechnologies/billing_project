@@ -1,3 +1,4 @@
+from attrs import fields
 from rest_framework import serializers
 from ..models import *
 from datetime import datetime, date
@@ -9,6 +10,7 @@ from accounts.models import SalesPerson, StaffProfile
 class LeadSerializer(serializers.ModelSerializer):
     lead_status_display = serializers.SerializerMethodField()
     lead_category_display = serializers.SerializerMethodField()
+    course_name = serializers.CharField(source='course.title', read_only=True, default=None)
 
     class Meta:
         model = Lead
@@ -17,6 +19,11 @@ class LeadSerializer(serializers.ModelSerializer):
             'CustomUser', 
             'lead_type', 
         ]
+        
+    def get_field_names(self, declared_fields, info):
+        fields = super().get_field_names(declared_fields, info)
+        fields.append("course_name")
+        return fields
 
     def get_lead_status_display(self, obj):
         return obj.get_lead_status_display()
@@ -27,11 +34,23 @@ class LeadSerializer(serializers.ModelSerializer):
     def validate(self, data):
         category = data.get('lead_category', getattr(self.instance, 'lead_category', None))
         detail = data.get('other_category_detail', getattr(self.instance, 'other_category_detail', None))
-        
+        course = data.get('course', getattr(self.instance, 'course', None))
+
         if category == 'other' and not detail:
             raise serializers.ValidationError({
                 'other_category_detail': "This field is required when category is 'Other'."
             })
+        
+        # course validation
+        if category == "intern" and not course:
+            raise serializers.ValidationError({
+                "course": "Course is required for intern leads."
+            })
+
+        if category != "intern" and course:
+            raise serializers.ValidationError({
+                "course": "Course can only be selected for intern leads."
+        })
         return data
 
 
@@ -41,11 +60,17 @@ class LeadSerializerListDisplay(serializers.ModelSerializer):
     salesperson_last_name = serializers.CharField(source='salesperson.last_name', read_only=True, default=None)
     quotation_number = serializers.CharField(source='quotation.quotation_number', read_only=True, default=None)
     qoutation_grand_total = serializers.DecimalField(source='quotation.grand_total', read_only=True, default=None, max_digits=10, decimal_places=2)
+    course_name = serializers.CharField(source='course.title', read_only=True, default=None)
 
     class Meta:
         model = Lead
         fields = "__all__"  # or specify the fields you want to include
 
+    def get_field_names(self, declared_fields, info):
+        fields = super().get_field_names(declared_fields, info)
+        fields.append("course_name")
+        return fields
+    
     def get_lead_status_display(self, obj):
         return obj.get_lead_status_display()
 
@@ -55,11 +80,17 @@ class LeadSerializerDetailDisplay(serializers.ModelSerializer):
     location_name = serializers.CharField(source='location.name', read_only=True, default=None)
     quotation = serializers.CharField(source='quotation.quotation_number', read_only=True, default=None)
     lead_source_name = serializers.CharField(source='lead_source.name', read_only=True, default=None)
+    course_name = serializers.CharField(source='course.title', read_only=True, default=None)
 
     class Meta:
         model = Lead
         fields = '__all__' 
 
+    def get_field_names(self, declared_fields, info):
+        fields = super().get_field_names(declared_fields, info)
+        fields.append("course_name")
+        return fields
+    
     def get_lead_status_display(self, obj):
         return obj.get_lead_status_display()
 

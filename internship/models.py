@@ -2,6 +2,12 @@ from django.db import models
 from accounts.models import Department, SalesPerson, StaffProfile
 from project_management.models import STATUS_CHOICES
 
+PAYMENT_METHODS = [
+    ('card', 'Card'),
+    ('bank_transfer', 'Bank Transfer'),
+    ('cash', 'Cash'),
+    ('upi', 'UPI'),
+]
 
 class Center(models.Model):
     name = models.CharField(max_length=100)
@@ -213,6 +219,12 @@ class StudentCourseEnrollment(models.Model):
     batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name="enrollments")
     installment_plan = models.ForeignKey(InstallmentPlan, on_delete=models.SET_NULL, null=True, blank=True, related_name="enrollments")
     enrollment_date = models.DateField(auto_now_add=True)
+
+    # advance payment fields
+    advance_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHODS, null=True, blank=True)
+    transaction_id = models.CharField(max_length=200, null=True, blank=True)
+    payment_date = models.DateField(null=True, blank=True)
     class Meta:
         unique_together = ['student', 'course']
 
@@ -247,18 +259,62 @@ class StudentCourseEnrollment(models.Model):
 
         if self.installment_plan and not self.student_installment_items.exists():
             from .models import StudentInstallmentItem
-            global_items = self.installment_plan.items.all()
+            from decimal import Decimal
+
+            # global_items = self.installment_plan.items.all()  # old code 
+            global_items = list(self.installment_plan.items.all().order_by('installment_number'))  
+            total_installment = len(global_items)
+
+            if total_installment == 0:
+                return
             
-            student_items = [
-                StudentInstallmentItem(
-                    enrollment=self,
-                    installment_number=item.installment_number,
-                    amount=item.amount,
-                    due_days=item.due_days
+            course_fee = Decimal(self.course.total_fee)
+            advance_amount = Decimal(self.advance_amount or 0)
+            balance_fee = course_fee - advance_amount
+
+            installment_amount = (
+                balance_fee / total_installment
+            ).quantize(Decimal('0.01'))
+            
+            student_items = []
+
+            for index, item in enumerate(global_items, start=1):
+                amount = installment_amount
+
+                if index == total_installment:
+                    assignment_total = installment_amount * (total_installment - 1)
+
+                    amount = balance_fee - assignment_total
+
+                student_items.append(
+                    StudentInstallmentItem(
+                        enrollment=self,
+                        installment_number=item.installment_number,
+                        amount=amount,
+                        due_days=item.due_days
+                    )
                 )
-                for item in global_items
-            ]
+            
             StudentInstallmentItem.objects.bulk_create(student_items)
+            from .models import CoursePayment
+
+            if self.advance_amount and self.advance_amount > 0:
+                advance_exist = CoursePayment.objects.filter(
+                    enrollment=self,
+                    payment_type='advance'
+                ).exists()
+
+                if not advance_exist:
+                    CoursePayment.objects.create(
+                        enrollment=self,
+                        student=self.student,
+                        installments=None,
+                        amount_paid=self.advance_amount,
+                        payment_method=self.payment_method,
+                        transaction_id=self.transaction_id,
+                        payment_type='advance',
+                        payment_date=self.payment_date
+                    )
 
     def __str__(self):
         return f"{self.student.profile.user.email} - {self.course.title}"
@@ -289,6 +345,19 @@ class CoursePayment(models.Model):
         ('cash', 'Cash'),
         ('upi', 'UPI'),
     ]
+
+    PAYMENT_TYPES = [
+        ('advance', 'Advance'),
+        ('installment', 'Installment'),
+    ]
+
+    enrollment = models.ForeignKey(
+        'StudentCourseEnrollment',
+        on_delete=models.PROTECT,
+        related_name='payments',
+        null=True,
+        blank=True
+    )
 
     student = models.ForeignKey(
         Student,
@@ -324,8 +393,12 @@ class CoursePayment(models.Model):
         blank=True
     )
 
-    payment_date = models.DateField(
-        auto_now_add=True
+    payment_date = models.DateField()
+
+    payment_type = models.CharField(
+        max_length=20,
+        choices=PAYMENT_TYPES,
+        default='installment'
     )
 
     class Meta:

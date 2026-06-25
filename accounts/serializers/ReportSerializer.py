@@ -381,6 +381,8 @@ class InternStatementReportSerializer(serializers.ModelSerializer):
     intern_name = serializers.SerializerMethodField()
     intern_id = serializers.SerializerMethodField()
     student_id = serializers.SerializerMethodField()
+    course_name = serializers.CharField(source='course.title', read_only=True)
+
 
 
     class Meta:
@@ -395,7 +397,8 @@ class InternStatementReportSerializer(serializers.ModelSerializer):
             'description',
             'invoice_grand_total',
             'receipt_total_amount',
-            'balance'
+            'balance',
+            'course_name'
         ]
 
     def get_intern_name(self, obj):

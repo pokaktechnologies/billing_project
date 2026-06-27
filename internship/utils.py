@@ -294,29 +294,53 @@ def get_staff_course_start_date(staff, course, installment_plan=None):
     return None
 
 
+from decimal import Decimal
+from django.db.models import Sum
+
 def get_next_unpaid_installment_item(staff, course, preferred_plan=None):
     student = get_payment_student(staff)
+
     if not student or not course:
         return None
 
     from .models import StudentCourseEnrollment, StudentInstallmentItem
-    enrollment = StudentCourseEnrollment.objects.filter(student=student, course=course).first()
+
+    enrollments = StudentCourseEnrollment.objects.filter(
+        student=student,
+        course=course,
+    )
+
+    # If using default installment, find that enrollment
+    if preferred_plan:
+        enrollments = enrollments.filter(
+            installment_plan=preferred_plan
+        )
+
+    # Get the latest matching enrollment
+    enrollment = enrollments.order_by("-id").first()
+
     if not enrollment:
         return None
 
-    student_items = StudentInstallmentItem.objects.filter(enrollment=enrollment)
-    
-    fully_paid_item_ids = []
-    for item in student_items:
-        paid = item.course_payments.filter(
-            student=student
-        ).aggregate(t=Sum("amount_paid"))["t"] or 0
-        if paid >= item.amount:
-            fully_paid_item_ids.append(item.id)
+    student_items = (
+        StudentInstallmentItem.objects
+        .filter(enrollment=enrollment)
+        .order_by("installment_number")
+    )
 
-    return student_items.exclude(
-        id__in=fully_paid_item_ids
-    ).order_by("installment_number", "due_days", "id").first()
+    for item in student_items:
+
+        paid = (
+            item.course_payments.aggregate(
+                total=Sum("amount_paid")
+            )["total"]
+            or Decimal("0.00")
+        )
+
+        if paid < item.amount:
+            return item
+
+    return None
 
 def get_installment_due_date_for_staff(staff, installment):
     if not installment:

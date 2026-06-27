@@ -1486,8 +1486,10 @@ from decimal import Decimal
 
 
 class StudentPaymentSerializer(serializers.ModelSerializer):
+    student_id = serializers.IntegerField(source="student.id", read_only=True)
+    student_code = serializers.CharField(source="student.student_id", read_only=True)
     student_name = serializers.SerializerMethodField()
-    course_title = serializers.SerializerMethodField()
+    course_title = serializers.CharField(source="course.title", read_only=True)
     installment_plan = serializers.SerializerMethodField()
     total_fee = serializers.SerializerMethodField()
     paid_amount = serializers.SerializerMethodField()
@@ -1497,9 +1499,10 @@ class StudentPaymentSerializer(serializers.ModelSerializer):
     balance_fee = serializers.SerializerMethodField()
 
     class Meta:
-        model = Student
+        model = StudentCourseEnrollment # aadyam student aayirunnu pinne validation error vannappo enrollment id yilekk maattana vendi ee model nn edukkunnatha
         fields = [
             "id",
+            "student_code",
             "student_name",
             "student_id",
             "course_title",
@@ -1512,106 +1515,175 @@ class StudentPaymentSerializer(serializers.ModelSerializer):
             "balance_fee"
         ]
 
-    def get_advance_amount(self, obj):
-        enrollment = self.get_enrollment(obj)
-
-        if not enrollment:
-            return self.format_decimal(0)
-
-        return self.format_decimal(
-            enrollment.advance_amount
-        )
-
-
-    def get_balance_fee(self, obj):
-        enrollment = self.get_enrollment(obj)
-
-        if not enrollment:
-            return self.format_decimal(0)
-
-        return self.format_decimal(
-            enrollment.course.total_fee -
-            enrollment.advance_amount
-        )
-    # Decimal formatter
     def format_decimal(self, value):
-        return str(Decimal(str(value)).quantize(Decimal("0.00")))
+        return str(
+            Decimal(str(value)).quantize(
+                Decimal("0.00")
+            )
+        )
+    
+    # get student name
+    def get_student_name(self, obj):
+        user = obj.student.profile.user
+        return f"{user.first_name} {user.last_name}"
+    
+
+    # def get_advance_amount(self, obj):
+    #     enrollment = self.get_enrollment(obj)
+
+    #     if not enrollment:
+    #         return self.format_decimal(0)
+
+    #     return self.format_decimal(
+    #         enrollment.advance_amount
+    #     )
+    def get_advance_amount(self, obj):
+        return self.format_decimal(
+            obj.advance_amount
+        )
+
+
+    # def get_balance_fee(self, obj):
+    #     enrollment = self.get_enrollment(obj)
+
+    #     if not enrollment:
+    #         return self.format_decimal(0)
+
+    #     return self.format_decimal(
+    #         enrollment.course.total_fee -
+    #         enrollment.advance_amount
+    #     )
+    def get_balance_fee(self, obj):
+        return self.format_decimal(
+            obj.course.total_fee -
+            obj.advance_amount
+        )
+    
+    # # Decimal formatter
+    # def format_decimal(self, value):
+    #     return str(Decimal(str(value)).quantize(Decimal("0.00")))
 
     # Cache enrollment
-    def get_enrollment(self, obj):
-        if not hasattr(obj, "_cached_enrollment"):
-            obj._cached_enrollment = obj.enrollments.first()
-        return obj._cached_enrollment
-
-    # Student name
-    def get_student_name(self, obj):
-        user = obj.profile.user
-        return f"{user.first_name} {user.last_name}"
+    # def get_enrollment(self, obj):
+    #     if not hasattr(obj, "_cached_enrollment"):
+    #         obj._cached_enrollment = obj.enrollments.first()
+    #     return obj._cached_enrollment
 
     # Course title
-    def get_course_title(self, obj):
-        enrollment = self.get_enrollment(obj)
-        return getattr(enrollment.course, "title", None) if enrollment else None
+    # def get_course_title(self, obj):
+    #     enrollment = self.get_enrollment(obj)
+    #     return getattr(enrollment.course, "title", None) if enrollment else None
 
     # Total fee
+    # def get_total_fee(self, obj):
+    #     enrollment = self.get_enrollment(obj)
+    #     if enrollment:
+    #         return self.format_decimal(
+    #             getattr(enrollment.course, "total_fee", Decimal("0.00"))
+    #         )
+    #     return self.format_decimal(Decimal("0.00"))
     def get_total_fee(self, obj):
-        enrollment = self.get_enrollment(obj)
-        if enrollment:
-            return self.format_decimal(
-                getattr(enrollment.course, "total_fee", Decimal("0.00"))
-            )
-        return self.format_decimal(Decimal("0.00"))
+        return self.format_decimal(
+            obj.course.total_fee
+        )
 
     # Paid amount
+    # def get_paid_amount(self, obj):
+    #     enrollment = self.get_enrollment(obj)
+
+    #     if not enrollment:
+    #         return self.format_decimal(Decimal("0.00"))
+
+    #     payments = [
+    #         p for p in obj.course_payments.all()
+    #         if p.enrollment_id == enrollment.id
+    #     ]
+
+    #     total = sum((p.amount_paid for p in payments), Decimal("0.00"))
+
+    #     return self.format_decimal(total)
     def get_paid_amount(self, obj):
-        enrollment = self.get_enrollment(obj)
 
-        if not enrollment:
-            return self.format_decimal(Decimal("0.00"))
-
-        payments = [
-            p for p in obj.course_payments.all()
-            if p.enrollment_id == enrollment.id
-        ]
-
-        total = sum((p.amount_paid for p in payments), Decimal("0.00"))
+        total = obj.payments.aggregate(
+            total=Sum("amount_paid")
+        )["total"] or Decimal("0.00")
 
         return self.format_decimal(total)
 
     # Pending amount
+    # def get_pending_amount(self, obj):
+    #     total = Decimal(self.get_total_fee(obj))
+    #     paid = Decimal(self.get_paid_amount(obj))
+    #     return self.format_decimal(total - paid)
+
     def get_pending_amount(self, obj):
-        total = Decimal(self.get_total_fee(obj))
-        paid = Decimal(self.get_paid_amount(obj))
-        return self.format_decimal(total - paid)
+
+        total_fee = Decimal(
+            str(obj.course.total_fee)
+        )
+
+        paid = Decimal(
+            self.get_paid_amount(obj)
+        )
+
+        return self.format_decimal(
+            total_fee - paid
+        )
 
     # Installment plan
+    # def get_installment_plan(self, obj):
+    #     enrollment = self.get_enrollment(obj)
+    #     if enrollment and enrollment.installment_plan:
+    #         plan = enrollment.installment_plan
+    #         return {
+    #             "id": plan.id,
+    #             "total_installments": plan.total_installments,
+    #         }
+
     def get_installment_plan(self, obj):
-        enrollment = self.get_enrollment(obj)
-        if enrollment and enrollment.installment_plan:
-            plan = enrollment.installment_plan
-            return {
-                "id": plan.id,
-                "total_installments": plan.total_installments,
-            }
+
+        if not obj.installment_plan:
+            return None
+
+        return {
+            "id": obj.installment_plan.id,
+            "total_installments": obj.installment_plan.total_installments,
+        }
         return None
 
     # Next due date
+    # def get_next_due_date(self, obj):
+    #     enrollment = self.get_enrollment(obj)
+    #     if not enrollment or not enrollment.installment_plan:
+    #         return None
+
+    #     next_installment = get_next_unpaid_installment_item(
+    #         obj,
+    #         enrollment.course,
+    #         preferred_plan=enrollment.installment_plan,
+    #     )
+
+    #     if not next_installment:
+    #         return None
+
+    #     return get_installment_due_date_for_staff(
+    #         obj,
+    #         next_installment,
+    #     )
+
     def get_next_due_date(self, obj):
-        enrollment = self.get_enrollment(obj)
-        if not enrollment or not enrollment.installment_plan:
-            return None
 
         next_installment = get_next_unpaid_installment_item(
-            obj,
-            enrollment.course,
-            preferred_plan=enrollment.installment_plan,
+            obj.student,
+            obj.course,
+            preferred_plan=obj.installment_plan,
         )
 
         if not next_installment:
             return None
 
         return get_installment_due_date_for_staff(
-            obj,
+            obj.student,
             next_installment,
         )
 

@@ -815,12 +815,23 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
             "payment_method",
             "transaction_id",
             "payment_date",
+
+            "payment_plan_type",
+            "custom_installments",
         ]
         read_only_fields = ["course"]
 
     def validate(self, attrs):
         batch = attrs.get("batch")
         installment_plan = attrs.get("installment_plan")
+        payment_plan_type = attrs.get(
+            "payment_plan_type",
+            getattr(self.instance, "payment_plan_type", "default_installment")
+        )
+        custom_installments = attrs.get(
+            "custom_installments",
+            getattr(self.instance, "custom_installments", None)
+        )
         student = attrs.get("student")
         advance_amount = attrs.get("advance_amount", getattr(self.instance, "advance_amount", 0))
         payment_method = attrs.get("payment_method", getattr(self.instance, "payment_method", None))
@@ -831,12 +842,52 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
         if not batch:
             raise serializers.ValidationError("Batch is required.")
 
-        # ── Installment plan must match course ──
-        if installment_plan and installment_plan.course_id != batch.course_id:
-            raise serializers.ValidationError(
-                f"Installment plan '{installment_plan}' does not belong "
-                f"to course '{batch.course.title}'."
-            )
+        # # ── Installment plan must match course ──
+        # if installment_plan and installment_plan.course_id != batch.course_id:
+        #     raise serializers.ValidationError(
+        #         f"Installment plan '{installment_plan}' does not belong "
+        #         f"to course '{batch.course.title}'."
+        #     )
+
+        if payment_plan_type == "default_installment":
+
+            if not installment_plan:
+                raise serializers.ValidationError({
+                    "installment_plan":
+                        "Installment plan is required."
+                })
+
+            if installment_plan.course_id != batch.course_id:
+                raise serializers.ValidationError({
+                    "installment_plan":
+                        "Selected installment plan does not belong to this course."
+                })
+
+        elif payment_plan_type == "custom_installment":
+
+            if not custom_installments:
+                raise serializers.ValidationError({
+                    "custom_installments":
+                        "Number of installments is required."
+                })
+
+            if custom_installments < 2:
+                raise serializers.ValidationError({
+                    "custom_installments":
+                        "Minimum 2 installments are required."
+                })
+
+            if custom_installments > 24:
+                raise serializers.ValidationError({
+                    "custom_installments":
+                        "Maximum 24 installments are allowed."
+                })
+
+        else:
+            raise serializers.ValidationError({
+                "payment_plan_type":
+                    "Invalid payment plan type."
+            })
 
         # # ── ❗ MAIN VALIDATION: One student → only one course ──
         # existing_qs = StudentCourseEnrollment.objects.filter(student=student)

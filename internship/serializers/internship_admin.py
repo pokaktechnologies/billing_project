@@ -1165,6 +1165,7 @@ class CourceInstallmentListSerializer(serializers.ModelSerializer):
 class StudentPaymentDetailSerializer(serializers.ModelSerializer):
     student_full_name = serializers.SerializerMethodField()
     student_code = serializers.CharField(source="student.student_id")
+    student_id = serializers.CharField(source="student.id")
     phone_number = serializers.CharField(source="student.profile.phone_number")
     email = serializers.CharField(source="student.profile.user.email")
 
@@ -1190,6 +1191,7 @@ class StudentPaymentDetailSerializer(serializers.ModelSerializer):
             "id",
             "student_full_name",
             "student_code",
+            "student_id",
             "phone_number",
             "email",
             "course_title",
@@ -1247,8 +1249,8 @@ class StudentPaymentDetailSerializer(serializers.ModelSerializer):
 
     # Next due date
     def get_next_due_date(self, obj):
-        if not obj.installment_plan:
-            return None
+        # if not obj.installment_plan:
+        #     return None
 
         next_installment = get_next_unpaid_installment_item(
             obj.student,

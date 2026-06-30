@@ -364,27 +364,24 @@ class CoursePaymentListCreateAPIView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
     
 
-
+# aadyam student nn aayirunnu one student one course validastion maattiyappo ee api erro vaann appo student course enrollment nn edduth data 
 class StudentPaymentListAPIView(generics.ListAPIView):
     serializer_class = StudentPaymentSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Student.objects.select_related(
-            "profile__user"
-        ).prefetch_related(
-            Prefetch(
-                "enrollments",
-                queryset=StudentCourseEnrollment.objects.select_related(
-                    "course",
-                    "batch",
-                    "installment_plan",
-                )
-            ),
-            "course_payments__installments__enrollment",
-        ).filter(
-            enrollments__isnull=False
-        ).distinct()
+        return (
+            StudentCourseEnrollment.objects.select_related(
+                "student__profile__user",
+                "course",
+                "installment_plan",
+            )
+            .prefetch_related(
+                "student_installment_items",
+                "payments",
+            )
+            .order_by("-id")
+        )
 
 
 class StudentPaymentDetailAPIView(APIView):
@@ -401,7 +398,7 @@ class StudentPaymentDetailAPIView(APIView):
                 "student_installment_items",
                 "student__course_payments__installments",
             ),
-            student_id=pk,
+            pk=pk,
         )
         serializer = StudentPaymentDetailSerializer(enrollment)
         return Response(serializer.data)

@@ -2,6 +2,12 @@ from django.db import models
 from accounts.models import Department, SalesPerson, StaffProfile
 from project_management.models import STATUS_CHOICES
 
+PAYMENT_METHODS = [
+    ('card', 'Card'),
+    ('bank_transfer', 'Bank Transfer'),
+    ('cash', 'Cash'),
+    ('upi', 'UPI'),
+]
 
 class Center(models.Model):
     name = models.CharField(max_length=100)
@@ -208,57 +214,230 @@ class CourseInstallment(models.Model):#######
 
 # enroll student with installment plan
 class StudentCourseEnrollment(models.Model):
+
+    PAYMENT_PLAN_TYPES = [
+    ("default_installment", "Default Installment"),
+    ("custom_installment", "Custom Installment"),
+    ]
+
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="enrollments")
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="enrollments")
     batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name="enrollments")
     installment_plan = models.ForeignKey(InstallmentPlan, on_delete=models.SET_NULL, null=True, blank=True, related_name="enrollments")
     enrollment_date = models.DateField(auto_now_add=True)
+
+    # advance payment fields
+    advance_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHODS, null=True, blank=True)
+    transaction_id = models.CharField(max_length=200, null=True, blank=True)
+    payment_date = models.DateField(null=True, blank=True)
+
+    # methid1 and methid 2 fields
+
+    payment_plan_type = models.CharField(max_length=30, choices=PAYMENT_PLAN_TYPES, default="default_installment")
+    custom_installments = models.PositiveIntegerField(null=True, blank=True)
     class Meta:
         unique_together = ['student', 'course']
 
     def save(self, *args, **kwargs):
+        from decimal import Decimal
+        from .models import StudentInstallmentItem, CoursePayment
+
         old_plan_id = None
+        old_payment_plan_type = None
+        old_custom_installments = None
+
+        # -------------------------------------------------
+        # Only fetch old values while updating
+        # -------------------------------------------------
         if self.pk:
             try:
-                old_plan_id = StudentCourseEnrollment.objects.filter(pk=self.pk).values_list('installment_plan_id', flat=True).first()
+                old_data = StudentCourseEnrollment.objects.filter(
+                    pk=self.pk
+                ).values(
+                    "installment_plan_id",
+                    "payment_plan_type",
+                    "custom_installments",
+                ).first()
+
+                if old_data:
+                    old_plan_id = old_data["installment_plan_id"]
+                    old_payment_plan_type = old_data["payment_plan_type"]
+                    old_custom_installments = old_data["custom_installments"]
+
             except Exception:
                 pass
 
-        if old_plan_id and old_plan_id != self.installment_plan_id:
-            from .models import CoursePayment
+        # -------------------------------------------------
+        # Detect payment structure change
+        # (ONLY FOR UPDATE)
+        # -------------------------------------------------
+        payment_structure_changed = False
+
+        if self.pk:
+            payment_structure_changed = (
+                old_plan_id != self.installment_plan_id
+                or old_payment_plan_type != self.payment_plan_type
+                or old_custom_installments != self.custom_installments
+            )
+
+        # -------------------------------------------------
+        # Prevent changing structure after payments
+        # -------------------------------------------------
+        if payment_structure_changed:
+
             has_payments = CoursePayment.objects.filter(
-                student_installment__enrollment=self
+                installments__enrollment=self
             ).exists()
-            
+
             if has_payments:
                 raise ValidationError(
-                    "Cannot change installment plan because payments have already been made under the current plan."
+                    "Cannot change payment structure because payments have already been made."
                 )
 
+        # -------------------------------------------------
+        # Assign Course
+        # -------------------------------------------------
         if self.batch:
             self.course = self.batch.course
         elif not self.course:
-            raise ValueError("Course must be set either directly or via batch.")
-        
+            raise ValueError(
+                "Course must be set either directly or via batch."
+            )
+
         super().save(*args, **kwargs)
 
-        if old_plan_id and old_plan_id != self.installment_plan_id:
+        # -------------------------------------------------
+        # Delete old installment items
+        # -------------------------------------------------
+        if payment_structure_changed:
             self.student_installment_items.all().delete()
 
-        if self.installment_plan and not self.student_installment_items.exists():
-            from .models import StudentInstallmentItem
-            global_items = self.installment_plan.items.all()
-            
-            student_items = [
-                StudentInstallmentItem(
-                    enrollment=self,
-                    installment_number=item.installment_number,
-                    amount=item.amount,
-                    due_days=item.due_days
+        # -------------------------------------------------
+        # Create Installment Items
+        # -------------------------------------------------
+        if not self.student_installment_items.exists():
+
+            course_fee = Decimal(str(self.course.total_fee))
+            advance_amount = Decimal(str(self.advance_amount or 0))
+            balance_fee = course_fee - advance_amount
+
+            student_items = []
+
+            # ==========================================
+            # DEFAULT INSTALLMENT
+            # ==========================================
+            if self.payment_plan_type == "default_installment":
+
+                if not self.installment_plan:
+                    raise ValidationError(
+                        "Installment plan is required."
+                    )
+
+                global_items = list(
+                    self.installment_plan.items.all().order_by(
+                        "installment_number"
+                    )
                 )
-                for item in global_items
-            ]
+
+                total_installments = len(global_items)
+
+                if total_installments == 0:
+                    raise ValidationError(
+                        "Selected installment plan has no installment items."
+                    )
+
+                installment_amount = (
+                    balance_fee / total_installments
+                ).quantize(Decimal("0.01"))
+
+                for index, item in enumerate(global_items, start=1):
+
+                    amount = installment_amount
+
+                    if index == total_installments:
+                        assigned_total = installment_amount * (
+                            total_installments - 1
+                        )
+
+                        amount = balance_fee - assigned_total
+
+                    student_items.append(
+                        StudentInstallmentItem(
+                            enrollment=self,
+                            installment_number=item.installment_number,
+                            amount=amount,
+                            due_days=item.due_days,
+                        )
+                    )
+
+            # ==========================================
+            # CUSTOM INSTALLMENT
+            # ==========================================
+            elif self.payment_plan_type == "custom_installment":
+
+                if not self.custom_installments:
+                    raise ValidationError(
+                        "Custom installments are required."
+                    )
+
+                total_installments = self.custom_installments
+
+                installment_amount = (
+                    balance_fee / total_installments
+                ).quantize(Decimal("0.01"))
+
+                DEFAULT_INTERVAL_DAYS = 30
+
+                for number in range(1, total_installments + 1):
+
+                    amount = installment_amount
+
+                    if number == total_installments:
+                        assigned_total = installment_amount * (
+                            total_installments - 1
+                        )
+
+                        amount = balance_fee - assigned_total
+
+                    student_items.append(
+                        StudentInstallmentItem(
+                            enrollment=self,
+                            installment_number=number,
+                            amount=amount,
+                            due_days=number * DEFAULT_INTERVAL_DAYS,
+                        )
+                    )
+
+            else:
+                raise ValidationError(
+                    "Invalid payment plan type."
+                )
+
             StudentInstallmentItem.objects.bulk_create(student_items)
+
+        # -------------------------------------------------
+        # Create Advance Payment
+        # -------------------------------------------------
+        if self.advance_amount and self.advance_amount > 0:
+
+            advance_exists = CoursePayment.objects.filter(
+                enrollment=self,
+                payment_type="advance",
+            ).exists()
+
+            if not advance_exists:
+
+                CoursePayment.objects.create(
+                    enrollment=self,
+                    student=self.student,
+                    installments=None,
+                    amount_paid=self.advance_amount,
+                    payment_method=self.payment_method,
+                    transaction_id=self.transaction_id,
+                    payment_type="advance",
+                    payment_date=self.payment_date,
+                )
 
     def __str__(self):
         return f"{self.student.profile.user.email} - {self.course.title}"
@@ -289,6 +468,19 @@ class CoursePayment(models.Model):
         ('cash', 'Cash'),
         ('upi', 'UPI'),
     ]
+
+    PAYMENT_TYPES = [
+        ('advance', 'Advance'),
+        ('installment', 'Installment'),
+    ]
+
+    enrollment = models.ForeignKey(
+        'StudentCourseEnrollment',
+        on_delete=models.PROTECT,
+        related_name='payments',
+        null=True,
+        blank=True
+    )
 
     student = models.ForeignKey(
         Student,
@@ -324,8 +516,12 @@ class CoursePayment(models.Model):
         blank=True
     )
 
-    payment_date = models.DateField(
-        auto_now_add=True
+    payment_date = models.DateField()
+
+    payment_type = models.CharField(
+        max_length=20,
+        choices=PAYMENT_TYPES,
+        default='installment'
     )
 
     class Meta:

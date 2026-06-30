@@ -209,7 +209,7 @@ class CourseSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         plans_data = validated_data.pop("installment_plans", [])
         course = Course.objects.create(**validated_data)
-
+        print("PLANS DATA =", plans_data)
         for plan_data in plans_data:
             items_data = plan_data.pop("items")
 
@@ -809,36 +809,151 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
             "batch_number",
             "installment_plan",
             "total_installments",
-            "enrollment_date"
+            "enrollment_date",
+
+            "advance_amount",
+            "payment_method",
+            "transaction_id",
+            "payment_date",
+
+            "payment_plan_type",
+            "custom_installments",
         ]
         read_only_fields = ["course"]
 
     def validate(self, attrs):
         batch = attrs.get("batch")
         installment_plan = attrs.get("installment_plan")
+        payment_plan_type = attrs.get(
+            "payment_plan_type",
+            getattr(self.instance, "payment_plan_type", "default_installment")
+        )
+        custom_installments = attrs.get(
+            "custom_installments",
+            getattr(self.instance, "custom_installments", None)
+        )
         student = attrs.get("student")
+        advance_amount = attrs.get("advance_amount", getattr(self.instance, "advance_amount", 0))
+        payment_method = attrs.get("payment_method", getattr(self.instance, "payment_method", None))
+        transaction_id = attrs.get("transaction_id", getattr(self.instance, "transaction_id", None))
+        payment_date = attrs.get("payment_date", getattr(self.instance, "payment_date", None))
 
         # ── Batch required ──
         if not batch:
             raise serializers.ValidationError("Batch is required.")
 
-        # ── Installment plan must match course ──
-        if installment_plan and installment_plan.course_id != batch.course_id:
-            raise serializers.ValidationError(
-                f"Installment plan '{installment_plan}' does not belong "
-                f"to course '{batch.course.title}'."
-            )
+        # # ── Installment plan must match course ──
+        # if installment_plan and installment_plan.course_id != batch.course_id:
+        #     raise serializers.ValidationError(
+        #         f"Installment plan '{installment_plan}' does not belong "
+        #         f"to course '{batch.course.title}'."
+        #     )
 
-        # ── ❗ MAIN VALIDATION: One student → only one course ──
-        existing_qs = StudentCourseEnrollment.objects.filter(student=student)
+        if payment_plan_type == "default_installment":
+
+            if not installment_plan:
+                raise serializers.ValidationError({
+                    "installment_plan":
+                        "Installment plan is required."
+                })
+
+            if installment_plan.course_id != batch.course_id:
+                raise serializers.ValidationError({
+                    "installment_plan":
+                        "Selected installment plan does not belong to this course."
+                })
+
+        elif payment_plan_type == "custom_installment":
+
+            if not custom_installments:
+                raise serializers.ValidationError({
+                    "custom_installments":
+                        "Number of installments is required."
+                })
+
+            if custom_installments < 2:
+                raise serializers.ValidationError({
+                    "custom_installments":
+                        "Minimum 2 installments are required."
+                })
+
+            if custom_installments > 24:
+                raise serializers.ValidationError({
+                    "custom_installments":
+                        "Maximum 24 installments are allowed."
+                })
+
+        else:
+            raise serializers.ValidationError({
+                "payment_plan_type":
+                    "Invalid payment plan type."
+            })
+
+        # # ── ❗ MAIN VALIDATION: One student → only one course ──
+        # existing_qs = StudentCourseEnrollment.objects.filter(student=student)
+
+        # if self.instance:
+        #     existing_qs = existing_qs.exclude(pk=self.instance.pk)
+
+        # if existing_qs.exists():
+        #     raise serializers.ValidationError(
+        #         "This student is already enrolled in a course."
+        #     )
+
+        # just a safty validation
+        course = batch.course
+
+        existing_qs = StudentCourseEnrollment.objects.filter(
+            student=student,
+            course=course,
+        )
 
         if self.instance:
             existing_qs = existing_qs.exclude(pk=self.instance.pk)
 
         if existing_qs.exists():
-            raise serializers.ValidationError(
-                "This student is already enrolled in a course."
-            )
+            raise serializers.ValidationError({
+                "student": "Student is already enrolled in this course."
+            })
+
+        # vaaalidation of advance pyment 
+        course_fee = batch.course.total_fee
+
+        if advance_amount < 0:
+            raise serializers.ValidationError({
+                "advance_amount":
+                    "Advance amount cannot be negative."
+            })
+
+        if advance_amount >= course_fee:
+            raise serializers.ValidationError({
+                "advance_amount":
+                    "Advance cannot must be less that course fee."
+            })
+        
+        if advance_amount == course_fee:
+            raise serializers.ValidationError({
+                "advance_amount":
+                "Advance amount cannot be equal to course fee."
+            })
+
+        if advance_amount > 0:
+
+            if not payment_method:
+                raise serializers.ValidationError({
+                    "payment_method":
+                        "Payment method is required."
+                })
+
+            if (
+                payment_method != "cash"
+                and not transaction_id
+            ):
+                raise serializers.ValidationError({
+                    "transaction_id":
+                        "Transaction ID required."
+                })
+
 
         return attrs
     
@@ -870,6 +985,7 @@ class CoursePaymentSerializer(serializers.ModelSerializer):
     )
     already_paid = serializers.SerializerMethodField()
     balance = serializers.SerializerMethodField()
+    payment_type = serializers.CharField(read_only=True)
 
     class Meta:
         model = CoursePayment
@@ -885,8 +1001,10 @@ class CoursePaymentSerializer(serializers.ModelSerializer):
             "payment_method",
             "transaction_id",
             "payment_date",
+            "payment_type",
+            "enrollment",
         ]
-        read_only_fields = ["payment_date"]
+        # read_only_fields = ["payment_date"]
 
     def get_already_paid(self, obj):
         if not obj.installments:  
@@ -903,19 +1021,42 @@ class CoursePaymentSerializer(serializers.ModelSerializer):
         return obj.installments.amount - already
 
     def validate(self, data):
-        student        = data["student"]
-        installments   = data["installments"]
-        amount_paid    = data["amount_paid"]
+
+        student = data["student"]
+        payment_type = data.get("payment_type", "installment")
+        amount_paid = data["amount_paid"]
         payment_method = data["payment_method"]
         transaction_id = data.get("transaction_id")
 
-        course = installments.enrollment.course
+        # Common validations
+        if amount_paid <= 0:
+            raise serializers.ValidationError(
+                "Amount must be greater than zero."
+            )
 
-        #  Enrollment check
-        enrollment = StudentCourseEnrollment.objects.filter(
-            student=student,
-            course=course,
-        ).first()
+        if payment_method != "cash" and not transaction_id:
+            raise serializers.ValidationError(
+                "Transaction ID required for non-cash payments."
+            )
+
+        # ADVANCE PAYMENT
+        if payment_type == "advance":
+            return data
+
+        # INSTALLMENT PAYMENT
+        installments = data.get("installments")
+
+        if not installments:
+            raise serializers.ValidationError({
+                "installments": "Installment item is required."
+            })
+
+        course = installments.enrollment.course
+        enrollment = installments.enrollment
+        # enrollment = StudentCourseEnrollment.objects.filter(
+        #     student=student,
+        #     course=course,
+        # ).first()
 
         if not enrollment:
             raise serializers.ValidationError(
@@ -927,20 +1068,14 @@ class CoursePaymentSerializer(serializers.ModelSerializer):
                 "This installment item does not belong to this student's enrollment."
             )
 
-        if payment_method != "cash" and not transaction_id:
-            raise serializers.ValidationError(
-                "Transaction ID required for non-cash payments."
-            )
-
         already_paid = CoursePayment.objects.filter(
             student=student,
             installments=installments,
-        ).aggregate(t=Sum("amount_paid"))["t"] or 0
+        ).aggregate(
+            t=Sum("amount_paid")
+        )["t"] or 0
 
         remaining = installments.amount - already_paid
-
-        if amount_paid <= 0:
-            raise serializers.ValidationError("Amount must be greater than zero.")
 
         if amount_paid > remaining:
             raise serializers.ValidationError(
@@ -952,6 +1087,12 @@ class CoursePaymentSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
+        installments = validated_data.get("installments")
+
+        # Automatically set enrollment for installment payments
+        if installments:
+            validated_data["enrollment"] = installments.enrollment
+
         with transaction.atomic():
             return super().create(validated_data)
 
@@ -1024,6 +1165,7 @@ class CourceInstallmentListSerializer(serializers.ModelSerializer):
 class StudentPaymentDetailSerializer(serializers.ModelSerializer):
     student_full_name = serializers.SerializerMethodField()
     student_code = serializers.CharField(source="student.student_id")
+    student_id = serializers.CharField(source="student.id")
     phone_number = serializers.CharField(source="student.profile.phone_number")
     email = serializers.CharField(source="student.profile.user.email")
 
@@ -1040,6 +1182,8 @@ class StudentPaymentDetailSerializer(serializers.ModelSerializer):
     pending_fee = serializers.SerializerMethodField()
     next_due_date = serializers.SerializerMethodField()
     installment_list = serializers.SerializerMethodField()
+    advance_amount = serializers.SerializerMethodField()
+    balance_fee = serializers.SerializerMethodField()
 
     class Meta:
         model = StudentCourseEnrollment
@@ -1047,6 +1191,7 @@ class StudentPaymentDetailSerializer(serializers.ModelSerializer):
             "id",
             "student_full_name",
             "student_code",
+            "student_id",
             "phone_number",
             "email",
             "course_title",
@@ -1056,8 +1201,22 @@ class StudentPaymentDetailSerializer(serializers.ModelSerializer):
             "pending_fee",
             "next_due_date",
             "installment_list",
+            "advance_amount",
+            "balance_fee"
         ]
 
+    def get_advance_amount(self, obj):
+        return self.format_decimal(
+            obj.advance_amount
+        )
+
+
+    def get_balance_fee(self, obj):
+        return self.format_decimal(
+            obj.course.total_fee -
+            obj.advance_amount
+        )
+   
     # Decimal formatter — always returns string like "15000.00"
     def format_decimal(self, value):
         return str(Decimal(str(value)).quantize(Decimal("0.00")))
@@ -1069,11 +1228,17 @@ class StudentPaymentDetailSerializer(serializers.ModelSerializer):
 
     # Total paid
     def get_total_paid(self, obj):
+
         payments = [
             p for p in obj.student.course_payments.all()
-            if p.installments and p.installments.enrollment_id == obj.id
+            if p.enrollment_id == obj.id
         ]
-        total = sum((p.amount_paid for p in payments), Decimal("0.00"))
+
+        total = sum(
+            (p.amount_paid for p in payments),
+            Decimal("0.00")
+        )
+
         return self.format_decimal(total)
     
     # Pending fee
@@ -1084,8 +1249,8 @@ class StudentPaymentDetailSerializer(serializers.ModelSerializer):
 
     # Next due date
     def get_next_due_date(self, obj):
-        if not obj.installment_plan:
-            return None
+        # if not obj.installment_plan:
+        #     return None
 
         next_installment = get_next_unpaid_installment_item(
             obj.student,
@@ -1323,18 +1488,23 @@ from decimal import Decimal
 
 
 class StudentPaymentSerializer(serializers.ModelSerializer):
+    student_id = serializers.IntegerField(source="student.id", read_only=True)
+    student_code = serializers.CharField(source="student.student_id", read_only=True)
     student_name = serializers.SerializerMethodField()
-    course_title = serializers.SerializerMethodField()
+    course_title = serializers.CharField(source="course.title", read_only=True)
     installment_plan = serializers.SerializerMethodField()
     total_fee = serializers.SerializerMethodField()
     paid_amount = serializers.SerializerMethodField()
     pending_amount = serializers.SerializerMethodField()
     next_due_date = serializers.SerializerMethodField()
+    advance_amount = serializers.SerializerMethodField()
+    balance_fee = serializers.SerializerMethodField()
 
     class Meta:
-        model = Student
+        model = StudentCourseEnrollment # aadyam student aayirunnu pinne validation error vannappo enrollment id yilekk maattana vendi ee model nn edukkunnatha
         fields = [
             "id",
+            "student_code",
             "student_name",
             "student_id",
             "course_title",
@@ -1343,85 +1513,179 @@ class StudentPaymentSerializer(serializers.ModelSerializer):
             "paid_amount",
             "pending_amount",
             "next_due_date",
+            "advance_amount",
+            "balance_fee"
         ]
 
-    # Decimal formatter
     def format_decimal(self, value):
-        return str(Decimal(str(value)).quantize(Decimal("0.00")))
+        return str(
+            Decimal(str(value)).quantize(
+                Decimal("0.00")
+            )
+        )
+    
+    # get student name
+    def get_student_name(self, obj):
+        user = obj.student.profile.user
+        return f"{user.first_name} {user.last_name}"
+    
+
+    # def get_advance_amount(self, obj):
+    #     enrollment = self.get_enrollment(obj)
+
+    #     if not enrollment:
+    #         return self.format_decimal(0)
+
+    #     return self.format_decimal(
+    #         enrollment.advance_amount
+    #     )
+    def get_advance_amount(self, obj):
+        return self.format_decimal(
+            obj.advance_amount
+        )
+
+
+    # def get_balance_fee(self, obj):
+    #     enrollment = self.get_enrollment(obj)
+
+    #     if not enrollment:
+    #         return self.format_decimal(0)
+
+    #     return self.format_decimal(
+    #         enrollment.course.total_fee -
+    #         enrollment.advance_amount
+    #     )
+    def get_balance_fee(self, obj):
+        return self.format_decimal(
+            obj.course.total_fee -
+            obj.advance_amount
+        )
+    
+    # # Decimal formatter
+    # def format_decimal(self, value):
+    #     return str(Decimal(str(value)).quantize(Decimal("0.00")))
 
     # Cache enrollment
-    def get_enrollment(self, obj):
-        if not hasattr(obj, "_cached_enrollment"):
-            obj._cached_enrollment = obj.enrollments.first()
-        return obj._cached_enrollment
-
-    # Student name
-    def get_student_name(self, obj):
-        user = obj.profile.user
-        return f"{user.first_name} {user.last_name}"
+    # def get_enrollment(self, obj):
+    #     if not hasattr(obj, "_cached_enrollment"):
+    #         obj._cached_enrollment = obj.enrollments.first()
+    #     return obj._cached_enrollment
 
     # Course title
-    def get_course_title(self, obj):
-        enrollment = self.get_enrollment(obj)
-        return getattr(enrollment.course, "title", None) if enrollment else None
+    # def get_course_title(self, obj):
+    #     enrollment = self.get_enrollment(obj)
+    #     return getattr(enrollment.course, "title", None) if enrollment else None
 
     # Total fee
+    # def get_total_fee(self, obj):
+    #     enrollment = self.get_enrollment(obj)
+    #     if enrollment:
+    #         return self.format_decimal(
+    #             getattr(enrollment.course, "total_fee", Decimal("0.00"))
+    #         )
+    #     return self.format_decimal(Decimal("0.00"))
     def get_total_fee(self, obj):
-        enrollment = self.get_enrollment(obj)
-        if enrollment:
-            return self.format_decimal(
-                getattr(enrollment.course, "total_fee", Decimal("0.00"))
-            )
-        return self.format_decimal(Decimal("0.00"))
+        return self.format_decimal(
+            obj.course.total_fee
+        )
 
     # Paid amount
+    # def get_paid_amount(self, obj):
+    #     enrollment = self.get_enrollment(obj)
+
+    #     if not enrollment:
+    #         return self.format_decimal(Decimal("0.00"))
+
+    #     payments = [
+    #         p for p in obj.course_payments.all()
+    #         if p.enrollment_id == enrollment.id
+    #     ]
+
+    #     total = sum((p.amount_paid for p in payments), Decimal("0.00"))
+
+    #     return self.format_decimal(total)
     def get_paid_amount(self, obj):
-        enrollment = self.get_enrollment(obj)
-        if not enrollment:
-            return self.format_decimal(Decimal("0.00"))
 
-        payments = [
-            p for p in obj.course_payments.all()
-            if p.installments and p.installments.enrollment_id == enrollment.id
-        ]
+        total = obj.payments.aggregate(
+            total=Sum("amount_paid")
+        )["total"] or Decimal("0.00")
 
-        total = sum((p.amount_paid for p in payments), Decimal("0.00"))
         return self.format_decimal(total)
 
     # Pending amount
+    # def get_pending_amount(self, obj):
+    #     total = Decimal(self.get_total_fee(obj))
+    #     paid = Decimal(self.get_paid_amount(obj))
+    #     return self.format_decimal(total - paid)
+
     def get_pending_amount(self, obj):
-        total = Decimal(self.get_total_fee(obj))
-        paid = Decimal(self.get_paid_amount(obj))
-        return self.format_decimal(total - paid)
+
+        total_fee = Decimal(
+            str(obj.course.total_fee)
+        )
+
+        paid = Decimal(
+            self.get_paid_amount(obj)
+        )
+
+        return self.format_decimal(
+            total_fee - paid
+        )
 
     # Installment plan
+    # def get_installment_plan(self, obj):
+    #     enrollment = self.get_enrollment(obj)
+    #     if enrollment and enrollment.installment_plan:
+    #         plan = enrollment.installment_plan
+    #         return {
+    #             "id": plan.id,
+    #             "total_installments": plan.total_installments,
+    #         }
+
     def get_installment_plan(self, obj):
-        enrollment = self.get_enrollment(obj)
-        if enrollment and enrollment.installment_plan:
-            plan = enrollment.installment_plan
-            return {
-                "id": plan.id,
-                "total_installments": plan.total_installments,
-            }
+
+        if not obj.installment_plan:
+            return None
+
+        return {
+            "id": obj.installment_plan.id,
+            "total_installments": obj.installment_plan.total_installments,
+        }
         return None
 
     # Next due date
+    # def get_next_due_date(self, obj):
+    #     enrollment = self.get_enrollment(obj)
+    #     if not enrollment or not enrollment.installment_plan:
+    #         return None
+
+    #     next_installment = get_next_unpaid_installment_item(
+    #         obj,
+    #         enrollment.course,
+    #         preferred_plan=enrollment.installment_plan,
+    #     )
+
+    #     if not next_installment:
+    #         return None
+
+    #     return get_installment_due_date_for_staff(
+    #         obj,
+    #         next_installment,
+    #     )
+
     def get_next_due_date(self, obj):
-        enrollment = self.get_enrollment(obj)
-        if not enrollment or not enrollment.installment_plan:
-            return None
 
         next_installment = get_next_unpaid_installment_item(
-            obj,
-            enrollment.course,
-            preferred_plan=enrollment.installment_plan,
+            obj.student,
+            obj.course,
+            preferred_plan=obj.installment_plan,
         )
 
         if not next_installment:
             return None
 
         return get_installment_due_date_for_staff(
-            obj,
+            obj.student,
             next_installment,
         )
 

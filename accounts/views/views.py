@@ -774,6 +774,18 @@ class SupplierAPIView(BaseAPIView):
             return Response({"Status": "1", "message": "Success", "Data": [serializer.data]}, status=status.HTTP_200_OK)
         else:
             suppliers = Supplier.objects.all().order_by('-created_at')
+
+            # Date range filters
+            start_date = request.query_params.get('start_date')
+            end_date = request.query_params.get('end_date')
+
+            if start_date and end_date:
+                suppliers = suppliers.filter(date__range=[start_date, end_date])
+            elif start_date:
+                suppliers = suppliers.filter(date__gte=start_date)
+            elif end_date:
+                suppliers = suppliers.filter(date__lte=end_date)
+
             # optional pagination response
             return paginate_response(suppliers, request, SupplierSerializer)
         

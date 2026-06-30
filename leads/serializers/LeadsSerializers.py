@@ -42,10 +42,10 @@ class LeadSerializer(serializers.ModelSerializer):
             })
         
         # course validation
-        if category == "intern" and not course:
-            raise serializers.ValidationError({
-                "course": "Course is required for intern leads."
-            })
+        # if category == "intern" and not course:
+        #     raise serializers.ValidationError({
+        #         "course": "Course is required for intern leads."
+        #     })
 
         if category != "intern" and course:
             raise serializers.ValidationError({

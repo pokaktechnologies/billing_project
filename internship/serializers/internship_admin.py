@@ -1714,3 +1714,161 @@ class AvailableStudentSerializer(serializers.ModelSerializer):
 
     def get_center_name(self, obj):
         return obj.center.name if obj.center else None
+
+
+from decimal import Decimal
+from django.db.models import Sum
+from rest_framework import serializers
+
+class StudentCourseSummarySerializer(serializers.ModelSerializer):
+    course_name = serializers.CharField(source="course.title")
+    enrollment_id = serializers.IntegerField(source="id")
+
+    course_duration = serializers.SerializerMethodField()
+    batch = serializers.SerializerMethodField()
+    instructors = serializers.SerializerMethodField()
+    course_status = serializers.SerializerMethodField()
+
+    total_fee = serializers.SerializerMethodField()
+    paid_amount = serializers.SerializerMethodField()
+    pending_amount = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StudentCourseEnrollment
+        fields = [
+            "enrollment_id",
+            "course_name",
+            "course_duration",
+            "enrollment_date",
+            "batch",
+            "instructors",
+            "course_status",
+
+            "payment_plan_type",
+            "custom_installments",
+
+            "advance_amount",
+
+            "total_fee",
+            "paid_amount",
+            "pending_amount",
+        ]
+
+    def format_decimal(self, value):
+        return str(Decimal(str(value)).quantize(Decimal("0.00")))
+
+    def get_course_duration(self, obj):
+        if not obj.batch:
+            return None
+
+        days = (obj.batch.end_date - obj.batch.start_date).days
+
+        months = round(days / 30)
+
+        return f"{months} Months"
+
+    def get_batch(self, obj):
+        if not obj.batch:
+            return None
+
+        return {
+            "id": obj.batch.id,
+            "batch_number": obj.batch.batch_number,
+        }
+
+    def get_instructors(self, obj):
+
+        if not obj.batch:
+            return []
+
+        return [
+            {
+                "id": faculty.id,
+                "name": faculty.get_full_name(),
+            }
+            for faculty in obj.batch.faculties.all()
+        ]
+
+    def get_course_status(self, obj):
+
+        if not obj.batch:
+            return "Unknown"
+
+        if obj.batch.end_date < timezone.now().date():
+            return "Completed"
+
+        if obj.batch.start_date > timezone.now().date():
+            return "Upcoming"
+
+        return "Active"
+
+    def get_total_fee(self, obj):
+        return self.format_decimal(obj.course.total_fee)
+
+    def get_paid_amount(self, obj):
+
+        total = obj.payments.aggregate(
+            total=Sum("amount_paid")
+        )["total"] or Decimal("0.00")
+
+        return self.format_decimal(total)
+
+    def get_pending_amount(self, obj):
+
+        total = Decimal(str(obj.course.total_fee))
+
+        paid = Decimal(self.get_paid_amount(obj))
+
+        return self.format_decimal(total - paid)
+    
+
+class StudentProfileDetailSerializer(serializers.ModelSerializer):
+
+    student_name = serializers.SerializerMethodField()
+
+    phone_number = serializers.CharField(
+        source="profile.phone_number"
+    )
+
+    email = serializers.CharField(
+        source="profile.user.email"
+    )
+
+    center = serializers.CharField(
+        source="center.center_name",
+        default=None
+    )
+
+    counsellor = serializers.SerializerMethodField()
+
+    courses = StudentCourseSummarySerializer(
+        source="enrollments",
+        many=True,
+        read_only=True,
+    )
+
+    class Meta:
+        model = Student
+        fields = [
+            "id",
+            "student_id",
+            "student_name",
+            "phone_number",
+            "email",
+            "center",
+            "status",
+            "counsellor",
+            "courses",
+        ]
+
+    def get_student_name(self, obj):
+        return obj.get_full_name()
+
+    def get_counsellor(self, obj):
+
+        counsellor = obj.councellor
+
+        if not counsellor:
+            return None
+
+        return str(counsellor)

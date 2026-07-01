@@ -4,6 +4,7 @@ from django.db import transaction
 from django.db.models import Q, Count, Prefetch, Sum
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.exceptions import ValidationError
 from rest_framework import generics, status
 from rest_framework.filters import SearchFilter
 from rest_framework.parsers import FormParser, MultiPartParser
@@ -16,7 +17,7 @@ from django.db.models.functions import TruncMonth
 
 from internship.serializers.instructor import StudentReportSerializer
 from ..models import Section, Class, Student, Course, Faculty, StudentCourseEnrollment, CoursePayment, StudentReport
-from ..serializers.internship_admin import AvailableFacultySerializer, AvailableStudentSerializer, ClassDetailSerializer, SectionSerializer, ClassListCreateSerializer, StudentPaymentDetailSerializer, StudentPaymentSerializer
+from ..serializers.internship_admin import AvailableFacultySerializer, AvailableStudentSerializer, ClassDetailSerializer, SectionSerializer, ClassListCreateSerializer, StudentPaymentDetailSerializer, StudentPaymentSerializer, StudentProfileDetailSerializer
 
 from accounts.models import CustomUser, StaffProfile
 from internship.utils import (
@@ -318,6 +319,21 @@ class StudentRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView)
             )
         )
     )
+    def perform_destroy(self, instance):
+
+        # Do not allow deletion if any payment exists
+        if instance.course_payments.exists():
+            raise ValidationError({
+                "detail": "Cannot delete this student because payment records exist."
+            })
+
+        with transaction.atomic():
+            # Delete all enrollments (this also deletes StudentInstallmentItem
+            # because StudentInstallmentItem.enrollment uses CASCADE)
+            instance.enrollments.all().delete()
+
+            # Finally delete the student
+            instance.delete()    
 
     serializer_class = StudentSerializer
     permission_classes = [IsAuthenticated]
@@ -708,3 +724,27 @@ class AvailableFacultyListAPIView(generics.ListAPIView):
             )
 
         return queryset
+
+# student detail profile viewfor admin
+class StudentProfileDetailAPIView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+
+        student = get_object_or_404(
+            Student.objects.select_related(
+                "profile__user",
+                "center",
+                "councellor",
+            ).prefetch_related(
+                "enrollments__course",
+                "enrollments__batch__faculties__user__user",
+                "enrollments__payments",
+            ),
+            pk=pk,
+        )
+
+        serializer = StudentProfileDetailSerializer(student)
+
+        return Response(serializer.data)

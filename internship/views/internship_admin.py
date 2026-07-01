@@ -353,6 +353,24 @@ class StudentCourseEnrollmentDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = StudentCourseEnrollmentSerializer
     permission_classes = [IsAuthenticated]
 
+    def perform_destroy(self, instance):
+
+        # Advance payments
+        has_advance_payments = instance.payments.exists()
+
+        # Installment payments
+        has_installment_payments = CoursePayment.objects.filter(
+            installments__enrollment=instance
+        ).exists()
+
+        if has_advance_payments or has_installment_payments:
+            raise ValidationError({
+                "detail": "Cannot delete this enrollment because payment records exist."
+            })
+
+        with transaction.atomic():
+            instance.delete()
+
 class CenterListCreateAPIView(generics.ListCreateAPIView):
     queryset = Center.objects.all()
     serializer_class = CenterSerializer

@@ -17,7 +17,7 @@ from django.db.models.functions import TruncMonth
 
 from internship.serializers.instructor import StudentReportSerializer
 from ..models import Section, Class, Student, Course, Faculty, StudentCourseEnrollment, CoursePayment, StudentReport
-from ..serializers.internship_admin import AvailableFacultySerializer, AvailableStudentSerializer, ClassDetailSerializer, SectionSerializer, ClassListCreateSerializer, StudentPaymentDetailSerializer, StudentPaymentSerializer, StudentProfileDetailSerializer
+from ..serializers.internship_admin import AvailableFacultySerializer, AvailableStudentSerializer, BatchInformationSerializer, ClassDetailSerializer, SectionSerializer, ClassListCreateSerializer, StudentPaymentDetailSerializer, StudentPaymentSerializer, StudentProfileDetailSerializer
 
 from accounts.models import CustomUser, StaffProfile
 from internship.utils import (
@@ -764,5 +764,30 @@ class StudentProfileDetailAPIView(APIView):
         )
 
         serializer = StudentProfileDetailSerializer(student)
+
+        return Response(serializer.data)
+
+
+class BatchInformationAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        batch_id = request.query_params.get("batch")
+
+        if not batch_id:
+            return Response(
+                {
+                    "detail": "batch query parameter is required."
+                },
+                status=400,
+            )
+
+        batch = get_object_or_404(
+            Batch.objects.select_related("course"),
+            pk=batch_id,
+        )
+
+        serializer = BatchInformationSerializer(batch)
 
         return Response(serializer.data)

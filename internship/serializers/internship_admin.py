@@ -1,3 +1,4 @@
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from django.utils import timezone
@@ -1872,3 +1873,116 @@ class StudentProfileDetailSerializer(serializers.ModelSerializer):
             return None
 
         return str(counsellor)
+
+
+class BatchInformationSerializer(serializers.ModelSerializer):
+    batch_status = serializers.SerializerMethodField()
+    course_title = serializers.CharField(source="course.title")
+    course_duration = serializers.SerializerMethodField()
+    class_schedule = serializers.SerializerMethodField()
+    next_class = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Batch
+        fields = [
+            "id",
+            "batch_number",
+            "course_title",
+            "course_duration",
+            "start_date",
+            "end_date",
+            "batch_status",
+            "class_schedule",
+            "next_class",
+        ]
+
+    def get_batch_status(self, obj):
+        today = date.today()
+
+        if not obj.is_active:
+            return "Inactive"
+
+        if obj.end_date < today:
+            return "Completed"
+
+        return "Active"
+
+    def get_course_duration(self, obj):
+        days = (obj.end_date - obj.start_date).days
+
+        months = days // 30
+
+        if months <= 0:
+            return f"{days} Days"
+
+        return f"{months} Months"
+
+    def get_class_schedule(self, obj):
+
+        sections = (
+            Section.objects.filter(batch=obj)
+            .prefetch_related("days", "class_obj")
+            .order_by("start_time")
+        )
+
+        data = []
+
+        for section in sections:
+
+            data.append({
+                "section_id": section.id,
+                "class_name": section.class_obj.name,
+                "days": [d.get_day_display() for d in section.days.all()],
+                "start_time": section.start_time.strftime("%I:%M %p"),
+                "end_time": section.end_time.strftime("%I:%M %p"),
+                "duration": SectionSerializer.get_duration_minutes(self, section),
+            })
+
+        return data
+
+    def get_next_class(self, obj):
+
+        day_map = {
+            "mon": 0,
+            "tue": 1,
+            "wed": 2,
+            "thu": 3,
+            "fri": 4,
+            "sat": 5,
+            "sun": 6,
+        }
+
+        today = date.today()
+        now = datetime.now().time()
+
+        sections = Section.objects.filter(batch=obj).prefetch_related("days")
+
+        nearest = None
+
+        for section in sections:
+
+            for day in section.days.all():
+
+                target = day_map[day.day]
+            
+                diff = target - today.weekday()
+
+                if diff < 0:
+                    diff += 7
+
+                next_date = today + timedelta(days=diff)
+
+                if diff == 0 and section.start_time <= now:
+                    next_date += timedelta(days=7)
+
+                if nearest is None or next_date < nearest["date"]:
+
+                    nearest = {
+                        "date": next_date,
+                        "day": day.get_day_display(),
+                        "class_name": section.class_obj.name,
+                        "start_time": section.start_time.strftime("%I:%M %p"),
+                        "end_time": section.end_time.strftime("%I:%M %p"),
+                    }
+
+        return nearest

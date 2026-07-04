@@ -1986,3 +1986,185 @@ class BatchInformationSerializer(serializers.ModelSerializer):
                     }
 
         return nearest
+
+
+# complete payment report 
+class PaymentReportSerializer(serializers.ModelSerializer):
+    enrollment_id = serializers.IntegerField(source="id")
+    student_id = serializers.CharField(source="student.id")
+    student_code = serializers.CharField(source="student.student_id")
+    student_name = serializers.CharField(source="student.get_full_name")
+
+    phone_number = serializers.CharField(source="student.profile.phone_number")
+    email = serializers.CharField(source="student.profile.user.email")
+
+    course_id = serializers.IntegerField(source="course.id")
+    course_title = serializers.CharField(source="course.title")
+
+    batch_id = serializers.IntegerField(source="batch.id")
+    batch_number = serializers.CharField(source="batch.batch_number")
+
+    payment_plan_type = serializers.SerializerMethodField()
+    total_installments = serializers.SerializerMethodField()
+
+    course_fee = serializers.SerializerMethodField()
+    advance_amount = serializers.SerializerMethodField()
+    balance_fee = serializers.SerializerMethodField()
+
+    paid_amount = serializers.SerializerMethodField()
+    pending_fee = serializers.SerializerMethodField()
+
+    payment_status = serializers.SerializerMethodField()
+
+    next_due_date = serializers.SerializerMethodField()
+
+    last_payment_date = serializers.SerializerMethodField()
+    last_payment_method = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StudentCourseEnrollment
+        fields = [
+            "enrollment_id",
+            "student_id",
+            "student_code",
+            "student_name",
+            "phone_number",
+            "email",
+            "course_id",
+            "course_title",
+            "batch_id",
+            "batch_number",
+            "payment_plan_type",
+            "total_installments",
+            "course_fee",
+            "advance_amount",
+            "balance_fee",
+            "paid_amount",
+            "pending_fee",
+            "payment_status",
+            "next_due_date",
+            "last_payment_date",
+            "last_payment_method",
+            "enrollment_date"
+        ]
+    def format_decimal(self, value):
+        return str(Decimal(str(value)).quantize(Decimal("0.00")))
+    
+    def get_payment_plan_type(self, obj):
+        return obj.get_payment_plan_type_display()
+
+    def get_total_installments(self, obj):
+
+        if obj.payment_plan_type == "default_installment":
+            if obj.installment_plan:
+                return obj.installment_plan.total_installments
+            return 0
+
+        return obj.custom_installments
+
+    # ---------------------------------------------------------
+    # Amounts
+    # ---------------------------------------------------------
+
+    def get_course_fee(self, obj):
+        return self.format_decimal(
+            obj.course.total_fee
+        )
+
+    def get_advance_amount(self, obj):
+        return self.format_decimal(
+            obj.advance_amount
+        )
+
+    def get_balance_fee(self, obj):
+
+        return self.format_decimal(
+            obj.course.total_fee -
+            obj.advance_amount
+        )
+
+    def get_paid_amount(self, obj):
+
+        total = obj.payments.aggregate(
+            total=Sum("amount_paid")
+        )["total"] or Decimal("0.00")
+
+        return self.format_decimal(total)
+
+    def get_pending_fee(self, obj):
+
+        pending = (
+            Decimal(str(obj.course.total_fee))
+            -
+            Decimal(self.get_paid_amount(obj))
+        )
+
+        return self.format_decimal(
+            pending
+        )
+
+    # ---------------------------------------------------------
+    # Status
+    # ---------------------------------------------------------
+
+    def get_payment_status(self, obj):
+
+        paid = Decimal(
+            self.get_paid_amount(obj)
+        )
+
+        total = Decimal(
+            str(obj.course.total_fee)
+        )
+
+        if paid <= Decimal("0.00"):
+            return "Pending"
+
+        if paid < total:
+            return "Partial"
+
+        return "Paid"
+
+    # ---------------------------------------------------------
+    # Due Date
+    # ---------------------------------------------------------
+
+    def get_next_due_date(self, obj):
+        # if not obj.installment_plan:
+        #     return None
+
+        next_installment = get_next_unpaid_installment_item(
+            obj.student,
+            obj.course,
+            preferred_plan=obj.installment_plan,
+        )
+
+        if not next_installment:
+            return None
+
+        return get_installment_due_date_for_staff(
+            obj.student,
+            next_installment,
+        )
+
+    # ---------------------------------------------------------
+    # Last Payment
+    # ---------------------------------------------------------
+
+    def get_last_payment_date(self, obj):
+
+        payment = obj.payments.first()
+
+        if payment:
+            return payment.payment_date
+
+        return None
+
+    def get_last_payment_method(self, obj):
+
+        payment = obj.payments.first()
+
+        if payment:
+            return payment.payment_method
+
+        return None

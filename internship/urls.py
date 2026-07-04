@@ -195,6 +195,7 @@ report_patterns = [
     
 
     path("registration/", report_view.RegistrationReportAPIView.as_view(), name="registration-report"),
+    path("payment-report/", internship_admin.PaymentReportListAPIView.as_view()),
 
 ]
 

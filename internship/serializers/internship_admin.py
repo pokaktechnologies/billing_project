@@ -2001,8 +2001,8 @@ class PaymentReportSerializer(serializers.ModelSerializer):
     course_id = serializers.IntegerField(source="course.id")
     course_title = serializers.CharField(source="course.title")
 
-    batch_id = serializers.IntegerField(source="batch.id")
-    batch_number = serializers.CharField(source="batch.batch_number")
+    batch_id = serializers.SerializerMethodField()
+    batch_number = serializers.SerializerMethodField()
 
     payment_plan_type = serializers.SerializerMethodField()
     total_installments = serializers.SerializerMethodField()
@@ -2049,6 +2049,13 @@ class PaymentReportSerializer(serializers.ModelSerializer):
         ]
     def format_decimal(self, value):
         return str(Decimal(str(value)).quantize(Decimal("0.00")))
+
+    def get_batch_id(self, obj):
+        return obj.batch.id if obj.batch else None
+
+
+    def get_batch_number(self, obj):
+        return obj.batch.batch_number if obj.batch else None
     
     def get_payment_plan_type(self, obj):
         return obj.get_payment_plan_type_display()

@@ -1356,7 +1356,20 @@ class SectionSerializer(serializers.ModelSerializer):
         
 
     def get_days_display(self, obj):
-        return [d.day for d in obj.days.all()]
+        day_order = {
+            "mon": 1,
+            "tue": 2,
+            "wed": 3,
+            "thu": 4,
+            "fri": 5,
+            "sat": 6,
+            "sun": 7,
+        }
+
+        days = list(obj.days.values_list("day", flat=True))
+        days.sort(key=lambda d: day_order[d])
+
+        return days
 
     def get_duration_minutes(self, obj):
         from datetime import datetime, date

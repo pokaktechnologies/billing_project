@@ -10,7 +10,7 @@ from rest_framework.generics import get_object_or_404
 
 from activity_logs.base_view import BaseAPIView
 from ..models import CustomUser, Feature
-from django.db.models import Q
+from django.db.models import Q, ProtectedError
 from django.db import transaction, IntegrityError
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
@@ -947,11 +947,26 @@ class ProductDetailAPI(APIView):
 
     def delete(self, request, product_id):
         product = get_object_or_404(Product, id=product_id)
-        product.delete()
-        return Response({
-            "Status": "1",
-            "message": "Product deleted successfully."
-        }, status=status.HTTP_200_OK)
+
+        try:
+            product.delete()
+
+            return Response(
+                {
+                    "status": "1",
+                    "message": "Product deleted successfully."
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except ProtectedError:
+            return Response(
+                {
+                    "status": "0",
+                    "detail": "This product cannot be deleted because it is already used in quotations, invoices, or credit notes."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 
 

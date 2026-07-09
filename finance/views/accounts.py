@@ -8,7 +8,7 @@ from activity_logs.base_view import BaseGenericAPIView
 from ..models import Account
 from ..serializers.accounts import AccountSerializer
 from ..filters import AccountFilter
-
+from django.db.models.deletion import ProtectedError
 
 class AccountListCreateAPIView(BaseGenericAPIView, generics.ListCreateAPIView):
      queryset = Account.objects.all().order_by('account_number')
@@ -73,6 +73,24 @@ class AccountTypeListView(APIView):
 class AccountRetrieveUpdateDestroyAPIView(BaseGenericAPIView, generics.RetrieveUpdateDestroyAPIView):
     queryset = Account.objects.all()
     serializer_class = AccountSerializer
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        try:
+            self.perform_destroy(instance)
+            return Response(
+                {"status": "1", "detail": "Account deleted successfully."},
+                status=status.HTTP_200_OK
+            )
+        except ProtectedError:
+            return Response(
+                {
+                    "status": "0",
+                    "detail": "Cannot delete this account because it is referenced by other records."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
 
 
 class GenerateAccountNumberView(APIView):

@@ -6,7 +6,7 @@ from activity_logs.base_view import BaseGenericAPIView
 from ..models import CashflowCategoryMapping, TaxSettings
 from ..serializers.settings import CashflowCategoryMappingSerializer, TaxSettingsSerializer
 from ..services.numbering import get_next_finance_number
-
+from django.db.models.deletion import ProtectedError
 class CashflowCategoryMappingListCreateView(BaseGenericAPIView, generics.ListCreateAPIView):
     serializer_class = CashflowCategoryMappingSerializer
     def get_queryset(self):
@@ -44,7 +44,7 @@ class TaxSettingsListCreateAPIView(BaseGenericAPIView, generics.ListCreateAPIVie
         if rate_min: queryset = queryset.filter(rate__gte=rate_min)
         if rate_max: queryset = queryset.filter(rate__lte=rate_max)
         return queryset
-from django.db.models.deletion import ProtectedError
+
 class TaxSettingsRetrieveUpdateDestroyAPIView(BaseGenericAPIView, generics.RetrieveUpdateDestroyAPIView):
     queryset = TaxSettings.objects.all()
     serializer_class = TaxSettingsSerializer

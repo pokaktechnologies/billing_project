@@ -48,3 +48,23 @@ class TaxSettingsListCreateAPIView(BaseGenericAPIView, generics.ListCreateAPIVie
 class TaxSettingsRetrieveUpdateDestroyAPIView(BaseGenericAPIView, generics.RetrieveUpdateDestroyAPIView):
     queryset = TaxSettings.objects.all()
     serializer_class = TaxSettingsSerializer
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+
+        try:
+            instance.delete()
+            return Response(
+                {
+                    "status": "1",
+                    "detail": "Tax setting deleted successfully."
+                },
+                status=status.HTTP_200_OK
+            )
+        except ProtectedError:
+            return Response(
+                {
+                    "status": "0",
+                    "detail": "This tax setting cannot be deleted because it is already assigned to products or courses."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )

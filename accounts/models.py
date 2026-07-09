@@ -843,22 +843,26 @@ class SalesReturnItem(models.Model):
             if self.pk:
                 old = SalesReturnItem.objects.select_related("invoice_item").get(pk=self.pk)
 
+            # Always sync pricing/tax from InvoiceItem
+            self.unit_price = self.invoice_item.unit_price
+            self.sgst_percentage = self.invoice_item.sgst_percentage
+            self.cgst_percentage = self.invoice_item.cgst_percentage
+
             old_product_id = old.invoice_item.product_id if old else None
             new_product_id = self.invoice_item.product_id
+
             product_ids = {
                 product_id for product_id in [old_product_id, new_product_id]
                 if product_id
             }
+
             locked_products = {
                 product.id: product
                 for product in Product.objects.select_for_update().filter(id__in=product_ids)
             }
 
-            # Keep pricing/tax synced when creating or when target invoice item changes.
+            # Invoice item changed during update
             if old and old.invoice_item_id != self.invoice_item_id:
-                self.unit_price = self.invoice_item.unit_price
-                self.sgst_percentage = self.invoice_item.sgst_percentage
-                self.cgst_percentage = self.invoice_item.cgst_percentage
 
                 available = self.invoice_item.available_quantity
 
@@ -894,6 +898,7 @@ class SalesReturnItem(models.Model):
                         new_units = self._to_stock_units(self.quantity)
                         new_product.stock += new_units
                         new_product.save(update_fields=["stock"])
+
             else:
                 available = self.invoice_item.available_quantity
 
@@ -924,19 +929,30 @@ class SalesReturnItem(models.Model):
                     if product:
                         delta_units = self._to_stock_units(delta, allow_negative=True)
                         new_stock = product.stock + delta_units
+
                         if new_stock < 0:
                             raise ValidationError(
                                 f"Insufficient stock to reduce return quantity for {product.name}."
                             )
+
                         product.stock = new_stock
                         product.save(update_fields=["stock"])
 
+            # Calculate totals
             self.total = self.unit_price * self.quantity
-            self.sgst = (self.sgst_percentage * self.total) / 100
-            self.cgst = (self.cgst_percentage * self.total) / 100
+            self.sgst = (self.sgst_percentage * self.total) / Decimal("100")
+            self.cgst = (self.cgst_percentage * self.total) / Decimal("100")
             self.sub_total = self.total + self.sgst + self.cgst
 
+            print("===== SalesReturnItem Save =====")
+            print("Unit Price:", self.unit_price)
+            print("Quantity:", self.quantity)
+            print("Total:", self.total)
+            print("Sub Total:", self.sub_total)
+
             super().save(*args, **kwargs)
+
+            # Update sales return grand total
             self.sales_return.update_grand_total()
 
     def delete(self, *args, **kwargs):

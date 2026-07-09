@@ -1,3 +1,4 @@
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from django.utils import timezone
@@ -1355,7 +1356,20 @@ class SectionSerializer(serializers.ModelSerializer):
         
 
     def get_days_display(self, obj):
-        return [d.day for d in obj.days.all()]
+        day_order = {
+            "mon": 1,
+            "tue": 2,
+            "wed": 3,
+            "thu": 4,
+            "fri": 5,
+            "sat": 6,
+            "sun": 7,
+        }
+
+        days = list(obj.days.values_list("day", flat=True))
+        days.sort(key=lambda d: day_order[d])
+
+        return days
 
     def get_duration_minutes(self, obj):
         from datetime import datetime, date
@@ -1714,3 +1728,463 @@ class AvailableStudentSerializer(serializers.ModelSerializer):
 
     def get_center_name(self, obj):
         return obj.center.name if obj.center else None
+
+
+from decimal import Decimal
+from django.db.models import Sum
+from rest_framework import serializers
+
+class StudentCourseSummarySerializer(serializers.ModelSerializer):
+    course_name = serializers.CharField(source="course.title")
+    enrollment_id = serializers.IntegerField(source="id")
+
+    course_duration = serializers.SerializerMethodField()
+    batch = serializers.SerializerMethodField()
+    instructors = serializers.SerializerMethodField()
+    course_status = serializers.SerializerMethodField()
+
+    total_fee = serializers.SerializerMethodField()
+    paid_amount = serializers.SerializerMethodField()
+    pending_amount = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StudentCourseEnrollment
+        fields = [
+            "enrollment_id",
+            "course_name",
+            "course_duration",
+            "enrollment_date",
+            "batch",
+            "instructors",
+            "course_status",
+
+            "payment_plan_type",
+            "custom_installments",
+
+            "advance_amount",
+
+            "total_fee",
+            "paid_amount",
+            "pending_amount",
+        ]
+
+    def format_decimal(self, value):
+        return str(Decimal(str(value)).quantize(Decimal("0.00")))
+
+    def get_course_duration(self, obj):
+        if not obj.batch:
+            return None
+
+        days = (obj.batch.end_date - obj.batch.start_date).days
+
+        months = round(days / 30)
+
+        return f"{months} Months"
+
+    def get_batch(self, obj):
+        if not obj.batch:
+            return None
+
+        return {
+            "id": obj.batch.id,
+            "batch_number": obj.batch.batch_number,
+        }
+
+    def get_instructors(self, obj):
+
+        if not obj.batch:
+            return []
+
+        return [
+            {
+                "id": faculty.id,
+                "name": faculty.get_full_name(),
+            }
+            for faculty in obj.batch.faculties.all()
+        ]
+
+    def get_course_status(self, obj):
+
+        if not obj.batch:
+            return "Unknown"
+
+        if obj.batch.end_date < timezone.now().date():
+            return "Completed"
+
+        if obj.batch.start_date > timezone.now().date():
+            return "Upcoming"
+
+        return "Active"
+
+    def get_total_fee(self, obj):
+        return self.format_decimal(obj.course.total_fee)
+
+    def get_paid_amount(self, obj):
+
+        total = obj.payments.aggregate(
+            total=Sum("amount_paid")
+        )["total"] or Decimal("0.00")
+
+        return self.format_decimal(total)
+
+    def get_pending_amount(self, obj):
+
+        total = Decimal(str(obj.course.total_fee))
+
+        paid = Decimal(self.get_paid_amount(obj))
+
+        return self.format_decimal(total - paid)
+    
+
+class StudentProfileDetailSerializer(serializers.ModelSerializer):
+
+    student_name = serializers.SerializerMethodField()
+
+    phone_number = serializers.CharField(
+        source="profile.phone_number"
+    )
+
+    email = serializers.CharField(
+        source="profile.user.email"
+    )
+
+    center = serializers.CharField(
+        source="center.center_name",
+        default=None
+    )
+
+    counsellor = serializers.SerializerMethodField()
+
+    courses = StudentCourseSummarySerializer(
+        source="enrollments",
+        many=True,
+        read_only=True,
+    )
+
+    class Meta:
+        model = Student
+        fields = [
+            "id",
+            "student_id",
+            "student_name",
+            "phone_number",
+            "email",
+            "center",
+            "status",
+            "counsellor",
+            "courses",
+        ]
+
+    def get_student_name(self, obj):
+        return obj.get_full_name()
+
+    def get_counsellor(self, obj):
+
+        counsellor = obj.councellor
+
+        if not counsellor:
+            return None
+
+        return str(counsellor)
+
+
+class BatchInformationSerializer(serializers.ModelSerializer):
+    batch_status = serializers.SerializerMethodField()
+    course_title = serializers.CharField(source="course.title")
+    course_duration = serializers.SerializerMethodField()
+    class_schedule = serializers.SerializerMethodField()
+    next_class = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Batch
+        fields = [
+            "id",
+            "batch_number",
+            "course_title",
+            "course_duration",
+            "start_date",
+            "end_date",
+            "batch_status",
+            "class_schedule",
+            "next_class",
+        ]
+
+    def get_batch_status(self, obj):
+        today = date.today()
+
+        if not obj.is_active:
+            return "Inactive"
+
+        if obj.end_date < today:
+            return "Completed"
+
+        return "Active"
+
+    def get_course_duration(self, obj):
+        days = (obj.end_date - obj.start_date).days
+
+        months = days // 30
+
+        if months <= 0:
+            return f"{days} Days"
+
+        return f"{months} Months"
+
+    def get_class_schedule(self, obj):
+
+        sections = (
+            Section.objects.filter(batch=obj)
+            .prefetch_related("days", "class_obj")
+            .order_by("start_time")
+        )
+
+        data = []
+
+        for section in sections:
+
+            data.append({
+                "section_id": section.id,
+                "class_name": section.class_obj.name,
+                "days": [d.get_day_display() for d in section.days.all()],
+                "start_time": section.start_time.strftime("%I:%M %p"),
+                "end_time": section.end_time.strftime("%I:%M %p"),
+                "duration": SectionSerializer.get_duration_minutes(self, section),
+            })
+
+        return data
+
+    def get_next_class(self, obj):
+
+        day_map = {
+            "mon": 0,
+            "tue": 1,
+            "wed": 2,
+            "thu": 3,
+            "fri": 4,
+            "sat": 5,
+            "sun": 6,
+        }
+
+        today = date.today()
+        now = datetime.now().time()
+
+        sections = Section.objects.filter(batch=obj).prefetch_related("days")
+
+        nearest = None
+
+        for section in sections:
+
+            for day in section.days.all():
+
+                target = day_map[day.day]
+            
+                diff = target - today.weekday()
+
+                if diff < 0:
+                    diff += 7
+
+                next_date = today + timedelta(days=diff)
+
+                if diff == 0 and section.start_time <= now:
+                    next_date += timedelta(days=7)
+
+                if nearest is None or next_date < nearest["date"]:
+
+                    nearest = {
+                        "date": next_date,
+                        "day": day.get_day_display(),
+                        "class_name": section.class_obj.name,
+                        "start_time": section.start_time.strftime("%I:%M %p"),
+                        "end_time": section.end_time.strftime("%I:%M %p"),
+                    }
+
+        return nearest
+
+
+# complete payment report 
+class PaymentReportSerializer(serializers.ModelSerializer):
+    enrollment_id = serializers.IntegerField(source="id")
+    student_id = serializers.CharField(source="student.id")
+    student_code = serializers.CharField(source="student.student_id")
+    student_name = serializers.CharField(source="student.get_full_name")
+
+    phone_number = serializers.CharField(source="student.profile.phone_number")
+    email = serializers.CharField(source="student.profile.user.email")
+
+    course_id = serializers.IntegerField(source="course.id")
+    course_title = serializers.CharField(source="course.title")
+
+    batch_id = serializers.SerializerMethodField()
+    batch_number = serializers.SerializerMethodField()
+
+    payment_plan_type = serializers.SerializerMethodField()
+    total_installments = serializers.SerializerMethodField()
+
+    course_fee = serializers.SerializerMethodField()
+    advance_amount = serializers.SerializerMethodField()
+    balance_fee = serializers.SerializerMethodField()
+
+    paid_amount = serializers.SerializerMethodField()
+    pending_fee = serializers.SerializerMethodField()
+
+    payment_status = serializers.SerializerMethodField()
+
+    next_due_date = serializers.SerializerMethodField()
+
+    last_payment_date = serializers.SerializerMethodField()
+    last_payment_method = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StudentCourseEnrollment
+        fields = [
+            "enrollment_id",
+            "student_id",
+            "student_code",
+            "student_name",
+            "phone_number",
+            "email",
+            "course_id",
+            "course_title",
+            "batch_id",
+            "batch_number",
+            "payment_plan_type",
+            "total_installments",
+            "course_fee",
+            "advance_amount",
+            "balance_fee",
+            "paid_amount",
+            "pending_fee",
+            "payment_status",
+            "next_due_date",
+            "last_payment_date",
+            "last_payment_method",
+            "enrollment_date"
+        ]
+    def format_decimal(self, value):
+        return str(Decimal(str(value)).quantize(Decimal("0.00")))
+
+    def get_batch_id(self, obj):
+        return obj.batch.id if obj.batch else None
+
+
+    def get_batch_number(self, obj):
+        return obj.batch.batch_number if obj.batch else None
+    
+    def get_payment_plan_type(self, obj):
+        return obj.get_payment_plan_type_display()
+
+    def get_total_installments(self, obj):
+
+        if obj.payment_plan_type == "default_installment":
+            if obj.installment_plan:
+                return obj.installment_plan.total_installments
+            return 0
+
+        return obj.custom_installments
+
+    # ---------------------------------------------------------
+    # Amounts
+    # ---------------------------------------------------------
+
+    def get_course_fee(self, obj):
+        return self.format_decimal(
+            obj.course.total_fee
+        )
+
+    def get_advance_amount(self, obj):
+        return self.format_decimal(
+            obj.advance_amount
+        )
+
+    def get_balance_fee(self, obj):
+
+        return self.format_decimal(
+            obj.course.total_fee -
+            obj.advance_amount
+        )
+
+    def get_paid_amount(self, obj):
+
+        total = obj.payments.aggregate(
+            total=Sum("amount_paid")
+        )["total"] or Decimal("0.00")
+
+        return self.format_decimal(total)
+
+    def get_pending_fee(self, obj):
+
+        pending = (
+            Decimal(str(obj.course.total_fee))
+            -
+            Decimal(self.get_paid_amount(obj))
+        )
+
+        return self.format_decimal(
+            pending
+        )
+
+    # ---------------------------------------------------------
+    # Status
+    # ---------------------------------------------------------
+
+    def get_payment_status(self, obj):
+
+        paid = Decimal(
+            self.get_paid_amount(obj)
+        )
+
+        total = Decimal(
+            str(obj.course.total_fee)
+        )
+
+        if paid <= Decimal("0.00"):
+            return "Pending"
+
+        if paid < total:
+            return "Partial"
+
+        return "Paid"
+
+    # ---------------------------------------------------------
+    # Due Date
+    # ---------------------------------------------------------
+
+    def get_next_due_date(self, obj):
+        # if not obj.installment_plan:
+        #     return None
+
+        next_installment = get_next_unpaid_installment_item(
+            obj.student,
+            obj.course,
+            preferred_plan=obj.installment_plan,
+        )
+
+        if not next_installment:
+            return None
+
+        return get_installment_due_date_for_staff(
+            obj.student,
+            next_installment,
+        )
+
+    # ---------------------------------------------------------
+    # Last Payment
+    # ---------------------------------------------------------
+
+    def get_last_payment_date(self, obj):
+
+        payment = obj.payments.first()
+
+        if payment:
+            return payment.payment_date
+
+        return None
+
+    def get_last_payment_method(self, obj):
+
+        payment = obj.payments.first()
+
+        if payment:
+            return payment.payment_method
+
+        return None

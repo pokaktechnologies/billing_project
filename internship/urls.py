@@ -136,8 +136,10 @@ internship_admin_patterns = [
 
     path("students/", internship_admin.StudentListCreateAPIView.as_view(), name="student-list-create"),
     path("students/<int:id>/", internship_admin.StudentRetrieveUpdateDestroyAPIView.as_view(), name="student-detail"),
+    path("students/<int:pk>/profile/", internship_admin.StudentProfileDetailAPIView.as_view()),
     path("students/<int:pk>/credentials/", internship_admin.StudentCredentialsAPIView.as_view(), name="student-credentials"),
     path("students-count/", internship_admin.StudentCountAPIView.as_view(), name="student-count"),
+    path("batch-information/", internship_admin.BatchInformationAPIView.as_view()),
 
 
     path("enrollments/", internship_admin.StudentCourseEnrollmentView.as_view(), name="student-course-enrollment-list-create"),
@@ -193,6 +195,7 @@ report_patterns = [
     
 
     path("registration/", report_view.RegistrationReportAPIView.as_view(), name="registration-report"),
+    path("payment-report/", internship_admin.PaymentReportListAPIView.as_view()),
 
 ]
 

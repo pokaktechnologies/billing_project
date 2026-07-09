@@ -11,12 +11,40 @@ from ..filters import AccountFilter
 
 
 class AccountListCreateAPIView(BaseGenericAPIView, generics.ListCreateAPIView):
-    queryset = Account.objects.all().order_by('-created_at')
-    serializer_class = AccountSerializer
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_class = AccountFilter
-    search_fields = ['name', 'account_number']
-    ordering_fields = ['account_number', 'name', 'created_at', 'opening_balance']
+     queryset = Account.objects.all().order_by('account_number')
+     serializer_class = AccountSerializer
+     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+     filterset_class = AccountFilter
+     search_fields = ['name', 'account_number']
+     ordering_fields = ['account_number', 'name', 'created_at', 'opening_balance']
+
+# in case melethe classs ordering work aavunnilleeel ith use akkaam
+# class AccountListCreateAPIView(BaseGenericAPIView, generics.ListCreateAPIView):
+
+#     serializer_class = AccountSerializer
+#     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+#     filterset_class = AccountFilter
+#     search_fields = ['name', 'account_number']
+#     ordering_fields = ['account_number', 'name', 'created_at', 'opening_balance']
+
+#     def get_queryset(self):
+#         return (
+#             Account.objects
+#             .annotate(
+#                 prefix=Cast(
+#                     Substr('account_number', 1, StrIndex('account_number', '.') - 1),
+#                     IntegerField()
+#                 ),
+#                 suffix=Cast(
+#                     Substr(
+#                         'account_number',
+#                         StrIndex('account_number', '.') + 1
+#                     ),
+#                     IntegerField()
+#                 ),
+#             )
+#             .order_by('prefix', 'suffix')
+#         )
 
 
 class AccountTypeListView(APIView):

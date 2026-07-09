@@ -1537,15 +1537,15 @@ class ReportView(BaseAPIView):
     parser_classes = [MultiPartParser, FormParser]
     
     def get(self, request, id=None):
-        report_type = request.query_params.get('type')  # daily, weekly, monthly
-        date_str = request.query_params.get('date')     # YYYY-MM-DD
-        week_str = request.query_params.get('week')     # YYYY-MM-DD
-        month_str = request.query_params.get('month')   # YYYY-MM
+        report_type = request.query_params.get('type')      # daily, weekly, monthly
+        project_id = request.query_params.get('project')    # <-- ADD HERE
+        date_str = request.query_params.get('date')         # YYYY-MM-DD
+        week_str = request.query_params.get('week')         # YYYY-MM-DD
+        month_str = request.query_params.get('month')       # YYYY-MM
 
-        
         user = request.user
 
-        #  Get member profile
+        # Get member profile
         member = Member.objects.filter(user=user).first()
         if not member:
             return Response(
@@ -1553,12 +1553,12 @@ class ReportView(BaseAPIView):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        #  Get projects where user is a member
+        # Get projects where user is a member
         project_ids = ProjectMember.objects.filter(
             member=member
         ).values_list('project_id', flat=True)
 
-        #  IF ID IS PROVIDED → RETRIEVE SINGLE REPORT
+        # IF ID IS PROVIDED → RETRIEVE SINGLE REPORT
         if id is not None:
             try:
                 report = Report.objects.select_related(
@@ -1585,18 +1585,21 @@ class ReportView(BaseAPIView):
                 status=status.HTTP_200_OK
             )
 
-
-        # Fetch reports only for those projects
+        # Fetch reports only for projects where user is a member
         reports = Report.objects.filter(
             project_id__in=project_ids,
             submitted_by=user
         )
 
-        #  Filter by report type
+        # Filter by selected project
+        if project_id:
+            reports = reports.filter(project_id=project_id)
+
+        # Filter by report type
         if report_type:
             reports = reports.filter(report_type=report_type)
-        
-        #  Daily filter
+
+        # Daily filter
         if date_str:
             try:
                 date = datetime.strptime(date_str, '%Y-%m-%d').date()
@@ -1618,8 +1621,8 @@ class ReportView(BaseAPIView):
                     {"status": "0", "message": "Invalid date format (YYYY-MM-DD)"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-                    
-        #  Weekly filter
+
+        # Weekly filter
         if week_str:
             try:
                 week_date = datetime.strptime(week_str, '%Y-%m-%d').date()
@@ -1644,8 +1647,7 @@ class ReportView(BaseAPIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            
-        #  Monthly filter
+        # Monthly filter
         if month_str:
             try:
                 month_date = datetime.strptime(month_str, '%Y-%m')
@@ -1669,7 +1671,7 @@ class ReportView(BaseAPIView):
                     {"status": "0", "message": "Invalid month format (YYYY-MM)"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            
+
         reports = reports.select_related(
             'submitted_by',
             'submitted_by__staff_profile',
@@ -1679,16 +1681,18 @@ class ReportView(BaseAPIView):
             'challenges'
         ).order_by('-submitted_at')
 
-        # -----------------
-        # Pagination
-        # -----------------
-        
         paginator = Pagination()
         page = paginator.paginate_queryset(reports, request)
 
         serializer = ReportResponseSerializer(page, many=True)
+        print("Requested Project:", project_id)
+
         return paginator.get_paginated_response(
-            {"status":"1", "message":"success", "data":serializer.data},
+            {
+                "status": "1",
+                "message": "success",
+                "data": serializer.data
+            }
         )
     
 

@@ -1,9 +1,10 @@
 from decimal import Decimal
 from django.utils import timezone
 from django.db import transaction
-from django.db.models import Q, Count, Prefetch, Sum
+from django.db.models import Q, Count, Prefetch, Sum, DecimalField, Value
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.exceptions import ValidationError
 from rest_framework import generics, status
 from rest_framework.filters import SearchFilter
 from rest_framework.parsers import FormParser, MultiPartParser
@@ -16,7 +17,7 @@ from django.db.models.functions import TruncMonth
 
 from internship.serializers.instructor import StudentReportSerializer
 from ..models import Section, Class, Student, Course, Faculty, StudentCourseEnrollment, CoursePayment, StudentReport
-from ..serializers.internship_admin import AvailableFacultySerializer, AvailableStudentSerializer, ClassDetailSerializer, SectionSerializer, ClassListCreateSerializer, StudentPaymentDetailSerializer, StudentPaymentSerializer
+from ..serializers.internship_admin import AvailableFacultySerializer, AvailableStudentSerializer, BatchInformationSerializer, ClassDetailSerializer, SectionSerializer, ClassListCreateSerializer, StudentPaymentDetailSerializer, StudentPaymentSerializer, StudentProfileDetailSerializer
 
 from accounts.models import CustomUser, StaffProfile
 from internship.utils import (
@@ -318,6 +319,21 @@ class StudentRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView)
             )
         )
     )
+    def perform_destroy(self, instance):
+
+        # Do not allow deletion if any payment exists
+        if instance.course_payments.exists():
+            raise ValidationError({
+                "detail": "Cannot delete this student because payment records exist."
+            })
+
+        with transaction.atomic():
+            # Delete all enrollments (this also deletes StudentInstallmentItem
+            # because StudentInstallmentItem.enrollment uses CASCADE)
+            instance.enrollments.all().delete()
+
+            # Finally delete the student
+            instance.delete()    
 
     serializer_class = StudentSerializer
     permission_classes = [IsAuthenticated]
@@ -336,6 +352,24 @@ class StudentCourseEnrollmentDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = StudentCourseEnrollment.objects.select_related("student", "batch", "installment_plan").all()
     serializer_class = StudentCourseEnrollmentSerializer
     permission_classes = [IsAuthenticated]
+
+    def perform_destroy(self, instance):
+
+        # Advance payments
+        has_advance_payments = instance.payments.exists()
+
+        # Installment payments
+        has_installment_payments = CoursePayment.objects.filter(
+            installments__enrollment=instance
+        ).exists()
+
+        if has_advance_payments or has_installment_payments:
+            raise ValidationError({
+                "detail": "Cannot delete this enrollment because payment records exist."
+            })
+
+        with transaction.atomic():
+            instance.delete()
 
 class CenterListCreateAPIView(generics.ListCreateAPIView):
     queryset = Center.objects.all()
@@ -708,3 +742,280 @@ class AvailableFacultyListAPIView(generics.ListAPIView):
             )
 
         return queryset
+
+# student detail profile viewfor admin
+class StudentProfileDetailAPIView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+
+        student = get_object_or_404(
+            Student.objects.select_related(
+                "profile__user",
+                "center",
+                "councellor",
+            ).prefetch_related(
+                "enrollments__course",
+                "enrollments__batch__faculties__user__user",
+                "enrollments__payments",
+            ),
+            pk=pk,
+        )
+
+        serializer = StudentProfileDetailSerializer(student)
+
+        return Response(serializer.data)
+
+
+class BatchInformationAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        batch_id = request.query_params.get("batch")
+
+        if not batch_id:
+            return Response(
+                {
+                    "detail": "batch query parameter is required."
+                },
+                status=400,
+            )
+
+        batch = get_object_or_404(
+            Batch.objects.select_related("course"),
+            pk=batch_id,
+        )
+
+        serializer = BatchInformationSerializer(batch)
+
+        return Response(serializer.data)
+
+
+from datetime import timedelta
+
+from django.db.models import F, Q, Sum
+from django.db.models.functions import Coalesce
+from django.utils import timezone
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import generics
+from rest_framework.filters import OrderingFilter, SearchFilter
+
+from internship.models import StudentCourseEnrollment
+from internship.serializers.internship_admin import PaymentReportSerializer
+
+
+class PaymentReportListAPIView(generics.ListAPIView):
+    serializer_class = PaymentReportSerializer
+    permission_classes = [IsAuthenticated]
+
+    filter_backends = [
+        DjangoFilterBackend,
+        SearchFilter,
+        OrderingFilter,
+    ]
+
+    search_fields = [
+        "student__profile__user__first_name",
+        "student__profile__user__last_name",
+        "student__student_id",
+        "student__profile__phone_number",
+        "student__profile__user__email",
+        "course__title",
+    ]
+
+    ordering_fields = [
+        "enrollment_date",
+        "course__title",
+        "student__student_id",
+        "course__total_fee",
+    ]
+
+    ordering = [
+        "-enrollment_date"
+    ]
+
+    def get_queryset(self):
+
+        queryset = (
+            StudentCourseEnrollment.objects
+            .select_related(
+                "student",
+                "student__profile",
+                "student__profile__user",
+                "course",
+                "batch",
+                "installment_plan",
+            )
+            .prefetch_related(
+                "payments",
+                "student_installment_items",
+            )
+            .annotate(
+                total_paid=Coalesce(
+                    Sum("payments__amount_paid"),
+                    Value(0),
+                    output_field=DecimalField(max_digits=10, decimal_places=2)
+                )
+)
+        )
+
+        params = self.request.query_params
+
+        # Student
+        student = params.get("student")
+
+        if student:
+            queryset = queryset.filter(
+                student_id=student
+            )
+
+        # Course
+        course = params.get("course")
+
+        if course:
+            queryset = queryset.filter(
+                course_id=course
+            )
+
+        # Batch
+        batch = params.get("batch")
+
+        if batch:
+            queryset = queryset.filter(
+                batch_id=batch
+            )
+
+        # Default / Custom
+        payment_plan_type = params.get(
+            "payment_plan_type"
+        )
+
+        if payment_plan_type:
+
+            queryset = queryset.filter(
+                payment_plan_type=payment_plan_type
+            )
+
+        # Installment Count
+        installments = params.get(
+            "installments"
+        )
+
+        if installments:
+
+            queryset = queryset.filter(
+
+                Q(
+                    payment_plan_type="default_installment",
+                    installment_plan__total_installments=installments,
+                )
+
+                |
+
+                Q(
+                    payment_plan_type="custom_installment",
+                    custom_installments=installments,
+                )
+
+            )
+
+        # Advance
+
+        advance = params.get("advance")
+
+        if advance == "yes":
+
+            queryset = queryset.filter(
+                advance_amount__gt=0
+            )
+
+        elif advance == "no":
+
+            queryset = queryset.filter(
+                advance_amount=0
+            )
+
+        # Payment Method
+        payment_method = params.get(
+            "payment_method"
+        )
+
+        if payment_method:
+
+            queryset = queryset.filter(
+                payments__payment_method=payment_method
+            ).distinct()
+
+        # Enrollment Date
+        enrolled_from = params.get(
+            "enrolled_from"
+        )
+
+        if enrolled_from:
+
+            queryset = queryset.filter(
+                enrollment_date__gte=enrolled_from
+            )
+
+        enrolled_to = params.get(
+            "enrolled_to"
+        )
+
+        if enrolled_to:
+
+            queryset = queryset.filter(
+                enrollment_date__lte=enrolled_to
+            )
+
+        # payment status
+        status = params.get("status")
+
+        if status == "pending":
+
+            queryset = queryset.filter(
+                total_paid=0
+            )
+
+        elif status == "partial":
+
+            queryset = queryset.filter(
+                total_paid__gt=0,
+                total_paid__lt=F("course__total_fee")
+            )
+
+        elif status == "paid":
+
+            queryset = queryset.filter(
+                total_paid__gte=F("course__total_fee")
+            )
+
+        # duee filter
+        due = params.get("due")
+
+        today = timezone.now().date()
+
+        if due == "today":
+
+            queryset = queryset.filter(
+                enrollment_date=today
+            )
+
+        elif due == "this_week":
+
+            queryset = queryset.filter(
+                enrollment_date__range=[
+                    today,
+                    today + timedelta(days=7)
+                ]
+            )
+
+        elif due == "this_month":
+
+            queryset = queryset.filter(
+                enrollment_date__month=today.month,
+                enrollment_date__year=today.year,
+            )
+
+        return queryset.distinct()

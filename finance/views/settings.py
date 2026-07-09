@@ -44,7 +44,7 @@ class TaxSettingsListCreateAPIView(BaseGenericAPIView, generics.ListCreateAPIVie
         if rate_min: queryset = queryset.filter(rate__gte=rate_min)
         if rate_max: queryset = queryset.filter(rate__lte=rate_max)
         return queryset
-
+from django.db.models.deletion import ProtectedError
 class TaxSettingsRetrieveUpdateDestroyAPIView(BaseGenericAPIView, generics.RetrieveUpdateDestroyAPIView):
     queryset = TaxSettings.objects.all()
     serializer_class = TaxSettingsSerializer

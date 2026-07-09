@@ -8,11 +8,17 @@ from activity_logs.base_view import BaseGenericAPIView
 from ..models import Account
 from ..serializers.accounts import AccountSerializer
 from ..filters import AccountFilter
-from django.db.models import IntegerField
-from django.db.models.functions import Cast, Substr, StrIndex
 
 
-# in case thazhathe  classs ordering work aavunnilleeel ith use akkaam
+class AccountListCreateAPIView(BaseGenericAPIView, generics.ListCreateAPIView):
+     queryset = Account.objects.all().order_by('account_number')
+     serializer_class = AccountSerializer
+     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+     filterset_class = AccountFilter
+     search_fields = ['name', 'account_number']
+     ordering_fields = ['account_number', 'name', 'created_at', 'opening_balance']
+
+# in case melethe classs ordering work aavunnilleeel ith use akkaam
 # class AccountListCreateAPIView(BaseGenericAPIView, generics.ListCreateAPIView):
 
 #     serializer_class = AccountSerializer
@@ -39,13 +45,6 @@ from django.db.models.functions import Cast, Substr, StrIndex
 #             )
 #             .order_by('prefix', 'suffix')
 #         )
-class AccountListCreateAPIView(BaseGenericAPIView, generics.ListCreateAPIView):
-     queryset = Account.objects.all().order_by('account_number')
-     serializer_class = AccountSerializer
-     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-     filterset_class = AccountFilter
-     search_fields = ['name', 'account_number']
-     ordering_fields = ['account_number', 'name', 'created_at', 'opening_balance']
 
 
 class AccountTypeListView(APIView):

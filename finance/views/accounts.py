@@ -86,7 +86,7 @@ class AccountRetrieveUpdateDestroyAPIView(BaseGenericAPIView, generics.RetrieveU
             return Response(
                 {
                     "status": "0",
-                    "detail": "Cannot delete this account because it is referenced by other records."
+                    "detail": "This account cannot be deleted because it is already used in journal entries or as a parent account."
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )

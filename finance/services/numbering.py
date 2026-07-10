@@ -1,12 +1,13 @@
 from ..utils import generate_next_number
-from ..models import Account, JournalEntry, CreditNote, DebitNote
+from ..models import Account, JournalEntry, CreditNote, DebitNote, PaymentVoucher
 
 def get_next_finance_number(model_type):
     model_map = {
         'ACT': (Account, 'account_number', 'ACT'),
         'JE': (JournalEntry, 'type_number', 'JE'),
         'CN': (CreditNote, 'credit_note_number', 'CN'),
-        'DN': (DebitNote, 'debit_note_number', 'DN')
+        'DN': (DebitNote, 'debit_note_number', 'DN'),
+        'PV': (PaymentVoucher, 'voucher_number', 'PV'),
     }
 
     if model_type not in model_map:

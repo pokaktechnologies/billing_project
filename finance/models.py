@@ -207,6 +207,7 @@ class JournalEntry(models.Model):
         ('credit_note', 'Credit Note'),
         ('debit_note', 'Debit Note'),
         ('journal_voucher', 'Journal Voucher'),
+        ('payment_voucher', 'Payment Voucher'),
         ('tax_payment', 'Tax Payment'),
     ]
     user = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True)
@@ -594,3 +595,103 @@ class TaxSettings(models.Model):
     def __str__(self):
         return f"{self.name} - {self.rate}%"
 
+
+
+class PaymentVoucher(models.Model):
+
+    PAYMENT_METHOD_CHOICES = [
+        ("cash", "Cash"),
+        ("bank", "Bank"),
+        ("upi", "UPI"),
+        ("cheque", "Cheque"),
+        ("neft", "NEFT"),
+        ("rtgs", "RTGS"),
+    ]
+
+    STATUS_CHOICES = [
+        ("draft", "Draft"),
+        ("posted", "Posted"),
+    ]
+
+    user = models.ForeignKey(CustomUser, on_delete=models.PROTECT, null=True, blank=True)
+    salesperson = models.ForeignKey(SalesPerson, on_delete=models.SET_NULL, null=True, blank=True)
+    voucher_number = models.CharField(max_length=50, unique=True)
+    date = models.DateField(default=timezone.now)
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES)
+    pay_to = models.CharField(max_length=200)
+    debit_account = models.ForeignKey(Account, related_name="payment_voucher_debits", on_delete=models.PROTECT)
+    credit_account = models.ForeignKey(Account, related_name="payment_voucher_credits", on_delete=models.PROTECT)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    reference_number = models.CharField(max_length=100, blank=True, null=True)
+    remarks = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="draft")
+    journal_entry = models.OneToOneField(JournalEntry, on_delete=models.SET_NULL, null=True, blank=True, related_name="payment_voucher")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+    
+    def create_or_update_journal_entry(self):
+        """
+        Create or update the Journal Entry for this Payment Voucher.
+        """
+
+        # Create new journal or reuse existing one
+        journal, created = JournalEntry.objects.get_or_create(
+            id=self.journal_entry.id if self.journal_entry else None,
+            defaults={
+                "user": self.user,
+                "salesperson": self.salesperson,
+                "type": "payment_voucher",
+                "type_number": self.voucher_number,
+                "date": self.date,
+                "narration": self.remarks or f"Payment made to {self.pay_to}",
+            }
+        )
+
+        # Updating existing voucher
+        if not created:
+
+            journal.user = self.user
+            journal.salesperson = self.salesperson
+            journal.type = "payment_voucher"
+            journal.type_number = self.voucher_number
+            journal.date = self.date
+            journal.narration = self.remarks or f"Payment made to {self.pay_to}"
+            journal.save()
+
+            # Remove old journal lines
+            journal.lines.all().delete()
+
+        # -------------------------
+        # Debit Entry
+        # -------------------------
+        JournalLine.objects.create(
+            journal=journal,
+            account=self.debit_account,
+            debit=self.amount
+        )
+
+        # -------------------------
+        # Credit Entry
+        # -------------------------
+        JournalLine.objects.create(
+            journal=journal,
+            account=self.credit_account,
+            credit=self.amount
+        )
+
+        # Link Journal Entry
+        self.journal_entry = journal
+        self.save(update_fields=["journal_entry"])
+        
+    def delete(self, *args, **kwargs):
+        if self.journal_entry:
+            self.journal_entry.delete()
+
+        super().delete(*args, **kwargs)
+
+
+    def __str__(self):
+        return self.voucher_number

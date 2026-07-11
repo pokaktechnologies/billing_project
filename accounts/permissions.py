@@ -117,7 +117,11 @@ PARENT_MODULE_MAP = [
             "chart_of_accounts",
             "tax_settings",
             "finance_reports",
-            "transactions"
+            "transactions",
+            "payment_voucher",
+            "trial_balance",
+            "balance_sheet",
+            "profit_loss"
         ]
     },
 

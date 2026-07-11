@@ -1228,6 +1228,10 @@ class ModulePermission(models.Model):
         ("tax_settings", "Tax Settings"),
         ("finance_reports", "Finance Reports"),
         ("transactions", "Transactions"),
+        ("payment_voucher", "Payment Voucher"),
+        ("trial_balance", "Trial Balance"),
+        ("balance_sheet", "Balance Sheet"),
+        ("profit_loss", "Profit & Loss"),
 
         # PROJECT
         ("project", "Project"),

@@ -83,7 +83,7 @@ class EmployeeLeaveRequestDetailView(BaseAPIView):
         if not leave_request:
             return Response({"detail": "Leave request not found."}, status=status.HTTP_404_NOT_FOUND)
         
-        if leave_request.status != "PENDING":
+        if leave_request.status != "pending":
              return Response({"detail": "Cannot delete a leave request that is not pending."}, status=status.HTTP_400_BAD_REQUEST)
 
         leave_request.delete()

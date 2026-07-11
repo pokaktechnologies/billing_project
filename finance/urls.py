@@ -1,4 +1,6 @@
 from django.urls import path
+
+from .views.payment_voucher import PaymentVoucherListCreateAPIView, PaymentVoucherRetrieveUpdateDestroyAPIView
 from .views.accounts import AccountListCreateAPIView, AccountRetrieveUpdateDestroyAPIView, GenerateAccountNumberView, AccountTypeListView
 from .views.ledger import (
     JournalEntryListCreateView, JournalEntryDetailView, ListJournalVoucherView, 
@@ -48,6 +50,9 @@ urlpatterns = [
     path('reports/account/', AccountReportView.as_view(), name='account-report'),
     path('reports/ledger/', LedgerReportView.as_view(), name='ledger-report'),
     path('reports/transaction/debit/', TransactionDebitNotReportView.as_view(), name='transaction-report-debit'),
-    path('reports/transaction/credit/', TransactionCreditNotReportView.as_view(), name='transaction-report-credit')
+    path('reports/transaction/credit/', TransactionCreditNotReportView.as_view(), name='transaction-report-credit'),
+
+    path("payment-vouchers/", PaymentVoucherListCreateAPIView.as_view(), name="payment-voucher-list-create"),
+    path("payment-vouchers/<int:pk>/", PaymentVoucherRetrieveUpdateDestroyAPIView.as_view(), name="payment-voucher-detail"),
 ]
 

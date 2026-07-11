@@ -2779,8 +2779,17 @@ class CustomerListCreateAPIView(BaseAPIView):
     # DELETE - Delete a customer
     def delete(self, request, pk):
         customer = get_object_or_404(Customer, pk=pk)
-        customer.delete()
-        return Response({"Status": "1", "message": "Customer deleted successfully."},status=status.HTTP_200_OK)
+        try:
+            customer.delete()
+            return Response({"Status": "1", "message": "Customer deleted successfully."}, status=status.HTTP_200_OK)
+        except ProtectedError:
+            return Response(
+                {
+                    "status": "0",
+                    "detail": "This client cannot be deleted because it is already used in quotations, invoices, receipts, or sales returns."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
 
 class CategoryListCreateAPIView(BaseAPIView):

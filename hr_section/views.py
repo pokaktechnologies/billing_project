@@ -645,6 +645,8 @@ class ErpEnquiryListCreateView(generics.ListCreateAPIView):
         queryset = super().get_queryset()
         start_date = self.request.query_params.get('start_date')
         end_date = self.request.query_params.get('end_date')
+        print("START:", start_date)
+        print("END:", end_date)
         if start_date:
             queryset = queryset.filter(created_at__date__gte=start_date)
         if end_date:

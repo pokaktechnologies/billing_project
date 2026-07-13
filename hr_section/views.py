@@ -10,7 +10,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from accounts.models import StaffProfile
 from accounts.permissions import HasModulePermission
 from rest_framework.permissions import IsAuthenticated
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from accounts.serializers.user import StaffProfileSerializer
 from activity_logs.base_view import BaseAPIView
@@ -643,14 +643,21 @@ class ErpEnquiryListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        start_date = self.request.query_params.get('start_date')
-        end_date = self.request.query_params.get('end_date')
-        print("START:", start_date)
-        print("END:", end_date)
+
+        start_date = self.request.query_params.get("start_date")
+        end_date = self.request.query_params.get("end_date")
+
         if start_date:
-            queryset = queryset.filter(created_at__date__gte=start_date)
+            start = timezone.make_aware(
+                datetime.strptime(start_date, "%Y-%m-%d")
+            )
+            queryset = queryset.filter(created_at__gte=start)
+
         if end_date:
-            queryset = queryset.filter(created_at__date__lte=end_date)
+            end = timezone.make_aware(
+                datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
+            )
+            queryset = queryset.filter(created_at__lt=end)
 
         return queryset
 

@@ -786,6 +786,11 @@ class SupplierAPIView(BaseAPIView):
             elif end_date:
                 suppliers = suppliers.filter(date__lte=end_date)
 
+            #supplier filter
+            supplier = request.query_params.get('supplier')
+            if supplier:
+                suppliers = suppliers.filter(company_name__iexact=supplier)
+
             # optional pagination response
             return paginate_response(suppliers, request, SupplierSerializer)
         

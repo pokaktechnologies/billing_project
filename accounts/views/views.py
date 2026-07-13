@@ -787,9 +787,26 @@ class SupplierAPIView(BaseAPIView):
                 suppliers = suppliers.filter(date__lte=end_date)
 
             #supplier filter
-            supplier = request.query_params.get('supplier')
+            supplier = request.query_params.get("supplier")
+            
             if supplier:
-                suppliers = suppliers.filter(company_name__iexact=supplier)
+                supplier = supplier.strip()
+
+                query = (
+                    Q(company_name__icontains=supplier) |
+                    Q(first_name__icontains=supplier) |
+                    Q(last_name__icontains=supplier)
+                )
+
+                # Handle full names
+                parts = supplier.split()
+                if len(parts) >= 2:
+                    query |= Q(
+                        first_name__icontains=parts[0],
+                        last_name__icontains=" ".join(parts[1:])
+                    )
+
+                suppliers = suppliers.filter(query)
 
             # optional pagination response
             return paginate_response(suppliers, request, SupplierSerializer)

@@ -33,7 +33,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         request = self.context.get("request")
 
         if request:
-            turnstile_token = request.data.get("cf_turnstile_response")
+            turnstile_token = request.data.get("turnstile_token")
             remote_ip = request.META.get("REMOTE_ADDR")
 
             is_valid, error = verify_turnstile(

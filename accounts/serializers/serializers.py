@@ -1,5 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
+
+from ..services.turnstile import verify_turnstile
 from ..models import *
 import random
 from django.db import transaction
@@ -27,7 +29,25 @@ from finance.utils import round_decimal
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
+
+        request = self.context.get("request")
+
+        if request:
+            turnstile_token = request.data.get("cf_turnstile_response")
+            remote_ip = request.META.get("REMOTE_ADDR")
+
+            is_valid, error = verify_turnstile(
+                token=turnstile_token,
+                remote_ip=remote_ip
+            )
+
+            if not is_valid:
+                raise serializers.ValidationError({
+                    "detail": error
+                })
+
         data = super().validate(attrs)
+
         user = self.user
 
         # Prevent superusers from obtaining tokens via this endpoint

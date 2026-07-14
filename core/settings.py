@@ -250,3 +250,9 @@ LOGGING = {
         },
     },
 }
+
+TURNSTILE_ENABLED = os.getenv("TURNSTILE_ENABLED", "False").lower() == "true"
+
+TURNSTILE_SITE_KEY = os.getenv("TURNSTILE_SITE_KEY")
+
+TURNSTILE_SECRET_KEY = os.getenv("TURNSTILE_SECRET_KEY")

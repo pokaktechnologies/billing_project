@@ -23,6 +23,11 @@ class DailyAttendanceSerializer(serializers.ModelSerializer):
         model = DailyAttendance
         fields = ['id', 'staff','first_name', 'last_name','employee_id','department', 'date', 'total_working_hours', 'status', 'sessions']
 
+    def update(self, instance, validated_data):
+        instance.status = validated_data.get("status", instance.status)
+        instance.save(update_fields=["status", "updated_at"])
+        return instance
+
 
 class DailyAttendanceSessionDetailSerializer(serializers.ModelSerializer):
     sessions = AttendanceSessionSerializer(many=True, read_only=True)

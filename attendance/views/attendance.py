@@ -39,11 +39,11 @@ class DailyAttendanceTodayView(generics.ListAPIView):
 
 
 # 3. Get attendance details by ID
-class DailyAttendanceDetailView(generics.RetrieveAPIView):
+class DailyAttendanceDetailView(generics.RetrieveUpdateAPIView):
     queryset = DailyAttendance.objects.all()
     serializer_class = DailyAttendanceSerializer
     permission_classes = [IsAuthenticated]
-    lookup_field = 'id'
+    lookup_field = "id"
 
 
 class DailyAttendanceSessionView(generics.ListAPIView):

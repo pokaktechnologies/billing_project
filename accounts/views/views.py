@@ -1105,18 +1105,32 @@ class QuotationOrderAPI(BaseAPIView):
                 )
                 terms_data = TermsAndConditionsPointSerializer(terms_points, many=True).data
 
-            # Contract and Sections
-            contract_data = {}
-            if quotation.contract:
-                contract_data = ContractSerializer(quotation.contract).data
-                sections = ContractSection.objects.filter(contract=quotation.contract)
-                contract_data['sections'] = []
+                # Contract and Sections
+                contract_data = {}
 
-                for section in sections:
-                    points = ContractPoint.objects.filter(section=section)
-                    section_data = ContractSectionSerializer(section).data
-                    section_data['points'] = ContractPointSerializer(points, many=True).data
-                    contract_data['sections'].append(section_data)
+                if quotation.contract:
+                    contract_data = ContractSerializer(quotation.contract).data
+                    sections = ContractSection.objects.filter(contract=quotation.contract)
+                    contract_data["sections"] = []
+
+                    for section in sections:
+                        section_data = ContractSectionSerializer(section).data
+                        section_data["subtitles"] = []
+
+                        subtitles = ContractSubtitle.objects.filter(section=section)
+
+                        for subtitle in subtitles:
+                            subtitle_data = ContractSubtitleSerializer(subtitle).data
+
+                            points = ContractPoint.objects.filter(subtitle=subtitle)
+                            subtitle_data["points"] = ContractPointSerializer(
+                                points,
+                                many=True
+                            ).data
+
+                            section_data["subtitles"].append(subtitle_data)
+
+                        contract_data["sections"].append(section_data)
 
             # Quotation Items
             item_list = []
@@ -1249,11 +1263,24 @@ class QuotationOrderAPI(BaseAPIView):
                     termsandconditions_id=terms_id  # Add terms and condition
                 )
                 contract = Contract.objects.create(title=contract_data['title'])
+
                 for section_data in contract_data.get('sections', []):
-                    section = ContractSection.objects.create(contract=contract, title=section_data.get('title', ''))
-                    
-                    for point_data in section_data.get('points', []):
-                        ContractPoint.objects.create(section=section, points=point_data['points'])
+                    section = ContractSection.objects.create(
+                        contract=contract,
+                        title=section_data.get('title', '')
+                    )
+
+                    for subtitle_data in section_data.get('subtitles', []):
+                        subtitle = ContractSubtitle.objects.create(
+                            section=section,
+                            title=subtitle_data.get('title', '')
+                        )
+
+                        for point_data in subtitle_data.get('points', []):
+                            ContractPoint.objects.create(
+                                subtitle=subtitle,
+                                points=point_data.get('points', '')
+                            )
 
                 # return contract
                 quotation.contract = contract
@@ -1344,17 +1371,24 @@ class QuotationOrderAPI(BaseAPIView):
                         contract = Contract.objects.create(title=contract_data["title"])
                         quotation.contract = contract
 
-                    # Create new sections and points
+                    # Create new sections, subtitles and points
                     for section_data in contract_data.get("sections", []):
                         section = ContractSection.objects.create(
                             contract=contract,
                             title=section_data.get("title", "")
                         )
-                        for point_data in section_data.get("points", []):
-                            ContractPoint.objects.create(
+
+                        for subtitle_data in section_data.get("subtitles", []):
+                            subtitle = ContractSubtitle.objects.create(
                                 section=section,
-                                points=point_data["points"]
+                                title=subtitle_data.get("title", "")
                             )
+
+                            for point_data in subtitle_data.get("points", []):
+                                ContractPoint.objects.create(
+                                    subtitle=subtitle,
+                                    points=point_data.get("points", "")
+                                )
                     quotation.save()
                 
                 # check if product payload have duplicate

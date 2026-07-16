@@ -176,6 +176,62 @@ class Account(models.Model):
         self.full_clean()
         super().save(*args, **kwargs)
 
+    def get_opening_balance(self, financial_year):
+        """
+        Return the opening balance for the given financial year.
+        If no balance exists, return 0.
+        """
+
+        opening = self.opening_balances.filter(
+            financial_year=financial_year
+        ).first()
+
+        if opening:
+            return opening.opening_balance
+
+        return Decimal("0.00")
+    
+    def get_closing_balance(self, financial_year):
+        """
+        Calculate the closing balance for a specific financial year.
+        """
+
+        opening_balance = self.get_opening_balance(financial_year)
+
+        debit_total = (
+            self.journalline_set.filter(
+                journal__date__date__gte=financial_year.start_date,
+                journal__date__date__lte=financial_year.end_date,
+            )
+            .aggregate(
+                total=Coalesce(
+                    Sum("debit"),
+                    Value(0),
+                    output_field=DecimalField(),
+                )
+            )["total"]
+            or Decimal("0")
+        )
+
+        credit_total = (
+            self.journalline_set.filter(
+                journal__date__date__gte=financial_year.start_date,
+                journal__date__date__lte=financial_year.end_date,
+            )
+            .aggregate(
+                total=Coalesce(
+                    Sum("credit"),
+                    Value(0),
+                    output_field=DecimalField(),
+                )
+            )["total"]
+            or Decimal("0")
+        )
+
+        if self.type in self.DEBIT_BALANCE_TYPES:
+            return opening_balance + debit_total - credit_total
+
+        return opening_balance + credit_total - debit_total
     # ---------------- BALANCE ----------------
 
     @property
@@ -695,3 +751,101 @@ class PaymentVoucher(models.Model):
 
     def __str__(self):
         return self.voucher_number
+
+
+# opening balance management models
+class FinancialYear(models.Model):
+    STATUS_CHOICES = [
+        ("open", "Open"),
+        ("closed", "Closed"),
+    ]
+
+    name = models.CharField(max_length=20, unique=True)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    
+    is_current = models.BooleanField(default=False)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="open")
+    remarks = models.TextField(blank=True, null=True)
+    # is_closed = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-start_date']
+
+    
+    def clean(self):
+        if self.start_date >= self.end_date:
+            raise ValidationError("Start date must be before end date.")
+    
+        qs = FinancialYear.objects.filter(is_current=True)
+
+        if self.pk:
+            qs = qs.exclude(pk=self.pk)
+        
+        if self.is_current and qs.exists():
+            raise ValidationError("Only one financial year can be marked as current.")
+            
+    def save(self, *args, **kwargs):
+        is_new = self.pk is None
+
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+        if is_new:
+            self.create_opening_balances()
+    def create_opening_balances(self):
+        """
+        Automatically create opening balances for all posting accounts
+        when a new financial year is created.
+        """
+
+        from django.db import transaction
+
+        with transaction.atomic():
+
+            previous_year = (
+                FinancialYear.objects
+                .filter(end_date__lt=self.start_date)
+                .order_by("-end_date")
+                .first()
+            )
+
+            posting_accounts = Account.objects.filter(
+                is_posting=True,
+                status="active"
+            )
+
+            for account in posting_accounts:
+
+                if previous_year:
+                    opening_balance = account.get_closing_balance(previous_year)
+                else:
+                    opening_balance = account.opening_balance
+
+                AccountOpeningBalance.objects.get_or_create(
+                    account=account,
+                    financial_year=self,
+                    defaults={
+                        "opening_balance": opening_balance
+                    }
+                )
+    
+    def __str__(self):
+        return self.name
+
+
+class AccountOpeningBalance(models.Model):
+    account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name='opening_balances')
+    financial_year = models.ForeignKey(FinancialYear, on_delete=models.CASCADE, related_name='account_balances')
+    opening_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('account', 'financial_year')
+        ordering = ["account__account_number"]
+
+    def __str__(self):
+        return f"{self.account.name} - {self.financial_year.name}"

@@ -1609,7 +1609,7 @@ class MaterialReceiveSerializer(serializers.ModelSerializer):
 class ContractPointSerializer(serializers.ModelSerializer):
     class Meta:
         model = ContractPoint
-        fields = ['id', 'points', 'section']
+        fields = ['id', 'points', 'subtitle']
 
 
 class ContractSectionSerializer(serializers.ModelSerializer):
@@ -1618,6 +1618,10 @@ class ContractSectionSerializer(serializers.ModelSerializer):
         model = ContractSection
         fields = ['id', 'title', 'contract']
 
+class ContractSubtitleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ContractSubtitle
+        fields = ['id', 'title', 'section']
 
 class ContractSerializer(serializers.ModelSerializer):
 
@@ -1626,13 +1630,32 @@ class ContractSerializer(serializers.ModelSerializer):
         fields = ['id', 'title', 'created_at']
 
 
-class ContractSectionDetailSerializer(serializers.ModelSerializer):
+
+class ContractSubtitleDetailSerializer(serializers.ModelSerializer):
     points = ContractPointSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = ContractSubtitle
+        fields = [
+            'id',
+            'title',
+            'section',
+            'points'
+        ]
+class ContractSectionDetailSerializer(serializers.ModelSerializer):
+    subtitles = ContractSubtitleDetailSerializer(
+        many=True,
+        read_only=True
+    )
+
     class Meta:
         model = ContractSection
-        fields = ['id', 'title', 'contract', 'points']
-
-
+        fields = [
+            'id',
+            'title',
+            'contract',
+            'subtitles'
+        ]
 class ContractDetailSerializer(serializers.ModelSerializer):
     sections = ContractSectionDetailSerializer(many=True, read_only=True)
     class Meta:

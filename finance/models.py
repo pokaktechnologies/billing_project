@@ -806,8 +806,10 @@ class FinancialYear(models.Model):
         with transaction.atomic():
 
             previous_year = (
-                FinancialYear.objects
-                .filter(end_date__lt=self.start_date)
+                FinancialYear.objects.filter(
+                    end_date__lt=self.start_date,
+                    status="closed"
+                )
                 .order_by("-end_date")
                 .first()
             )

@@ -10,6 +10,7 @@ from django.db.models import Sum, Value, DecimalField
 from django.db.models.functions import Coalesce
 from decimal import Decimal
 import re
+from dateutil.relativedelta import relativedelta
 from django.core.exceptions import ValidationError
 # ----------------------
 # Account Model
@@ -786,6 +787,15 @@ class FinancialYear(models.Model):
         
         if self.is_current and qs.exists():
             raise ValidationError("Only one financial year can be marked as current.")
+        
+        duration = relativedelta(self.end_date, self.start_date)
+
+        total_months = duration.years * 12 + duration.months
+
+        if total_months < 12:
+            raise ValidationError({
+                "end_date": "Financial Year must be at least 12 months."
+            })
             
     def save(self, *args, **kwargs):
         is_new = self.pk is None

@@ -200,8 +200,8 @@ class Account(models.Model):
 
         debit_total = (
             self.journalline_set.filter(
-                journal__date__date__gte=financial_year.start_date,
-                journal__date__date__lte=financial_year.end_date,
+                journal__date__gte=financial_year.start_date,
+                journal__date__lte=financial_year.end_date,
             )
             .aggregate(
                 total=Coalesce(
@@ -215,8 +215,8 @@ class Account(models.Model):
 
         credit_total = (
             self.journalline_set.filter(
-                journal__date__date__gte=financial_year.start_date,
-                journal__date__date__lte=financial_year.end_date,
+                journal__date__gte=financial_year.start_date,
+                journal__date__lte=financial_year.end_date,
             )
             .aggregate(
                 total=Coalesce(

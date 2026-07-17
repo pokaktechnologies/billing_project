@@ -200,8 +200,8 @@ class Account(models.Model):
 
         debit_total = (
             self.journalline_set.filter(
-                journal__date__date__gte=financial_year.start_date,
-                journal__date__date__lte=financial_year.end_date,
+                journal__date__gte=financial_year.start_date,
+                journal__date__lte=financial_year.end_date,
             )
             .aggregate(
                 total=Coalesce(
@@ -215,8 +215,8 @@ class Account(models.Model):
 
         credit_total = (
             self.journalline_set.filter(
-                journal__date__date__gte=financial_year.start_date,
-                journal__date__date__lte=financial_year.end_date,
+                journal__date__gte=financial_year.start_date,
+                journal__date__lte=financial_year.end_date,
             )
             .aggregate(
                 total=Coalesce(
@@ -823,10 +823,14 @@ class FinancialYear(models.Model):
 
                 if previous_year:
                     opening_balance = account.get_closing_balance(previous_year)
+                    if account.id == 3:   # Cash
+                        raise ValidationError(
+                            f"Cash closing balance = {opening_balance}"
+                        )
                 else:
                     opening_balance = account.opening_balance
 
-                AccountOpeningBalance.objects.get_or_create(
+                AccountOpeningBalance.objects.update_or_create(
                     account=account,
                     financial_year=self,
                     defaults={

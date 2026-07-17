@@ -835,11 +835,11 @@ class FinancialYear(models.Model):
                         "opening_balance": opening_balance
                     }
                 )
-                            # Debug only for Cash account
-                if account.id == 3:
-                    raise ValidationError(
-                        f"Saved Cash Opening Balance = {opening_balance}"
-                    )
+                #             # Debug only for Cash account
+                # if account.id == 3:
+                #     raise ValidationError(
+                #         f"Saved Cash Opening Balance = {opening_balance}"
+                #     )
     
     def __str__(self):
         return self.name

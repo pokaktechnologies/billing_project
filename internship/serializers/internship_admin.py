@@ -1035,10 +1035,10 @@ class CoursePaymentSerializer(serializers.ModelSerializer):
                 "Amount must be greater than zero."
             )
 
-        if payment_method != "cash" and not transaction_id:
-            raise serializers.ValidationError(
-                "Transaction ID required for non-cash payments."
-            )
+        # if payment_method != "cash" and not transaction_id:
+        #     raise serializers.ValidationError(
+        #         "Transaction ID required for non-cash payments."
+        #     )
 
         # ADVANCE PAYMENT
         if payment_type == "advance":

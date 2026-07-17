@@ -823,10 +823,6 @@ class FinancialYear(models.Model):
 
                 if previous_year:
                     opening_balance = account.get_closing_balance(previous_year)
-                    if account.id == 3:   # Cash
-                        raise ValidationError(
-                            f"Cash closing balance = {opening_balance}"
-                        )
                 else:
                     opening_balance = account.opening_balance
 

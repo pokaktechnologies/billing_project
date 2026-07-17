@@ -1123,9 +1123,16 @@ class ContractSection(models.Model):
     def __str__(self):
         return f'{self.contract.title} - {self.title}'
 
+class ContractSubtitle(models.Model):
+    section = models.ForeignKey(
+        ContractSection,
+        related_name="subtitles",
+        on_delete=models.CASCADE
+    )
+    title = models.CharField(max_length=255)
 
 class ContractPoint(models.Model):
-    section = models.ForeignKey(ContractSection, related_name='points', on_delete=models.CASCADE)
+    subtitle = models.ForeignKey(ContractSubtitle, related_name='points', on_delete=models.CASCADE, null=True, blank=True)
     points = models.TextField()
 
     

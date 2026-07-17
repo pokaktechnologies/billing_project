@@ -10,6 +10,7 @@ from .views.documents import CreditNoteListCreateAPIView, CreditNoteRetrieveUpda
 from .views.settings import FinaceNumberGeneratorView, CashflowCategoryMappingListCreateView, CashflowCategoryMappingDetailView, TaxSettingsListCreateAPIView, TaxSettingsRetrieveUpdateDestroyAPIView
 from .views.reports import TrialBalanceView, ProfitAndLossView, BalanceSheetView, CashflowStatementView, AccountBalanceHierarchyView
 from .views.FinanceReport import JournalVoucherReportView, AccountReportView, LedgerReportView, TransactionDebitNotReportView, TransactionCreditNotReportView
+from .views.opening_balance import FinancialYearListCreateAPIView, FinancialYearRetrieveUpdateDestroyAPIView, OpeningBalanceDashboardAPIView
 
 urlpatterns = [
     path('account/', AccountListCreateAPIView.as_view(), name='account'),
@@ -54,5 +55,11 @@ urlpatterns = [
 
     path("payment-vouchers/", PaymentVoucherListCreateAPIView.as_view(), name="payment-voucher-list-create"),
     path("payment-vouchers/<int:pk>/", PaymentVoucherRetrieveUpdateDestroyAPIView.as_view(), name="payment-voucher-detail"),
+
+
+    # opening balance
+    path("financial-years/", FinancialYearListCreateAPIView.as_view(), name="financial-year-list-create"),
+    path("financial-years/<int:pk>/", FinancialYearRetrieveUpdateDestroyAPIView.as_view(), name="financial-year-detail"),
+    path("opening-balances/", OpeningBalanceDashboardAPIView.as_view(), name="opening-balance-dashboard"),
 ]
 

@@ -868,6 +868,7 @@ class RegistrationReportSerializer(serializers.ModelSerializer):
     next_due_installment = serializers.SerializerMethodField()
     faculties = serializers.SerializerMethodField()
     certificate_received = serializers.SerializerMethodField()
+    phone_number = serializers.CharField(source="profile.phone_number", default=None)
 
     class Meta:
         model = Student
@@ -889,6 +890,7 @@ class RegistrationReportSerializer(serializers.ModelSerializer):
             "installments",
             "faculties",
             "certificate_received",
+            "phone_number",
         ]
 
     def _get_enrollment(self, obj):

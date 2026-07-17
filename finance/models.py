@@ -779,23 +779,7 @@ class FinancialYear(models.Model):
     def clean(self):
         if self.start_date >= self.end_date:
             raise ValidationError("Start date must be before end date.")
-    
-        qs = FinancialYear.objects.filter(is_current=True)
 
-        if self.pk:
-            qs = qs.exclude(pk=self.pk)
-        
-        if self.is_current and qs.exists():
-            raise ValidationError("Only one financial year can be marked as current.")
-        
-        duration = relativedelta(self.end_date, self.start_date)
-
-        total_months = duration.years * 12 + duration.months
-
-        if total_months < 12:
-            raise ValidationError({
-                "end_date": "Financial Year must be at least 12 months."
-            })
             
     def save(self, *args, **kwargs):
         is_new = self.pk is None

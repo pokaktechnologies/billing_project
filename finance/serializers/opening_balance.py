@@ -45,7 +45,7 @@ class OpeningBalanceDashboardSerializer(serializers.ModelSerializer):
 class OpeningBalanceRowSerializer(serializers.Serializer):
     account = serializers.IntegerField()
     opening_balance = serializers.DecimalField(max_digits=12, decimal_places=2)
-    
+
     def validate_account(self, value):
 
         if not Account.objects.filter(
@@ -100,3 +100,51 @@ class FinancialYearSerializer(serializers.ModelSerializer):
             "id",
             "created_at",
         ]
+    def validate(self, attrs):
+        start_date = attrs.get(
+            "start_date",
+            getattr(self.instance, "start_date", None)
+        )
+        end_date = attrs.get(
+            "end_date",
+            getattr(self.instance, "end_date", None)
+        )
+        is_current = attrs.get(
+            "is_current",
+            getattr(self.instance, "is_current", False)
+        )
+
+        # Start date validation
+        if start_date >= end_date:
+            raise serializers.ValidationError({
+                "start_date": "Start date must be before end date."
+            })
+
+        # Prevent overlapping financial years
+        queryset = FinancialYear.objects.all()
+
+        if self.instance:
+            queryset = queryset.exclude(pk=self.instance.pk)
+
+        overlap = queryset.filter(
+            start_date__lte=end_date,
+            end_date__gte=start_date
+        ).exists()
+
+        if overlap:
+            raise serializers.ValidationError({
+                "start_date": "The selected date range overlaps with an existing financial year."
+            })
+
+        # Only one current financial year
+        queryset = FinancialYear.objects.filter(is_current=True)
+
+        if self.instance:
+            queryset = queryset.exclude(pk=self.instance.pk)
+
+        if is_current and queryset.exists():
+            raise serializers.ValidationError({
+                "is_current": "Only one financial year can be marked as current."
+            })
+
+        return attrs

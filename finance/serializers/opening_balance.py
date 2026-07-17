@@ -11,6 +11,8 @@ from ..services.opening_balance import (
 from django.db import transaction
 class OpeningBalanceDashboardSerializer(serializers.ModelSerializer):
     opening_balance = serializers.SerializerMethodField()
+    closing_balance = serializers.SerializerMethodField()
+    
     class Meta:
         model = Account
 
@@ -20,7 +22,16 @@ class OpeningBalanceDashboardSerializer(serializers.ModelSerializer):
             "name",
             "type",
             "opening_balance",
+            "closing_balance",
         ]
+        
+    def get_closing_balance(self, obj):
+        financial_year = self.context.get("financial_year")
+
+        if not financial_year:
+            return "0.00"
+
+        return obj.get_closing_balance(financial_year)
 
     def get_opening_balance(self, obj):
         financial_year = self.context.get("financial_year")

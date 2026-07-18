@@ -8,7 +8,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.generics import get_object_or_404
 
-from activity_logs.base_view import BaseAPIView
+from activity_logs.base_view import BaseAPIView, BaseGenericAPIView
 from ..models import CustomUser, Feature
 from django.db.models import Q, ProtectedError
 from django.db import transaction, IntegrityError
@@ -3363,63 +3363,151 @@ class ContractSectionListCreateAPIView(BaseAPIView):
 
 # Point
 class ContractPointListCreateAPIView(BaseAPIView):
-    
 
     def get_permissions(self):
         if self.request.method == 'GET':
-            return [AllowAny()]   
+            return [AllowAny()]
         return [IsAuthenticated()]
-        
+
     def get(self, request, contract_id, section_id, point_id=None):
         if point_id:
             point = get_object_or_404(
-            ContractPoint,
-            id=point_id,
-            section_id=section_id,
-            section__contract_id=contract_id
-        )
+                ContractPoint,
+                id=point_id,
+                subtitle__section_id=section_id,
+                subtitle__section__contract_id=contract_id
+            )
             serializer = ContractPointSerializer(point)
-            return Response({"status": "1", "message": "success", "data": [serializer.data]})
-        points = ContractPoint.objects.filter(section_id=section_id, section__contract_id=contract_id)
+            return Response({
+                "status": "1",
+                "message": "success",
+                "data": [serializer.data]
+            })
+
+        points = ContractPoint.objects.filter(
+            subtitle__section_id=section_id,
+            subtitle__section__contract_id=contract_id
+        )
+
         serializer = ContractPointSerializer(points, many=True)
-        return Response({"status": "1", "message": "success", "data": serializer.data})
+
+        return Response({
+            "status": "1",
+            "message": "success",
+            "data": serializer.data
+        })
 
     def post(self, request, contract_id, section_id, point_id=None):
-        data = request.data.copy()
-        data['section'] = section_id
-        serializer = ContractPointSerializer(data=data)
+        serializer = ContractPointSerializer(data=request.data)
+
         if serializer.is_valid():
             serializer.save()
-            return Response({"status": "1", "message": "success", "data": [serializer.data]}, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                "status": "1",
+                "message": "success",
+                "data": [serializer.data]
+            }, status=status.HTTP_201_CREATED)
 
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request, contract_id, section_id, point_id):
         point = get_object_or_404(
             ContractPoint,
             id=point_id,
-            section_id=section_id,
-            section__contract_id=contract_id
+            subtitle__section_id=section_id,
+            subtitle__section__contract_id=contract_id
         )
-        serializer = ContractPointSerializer(point, data=request.data, partial=True)
+
+        serializer = ContractPointSerializer(
+            point,
+            data=request.data,
+            partial=True
+        )
+
         if serializer.is_valid():
             serializer.save()
-            return Response({"status": "1", "message": "success", "data": [serializer.data]})
+            return Response({
+                "status": "1",
+                "message": "success",
+                "data": [serializer.data]
+            })
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, contract_id, section_id, point_id):
         point = get_object_or_404(
             ContractPoint,
             id=point_id,
-            section_id=section_id,
-            section__contract_id=contract_id
+            subtitle__section_id=section_id,
+            subtitle__section__contract_id=contract_id
         )
+
         point.delete()
-        return Response({"status": "1", "message": "Point Deleted Succesfully"}, status=status.HTTP_204_NO_CONTENT)
+
+        return Response({
+            "status": "1",
+            "message": "Point Deleted Successfully"
+        }, status=status.HTTP_204_NO_CONTENT)
 
 
 
+class ContractSubtitleListCreateAPIView(BaseGenericAPIView):
+    queryset = ContractSubtitle.objects.all()
+    serializer_class = ContractSubtitleSerializer
+    lookup_field = "subtitle_id"
 
+    def get(self, request, contract_id, section_id):
+        subtitles = ContractSubtitle.objects.filter(section_id=section_id)
+        serializer = self.serializer_class(subtitles, many=True)
+        return Response(serializer.data)
+
+    def post(self, request, contract_id, section_id):
+        section = get_object_or_404(
+            ContractSection,
+            id=section_id,
+            contract_id=contract_id
+        )
+
+        serializer = self.serializer_class(data=request.data)
+
+        if serializer.is_valid():
+            serializer.save(section=section)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request, contract_id, section_id, subtitle_id):
+        subtitle = get_object_or_404(
+            ContractSubtitle,
+            id=subtitle_id,
+            section_id=section_id
+        )
+
+        serializer = self.serializer_class(
+            subtitle,
+            data=request.data,
+            partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, contract_id, section_id, subtitle_id):
+        subtitle = get_object_or_404(
+            ContractSubtitle,
+            id=subtitle_id,
+            section_id=section_id
+        )
+
+        subtitle.delete()
+
+        return Response(
+            {"message": "Subtitle deleted successfully."},
+            status=status.HTTP_204_NO_CONTENT
+        )
 
 
 

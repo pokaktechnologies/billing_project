@@ -10,6 +10,7 @@ from django.db.models import Sum, Value, DecimalField
 from django.db.models.functions import Coalesce
 from decimal import Decimal
 import re
+from dateutil.relativedelta import relativedelta
 from django.core.exceptions import ValidationError
 # ----------------------
 # Account Model
@@ -201,7 +202,7 @@ class Account(models.Model):
         debit_total = (
             self.journalline_set.filter(
                 journal__date__gte=financial_year.start_date,
-                journal__date__date__lte=financial_year.end_date,
+                journal__date__lte=financial_year.end_date,
             )
             .aggregate(
                 total=Coalesce(
@@ -216,7 +217,7 @@ class Account(models.Model):
         credit_total = (
             self.journalline_set.filter(
                 journal__date__gte=financial_year.start_date,
-                journal__date__date__lte=financial_year.end_date,
+                journal__date__lte=financial_year.end_date,
             )
             .aggregate(
                 total=Coalesce(
@@ -778,14 +779,7 @@ class FinancialYear(models.Model):
     def clean(self):
         if self.start_date >= self.end_date:
             raise ValidationError("Start date must be before end date.")
-    
-        qs = FinancialYear.objects.filter(is_current=True)
 
-        if self.pk:
-            qs = qs.exclude(pk=self.pk)
-        
-        if self.is_current and qs.exists():
-            raise ValidationError("Only one financial year can be marked as current.")
             
     def save(self, *args, **kwargs):
         is_new = self.pk is None
@@ -835,11 +829,11 @@ class FinancialYear(models.Model):
                         "opening_balance": opening_balance
                     }
                 )
-                            # Debug only for Cash account
-                if account.id == 3:
-                    raise ValidationError(
-                        f"Saved Cash Opening Balance = {opening_balance}"
-                    )
+                #             # Debug only for Cash account
+                # if account.id == 3:
+                #     raise ValidationError(
+                #         f"Saved Cash Opening Balance = {opening_balance}"
+                #     )
     
     def __str__(self):
         return self.name

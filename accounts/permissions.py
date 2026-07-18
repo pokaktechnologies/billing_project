@@ -121,7 +121,8 @@ PARENT_MODULE_MAP = [
             "payment_voucher",
             "trial_balance",
             "balance_sheet",
-            "profit_loss"
+            "profit_loss",
+            "financial_year"
         ]
     },
 

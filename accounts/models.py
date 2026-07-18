@@ -1239,6 +1239,7 @@ class ModulePermission(models.Model):
         ("trial_balance", "Trial Balance"),
         ("balance_sheet", "Balance Sheet"),
         ("profit_loss", "Profit & Loss"),
+        ("financial_year", "Financial Year"),
 
         # PROJECT
         ("project", "Project"),

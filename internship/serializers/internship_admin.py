@@ -819,6 +819,9 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
 
             "payment_plan_type",
             "custom_installments",
+
+            "discount_amount",
+            "discount_reason",
         ]
         read_only_fields = ["course"]
 
@@ -838,6 +841,7 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
         payment_method = attrs.get("payment_method", getattr(self.instance, "payment_method", None))
         transaction_id = attrs.get("transaction_id", getattr(self.instance, "transaction_id", None))
         payment_date = attrs.get("payment_date", getattr(self.instance, "payment_date", None))
+        discount_amount = attrs.get("discount_amount", getattr(self.instance, "discount_amount", 0))
 
         # ── Batch required ──
         if not batch:
@@ -920,16 +924,30 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
         # vaaalidation of advance pyment 
         course_fee = batch.course.total_fee
 
+        if discount_amount < 0:
+            raise serializers.ValidationError({
+                "discount_amount":
+                    "Discount cannot be negative."
+            })
+
+        if discount_amount >= course_fee:
+            raise serializers.ValidationError({
+                "discount_amount":
+                    "Discount must be less than the course fee."
+            })
+
+        discounted_fee = course_fee - discount_amount
+
         if advance_amount < 0:
             raise serializers.ValidationError({
                 "advance_amount":
                     "Advance amount cannot be negative."
             })
 
-        if advance_amount >= course_fee:
+        if advance_amount >= discounted_fee:
             raise serializers.ValidationError({
                 "advance_amount":
-                    "Advance cannot must be less that course fee."
+                    "Advance amount must be less than the discounted course fee."
             })
         
         if advance_amount == course_fee:
@@ -1185,6 +1203,8 @@ class StudentPaymentDetailSerializer(serializers.ModelSerializer):
     installment_list = serializers.SerializerMethodField()
     advance_amount = serializers.SerializerMethodField()
     balance_fee = serializers.SerializerMethodField()
+    discount_amount = serializers.SerializerMethodField()
+    discounted_fee = serializers.SerializerMethodField()
 
     class Meta:
         model = StudentCourseEnrollment
@@ -1203,8 +1223,25 @@ class StudentPaymentDetailSerializer(serializers.ModelSerializer):
             "next_due_date",
             "installment_list",
             "advance_amount",
+            "discount_amount",
+            "discounted_fee",
             "balance_fee"
         ]
+
+    # Decimal formatter — always returns string like "15000.00"
+    def format_decimal(self, value):
+        return str(Decimal(str(value)).quantize(Decimal("0.00")))
+    
+    def get_discount_amount(self, obj):
+        return self.format_decimal(
+            obj.discount_amount
+    )
+
+    def get_discounted_fee(self, obj):
+        return self.format_decimal(
+            Decimal(str(obj.course.total_fee))
+            - Decimal(str(obj.discount_amount or 0))
+        )
 
     def get_advance_amount(self, obj):
         return self.format_decimal(
@@ -1214,13 +1251,11 @@ class StudentPaymentDetailSerializer(serializers.ModelSerializer):
 
     def get_balance_fee(self, obj):
         return self.format_decimal(
-            obj.course.total_fee -
-            obj.advance_amount
+            obj.course.total_fee
+            - obj.discount_amount
+            - obj.advance_amount
         )
    
-    # Decimal formatter — always returns string like "15000.00"
-    def format_decimal(self, value):
-        return str(Decimal(str(value)).quantize(Decimal("0.00")))
 
     # Student full name
     def get_student_full_name(self, obj):
@@ -1244,9 +1279,14 @@ class StudentPaymentDetailSerializer(serializers.ModelSerializer):
     
     # Pending fee
     def get_pending_fee(self, obj):
-        total = Decimal(str(obj.course.total_fee))
+        discounted_fee = (
+            Decimal(str(obj.course.total_fee))
+            - Decimal(str(obj.discount_amount or 0))
+        )
+
         paid = Decimal(self.get_total_paid(obj))
-        return self.format_decimal(total - paid)
+
+        return self.format_decimal(discounted_fee - paid)
 
     # Next due date
     def get_next_due_date(self, obj):
@@ -1513,6 +1553,8 @@ class StudentPaymentSerializer(serializers.ModelSerializer):
     next_due_date = serializers.SerializerMethodField()
     advance_amount = serializers.SerializerMethodField()
     balance_fee = serializers.SerializerMethodField()
+    discount_amount = serializers.SerializerMethodField()
+    discounted_fee = serializers.SerializerMethodField()
 
     class Meta:
         model = StudentCourseEnrollment # aadyam student aayirunnu pinne validation error vannappo enrollment id yilekk maattana vendi ee model nn edukkunnatha
@@ -1528,7 +1570,9 @@ class StudentPaymentSerializer(serializers.ModelSerializer):
             "pending_amount",
             "next_due_date",
             "advance_amount",
-            "balance_fee"
+            "balance_fee",
+            "discount_amount",
+            "discounted_fee"
         ]
 
     def format_decimal(self, value):
@@ -1536,6 +1580,18 @@ class StudentPaymentSerializer(serializers.ModelSerializer):
             Decimal(str(value)).quantize(
                 Decimal("0.00")
             )
+        )
+    
+    def get_discount_amount(self, obj):
+        return self.format_decimal(
+            obj.discount_amount
+        )
+
+
+    def get_discounted_fee(self, obj):
+        return self.format_decimal(
+            Decimal(str(obj.course.total_fee))
+            - Decimal(str(obj.discount_amount or 0))
         )
     
     # get student name
@@ -1571,8 +1627,9 @@ class StudentPaymentSerializer(serializers.ModelSerializer):
     #     )
     def get_balance_fee(self, obj):
         return self.format_decimal(
-            obj.course.total_fee -
-            obj.advance_amount
+            Decimal(str(obj.course.total_fee))
+            - Decimal(str(obj.discount_amount or 0))
+            - Decimal(str(obj.advance_amount or 0))
         )
     
     # # Decimal formatter
@@ -1634,8 +1691,9 @@ class StudentPaymentSerializer(serializers.ModelSerializer):
 
     def get_pending_amount(self, obj):
 
-        total_fee = Decimal(
-            str(obj.course.total_fee)
+        discounted_fee = (
+            Decimal(str(obj.course.total_fee))
+            - Decimal(str(obj.discount_amount or 0))
         )
 
         paid = Decimal(
@@ -1643,9 +1701,8 @@ class StudentPaymentSerializer(serializers.ModelSerializer):
         )
 
         return self.format_decimal(
-            total_fee - paid
+            discounted_fee - paid
         )
-
     # Installment plan
     # def get_installment_plan(self, obj):
     #     enrollment = self.get_enrollment(obj)

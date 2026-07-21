@@ -236,6 +236,10 @@ class StudentCourseEnrollment(models.Model):
 
     payment_plan_type = models.CharField(max_length=30, choices=PAYMENT_PLAN_TYPES, default="default_installment")
     custom_installments = models.PositiveIntegerField(null=True, blank=True)
+
+    # descount integrations model
+    discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    discount_reason = models.TextField(blank=True, null=True)
     class Meta:
         unique_together = ['student', 'course']
 
@@ -246,6 +250,7 @@ class StudentCourseEnrollment(models.Model):
         old_plan_id = None
         old_payment_plan_type = None
         old_custom_installments = None
+        old_discount_amount = None
 
         # -------------------------------------------------
         # Only fetch old values while updating
@@ -258,12 +263,14 @@ class StudentCourseEnrollment(models.Model):
                     "installment_plan_id",
                     "payment_plan_type",
                     "custom_installments",
+                    "discount_amount",
                 ).first()
 
                 if old_data:
                     old_plan_id = old_data["installment_plan_id"]
                     old_payment_plan_type = old_data["payment_plan_type"]
                     old_custom_installments = old_data["custom_installments"]
+                    old_discount_amount = old_data["discount_amount"]
 
             except Exception:
                 pass
@@ -279,6 +286,8 @@ class StudentCourseEnrollment(models.Model):
                 old_plan_id != self.installment_plan_id
                 or old_payment_plan_type != self.payment_plan_type
                 or old_custom_installments != self.custom_installments
+                or Decimal(str(old_discount_amount or 0))
+                != Decimal(str(self.discount_amount or 0))
             )
 
         # -------------------------------------------------
@@ -319,8 +328,10 @@ class StudentCourseEnrollment(models.Model):
         if not self.student_installment_items.exists():
 
             course_fee = Decimal(str(self.course.total_fee))
+            discount_amount = Decimal(str(self.discount_amount or 0))
+            discounted_fee = course_fee - discount_amount
             advance_amount = Decimal(str(self.advance_amount or 0))
-            balance_fee = course_fee - advance_amount
+            balance_fee = discounted_fee - advance_amount
 
             student_items = []
 
@@ -438,7 +449,6 @@ class StudentCourseEnrollment(models.Model):
                     payment_type="advance",
                     payment_date=self.payment_date,
                 )
-
     def __str__(self):
         return f"{self.student.profile.user.email} - {self.course.title}"
 

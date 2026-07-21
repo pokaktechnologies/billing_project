@@ -187,6 +187,8 @@ urlpatterns = [
     path('contracts/<int:contract_id>/sections/', ContractSectionListCreateAPIView.as_view()),
     path('contracts/<int:contract_id>/sections/<int:section_id>/', ContractSectionListCreateAPIView.as_view()),
 
+    path('contracts/<int:contract_id>/sections/<int:section_id>/subtitles/', ContractSubtitleListCreateAPIView.as_view()),
+    path('contracts/<int:contract_id>/sections/<int:section_id>/subtitles/<int:subtitle_id>/', ContractSubtitleListCreateAPIView.as_view()),
     # Points
     path('contracts/<int:contract_id>/sections/<int:section_id>/points/', ContractPointListCreateAPIView.as_view()),
     path('contracts/<int:contract_id>/sections/<int:section_id>/points/<int:point_id>/', ContractPointListCreateAPIView.as_view()),

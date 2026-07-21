@@ -507,18 +507,35 @@ class PrintQuotationOrderSerializer(serializers.ModelSerializer):
             return None
 
         contract_data = {
-            **contract.__dict__,
-            'sections': []
+            "id": contract.id,
+            "title": contract.title,
+            "sections": []
         }
-        contract_data.pop('_state', None)
 
         for section in contract.sections.all():
+
             section_data = {
-                **section.__dict__,
-                'points': list(section.points.values())
+                "id": section.id,
+                "title": section.title,
+                "subtitles": []
             }
-            section_data.pop('_state', None)
-            contract_data['sections'].append(section_data)
+
+            for subtitle in section.subtitles.all():
+
+                subtitle_data = {
+                    "id": subtitle.id,
+                    "title": subtitle.title,
+                    "points": list(
+                        subtitle.points.values(
+                            "id",
+                            "points"
+                        )
+                    )
+                }
+
+                section_data["subtitles"].append(subtitle_data)
+
+            contract_data["sections"].append(section_data)
 
         return contract_data
 

@@ -1,5 +1,6 @@
 from django.urls import path, include
 from .views import application, instructor, intern, report_view, internship_admin
+from .views.registration import StudentRegistrationReportView
 
 instructor_patterns = [
     path('course/', instructor.InstructorCourseListCreateAPIView.as_view(), name='instructor-course-list'),
@@ -196,6 +197,8 @@ report_patterns = [
 
     path("registration/", report_view.RegistrationReportAPIView.as_view(), name="registration-report"),
     path("payment-report/", internship_admin.PaymentReportListAPIView.as_view()),
+
+    path("student-registration/", StudentRegistrationReportView.as_view(), name="student-registration-report"),
 
 ]
 

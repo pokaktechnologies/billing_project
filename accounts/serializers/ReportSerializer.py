@@ -10,7 +10,7 @@ from attendance.models import DailyAttendance, AttendanceSession
 from accounts.models import CustomUser
 from datetime import datetime
 from django.utils import timezone
-
+from internship.models import StudentCourseEnrollment
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.utils import timezone
 from datetime import datetime
@@ -376,12 +376,17 @@ class ClientStatementReportSerializer(serializers.ModelSerializer):
         return None
     
 class InternStatementReportSerializer(serializers.ModelSerializer):
-    receipt_total_amount = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
-    balance = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    # receipt_total_amount = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    # balance = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    receipt_total_amount = serializers.SerializerMethodField()
+    balance = serializers.SerializerMethodField()
     intern_name = serializers.SerializerMethodField()
     intern_id = serializers.SerializerMethodField()
     student_id = serializers.SerializerMethodField()
     course_name = serializers.CharField(source='course.title', read_only=True)
+    discount_amount = serializers.SerializerMethodField()
+    discounted_fee = serializers.SerializerMethodField()
+    pending_amount = serializers.SerializerMethodField()
 
 
 
@@ -398,9 +403,78 @@ class InternStatementReportSerializer(serializers.ModelSerializer):
             'invoice_grand_total',
             'receipt_total_amount',
             'balance',
-            'course_name'
+            'course_name',
+            'discount_amount',
+            'discounted_fee',
+            'pending_amount'
         ]
+    def get_enrollment(self, obj):
+        intern = obj.intern
 
+        if not intern or not hasattr(intern, "student_profile"):
+            return None
+
+        return StudentCourseEnrollment.objects.filter(
+            student=intern.student_profile,
+            course=obj.course
+        ).first()
+    
+
+    def get_receipt_total_amount(self, obj):
+        total = obj.receipt_total_amount or Decimal("0.00")
+        return str(total.quantize(Decimal("0.00")))
+
+    def get_balance(self, obj):
+
+        enrollment = self.get_enrollment(obj)
+
+        discounted_fee = Decimal(str(obj.invoice_grand_total))
+
+        if enrollment:
+            discounted_fee -= Decimal(str(enrollment.discount_amount or 0))
+
+        paid = Decimal(str(obj.receipt_total_amount or 0))
+
+        return str(
+            (discounted_fee - paid).quantize(Decimal("0.00"))
+        )
+    def get_discount_amount(self, obj):
+        enrollment = self.get_enrollment(obj)
+
+        if not enrollment:
+            return "0.00"
+
+        return str(
+            Decimal(str(enrollment.discount_amount)).quantize(
+                Decimal("0.00")
+            )
+        )
+    
+    def get_discounted_fee(self, obj):
+        enrollment = self.get_enrollment(obj)
+
+        total = Decimal(str(obj.invoice_grand_total))
+
+        if enrollment:
+            total -= Decimal(str(enrollment.discount_amount or 0))
+
+        return str(
+            total.quantize(Decimal("0.00"))
+        )
+    
+    def get_pending_amount(self, obj):
+        enrollment = self.get_enrollment(obj)
+
+        total = Decimal(str(obj.invoice_grand_total))
+
+        if enrollment:
+            total -= Decimal(str(enrollment.discount_amount or 0))
+
+        paid = Decimal(str(obj.receipt_total_amount or 0))
+
+        return str(
+            (total - paid).quantize(Decimal("0.00"))
+        )
     def get_intern_name(self, obj):
         intern = obj.intern
         if intern and intern.user:

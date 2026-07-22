@@ -1804,6 +1804,9 @@ class StudentCourseSummarySerializer(serializers.ModelSerializer):
     paid_amount = serializers.SerializerMethodField()
     pending_amount = serializers.SerializerMethodField()
 
+    discount_amount = serializers.SerializerMethodField()
+    discounted_fee = serializers.SerializerMethodField()
+
     class Meta:
         model = StudentCourseEnrollment
         fields = [
@@ -1823,6 +1826,8 @@ class StudentCourseSummarySerializer(serializers.ModelSerializer):
             "total_fee",
             "paid_amount",
             "pending_amount",
+            "discount_amount",
+            "discounted_fee",
         ]
 
     def format_decimal(self, value):
@@ -1875,6 +1880,18 @@ class StudentCourseSummarySerializer(serializers.ModelSerializer):
 
     def get_total_fee(self, obj):
         return self.format_decimal(obj.course.total_fee)
+    
+    def get_discount_amount(self, obj):
+        return self.format_decimal(
+            obj.discount_amount
+        )
+
+
+    def get_discounted_fee(self, obj):
+        return self.format_decimal(
+            Decimal(str(obj.course.total_fee))
+            - Decimal(str(obj.discount_amount or 0))
+        )
 
     def get_paid_amount(self, obj):
 
@@ -1886,11 +1903,16 @@ class StudentCourseSummarySerializer(serializers.ModelSerializer):
 
     def get_pending_amount(self, obj):
 
-        total = Decimal(str(obj.course.total_fee))
+        discounted_fee = (
+            Decimal(str(obj.course.total_fee))
+            - Decimal(str(obj.discount_amount or 0))
+        )
 
         paid = Decimal(self.get_paid_amount(obj))
 
-        return self.format_decimal(total - paid)
+        return self.format_decimal(
+            discounted_fee - paid
+        )
     
 
 class StudentProfileDetailSerializer(serializers.ModelSerializer):

@@ -2272,7 +2272,7 @@ class ManagerDailyReportSummaryView(APIView):
 
                 submitted_on = timezone.localtime(
                     report.submitted_at
-                ).date()
+                ).strftime("%Y-%m-%d %H:%M:%S")
 
                 if report.submitted_at > deadline:
                     status_text = "Late"

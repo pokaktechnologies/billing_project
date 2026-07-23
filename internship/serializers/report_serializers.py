@@ -869,6 +869,8 @@ class RegistrationReportSerializer(serializers.ModelSerializer):
     faculties = serializers.SerializerMethodField()
     certificate_received = serializers.SerializerMethodField()
     phone_number = serializers.CharField(source="profile.phone_number", default=None)
+    discount_amount = serializers.SerializerMethodField()
+    discounted_fee = serializers.SerializerMethodField()
 
     class Meta:
         model = Student
@@ -891,6 +893,8 @@ class RegistrationReportSerializer(serializers.ModelSerializer):
             "faculties",
             "certificate_received",
             "phone_number",
+            "discount_amount",
+            "discounted_fee",
         ]
 
     def _get_enrollment(self, obj):
@@ -901,7 +905,28 @@ class RegistrationReportSerializer(serializers.ModelSerializer):
 
     def get_student_name(self, obj):
         return obj.get_full_name()
+    def get_discount_amount(self, obj):
+        enrollment = self._get_enrollment(obj)
 
+        if not enrollment:
+            return "0.00"
+
+        return f"{Decimal(str(enrollment.discount_amount or 0)):.2f}"
+
+
+    def get_discounted_fee(self, obj):
+        enrollment = self._get_enrollment(obj)
+
+        if not enrollment:
+            return None
+
+        discounted_fee = (
+            Decimal(str(enrollment.course.total_fee))
+            - Decimal(str(enrollment.discount_amount or 0))
+        )
+
+        return f"{discounted_fee:.2f}"
+    
     def get_place(self, obj):
         return obj.center.address if obj.center else None
 
@@ -934,10 +959,20 @@ class RegistrationReportSerializer(serializers.ModelSerializer):
         return f"{total:.2f}"
 
     def get_balance(self, obj):
-        course_fee = self.get_course_fee(obj)
-        if course_fee is None:
+        enrollment = self._get_enrollment(obj)
+
+        if not enrollment:
             return None
-        balance = course_fee - Decimal(self.get_paid_amount(obj))
+
+        discounted_fee = (
+            Decimal(str(enrollment.course.total_fee))
+            - Decimal(str(enrollment.discount_amount or 0))
+        )
+
+        paid = Decimal(self.get_paid_amount(obj))
+
+        balance = discounted_fee - paid
+
         return f"{balance:.2f}"
 
     def get_batch_end_date(self, obj):

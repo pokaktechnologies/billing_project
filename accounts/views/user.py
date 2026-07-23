@@ -18,6 +18,8 @@ from django.conf import settings
 from django.db.models import Q
 from hr_section.models import Enquiry
 from hr_section.serializers import EnquirySerializer
+from internship.models import Student
+from internship.serializers.student import StudentProfileSerializer
 from project_management.models import TaskAssign
 from attendance.models import DailyAttendance
 from attendance.serializers import DailyAttendanceSerializer, DailyAttendanceSessionDetailSerializer
@@ -529,10 +531,33 @@ class StaffPersonalInfoView(APIView):
 
     def get(self, request):
         user = request.user
+
+        # Staff user
         if user.is_staff:
             serializer = StaffPersonalInfoSerializer(user)
-            return Response({"status": "1", "message": "success", "data": serializer.data})
-        return Response({"status": "0", "message": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({
+                "status": "1",
+                "message": "success",
+                "data": serializer.data
+            })
+
+        # Student user
+        try:
+            student = user.staff_profile.student_profile
+            serializer = StudentProfileSerializer(student)
+
+            return Response({
+                "status": "1",
+                "message": "success",
+                "data": serializer.data
+            })
+
+        except (StaffProfile.DoesNotExist, Student.DoesNotExist):
+            return Response({
+                "status": "0",
+                "message": "Profile not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
 
 
 class StaffPersonalAttendanceView(APIView):

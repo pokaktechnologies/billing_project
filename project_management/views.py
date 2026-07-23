@@ -2226,11 +2226,17 @@ class ManagerDailyReportSummaryView(APIView):
         else:
             selected_date = timezone.now().date()
 
-        # timezone-safe datetime
+        # End of day (used for member filtering)
         day_end = timezone.make_aware(
             datetime.combine(selected_date, datetime.max.time())
         )
-
+        # Report submission deadline: 6:30 PM
+        deadline = timezone.make_aware(
+            datetime.combine(
+                selected_date,
+                datetime.strptime("18:30", "%H:%M").time()
+            )
+        )
         # -----------------------------
         # MEMBERS (joined before this day)
         # -----------------------------
@@ -2258,7 +2264,7 @@ class ManagerDailyReportSummaryView(APIView):
         pending = 0
         employees = []
 
-        deadline = day_end
+        # deadline = day_end
 
         # -----------------------------
         # LOOP MEMBERS
@@ -2272,7 +2278,7 @@ class ManagerDailyReportSummaryView(APIView):
 
                 submitted_on = timezone.localtime(
                     report.submitted_at
-                ).date()
+                ).strftime("%Y-%m-%d %H:%M:%S")
 
                 if report.submitted_at > deadline:
                     status_text = "Late"

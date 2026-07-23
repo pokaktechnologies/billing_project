@@ -1674,12 +1674,8 @@ class InternStatementReportView(APIView):
             receipt_total_amount=Coalesce(
                 Sum('receipts__total_amount'),
                 Value(0, output_field=DecimalField())
-            ),
-            balance=F('invoice_grand_total') - Coalesce(
-                Sum('receipts__total_amount'),
-                Value(0, output_field=DecimalField())
             )
-        ).order_by('-invoice_date')
+        )
 
         if date_from and date_to:
             invoices = invoices.filter(invoice_date__range=[date_from, date_to])

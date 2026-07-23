@@ -653,7 +653,8 @@ class RegistrationReportAPIView(APIView):
         )
 
         total_course_fee = sum(
-            Decimal(str(s["course_fee"] or 0)) for s in students_data
+            Decimal(str(s["discounted_fee"] or 0))
+            for s in students_data
         )
         total_balance = total_course_fee - total_paid
 

@@ -2113,6 +2113,9 @@ class PaymentReportSerializer(serializers.ModelSerializer):
     last_payment_date = serializers.SerializerMethodField()
     last_payment_method = serializers.SerializerMethodField()
 
+    discount_amount = serializers.SerializerMethodField()
+    discounted_fee = serializers.SerializerMethodField()
+
     class Meta:
         model = StudentCourseEnrollment
         fields = [
@@ -2137,7 +2140,9 @@ class PaymentReportSerializer(serializers.ModelSerializer):
             "next_due_date",
             "last_payment_date",
             "last_payment_method",
-            "enrollment_date"
+            "enrollment_date",
+            "discount_amount",
+            "discounted_fee",
         ]
     def format_decimal(self, value):
         return str(Decimal(str(value)).quantize(Decimal("0.00")))
@@ -2148,7 +2153,18 @@ class PaymentReportSerializer(serializers.ModelSerializer):
 
     def get_batch_number(self, obj):
         return obj.batch.batch_number if obj.batch else None
-    
+
+    def get_discount_amount(self, obj):
+        return self.format_decimal(
+            obj.discount_amount
+        )
+
+
+    def get_discounted_fee(self, obj):
+        return self.format_decimal(
+            Decimal(str(obj.course.total_fee))
+            - Decimal(str(obj.discount_amount or 0))
+    )
     def get_payment_plan_type(self, obj):
         return obj.get_payment_plan_type_display()
 
@@ -2178,10 +2194,10 @@ class PaymentReportSerializer(serializers.ModelSerializer):
     def get_balance_fee(self, obj):
 
         return self.format_decimal(
-            obj.course.total_fee -
-            obj.advance_amount
+            Decimal(str(obj.course.total_fee))
+            - Decimal(str(obj.discount_amount or 0))
+            - Decimal(str(obj.advance_amount or 0))
         )
-
     def get_paid_amount(self, obj):
 
         total = obj.payments.aggregate(
@@ -2192,14 +2208,17 @@ class PaymentReportSerializer(serializers.ModelSerializer):
 
     def get_pending_fee(self, obj):
 
-        pending = (
+        discounted_fee = (
             Decimal(str(obj.course.total_fee))
-            -
-            Decimal(self.get_paid_amount(obj))
+            - Decimal(str(obj.discount_amount or 0))
+        )
+
+        paid = Decimal(
+            self.get_paid_amount(obj)
         )
 
         return self.format_decimal(
-            pending
+            discounted_fee - paid
         )
 
     # ---------------------------------------------------------
@@ -2212,14 +2231,15 @@ class PaymentReportSerializer(serializers.ModelSerializer):
             self.get_paid_amount(obj)
         )
 
-        total = Decimal(
-            str(obj.course.total_fee)
+        discounted_fee = (
+            Decimal(str(obj.course.total_fee))
+            - Decimal(str(obj.discount_amount or 0))
         )
 
         if paid <= Decimal("0.00"):
             return "Pending"
 
-        if paid < total:
+        if paid < discounted_fee:
             return "Partial"
 
         return "Paid"

@@ -1,7 +1,7 @@
 from decimal import Decimal
 from django.utils import timezone
 from django.db import transaction
-from django.db.models import Q, Count, Prefetch, Sum, DecimalField, Value
+from django.db.models import Q, Count, Prefetch, Sum, DecimalField, Value, ExpressionWrapper
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.exceptions import ValidationError
@@ -857,8 +857,12 @@ class PaymentReportListAPIView(generics.ListAPIView):
                     Sum("payments__amount_paid"),
                     Value(0),
                     output_field=DecimalField(max_digits=10, decimal_places=2)
+                ),
+                discounted_fee=ExpressionWrapper(
+                    F("course__total_fee") - F("discount_amount"),
+                    output_field=DecimalField(max_digits=10, decimal_places=2)
                 )
-)
+            )
         )
 
         params = self.request.query_params
@@ -969,7 +973,7 @@ class PaymentReportListAPIView(generics.ListAPIView):
                 enrollment_date__lte=enrolled_to
             )
 
-        # payment status
+        # Payment Status
         status = params.get("status")
 
         if status == "pending":
@@ -982,16 +986,16 @@ class PaymentReportListAPIView(generics.ListAPIView):
 
             queryset = queryset.filter(
                 total_paid__gt=0,
-                total_paid__lt=F("course__total_fee")
+                total_paid__lt=F("discounted_fee")
             )
 
         elif status == "paid":
 
             queryset = queryset.filter(
-                total_paid__gte=F("course__total_fee")
+                total_paid__gte=F("discounted_fee")
             )
 
-        # duee filter
+        # Due Filter
         due = params.get("due")
 
         today = timezone.now().date()

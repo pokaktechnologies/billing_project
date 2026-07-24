@@ -2067,6 +2067,39 @@ class ManagerWeeklyReportSummaryView(APIView):
             status=status.HTTP_200_OK
         )
     
+    def delete(self, request):
+        report_id = request.query_params.get("report_id")
+        project_id = request.query_params.get("project")
+
+        if not report_id:
+            return Response(
+                {"status": "0", "message": "report_id required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not project_id:
+            return Response(
+                {"status": "0", "message": "project required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        report = get_object_or_404(
+            Report,
+            id=report_id,
+            project_id=project_id,
+            report_type="weekly",
+        )
+
+        report.delete()
+
+        return Response(
+            {
+                "status": "1",
+                "message": "Weekly report deleted successfully"
+            },
+            status=status.HTTP_200_OK
+        )
+    
 class ManagerMonthlyReportSummaryView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -2323,6 +2356,40 @@ class ManagerDailyReportSummaryView(APIView):
             },
             status=status.HTTP_200_OK
         )
+
+    def delete(self, request):
+        report_id = request.query_params.get("report_id")
+        project_id = request.query_params.get("project")
+
+        if not report_id:
+            return Response(
+                {"status": "0", "message": "report_id required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not project_id:
+            return Response(
+                {"status": "0", "message": "project required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        report = get_object_or_404(
+            Report,
+            id=report_id,
+            project_id=project_id,
+            report_type="daily"
+        )
+
+        report.delete()
+
+        return Response(
+            {
+                "status": "1",
+                "message": "Report deleted successfully"
+            },
+            status=status.HTTP_200_OK
+        )
+
 class ProjectProgressionView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]

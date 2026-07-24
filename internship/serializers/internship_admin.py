@@ -594,8 +594,7 @@ class StudentSerializer(serializers.ModelSerializer):
     profile = StaffProfileSerializer(required=False, allow_null=True)
     batch = serializers.SerializerMethodField()
     batch_number = serializers.SerializerMethodField()
-    course = serializers.SerializerMethodField()
-    course_title = serializers.SerializerMethodField()
+    courses = serializers.SerializerMethodField()
     center_name = serializers.CharField(source="center.name", read_only=True)
     councellor_name = serializers.CharField(source="councellor.get_full_name", read_only=True)
     payment_type = serializers.SerializerMethodField()
@@ -617,8 +616,7 @@ class StudentSerializer(serializers.ModelSerializer):
             "full_name",
             "center",
             "center_name",
-            "course",
-            "course_title",
+            "courses",
             "batch",
             "batch_number",
             "payment_type",
@@ -645,13 +643,17 @@ class StudentSerializer(serializers.ModelSerializer):
         enrollment = obj.enrollments.first()
         return enrollment.batch.batch_number if enrollment and enrollment.batch else None
 
-    def get_course(self, obj):
-        enrollment = obj.enrollments.first()
-        return enrollment.course.id if enrollment and enrollment.course else None
+    def get_courses(self, obj):
+        enrollments = obj.enrollments.select_related("course")
 
-    def get_course_title(self, obj):
-        enrollment = obj.enrollments.first()
-        return enrollment.course.title if enrollment and enrollment.course else None
+        return [
+            {
+                # "id": enrollment.course.id,
+                "title": enrollment.course.title,
+            }
+            for enrollment in enrollments
+            if enrollment.course
+        ]
 
     def get_payment_type(self, obj):
         enrollment = obj.enrollments.first()

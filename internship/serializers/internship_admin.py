@@ -878,11 +878,11 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
                         "Number of installments is required."
                 })
 
-            if custom_installments < 2:
-                raise serializers.ValidationError({
-                    "custom_installments":
-                        "Minimum 2 installments are required."
-                })
+            # if custom_installments < 2:
+            #     raise serializers.ValidationError({
+            #         "custom_installments":
+            #             "Minimum 2 installments are required."
+            #     })
 
             if custom_installments > 24:
                 raise serializers.ValidationError({

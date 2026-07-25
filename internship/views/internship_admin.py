@@ -1,4 +1,5 @@
 from decimal import Decimal
+from django.db.migrations import serializer
 from django.utils import timezone
 from django.db import transaction
 from django.db.models import Q, Count, Prefetch, Sum, DecimalField, Value, ExpressionWrapper
@@ -15,6 +16,7 @@ from rest_framework import generics
 from datetime import datetime
 from django.db.models.functions import TruncMonth
 
+from accounts.services.receipt_service import StudentReceiptService
 from internship.serializers.instructor import StudentReportSerializer
 from ..models import Section, Class, Student, Course, Faculty, StudentCourseEnrollment, CoursePayment, StudentReport
 from ..serializers.internship_admin import AvailableFacultySerializer, AvailableStudentSerializer, BatchInformationSerializer, ClassDetailSerializer, SectionSerializer, ClassListCreateSerializer, StudentPaymentDetailSerializer, StudentPaymentSerializer, StudentProfileDetailSerializer
@@ -347,6 +349,28 @@ class StudentCourseEnrollmentView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_fields = ["course", "batch"]
+
+    def perform_create(self, serializer):
+        enrollment = serializer.save()
+
+        receipt_data = serializer.validated_data.pop("receipt", None)
+
+        if receipt_data:
+
+            advance_payment = CoursePayment.objects.filter(
+                enrollment=enrollment,
+                payment_type="advance"
+            ).first()
+
+            if advance_payment:
+                StudentReceiptService.create_receipt(
+                    enrollment=enrollment,
+                    payment=advance_payment,
+                    receipt_data=receipt_data,
+                    user=self.request.user,
+                )
+
+
 
 class StudentCourseEnrollmentDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = StudentCourseEnrollment.objects.select_related("student", "batch", "installment_plan").all()

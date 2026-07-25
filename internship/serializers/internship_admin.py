@@ -799,6 +799,7 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
     course_title = serializers.CharField(source="course.title", read_only=True)
     batch_number = serializers.CharField(source="batch.batch_number", read_only=True)
     total_installments = serializers.CharField(source="installment_plan.total_installments", read_only=True)
+    receipt = serializers.JSONField(write_only=True, required=False)
 
     class Meta:
         model = StudentCourseEnrollment
@@ -824,8 +825,15 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
 
             "discount_amount",
             "discount_reason",
+
+            "receipt"
         ]
         read_only_fields = ["course"]
+
+    def create(self, validated_data):
+        # Remove receipt because it is not a model field
+        validated_data.pop("receipt", None)
+        return super().create(validated_data)
 
     def validate(self, attrs):
         batch = attrs.get("batch")

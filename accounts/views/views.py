@@ -2634,7 +2634,9 @@ class DelivaryOrderBySalesOrder(APIView):
 
 
 class OrderNumberGeneratorView(APIView):
-    def generate_next_number(self, model, field_name: str, prefix: str, length: int) -> str:
+
+    @staticmethod
+    def generate_next_number(model, field_name: str, prefix: str, length: int) -> str:
         start = 10**(length - 1) + 1  # e.g., for length 6 -> 100001
 
         # Filter by prefix and order descending to get the latest number
@@ -2655,31 +2657,31 @@ class OrderNumberGeneratorView(APIView):
 
 
         if order_type == "QU":
-            order_number = self.generate_next_number(QuotationOrderModel, "quotation_number", "QU", 6)
+            order_number = OrderNumberGeneratorView.generate_next_number(QuotationOrderModel, "quotation_number", "QU", 6)
         elif order_type == "SO":
-            order_number = self.generate_next_number(SalesOrderModel, "sales_order_number", "SO", 6)
+            order_number = OrderNumberGeneratorView.generate_next_number(SalesOrderModel, "sales_order_number", "SO", 6)
         elif order_type == "DO":
-            order_number = self.generate_next_number(DeliveryFormModel, "delivery_number", "DO", 6)
+            order_number = OrderNumberGeneratorView.generate_next_number(DeliveryFormModel, "delivery_number", "DO", 6)
         elif order_type == "INV":
-            order_number = self.generate_next_number(InvoiceModel, "invoice_number", "INV", 6)
+            order_number = OrderNumberGeneratorView.generate_next_number(InvoiceModel, "invoice_number", "INV", 6)
         elif order_type == "RP":
-            order_number = self.generate_next_number(ReceiptModel, "receipt_number", "RP", 6)
+            order_number = OrderNumberGeneratorView.generate_next_number(ReceiptModel, "receipt_number", "RP", 6)
         elif order_type == "SU":
-            order_number = self.generate_next_number(Supplier, "supplier_number", "SU", 6)
+            order_number = OrderNumberGeneratorView.generate_next_number(Supplier, "supplier_number", "SU", 6)
         elif order_type == "PO":
-            order_number = self.generate_next_number(PurchaseOrder, "purchase_order_number", "PO", 6)
+            order_number = OrderNumberGeneratorView.generate_next_number(PurchaseOrder, "purchase_order_number", "PO", 6)
         elif order_type == "MR":
-            order_number = self.generate_next_number(MaterialReceive, "material_receive_number", "MR", 6)
+            order_number = OrderNumberGeneratorView.generate_next_number(MaterialReceive, "material_receive_number", "MR", 6)
         elif order_type == "SR":
-            order_number = self.generate_next_number(SalesReturnModel, "sales_return_number", "SR", 6)
+            order_number = OrderNumberGeneratorView.generate_next_number(SalesReturnModel, "sales_return_number", "SR", 6)
         elif order_type == "LD":
-            order_number = self.generate_next_number(Lead, "lead_number", "LD", 6)
+            order_number = OrderNumberGeneratorView.generate_next_number(Lead, "lead_number", "LD", 6)
         elif order_type == "EMP":
-            order_number = self.generate_next_number(JobDetail, "employee_id", "EMP", 6)
+            order_number = OrderNumberGeneratorView.generate_next_number(JobDetail, "employee_id", "EMP", 6)
         elif order_type == "PC":
-            order_number = self.generate_next_number(Product, "code", "PC", 4)
+            order_number = OrderNumberGeneratorView.generate_next_number(Product, "code", "PC", 4)
         elif order_type == "CL":
-            order_number = self.generate_next_number(Customer, "customer_number", "CL", 6)
+            order_number = OrderNumberGeneratorView.generate_next_number(Customer, "customer_number", "CL", 6)
 
         else:
             return Response({

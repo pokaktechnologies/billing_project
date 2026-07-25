@@ -1015,6 +1015,7 @@ class CoursePaymentSerializer(serializers.ModelSerializer):
     already_paid = serializers.SerializerMethodField()
     balance = serializers.SerializerMethodField()
     payment_type = serializers.CharField(read_only=True)
+    receipt = serializers.JSONField(write_only=True, required=False)
 
     class Meta:
         model = CoursePayment
@@ -1032,6 +1033,7 @@ class CoursePaymentSerializer(serializers.ModelSerializer):
             "payment_date",
             "payment_type",
             "enrollment",
+            "receipt"
         ]
         # read_only_fields = ["payment_date"]
 
@@ -1116,6 +1118,7 @@ class CoursePaymentSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
+        validated_data.pop("receipt", None)
         installments = validated_data.get("installments")
 
         # Automatically set enrollment for installment payments

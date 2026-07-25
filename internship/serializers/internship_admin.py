@@ -1809,13 +1809,68 @@ class StudentCourseSummarySerializer(serializers.ModelSerializer):
     discount_amount = serializers.SerializerMethodField()
     discounted_fee = serializers.SerializerMethodField()
 
+    registration_date = serializers.DateTimeField(
+        source="student.created_at",
+        format="%Y-%m-%d",
+        read_only=True,
+    )
+
+    student_full_name = serializers.SerializerMethodField()
+    phone_number = serializers.CharField(
+        source="student.profile.phone_number",
+        read_only=True,
+    )
+
+    place = serializers.SerializerMethodField()
+    counsellor_name = serializers.SerializerMethodField()
+
+    center = serializers.CharField(
+        source="student.center.name",
+        read_only=True,
+    )
+
+    course_starting_date = serializers.DateField(
+        source="batch.start_date",
+        read_only=True,
+    )
+
+    second_payment = serializers.SerializerMethodField()
+    third_payment = serializers.SerializerMethodField()
+
+    class_end_date = serializers.DateField(
+        source="batch.end_date",
+        read_only=True,
+    )
+
+    payment_status = serializers.SerializerMethodField()
+
+    student_status = serializers.CharField(
+        source="student.status",
+        read_only=True,
+    )
+
+
+
+
     class Meta:
         model = StudentCourseEnrollment
         fields = [
             "enrollment_id",
+
+            "registration_date",
+            "student_full_name",
+            "phone_number",
+            "place",
+            "counsellor_name",
+
             "course_name",
+            "center",
+
+            "course_starting_date",
             "course_duration",
+
             "enrollment_date",
+
             "batch",
             "instructors",
             "course_status",
@@ -1826,10 +1881,18 @@ class StudentCourseSummarySerializer(serializers.ModelSerializer):
             "advance_amount",
 
             "total_fee",
-            "paid_amount",
-            "pending_amount",
             "discount_amount",
             "discounted_fee",
+            "paid_amount",
+            "pending_amount",
+
+            "second_payment",
+            "third_payment",
+
+            "class_end_date",
+
+            "payment_status",
+            "student_status",
         ]
 
     def format_decimal(self, value):
@@ -1915,6 +1978,73 @@ class StudentCourseSummarySerializer(serializers.ModelSerializer):
         return self.format_decimal(
             discounted_fee - paid
         )
+
+    def get_student_full_name(self, obj):
+        return obj.student.get_full_name()
+
+    def get_place(self, obj):
+        profile = obj.student.profile
+
+        return getattr(profile, "place", None)
+
+    def get_counsellor_name(self, obj):
+        if obj.student.councellor:
+            return obj.student.councellor.get_full_name()
+
+        return None
+
+    def _payment(self, obj, installment_number):
+        installment = obj.student_installment_items.filter(
+            installment_number=installment_number
+        ).first()
+
+        if not installment:
+            return None
+
+        paid = (
+                installment.course_payments.aggregate(
+                    total=Sum("amount_paid")
+                )["total"]
+                or Decimal("0.00")
+        )
+
+        return {
+            "installment": installment_number,
+            "amount": self.format_decimal(installment.amount),
+            "paid": self.format_decimal(paid),
+            "status": "Paid" if paid >= installment.amount else "Pending",
+        }
+
+    def get_second_payment(self, obj):
+        return self._payment(obj, 2)
+
+    def get_third_payment(self, obj):
+        return self._payment(obj, 3)
+
+    def get_payment_status(self, obj):
+        discounted_fee = (
+                Decimal(str(obj.course.total_fee))
+                - Decimal(str(obj.discount_amount or 0))
+        )
+
+        paid = (
+                obj.payments.aggregate(
+                    total=Sum("amount_paid")
+                )["total"]
+                or Decimal("0.00")
+        )
+
+        if paid == 0:
+            return "Unpaid"
+
+        if paid >= discounted_fee:
+            return "Paid"
+
+        return "Partially Paid"
+
+
+
+
     
 
 class StudentProfileDetailSerializer(serializers.ModelSerializer):
@@ -1930,7 +2060,7 @@ class StudentProfileDetailSerializer(serializers.ModelSerializer):
     )
 
     center = serializers.CharField(
-        source="center.center_name",
+        source="center.name",
         default=None
     )
 

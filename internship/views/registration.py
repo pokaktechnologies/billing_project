@@ -42,7 +42,10 @@ class StudentRegistrationReportView(ListAPIView):
     ordering = ["-created_at"]
 
     queryset = (
-        Student.objects.select_related(
+        Student.objects.filter(
+            enrollments__isnull=False
+        )
+        .select_related(
             "profile__user",
             "center",
             "councellor",
@@ -66,6 +69,7 @@ class StudentRegistrationReportView(ListAPIView):
                 ),
             ),
         )
+        .distinct()
     )
 
     def get_queryset(self):

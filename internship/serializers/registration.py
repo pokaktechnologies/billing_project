@@ -9,11 +9,16 @@ from internship.serializers.report_serializers import InstallmentItemReportSeria
 
 class StudentRegistrationReportSerializer(serializers.ModelSerializer):
     registration_date = serializers.DateTimeField(source="created_at",format="%Y-%m-%d",read_only=True)
+    enrollment_id = serializers.SerializerMethodField()
+    student_id = serializers.SerializerMethodField()
+    course_id = serializers.SerializerMethodField()
+    student_code = serializers.SerializerMethodField()
+    user_id = serializers.IntegerField(source="profile.user.id",read_only=True)
     student_name = serializers.SerializerMethodField()
     place = serializers.SerializerMethodField()
     counsellor = serializers.SerializerMethodField()
     course = serializers.SerializerMethodField()
-    center = serializers.CharField(source="center.name", default=None)
+    center = serializers.CharField(source="center.name", read_only=True, default=None)
     duration = serializers.SerializerMethodField()
     course_fee = serializers.SerializerMethodField()
     paid_amount = serializers.SerializerMethodField()
@@ -23,23 +28,20 @@ class StudentRegistrationReportSerializer(serializers.ModelSerializer):
     payment_status = serializers.SerializerMethodField()
     student_status = serializers.CharField(source="status", read_only=True)
     batch_end_date = serializers.SerializerMethodField()
-    next_due_installment = serializers.SerializerMethodField()
-    installments = serializers.SerializerMethodField()
-    faculties = serializers.SerializerMethodField()
-    certificate_received = serializers.SerializerMethodField()
+    phone_number = serializers.CharField(source="profile.phone_number", read_only=True, default=None)
 
-    phone_number = serializers.CharField(
-        source="profile.phone_number",
-        default=None,
-    )
 
     class Meta:
         model = Student
         fields = [
             "id",
-            "registration_date",
+            "enrollment_id",
             "student_id",
+            "course_id",
+            "user_id",
+            "student_code",
             "student_name",
+            "registration_date",
             "phone_number",
             "place",
             "counsellor",
@@ -55,13 +57,8 @@ class StudentRegistrationReportSerializer(serializers.ModelSerializer):
             "batch_end_date",
             "payment_status",
             "student_status",
-            "next_due_installment",
-            "installments",
-            "faculties",
-            "certificate_received",
+
         ]
-
-
 
     def _get_enrollment(self, obj):
         if not hasattr(obj, "_cached_enrollment"):
@@ -69,6 +66,21 @@ class StudentRegistrationReportSerializer(serializers.ModelSerializer):
             obj._cached_enrollment = enrollments[0] if enrollments else None
         return obj._cached_enrollment
 
+    def get_enrollment_id(self, obj):
+        enrollment = self._get_enrollment(obj)
+        return enrollment.id if enrollment else None
+
+    def get_student_id(self, obj):
+        enrollment = self._get_enrollment(obj)
+        return enrollment.student.id if enrollment else None
+
+    def get_student_code(self, obj):
+        enrollment = self._get_enrollment(obj)
+        return enrollment.student.student_id if enrollment else None
+
+    def get_course_id(self, obj):
+        enrollment = self._get_enrollment(obj)
+        return enrollment.course.id if enrollment and enrollment.course else None
     def get_student_name(self, obj):
         return obj.get_full_name()
 
@@ -108,27 +120,7 @@ class StudentRegistrationReportSerializer(serializers.ModelSerializer):
         e = self._get_enrollment(obj)
         return e.batch.end_date if e and e.batch else None
 
-    def get_next_due_installment(self, obj):
-        return None  # copy from existing serializer
 
-    def get_installments(self, obj):
-        e = self._get_enrollment(obj)
-        if not e:
-            return []
-        return InstallmentItemReportSerializer(
-            e.student_installment_items.all(),
-            many=True,
-            context={"student": obj},
-        ).data
-
-    def get_faculties(self, obj):
-        e = self._get_enrollment(obj)
-        if not e or not e.batch:
-            return []
-        return [{"id": f.id, "name": f.get_full_name()} for f in e.batch.faculties.all()]
-
-    def get_certificate_received(self, obj):
-        return CertificateRecord.objects.filter(user_id=obj.profile_id).exists()
 
     def _payment(self, obj, number):
         e = self._get_enrollment(obj)

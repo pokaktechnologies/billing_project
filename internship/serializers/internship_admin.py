@@ -594,8 +594,7 @@ class StudentSerializer(serializers.ModelSerializer):
     profile = StaffProfileSerializer(required=False, allow_null=True)
     batch = serializers.SerializerMethodField()
     batch_number = serializers.SerializerMethodField()
-    course = serializers.SerializerMethodField()
-    course_title = serializers.SerializerMethodField()
+    courses = serializers.SerializerMethodField()
     center_name = serializers.CharField(source="center.name", read_only=True)
     councellor_name = serializers.CharField(source="councellor.get_full_name", read_only=True)
     payment_type = serializers.SerializerMethodField()
@@ -617,8 +616,7 @@ class StudentSerializer(serializers.ModelSerializer):
             "full_name",
             "center",
             "center_name",
-            "course",
-            "course_title",
+            "courses",
             "batch",
             "batch_number",
             "payment_type",
@@ -645,13 +643,17 @@ class StudentSerializer(serializers.ModelSerializer):
         enrollment = obj.enrollments.first()
         return enrollment.batch.batch_number if enrollment and enrollment.batch else None
 
-    def get_course(self, obj):
-        enrollment = obj.enrollments.first()
-        return enrollment.course.id if enrollment and enrollment.course else None
+    def get_courses(self, obj):
+        enrollments = obj.enrollments.select_related("course")
 
-    def get_course_title(self, obj):
-        enrollment = obj.enrollments.first()
-        return enrollment.course.title if enrollment and enrollment.course else None
+        return [
+            {
+                # "id": enrollment.course.id,
+                "title": enrollment.course.title,
+            }
+            for enrollment in enrollments
+            if enrollment.course
+        ]
 
     def get_payment_type(self, obj):
         enrollment = obj.enrollments.first()
@@ -797,6 +799,7 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
     course_title = serializers.CharField(source="course.title", read_only=True)
     batch_number = serializers.CharField(source="batch.batch_number", read_only=True)
     total_installments = serializers.CharField(source="installment_plan.total_installments", read_only=True)
+    receipt = serializers.JSONField(write_only=True, required=False)
 
     class Meta:
         model = StudentCourseEnrollment
@@ -822,8 +825,15 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
 
             "discount_amount",
             "discount_reason",
+
+            "receipt"
         ]
         read_only_fields = ["course"]
+
+    def create(self, validated_data):
+        # Remove receipt because it is not a model field
+        validated_data.pop("receipt", None)
+        return super().create(validated_data)
 
     def validate(self, attrs):
         batch = attrs.get("batch")
@@ -876,11 +886,11 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
                         "Number of installments is required."
                 })
 
-            if custom_installments < 2:
-                raise serializers.ValidationError({
-                    "custom_installments":
-                        "Minimum 2 installments are required."
-                })
+            # if custom_installments < 2:
+            #     raise serializers.ValidationError({
+            #         "custom_installments":
+            #             "Minimum 2 installments are required."
+            #     })
 
             if custom_installments > 24:
                 raise serializers.ValidationError({
@@ -1005,6 +1015,7 @@ class CoursePaymentSerializer(serializers.ModelSerializer):
     already_paid = serializers.SerializerMethodField()
     balance = serializers.SerializerMethodField()
     payment_type = serializers.CharField(read_only=True)
+    receipt = serializers.JSONField(write_only=True, required=False)
 
     class Meta:
         model = CoursePayment
@@ -1022,6 +1033,7 @@ class CoursePaymentSerializer(serializers.ModelSerializer):
             "payment_date",
             "payment_type",
             "enrollment",
+            "receipt"
         ]
         # read_only_fields = ["payment_date"]
 
@@ -1106,6 +1118,7 @@ class CoursePaymentSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
+        validated_data.pop("receipt", None)
         installments = validated_data.get("installments")
 
         # Automatically set enrollment for installment payments
@@ -1807,13 +1820,68 @@ class StudentCourseSummarySerializer(serializers.ModelSerializer):
     discount_amount = serializers.SerializerMethodField()
     discounted_fee = serializers.SerializerMethodField()
 
+    registration_date = serializers.DateTimeField(
+        source="student.created_at",
+        format="%Y-%m-%d",
+        read_only=True,
+    )
+
+    student_full_name = serializers.SerializerMethodField()
+    phone_number = serializers.CharField(
+        source="student.profile.phone_number",
+        read_only=True,
+    )
+
+    place = serializers.SerializerMethodField()
+    counsellor_name = serializers.SerializerMethodField()
+
+    center = serializers.CharField(
+        source="student.center.name",
+        read_only=True,
+    )
+
+    course_starting_date = serializers.DateField(
+        source="batch.start_date",
+        read_only=True,
+    )
+
+    second_payment = serializers.SerializerMethodField()
+    third_payment = serializers.SerializerMethodField()
+
+    class_end_date = serializers.DateField(
+        source="batch.end_date",
+        read_only=True,
+    )
+
+    payment_status = serializers.SerializerMethodField()
+
+    student_status = serializers.CharField(
+        source="student.status",
+        read_only=True,
+    )
+
+
+
+
     class Meta:
         model = StudentCourseEnrollment
         fields = [
             "enrollment_id",
+
+            "registration_date",
+            "student_full_name",
+            "phone_number",
+            "place",
+            "counsellor_name",
+
             "course_name",
+            "center",
+
+            "course_starting_date",
             "course_duration",
+
             "enrollment_date",
+
             "batch",
             "instructors",
             "course_status",
@@ -1824,10 +1892,18 @@ class StudentCourseSummarySerializer(serializers.ModelSerializer):
             "advance_amount",
 
             "total_fee",
-            "paid_amount",
-            "pending_amount",
             "discount_amount",
             "discounted_fee",
+            "paid_amount",
+            "pending_amount",
+
+            "second_payment",
+            "third_payment",
+
+            "class_end_date",
+
+            "payment_status",
+            "student_status",
         ]
 
     def format_decimal(self, value):
@@ -1913,6 +1989,73 @@ class StudentCourseSummarySerializer(serializers.ModelSerializer):
         return self.format_decimal(
             discounted_fee - paid
         )
+
+    def get_student_full_name(self, obj):
+        return obj.student.get_full_name()
+
+    def get_place(self, obj):
+        profile = obj.student.profile
+
+        return getattr(profile, "place", None)
+
+    def get_counsellor_name(self, obj):
+        if obj.student.councellor:
+            return obj.student.councellor.get_full_name()
+
+        return None
+
+    def _payment(self, obj, installment_number):
+        installment = obj.student_installment_items.filter(
+            installment_number=installment_number
+        ).first()
+
+        if not installment:
+            return None
+
+        paid = (
+                installment.course_payments.aggregate(
+                    total=Sum("amount_paid")
+                )["total"]
+                or Decimal("0.00")
+        )
+
+        return {
+            "installment": installment_number,
+            "amount": self.format_decimal(installment.amount),
+            "paid": self.format_decimal(paid),
+            "status": "Paid" if paid >= installment.amount else "Pending",
+        }
+
+    def get_second_payment(self, obj):
+        return self._payment(obj, 2)
+
+    def get_third_payment(self, obj):
+        return self._payment(obj, 3)
+
+    def get_payment_status(self, obj):
+        discounted_fee = (
+                Decimal(str(obj.course.total_fee))
+                - Decimal(str(obj.discount_amount or 0))
+        )
+
+        paid = (
+                obj.payments.aggregate(
+                    total=Sum("amount_paid")
+                )["total"]
+                or Decimal("0.00")
+        )
+
+        if paid == 0:
+            return "Unpaid"
+
+        if paid >= discounted_fee:
+            return "Paid"
+
+        return "Partially Paid"
+
+
+
+
     
 
 class StudentProfileDetailSerializer(serializers.ModelSerializer):
@@ -1928,7 +2071,7 @@ class StudentProfileDetailSerializer(serializers.ModelSerializer):
     )
 
     center = serializers.CharField(
-        source="center.center_name",
+        source="center.name",
         default=None
     )
 

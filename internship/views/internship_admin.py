@@ -1,4 +1,5 @@
 from decimal import Decimal
+from django.db.migrations import serializer
 from django.utils import timezone
 from django.db import transaction
 from django.db.models import Q, Count, Prefetch, Sum, DecimalField, Value, ExpressionWrapper
@@ -15,6 +16,7 @@ from rest_framework import generics
 from datetime import datetime
 from django.db.models.functions import TruncMonth
 
+from accounts.services.receipt_service import StudentReceiptService
 from internship.serializers.instructor import StudentReportSerializer
 from ..models import Section, Class, Student, Course, Faculty, StudentCourseEnrollment, CoursePayment, StudentReport
 from ..serializers.internship_admin import AvailableFacultySerializer, AvailableStudentSerializer, BatchInformationSerializer, ClassDetailSerializer, SectionSerializer, ClassListCreateSerializer, StudentPaymentDetailSerializer, StudentPaymentSerializer, StudentProfileDetailSerializer
@@ -348,6 +350,28 @@ class StudentCourseEnrollmentView(generics.ListCreateAPIView):
     filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_fields = ["course", "batch"]
 
+    def perform_create(self, serializer):
+        enrollment = serializer.save()
+
+        receipt_data = serializer.validated_data.pop("receipt", None)
+
+        if receipt_data:
+
+            advance_payment = CoursePayment.objects.filter(
+                enrollment=enrollment,
+                payment_type="advance"
+            ).first()
+
+            if advance_payment:
+                StudentReceiptService.create_receipt(
+                    enrollment=enrollment,
+                    payment=advance_payment,
+                    receipt_data=receipt_data,
+                    user=self.request.user,
+                )
+
+
+
 class StudentCourseEnrollmentDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = StudentCourseEnrollment.objects.select_related("student", "batch", "installment_plan").all()
     serializer_class = StudentCourseEnrollmentSerializer
@@ -396,6 +420,21 @@ class CoursePaymentListCreateAPIView(generics.ListCreateAPIView):
     )
     serializer_class = CoursePaymentSerializer
     permission_classes = [IsAuthenticated]
+
+    def perform_create(self, serializer):
+
+        receipt_data = serializer.validated_data.pop("receipt", None)
+
+        payment = serializer.save()
+
+        if receipt_data:
+
+            StudentReceiptService.create_receipt(
+                enrollment=payment.enrollment,
+                payment=payment,
+                receipt_data=receipt_data,
+                user=self.request.user,
+            )
     
 
 # aadyam student nn aayirunnu one student one course validastion maattiyappo ee api erro vaann appo student course enrollment nn edduth data 
@@ -524,9 +563,32 @@ class AcademicDashboardAPIView(APIView):
         faculty_count = Faculty.objects.filter(is_active=True).count()
 
         # Pending payments
-        paid_students = CoursePayment.objects.values("student").distinct().count()
-        total_students = Student.objects.count()
-        pending_payments = total_students - paid_students
+        # paid_students = CoursePayment.objects.values("student").distinct().count()
+        # total_students = Student.objects.count()
+        # pending_payments = total_students - paid_students
+
+        pending_payments = 0
+
+        enrollments = StudentCourseEnrollment.objects.select_related(
+            "student",
+            "course"
+        )
+
+        for enrollment in enrollments:
+            total_paid = (
+                    CoursePayment.objects.filter(
+                        student=enrollment.student
+                    ).aggregate(
+                        total=Sum("amount_paid")
+                    )["total"] or 0
+            )
+
+            if total_paid < enrollment.course.total_fee:
+                pending_payments += 1
+
+
+
+
 
         stats = {
             "active_students": active_students,

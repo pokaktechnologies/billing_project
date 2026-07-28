@@ -139,21 +139,21 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 class StudentTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
 
-        request = self.context.get("request")
+        # request = self.context.get("request")
 
-        if request:
-            turnstile_token = request.data.get("turnstile_token")
-            remote_ip = request.META.get("REMOTE_ADDR")
+        # if request:
+        #     turnstile_token = request.data.get("turnstile_token")
+        #     remote_ip = request.META.get("REMOTE_ADDR")
 
-            is_valid, error = verify_turnstile(
-                token=turnstile_token,
-                remote_ip=remote_ip
-            )
+        #     is_valid, error = verify_turnstile(
+        #         token=turnstile_token,
+        #         remote_ip=remote_ip
+        #     )
 
-            if not is_valid:
-                raise serializers.ValidationError({
-                    "detail": error
-                })
+        #     if not is_valid:
+        #         raise serializers.ValidationError({
+        #             "detail": error
+        #         })
 
         data = super().validate(attrs)
 
@@ -247,8 +247,8 @@ class StudentTokenObtainPairSerializer(TokenObtainPairSerializer):
         # else:
         #     print(f"Skipping attendance update for {user.email} (not staff)")
 
-        # return data
-        
+        return data
+
 class CustomClientTokenObtainPairSerializer(TokenObtainPairSerializer):
 
     def validate(self, attrs):

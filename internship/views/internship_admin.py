@@ -563,9 +563,32 @@ class AcademicDashboardAPIView(APIView):
         faculty_count = Faculty.objects.filter(is_active=True).count()
 
         # Pending payments
-        paid_students = CoursePayment.objects.values("student").distinct().count()
-        total_students = Student.objects.count()
-        pending_payments = total_students - paid_students
+        # paid_students = CoursePayment.objects.values("student").distinct().count()
+        # total_students = Student.objects.count()
+        # pending_payments = total_students - paid_students
+
+        pending_payments = 0
+
+        enrollments = StudentCourseEnrollment.objects.select_related(
+            "student",
+            "course"
+        )
+
+        for enrollment in enrollments:
+            total_paid = (
+                    CoursePayment.objects.filter(
+                        student=enrollment.student
+                    ).aggregate(
+                        total=Sum("amount_paid")
+                    )["total"] or 0
+            )
+
+            if total_paid < enrollment.course.total_fee:
+                pending_payments += 1
+
+
+
+
 
         stats = {
             "active_students": active_students,

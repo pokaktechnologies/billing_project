@@ -95,7 +95,25 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             },
             status=status.HTTP_200_OK
         )
+class StudentTokenObtainPairView(TokenObtainPairView):
+    serializer_class = StudentTokenObtainPairSerializer
 
+    def get(self, request, *args, **kwargs):
+        return Response(
+            {"detail": "Method 'GET' not allowed."},
+            status=status.HTTP_405_METHOD_NOT_ALLOWED
+        )
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user = serializer.user
+
+        return Response({
+            **serializer.validated_data,
+            "id": user.id,
+        })
 class ClientTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomClientTokenObtainPairSerializer
 

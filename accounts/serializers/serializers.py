@@ -50,6 +50,13 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
         user = self.user
 
+        # prevent students from satfff login
+        if hasattr(user, "staff_profile"):
+            if hasattr(user.staff_profile, "student_profile"):
+                raise serializers.ValidationError({
+                    "detail": "please login using the student login"
+                })
+
         # Prevent superusers from obtaining tokens via this endpoint
         if getattr(user, 'is_superuser', False):
             raise serializers.ValidationError({
@@ -129,6 +136,118 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
         return data
     
+class StudentTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+
+        # request = self.context.get("request")
+
+        # if request:
+        #     turnstile_token = request.data.get("turnstile_token")
+        #     remote_ip = request.META.get("REMOTE_ADDR")
+
+        #     is_valid, error = verify_turnstile(
+        #         token=turnstile_token,
+        #         remote_ip=remote_ip
+        #     )
+
+        #     if not is_valid:
+        #         raise serializers.ValidationError({
+        #             "detail": error
+        #         })
+
+        data = super().validate(attrs)
+
+        user = self.user
+
+        # User must have a staff profile
+        if not hasattr(user, "staff_profile"):
+            raise serializers.ValidationError({
+                "detail": "Invalid student account."
+            })
+        
+        if not hasattr(user.staff_profile, "student_profile"):
+            raise serializers.ValidationError({
+                "detail": "Please login using the Staff Login."
+            })
+
+        # Prevent superusers from obtaining tokens via this endpoint
+        if getattr(user, 'is_superuser', False):
+            raise serializers.ValidationError({
+                "detail": "Superuser login via this token endpoint is not allowed."
+            })
+        
+        # ---------------------------
+        # 2. Block staff with invalid job status
+        # ---------------------------
+        # if hasattr(user, "staff_profile"):
+        #     job = getattr(user.staff_profile, "job_detail", None)
+        #     if job and job.status in ["terminated", "inactive", "resigned"]:
+        #         raise serializers.ValidationError({
+        #             "detail": f"Login denied. Staff status is '{job.status}'."
+        #         })
+        # now = timezone.localtime()
+        # current_time = now.time()
+
+        # # Define sessions with thresholds
+        # sessions = {
+        #     "session1": {"start": dt_time(9, 0), "end": dt_time(12, 0), "late_threshold": dt_time(9, 15)},
+        #     "session2": {"start": dt_time(12, 0), "end": dt_time(15, 0), "late_threshold": dt_time(12, 15)},
+        #     "session3": {"start": dt_time(15, 0), "end": dt_time(18, 0), "late_threshold": dt_time(15, 15)},
+        # }
+
+        # session_name = None
+        # login_time = None
+        # session_status = None
+
+        # if hasattr(user, "staff_profile"):
+        #     # --- Morning session special rules ---
+        #     if current_time < dt_time(8, 0):
+        #         # Before 8:00 AM → just allow login, no attendance recorded
+        #         print(f"{user.email} logged in before 8:00 AM. No attendance recorded yet.")
+        #         return data
+        #     elif dt_time(8, 0) <= current_time < dt_time(9, 0):
+        #         # Clamp to 9:00 AM
+        #         session_name = "session1"
+        #         login_time = timezone.make_aware(datetime.combine(now.date(), dt_time(9, 0)))
+        #         session_status = "present"
+        #     elif dt_time(9, 0) <= current_time < dt_time(12, 0):
+        #         # After 9:00 AM → normal late calculation
+        #         session_name = "session1"
+        #         login_time = timezone.make_aware(datetime.combine(now.date(), current_time))
+        #         session_status = "present" if current_time <= sessions["session1"]["late_threshold"] else "late"
+        #     # --- Afternoon & Evening sessions ---
+        #     elif dt_time(12, 0) <= current_time < dt_time(15, 0):
+        #         session_name = "session2"
+        #         login_time = timezone.make_aware(datetime.combine(now.date(), current_time))
+        #         session_status = "present" if current_time <= sessions["session2"]["late_threshold"] else "late"
+        #     elif dt_time(15, 0) <= current_time < dt_time(18, 0):
+        #         session_name = "session3"
+        #         login_time = timezone.make_aware(datetime.combine(now.date(), current_time))
+        #         session_status = "present" if current_time <= sessions["session3"]["late_threshold"] else "late"
+
+        #     # Update attendance
+        #     if session_name:
+        #         try:
+        #             daily_attendance = DailyAttendance.objects.get(
+        #                 staff=user.staff_profile,
+        #                 date=now.date()
+        #             )
+        #             attendance_session, created = AttendanceSession.objects.get_or_create(
+        #                 daily_attendance=daily_attendance,
+        #                 session=session_name,
+        #                 defaults={"login_time": login_time, "status": session_status}
+        #             )
+        #             if not created and not attendance_session.login_time:
+        #                 attendance_session.login_time = login_time
+        #                 attendance_session.status = session_status
+        #                 attendance_session.save()
+        #             print(f"{user.email} | {session_name} login at {login_time}, status: {session_status}")
+        #         except DailyAttendance.DoesNotExist:
+        #             print(f"No daily attendance for {user.email} today")
+        # else:
+        #     print(f"Skipping attendance update for {user.email} (not staff)")
+
+        return data
 
 class CustomClientTokenObtainPairSerializer(TokenObtainPairSerializer):
 

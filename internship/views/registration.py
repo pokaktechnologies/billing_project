@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+import django_filters
 from django.db.models import Prefetch
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
@@ -9,13 +10,81 @@ from internship.models import (Student,StudentCourseEnrollment,StudentInstallmen
 from internship.serializers.registration import StudentRegistrationReportSerializer
 
 
+
+
+
+
+class StudentRegistrationReportFilter(django_filters.FilterSet):
+
+    center = django_filters.NumberFilter(
+        field_name="student__center"
+    )
+
+    councellor = django_filters.NumberFilter(
+        field_name="student__councellor"
+    )
+
+    status = django_filters.CharFilter(
+        field_name="student__status"
+    )
+
+    created_at__date = django_filters.DateFilter(
+        field_name="enrollment_date"
+    )
+
+    created_at__date__gte = django_filters.DateFilter(
+        field_name="enrollment_date",
+        lookup_expr="gte"
+    )
+
+    created_at__date__lte = django_filters.DateFilter(
+        field_name="enrollment_date",
+        lookup_expr="lte"
+    )
+
+    class Meta:
+        model = StudentCourseEnrollment
+        fields = []
+
+from rest_framework.filters import OrderingFilter
+class StudentRegistrationOrderingFilter(OrderingFilter):
+
+    ordering_map = {
+        "created_at": "enrollment_date",
+        "student_code": "student__student_id",
+        "status": "student__status",
+        "center": "student__center__name",
+        "councellor": "student__councellor__profile__user__first_name",
+        "course": "course__title",
+    }
+
+    def get_ordering(self, request, queryset, view):
+        params = request.query_params.get(self.ordering_param)
+
+        if not params:
+            return getattr(view, "ordering", None)
+
+        ordering = []
+
+        for field in params.split(","):
+            desc = field.startswith("-")
+            key = field.lstrip("-")
+
+            mapped = self.ordering_map.get(key, key)
+
+            if desc:
+                mapped = "-" + mapped
+
+            ordering.append(mapped)
+
+        return ordering
 class StudentRegistrationReportView(ListAPIView):
     serializer_class = StudentRegistrationReportSerializer
 
     filter_backends = [
         DjangoFilterBackend,
         filters.SearchFilter,
-        filters.OrderingFilter,
+        StudentRegistrationOrderingFilter,
     ]
 
     search_fields = [
@@ -25,20 +94,8 @@ class StudentRegistrationReportView(ListAPIView):
         "student__student_id",
     ]
 
-    filterset_fields = {
-        "enrollment_date": ["exact", "gte", "lte"],
-        "student__center": ["exact"],
-        "student__councellor": ["exact"],
-        "student__status": ["exact"],
-        "course": ["exact"],
-    }
+    filterset_class = StudentRegistrationReportFilter
 
-    ordering_fields = [
-        "enrollment_date",
-        "student__student_id",
-        "student__start_date",
-        "student__status",
-    ]
 
     ordering = ["-enrollment_date"]
 

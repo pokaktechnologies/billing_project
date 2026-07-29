@@ -20,6 +20,7 @@ urlpatterns = [
     path('profile/', ProfileAPIView.as_view()),
     path('logout/', LogoutView.as_view()),
     path('token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path("student/token/", StudentTokenObtainPairView.as_view(), name="student_token_obtain_pair"),
     path('client/token/', ClientTokenObtainPairView.as_view(), name='client_token_obtain_pair'),
     path('admin/token/', SuperuserTokenObtainPairView.as_view(), name='superuser_token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
@@ -195,7 +196,8 @@ urlpatterns = [
 
     path('staff/info/', StaffPersonalInfoView.as_view(), name='staff-personal-info'),
     path('staff/attendance/',StaffPersonalAttendanceView.as_view(), name='staff-attendance-info'),
-
+    path("staff/profile/", StaffProfileUpdateAPIView.as_view()),
+    path("admin/profile/", AdminProfileAPIView.as_view(), name="admin-profile"),
     path('unassigned-staff/', UnassignedStaffListView.as_view(), name='unassigned-staff-list'),
 
     ## DASHBOARD URLS

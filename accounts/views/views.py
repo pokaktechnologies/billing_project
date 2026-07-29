@@ -95,7 +95,25 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             },
             status=status.HTTP_200_OK
         )
+class StudentTokenObtainPairView(TokenObtainPairView):
+    serializer_class = StudentTokenObtainPairSerializer
 
+    def get(self, request, *args, **kwargs):
+        return Response(
+            {"detail": "Method 'GET' not allowed."},
+            status=status.HTTP_405_METHOD_NOT_ALLOWED
+        )
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user = serializer.user
+
+        return Response({
+            **serializer.validated_data,
+            "id": user.id,
+        })
 class ClientTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomClientTokenObtainPairSerializer
 
@@ -2238,7 +2256,7 @@ class ReceiptView(BaseAPIView):
             if request.user.is_superuser:
                 receipts = ReceiptModel.objects.all().order_by('-created_at')
             else:
-                receipts = ReceiptModel.objects.filter(user=request.user).order_by('-created_at')
+                receipts = ReceiptModel.objects.all().order_by('-created_at')
 
             if receipt_type:
                 receipts = receipts.filter(receipt_type=receipt_type)
@@ -3532,7 +3550,7 @@ class InvoiceAPI(BaseAPIView):
         if request.user.is_superuser:
             qs = InvoiceModel.objects.all()
         else:
-            qs = InvoiceModel.objects.filter(user=request.user)
+            qs = InvoiceModel.objects.all()
 
         if invoice_type:
             qs = qs.filter(invoice_type=invoice_type)

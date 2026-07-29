@@ -2256,7 +2256,7 @@ class ReceiptView(BaseAPIView):
             if request.user.is_superuser:
                 receipts = ReceiptModel.objects.all().order_by('-created_at')
             else:
-                receipts = ReceiptModel.objects.filter(user=request.user).order_by('-created_at')
+                receipts = ReceiptModel.objects.all().order_by('-created_at')
 
             if receipt_type:
                 receipts = receipts.filter(receipt_type=receipt_type)

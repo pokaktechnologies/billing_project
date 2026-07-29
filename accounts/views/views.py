@@ -3550,7 +3550,7 @@ class InvoiceAPI(BaseAPIView):
         if request.user.is_superuser:
             qs = InvoiceModel.objects.all()
         else:
-            qs = InvoiceModel.objects.filter(user=request.user)
+            qs = InvoiceModel.objects.all()
 
         if invoice_type:
             qs = qs.filter(invoice_type=invoice_type)

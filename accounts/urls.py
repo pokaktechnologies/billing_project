@@ -196,7 +196,8 @@ urlpatterns = [
 
     path('staff/info/', StaffPersonalInfoView.as_view(), name='staff-personal-info'),
     path('staff/attendance/',StaffPersonalAttendanceView.as_view(), name='staff-attendance-info'),
-
+    path("staff/profile/", StaffProfileUpdateAPIView.as_view()),
+    path("admin/profile/", AdminProfileAPIView.as_view(), name="admin-profile"),
     path('unassigned-staff/', UnassignedStaffListView.as_view(), name='unassigned-staff-list'),
 
     ## DASHBOARD URLS

@@ -558,8 +558,46 @@ class StaffPersonalInfoView(APIView):
                 "message": "Profile not found"
             }, status=status.HTTP_404_NOT_FOUND)
 
+# staff n person infromations mathram edit cheyyaan
+class StaffProfileUpdateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
 
+    def get(self, request):
+        profile = get_object_or_404(StaffProfile, user=request.user)
 
+        serializer = StaffProfileSerializer(profile)
+
+        return Response({
+            "status": "1",
+            "message": "success",
+            "data": serializer.data
+        })
+
+    def patch(self, request):
+        profile = get_object_or_404(StaffProfile, user=request.user)
+
+        serializer = StaffProfileSerializer(
+            profile,
+            data=request.data,
+            partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return Response({
+                "status": "1",
+                "message": "Profile updated successfully",
+                "data": serializer.data
+            })
+
+        return Response({
+            "status": "0",
+            "message": "Validation error",
+            "errors": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
 class StaffPersonalAttendanceView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -890,3 +928,76 @@ class AdminDashboardView(APIView):
                 "project_dashboard": pm_data
             }
         }, status=status.HTTP_200_OK)
+
+
+class AdminProfileAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get(self, request):
+
+        if not request.user.is_superuser:
+            return Response(
+                {
+                    "status": "0",
+                    "message": "Permission denied."
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        profile, created = StaffProfile.objects.get_or_create(
+            user=request.user,
+            defaults={
+                "staff_email": request.user.email
+            }
+        )
+
+        serializer = AdminStaffProfileSerializer(profile)
+
+        return Response({
+            "status": "1",
+            "message": "success",
+            "data": serializer.data
+        })
+
+    def patch(self, request):
+
+        if not request.user.is_superuser:
+            return Response(
+                {
+                    "status": "0",
+                    "message": "Permission denied."
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        profile, created = StaffProfile.objects.get_or_create(
+            user=request.user,
+            defaults={
+                "staff_email": request.user.email
+            }
+        )
+
+        serializer = AdminStaffProfileSerializer(
+            profile,
+            data=request.data,
+            partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return Response({
+                "status": "1",
+                "message": "Profile updated successfully.",
+                "data": serializer.data
+            })
+
+        return Response(
+            {
+                "status": "0",
+                "message": "Validation error.",
+                "errors": serializer.errors
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )

@@ -315,3 +315,15 @@ class TaskListSerializer(serializers.ModelSerializer):
             "end_date",
         ]
 
+class AdminStaffProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StaffProfile
+        fields = [
+            "id",
+            "phone_number",
+            "qulification",
+            "staff_email",
+            "profile_image",
+            "date_of_birth",
+            "address",
+        ]

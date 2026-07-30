@@ -56,7 +56,6 @@ class StudentRegistrationOrderingFilter(OrderingFilter):
         "center": "student__center__name",
         "councellor": "student__councellor__profile__user__first_name",
         "course": "course__title",
-        "form_type": "form_type",
     }
 
     def get_ordering(self, request, queryset, view):

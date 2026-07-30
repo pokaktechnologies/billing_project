@@ -45,6 +45,7 @@ class InternshipApplicationSerializer(serializers.ModelSerializer):
             "academic_counselor",
             "documents",
             "created_at",
+            "form_type",
         ]
         read_only_fields = ["id", "created_at"]
 

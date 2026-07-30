@@ -48,6 +48,11 @@ class InternshipApplicationAPIView(APIView):
     def filter_queryset(self, queryset):
         params = self.request.query_params
 
+        form_type = params.get("form_type")
+        if form_type:
+            queryset = queryset.filter(form_type=form_type)
+
+            
         search = params.get("search")
         if search:
             queryset = queryset.filter(

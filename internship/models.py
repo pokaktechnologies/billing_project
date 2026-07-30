@@ -844,6 +844,11 @@ phone_validator = RegexValidator(
 # -----------------------------
 class InternshipApplication(models.Model):
 
+    FORM_CHOICE = [
+        ("internship_form", "Internship Form"),
+        ("free_course_form", "Free Course Form")
+    ]
+
     QUALIFICATION_CHOICES = [
         ('sslc', 'SSLC'),
         ('plus_two', 'Plus Two'),
@@ -867,8 +872,10 @@ class InternshipApplication(models.Model):
     COURSE_TYPE_CHOICES = [
         ('online', 'Online'),
         ('offline', 'Offline'),
+        ('recorded', 'Recorded'),
     ]
 
+    form_type = models.CharField(max_length=20, choices=FORM_CHOICE, default="internship_form")
     # Basic Info
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)

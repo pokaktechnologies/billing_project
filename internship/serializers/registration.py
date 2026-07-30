@@ -59,6 +59,7 @@ class StudentRegistrationReportSerializer(serializers.ModelSerializer):
             "batch_end_date",
             "payment_status",
             "student_status",
+            "form_type",
 
         ]
 

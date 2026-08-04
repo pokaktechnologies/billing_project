@@ -135,7 +135,7 @@ class StudentListAPIView(APIView):
             "course",
             "batch",
             "center"
-        )
+        ).order_by("-created_at", "-id")
 
         # batch filter
         if batch_id:
@@ -162,6 +162,8 @@ class StudentListAPIView(APIView):
                 Q(profile__user__last_name__icontains=name) |
                 Q(profile__user__email__icontains=name)
             )
+
+        qs = qs.order_by("-created_at", "-id")
 
         serializer = StudentSerializer(qs, many=True)
         return Response(serializer.data)
@@ -771,6 +773,8 @@ class FacultyStudentsAPIView(APIView):
 
         if batch:
             students = students.filter(enrollments__batch_id=batch)
+
+        students = students.order_by("-created_at", "-id")
 
         serializer = StudentSerializer(students.distinct(), many=True)
         return Response(serializer.data)

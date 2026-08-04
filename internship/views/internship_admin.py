@@ -129,7 +129,7 @@ class FacultyQuerysetMixin:
     ).annotate(
         course_count=Count("batches__course", distinct=True),
         students_count=Count("batches__enrollments__student", distinct=True),
-    ).order_by("id")
+    ).order_by("-id")
 
 
 #Faculty
@@ -244,7 +244,7 @@ class StudentListCreateAPIView(generics.ListCreateAPIView):
                 enrollments__batch_id=batch
             )
 
-        return qs.distinct()
+        return qs.order_by("-created_at", "-id")
 
 class StudentCredentialsAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -507,7 +507,7 @@ class ClassListCreateAPIView(generics.ListCreateAPIView):
     def get_queryset(self):
         return Class.objects.select_related("center").prefetch_related(
             "sections__days", "sections__batch"
-        ).filter(is_active=True)
+        ).filter(is_active=True).order_by("-id")
 
 class ClassRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class   = ClassDetailSerializer
@@ -540,7 +540,7 @@ class SectionListCreateAPIView(generics.ListCreateAPIView):
         day = self.request.query_params.get("day")
         if day:
             qs = qs.filter(days__day=day)
-        return qs
+        return qs.order_by("-id")
 
 class SectionRetrieveUpdateDeleteAPIView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class   = SectionSerializer
@@ -803,7 +803,7 @@ class AvailableFacultyListAPIView(generics.ListAPIView):
                 Q(staff_email__icontains=search)
             )
 
-        return queryset
+        return queryset.order_by("-id")
 
 # student detail profile viewfor admin
 class StudentProfileDetailAPIView(APIView):

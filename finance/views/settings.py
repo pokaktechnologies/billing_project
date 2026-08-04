@@ -43,7 +43,7 @@ class TaxSettingsListCreateAPIView(BaseGenericAPIView, generics.ListCreateAPIVie
         if is_active is not None: queryset = queryset.filter(is_active=is_active.lower() == 'true')
         if rate_min: queryset = queryset.filter(rate__gte=rate_min)
         if rate_max: queryset = queryset.filter(rate__lte=rate_max)
-        return queryset
+        return queryset.order_by('-id')
 
 class TaxSettingsRetrieveUpdateDestroyAPIView(BaseGenericAPIView, generics.RetrieveUpdateDestroyAPIView):
     queryset = TaxSettings.objects.all()

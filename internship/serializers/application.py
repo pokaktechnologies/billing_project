@@ -38,7 +38,8 @@ class InternshipApplicationSerializer(serializers.ModelSerializer):
             "pincode",
             "where_did_you_find_us",
             "other_source",
-            "course_applied_for",
+            # "course_applied_for",
+            "course",
             "course_duration",
             "course_type",
             "linkedin_profile_url",
@@ -142,7 +143,7 @@ class InternshipApplicationSerializer(serializers.ModelSerializer):
     {application.first_name} {application.last_name}
 
     Course:
-    {application.course_applied_for}
+    {application.course}
 
     Course Type:
     {application.course_type}
@@ -277,7 +278,8 @@ class InternshipApplicationListSerializer(InternshipApplicationSerializer):
             "pincode",
             "where_did_you_find_us",
             "other_source",
-            "course_applied_for",
+            # "course_applied_for",
+            "course",
             "course_duration",
             "course_type",
             "linkedin_profile_url",

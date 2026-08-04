@@ -918,10 +918,10 @@ class InternshipApplication(models.Model):
     other_source = models.CharField(max_length=255, blank=True, null=True)
 
     # Course Info
-    course_applied_for = models.CharField(max_length=255, blank=True, null=True)
+    course_applied_for = models.CharField(max_length=255, blank=True, null=True)# unused
     course_duration = models.PositiveIntegerField(help_text="Duration in months")
     course_type = models.CharField(max_length=10, choices=COURSE_TYPE_CHOICES)
-
+    course = models.ForeignKey(Course, on_delete=models.PROTECT, related_name="internship_applications", blank=True, null=True)
     # Profiles
     linkedin_profile_url = models.URLField(blank=True, null=True)
     github_profile_url = models.URLField(blank=True, null=True)

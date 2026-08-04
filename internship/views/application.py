@@ -62,6 +62,7 @@ class InternshipApplicationAPIView(APIView):
                 | Q(email__icontains=search)
                 | Q(primary_phone__icontains=search)
                 | Q(course_applied_for__icontains=search)
+                | Q(course__name__icontains=search)
             )
 
         academic_counselor = params.get("academic_counselor")

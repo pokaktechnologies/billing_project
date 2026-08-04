@@ -1,8 +1,9 @@
 import re
 
+from django.core.mail import send_mail
 from django.db import transaction
 from rest_framework import serializers
-
+from django.conf import settings
 from ..models import InternshipApplication, InternshipDocument
 
 
@@ -15,6 +16,7 @@ class InternshipDocumentSerializer(serializers.ModelSerializer):
 
 class InternshipApplicationSerializer(serializers.ModelSerializer):
     documents = InternshipDocumentSerializer(many=True, required=False)
+    academic_counselor_name = serializers.CharField(source="academic_counselor.get_full_name", read_only=True)
 
     class Meta:
         model = InternshipApplication
@@ -42,12 +44,20 @@ class InternshipApplicationSerializer(serializers.ModelSerializer):
             "linkedin_profile_url",
             "github_profile_url",
             "portfolio_url",
-            "academic_counselor",
+            # "academic_counselor",
+            "academic_counselor_name",
+             "councellor",
             "documents",
             "created_at",
             "form_type",
+            "slot_amount",
+            "slot_payment_method",
+            "slot_transaction_id",
+            "slot_payment_date",
+            "is_converted",
+            "converted_students",
         ]
-        read_only_fields = ["id", "created_at"]
+        read_only_fields = ["id", "created_at", "is_converted", "converted_students"]
 
     def to_internal_value(self, data):
         internal_value = super().to_internal_value(data)
@@ -78,7 +88,24 @@ class InternshipApplicationSerializer(serializers.ModelSerializer):
                     )
                 }
             )
+        
+        form_type = attrs.get("form_type")
 
+        if form_type == "free_course_form":
+
+            attrs["slot_amount"] = None
+            attrs["slot_payment_method"] = None
+            attrs["slot_transaction_id"] = None
+            attrs["slot_payment_date"] = None
+
+        elif form_type == "internship_form":
+
+            slot_amount = attrs.get("slot_amount")
+
+            if slot_amount is not None and slot_amount < 0:
+                raise serializers.ValidationError({
+                    "slot_amount": "Slot amount cannot be negative."
+                })
         return attrs
 
     @transaction.atomic
@@ -90,9 +117,67 @@ class InternshipApplicationSerializer(serializers.ModelSerializer):
         application.save()
 
         for document_data in documents_data:
-            document = InternshipDocument(application=application, **document_data)
+            document = InternshipDocument(
+                application=application,
+                **document_data
+            )
             document.full_clean()
             document.save()
+
+        # -----------------------------------------
+        # Send confirmation email
+        # -----------------------------------------
+        try:
+
+            subject = "Internship Application Submitted Successfully"
+
+            message = f"""
+    Dear {application.first_name} {application.last_name},
+
+    Thank you for submitting your internship application with Pokak Technologies.
+
+    Application Details
+
+    Name:
+    {application.first_name} {application.last_name}
+
+    Course:
+    {application.course_applied_for}
+
+    Course Type:
+    {application.course_type}
+
+    Duration:
+    {application.course_duration} Month(s)
+
+    """
+
+            if application.form_type == "internship_form":
+                message += f"""
+    Slot Amount:
+    ₹{application.slot_amount or 0}
+    """
+
+            message += """
+
+    Our team will review your application and contact you shortly.
+
+    Thank you.
+
+    Regards,
+    Pokak Technologies
+    """
+
+            send_mail(
+                subject,
+                message,
+                settings.DEFAULT_FROM_EMAIL,
+                [application.email],
+                fail_silently=False,
+            )
+
+        except Exception as e:
+            print("Email sending failed:", e)
 
         return application
 
@@ -198,6 +283,62 @@ class InternshipApplicationListSerializer(InternshipApplicationSerializer):
             "linkedin_profile_url",
             "github_profile_url",
             "portfolio_url",
-            "academic_counselor",
+            # "academic_counselor",
+             "councellor",
             "created_at",
+            "slot_amount",
+            "is_converted",
         ]
+
+
+from rest_framework import serializers
+
+from ..models import Center, SalesPerson
+
+
+class  ConvertToStudentSerializer(serializers.Serializer):
+    center = serializers.PrimaryKeyRelatedField(
+        queryset=Center.objects.all()
+    )
+
+    start_date = serializers.DateField()
+
+    councellor = serializers.PrimaryKeyRelatedField(
+        queryset=SalesPerson.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+
+    STATUS_CHOICES = [
+        ("active", "Active"),
+        ("completed", "Completed"),
+        ("inactive", "Inactive"),
+    ]
+
+    status = serializers.ChoiceField(
+        choices=STATUS_CHOICES,
+        default="active"
+    )
+
+    email = serializers.EmailField()
+
+    password = serializers.CharField(
+        write_only=True,
+        min_length=6
+    )
+
+    confirm_password = serializers.CharField(
+        write_only=True
+    )
+
+    def validate(self, attrs):
+
+        if attrs["password"] != attrs["confirm_password"]:
+            raise serializers.ValidationError(
+                {
+                    "confirm_password":
+                    "Passwords do not match."
+                }
+            )
+
+        return attrs

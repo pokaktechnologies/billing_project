@@ -208,6 +208,7 @@ urlpatterns = [
     path('', include((internship_admin_patterns))),
     path('applications/', application.InternshipApplicationAPIView.as_view(), name='internship-application-list-create'),
     path('applications/<int:pk>/', application.InternshipApplicationAPIView.as_view(), name='internship-application-detail'),
+    path("applications/<int:pk>/convert/", application.ConvertApplicationToStudentAPIView.as_view(), name="convert_application_to_student"),
     path('report/', include(report_patterns)),
 ]
 

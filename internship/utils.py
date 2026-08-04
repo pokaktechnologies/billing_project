@@ -390,3 +390,142 @@ def is_attempt_fully_evaluated(attempt):
             return False
 
     return True
+
+
+from django.db import transaction
+from django.utils import timezone
+from django.core.mail import send_mail
+from django.conf import settings
+
+from accounts.models import (
+    CustomUser,
+    StaffProfile,
+)
+
+from .models import InternshipApplication, Student
+class StudentConversionService:
+
+    @staticmethod
+    @transaction.atomic
+    def convert(
+        *,
+        application: InternshipApplication,
+        email: str,
+        password: str,
+        center,
+        start_date,
+        councellor,
+        status,
+    ):
+
+        # ---------------------------------------
+        # Already converted
+        # ---------------------------------------
+
+        if application.is_converted:
+            raise ValueError(
+                "This application has already been converted."
+            )
+
+        # ---------------------------------------
+        # Email already exists
+        # ---------------------------------------
+
+        if CustomUser.objects.filter(email=email).exists():
+            raise ValueError(
+                "Email already exists."
+            )
+
+        # ---------------------------------------
+        # Generate Student ID
+        # ---------------------------------------
+
+        student_id = generate_student_id(
+            model=Student,
+            field_name="student_id",
+            prefix="ST",
+            length=3,
+        )
+
+        # ---------------------------------------
+        # Create User
+        # ---------------------------------------
+
+        user = CustomUser.objects.create_user(
+            email=email,
+            password=password,
+            first_name=application.first_name,
+            last_name=application.last_name,
+            gender=application.gender,
+            # is_active=True,
+        )
+
+        # ---------------------------------------
+        # Create Staff Profile
+        # ---------------------------------------
+
+        profile = StaffProfile.objects.create(
+            user=user,
+            phone_number=application.primary_phone,
+            qulification=application.qualification,
+            staff_email=email,
+            profile_image=application.profile_image,
+            date_of_birth=application.dob,
+            address=application.address,
+        )
+
+        # ---------------------------------------
+        # Create Student
+        # ---------------------------------------
+
+        student = Student.objects.create(
+            profile=profile,
+            student_id=student_id,
+            center=center,
+            start_date=start_date,
+            status=status,
+            councellor=application.councellor,
+        )
+
+        # ---------------------------------------
+        # Update Application
+        # ---------------------------------------
+
+        application.converted_students = student
+        application.is_converted = True
+
+        application.save(
+            update_fields=[
+                "converted_students",
+                "is_converted",
+            ]
+        )
+
+        # ---------------------------------------
+        # Send Mail
+        # ---------------------------------------
+
+        try:
+
+            subject = "Student Account Created"
+
+            message = (
+                f"Hi {application.first_name},\n\n"
+                f"Your student account has been created.\n\n"
+                f"Login Email : {email}\n"
+                f"Password : {password}\n\n"
+                f"Welcome to Pokak Technologies."
+            )
+
+            send_mail(
+                subject,
+                message,
+                settings.DEFAULT_FROM_EMAIL,
+                [email],
+                fail_silently=False,
+            )
+
+        except Exception as exc:
+            print("Email sending failed:", exc)
+
+        return student

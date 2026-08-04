@@ -2245,7 +2245,7 @@ class ReceiptView(BaseAPIView):
             if request.user.is_superuser:
                 receipt = get_object_or_404(ReceiptModel, id=rec_id)
             else:
-                receipt = get_object_or_404(ReceiptModel, id=rec_id, user=request.user)
+                receipt = get_object_or_404(ReceiptModel, id=rec_id)
             serializer = ReceiptSerializer(receipt)
             return Response({
                 'Status': '1',
@@ -3616,7 +3616,7 @@ class InvoiceDetailAPI(APIView):
         if request.user.is_superuser:
             invoice = get_object_or_404(InvoiceModel, id=ioid)
         else:
-            invoice = get_object_or_404(InvoiceModel, id=ioid, user=request.user)
+            invoice = get_object_or_404(InvoiceModel, id=ioid)
         serializer = InvoiceSerializer(
             invoice,
             context={"request": request}

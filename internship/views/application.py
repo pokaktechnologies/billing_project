@@ -6,13 +6,14 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
+from rest_framework.permissions import IsAuthenticated
 from ..models import InternshipApplication
 from ..serializers.application import (
     InternshipApplicationListSerializer,
     InternshipApplicationSerializer,
+    ConvertToStudentSerializer
 )
-
+from ..utils import StudentConversionService
 
 class InternshipApplicationPagination(PageNumberPagination):
     page_size = 10
@@ -175,3 +176,53 @@ class InternshipApplicationAPIView(APIView):
         application = get_object_or_404(self.get_queryset(), pk=pk)
         application.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ConvertApplicationToStudentAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+
+        application = get_object_or_404(
+            InternshipApplication,
+            pk=pk,
+        )
+
+        serializer = ConvertToStudentSerializer(
+            data=request.data
+        )
+
+        serializer.is_valid(raise_exception=True)
+
+        try:
+
+            student = StudentConversionService.convert(
+                application=application,
+                email=serializer.validated_data["email"],
+                password=serializer.validated_data["password"],
+                center=serializer.validated_data["center"],
+                start_date=serializer.validated_data["start_date"],
+                # councellor=serializer.validated_data.get("councellor"),# old
+                councellor=application.councellor,
+                status=serializer.validated_data["status"],
+            )
+
+        except ValueError as exc:
+
+            return Response(
+                {
+                    "status": "0",
+                    "message": str(exc),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            {
+                "status": "1",
+                "message": "Student converted successfully.",
+                "student_id": student.id,
+                "student_code": student.student_id,
+            },
+            status=status.HTTP_201_CREATED,
+        )

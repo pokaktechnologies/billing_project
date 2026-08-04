@@ -917,7 +917,7 @@ class ProductListCreateAPIView(BaseAPIView):
 
         products = Product.objects.select_related(
             'unit', 'category', 'tax_setting'
-        ).all()
+        ).all().order_by('-id')
         
         if search:
             products = products.filter(
@@ -1047,6 +1047,8 @@ class SalesPersonListCreateAPIView(BaseAPIView):
                 Q(email__icontains=search) |
                 Q(phone__icontains=search)
             )
+
+        queryset = queryset.order_by("-id")
 
         # optional pagination
         return paginate_response(queryset, request, SalesPersonSerializer)
@@ -2778,6 +2780,8 @@ class CustomerListCreateAPIView(BaseAPIView):
         if module_type:
             queryset = queryset.filter(module_type=module_type)
         
+        queryset = queryset.order_by("-id")
+
         # optional pagination
         return paginate_response(queryset, request, CustomerSerializer)
 
@@ -2882,7 +2886,7 @@ class CategoryListCreateAPIView(BaseAPIView):
                 "Data": [serializer.data]  # Returning data inside an array
             }
         else:
-            categories = Category.objects.all()
+            categories = Category.objects.all().order_by('-id')
             serializer = CategorySerializer(categories, many=True)
             response_data = {
                 "Status": "1",
@@ -2937,7 +2941,7 @@ class UnitAPIView(BaseAPIView):
                 "Data": [serializer.data]
             }
         else:
-            units = Unit.objects.all()
+            units = Unit.objects.all().order_by('-id')
             serializer = UnitSerializer(units, many=True)
             response_data = {
                 "Status": "1",
@@ -3027,7 +3031,7 @@ class TermsAndConditionsAPI(BaseAPIView):
             serializer = TermsAndConditionsSerializer(term)
             return Response({"status": "1", "data": [serializer.data]})
         else:
-            terms = TermsAndConditions.objects.all()
+            terms = TermsAndConditions.objects.all().order_by('-id')
             serializer = TermsAndConditionsSerializer(terms, many=True)
             return Response({"status": "1", "data": serializer.data})
 
@@ -3298,7 +3302,7 @@ class ContractListCreateAPIView(BaseAPIView):
             contract = get_object_or_404(Contract, id=contract_id, is_template=True)
             serializer = ContractSerializer(contract)
             return Response({"status": "1", "message": "success", "data": [serializer.data]})
-        contracts = Contract.objects.filter(is_template=True)
+        contracts = Contract.objects.filter(is_template=True).order_by("-created_at", "-id")
         serializer = ContractSerializer(contracts, many=True)
         return Response({"status": "1", "message": "success", "data": serializer.data})
 

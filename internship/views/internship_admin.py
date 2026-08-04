@@ -129,7 +129,7 @@ class FacultyQuerysetMixin:
     ).annotate(
         course_count=Count("batches__course", distinct=True),
         students_count=Count("batches__enrollments__student", distinct=True),
-    ).order_by("id")
+    ).order_by("-id")
 
 
 #Faculty
@@ -244,7 +244,7 @@ class StudentListCreateAPIView(generics.ListCreateAPIView):
                 enrollments__batch_id=batch
             )
 
-        return qs.distinct()
+        return qs.order_by("-created_at", "-id")
 
 class StudentCredentialsAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -507,7 +507,7 @@ class ClassListCreateAPIView(generics.ListCreateAPIView):
     def get_queryset(self):
         return Class.objects.select_related("center").prefetch_related(
             "sections__days", "sections__batch"
-        ).filter(is_active=True)
+        ).filter(is_active=True).order_by("-id")
 
 class ClassRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class   = ClassDetailSerializer
@@ -540,7 +540,7 @@ class SectionListCreateAPIView(generics.ListCreateAPIView):
         day = self.request.query_params.get("day")
         if day:
             qs = qs.filter(days__day=day)
-        return qs
+        return qs.order_by("-id")
 
 class SectionRetrieveUpdateDeleteAPIView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class   = SectionSerializer
@@ -803,7 +803,7 @@ class AvailableFacultyListAPIView(generics.ListAPIView):
                 Q(staff_email__icontains=search)
             )
 
-        return queryset
+        return queryset.order_by("-id")
 
 # student detail profile viewfor admin
 class StudentProfileDetailAPIView(APIView):
@@ -857,7 +857,7 @@ class BatchInformationAPIView(APIView):
 
 from datetime import timedelta
 
-from django.db.models import F, Q, Sum
+from django.db.models import F, Max, Q, Sum
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
@@ -923,7 +923,8 @@ class PaymentReportListAPIView(generics.ListAPIView):
                 discounted_fee=ExpressionWrapper(
                     F("course__total_fee") - F("discount_amount"),
                     output_field=DecimalField(max_digits=10, decimal_places=2)
-                )
+                ),
+                last_paid=Max("payments__payment_date"),
             )
         )
 
@@ -1083,5 +1084,24 @@ class PaymentReportListAPIView(generics.ListAPIView):
                 enrollment_date__month=today.month,
                 enrollment_date__year=today.year,
             )
+
+        # Last Paid Date
+        last_paid_from = params.get("last_paid_from")
+        last_paid_to = params.get("last_paid_to")
+
+        if last_paid_from and last_paid_to and last_paid_from == last_paid_to:
+            queryset = queryset.filter(
+                last_paid=last_paid_from
+            )
+        else:
+            if last_paid_from:
+                queryset = queryset.filter(
+                    last_paid__gte=last_paid_from
+                )
+
+            if last_paid_to:
+                queryset = queryset.filter(
+                    last_paid__lte=last_paid_to
+                )
 
         return queryset.distinct()

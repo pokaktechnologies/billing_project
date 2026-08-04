@@ -857,7 +857,7 @@ class BatchInformationAPIView(APIView):
 
 from datetime import timedelta
 
-from django.db.models import F, Q, Sum
+from django.db.models import F, Max, Q, Sum
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
@@ -923,7 +923,8 @@ class PaymentReportListAPIView(generics.ListAPIView):
                 discounted_fee=ExpressionWrapper(
                     F("course__total_fee") - F("discount_amount"),
                     output_field=DecimalField(max_digits=10, decimal_places=2)
-                )
+                ),
+                last_paid=Max("payments__payment_date"),
             )
         )
 
@@ -1083,5 +1084,24 @@ class PaymentReportListAPIView(generics.ListAPIView):
                 enrollment_date__month=today.month,
                 enrollment_date__year=today.year,
             )
+
+        # Last Paid Date
+        last_paid_from = params.get("last_paid_from")
+        last_paid_to = params.get("last_paid_to")
+
+        if last_paid_from and last_paid_to and last_paid_from == last_paid_to:
+            queryset = queryset.filter(
+                last_paid=last_paid_from
+            )
+        else:
+            if last_paid_from:
+                queryset = queryset.filter(
+                    last_paid__gte=last_paid_from
+                )
+
+            if last_paid_to:
+                queryset = queryset.filter(
+                    last_paid__lte=last_paid_to
+                )
 
         return queryset.distinct()

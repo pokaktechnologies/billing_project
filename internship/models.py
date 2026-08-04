@@ -918,7 +918,7 @@ class InternshipApplication(models.Model):
     other_source = models.CharField(max_length=255, blank=True, null=True)
 
     # Course Info
-    course_applied_for = models.ForeignKey(Course, on_delete=models.PROTECT, related_name="internship_applications")
+    course_applied_for = models.CharField(max_length=255, blank=True, null=True)
     course_duration = models.PositiveIntegerField(help_text="Duration in months")
     course_type = models.CharField(max_length=10, choices=COURSE_TYPE_CHOICES)
 

@@ -801,7 +801,7 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
     batch_number = serializers.CharField(source="batch.batch_number", read_only=True)
     total_installments = serializers.CharField(source="installment_plan.total_installments", read_only=True)
     receipt = serializers.JSONField(write_only=True, required=False)
-    application = serializers.PrimaryKeyRelatedField( queryset=InternshipApplication.objects.all(), required=False, allow_null=True,)
+    application = serializers.PrimaryKeyRelatedField(read_only=True)
 
     class Meta:
         model = StudentCourseEnrollment

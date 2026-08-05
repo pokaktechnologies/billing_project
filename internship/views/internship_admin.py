@@ -18,7 +18,7 @@ from django.db.models.functions import TruncMonth
 
 from accounts.services.receipt_service import StudentReceiptService
 from internship.serializers.instructor import StudentReportSerializer
-from ..models import Section, Class, Student, Course, Faculty, StudentCourseEnrollment, CoursePayment, StudentReport
+from ..models import InternshipApplication, Section, Class, Student, Course, Faculty, StudentCourseEnrollment, CoursePayment, StudentReport
 from ..serializers.internship_admin import AvailableFacultySerializer, AvailableStudentSerializer, BatchInformationSerializer, ClassDetailSerializer, SectionSerializer, ClassListCreateSerializer, StudentPaymentDetailSerializer, StudentPaymentSerializer, StudentProfileDetailSerializer
 
 from accounts.models import CustomUser, StaffProfile
@@ -351,7 +351,16 @@ class StudentCourseEnrollmentView(generics.ListCreateAPIView):
     filterset_fields = ["course", "batch"]
 
     def perform_create(self, serializer):
-        enrollment = serializer.save()
+
+        student = serializer.validated_data["student"]
+
+        application = InternshipApplication.objects.filter(
+            converted_students=student
+        ).order_by("-created_at").first()
+
+        enrollment = serializer.save(
+            application=application
+        )
 
         receipt_data = serializer.validated_data.pop("receipt", None)
 

@@ -296,3 +296,28 @@ class InternshipApplicationAPITests(APITestCase):
                 content_type="image/png",
             ),
         }
+
+    def test_application_report_view(self):
+        app = InternshipApplication.objects.create(
+            first_name="John",
+            last_name="Doe",
+            primary_phone="+919876543210",
+            email="john@example.com",
+            dob="1999-01-01",
+            gender="male",
+            qualification="ug",
+            address="Test street",
+            state="Kerala",
+            district="Ernakulam",
+            pincode="682001",
+            course_duration=6,
+            course_type="online",
+        )
+        report_url = reverse("internship-application-report")
+        response = self.client.get(report_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data["results"] if isinstance(response.data, dict) and "results" in response.data else response.data
+        self.assertTrue(len(results) >= 1)
+        self.assertEqual(results[0]["applicant_name"], "John Doe")
+
+

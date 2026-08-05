@@ -344,3 +344,96 @@ class  ConvertToStudentSerializer(serializers.Serializer):
             )
 
         return attrs
+
+
+class InternshipApplicationReportSerializer(serializers.ModelSerializer):
+    applicant_name = serializers.SerializerMethodField()
+    counsellor_id = serializers.SerializerMethodField()
+    counsellor_name = serializers.SerializerMethodField()
+    course_id = serializers.SerializerMethodField()
+    course_title = serializers.SerializerMethodField()
+    gender_display = serializers.CharField(source="get_gender_display", read_only=True)
+    qualification_display = serializers.CharField(source="get_qualification_display", read_only=True)
+    course_type_display = serializers.CharField(source="get_course_type_display", read_only=True)
+    where_did_you_find_us_display = serializers.CharField(source="get_where_did_you_find_us_display", read_only=True)
+    form_type_display = serializers.CharField(source="get_form_type_display", read_only=True)
+    converted_student_id = serializers.SerializerMethodField()
+    converted_student_code = serializers.SerializerMethodField()
+    documents_count = serializers.SerializerMethodField()
+    documents = InternshipDocumentSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = InternshipApplication
+        fields = [
+            "id",
+            "form_type",
+            "form_type_display",
+            "first_name",
+            "last_name",
+            "applicant_name",
+            "profile_image",
+            "primary_phone",
+            "secondary_phone",
+            "email",
+            "dob",
+            "gender",
+            "gender_display",
+            "qualification",
+            "qualification_display",
+            "course_name",
+            "address",
+            "state",
+            "district",
+            "pincode",
+            "where_did_you_find_us",
+            "where_did_you_find_us_display",
+            "other_source",
+            "course_id",
+            "course_title",
+            "course_duration",
+            "course_type",
+            "course_type_display",
+            "linkedin_profile_url",
+            "github_profile_url",
+            "portfolio_url",
+            "counsellor_id",
+            "counsellor_name",
+            "slot_amount",
+            "slot_payment_method",
+            "slot_transaction_id",
+            "slot_payment_date",
+            "is_converted",
+            "converted_student_id",
+            "converted_student_code",
+            "documents_count",
+            "documents",
+            "created_at",
+        ]
+
+    def get_applicant_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}".strip()
+
+    def get_counsellor_id(self, obj):
+        return obj.councellor.id if obj.councellor else None
+
+    def get_counsellor_name(self, obj):
+        if obj.councellor:
+            return obj.councellor.get_full_name()
+        return obj.academic_counselor or None
+
+    def get_course_id(self, obj):
+        return obj.course.id if obj.course else None
+
+    def get_course_title(self, obj):
+        if obj.course:
+            return obj.course.title
+        return obj.course_applied_for or obj.course_name or None
+
+    def get_converted_student_id(self, obj):
+        return obj.converted_students.id if obj.converted_students else None
+
+    def get_converted_student_code(self, obj):
+        return obj.converted_students.student_id if obj.converted_students else None
+
+    def get_documents_count(self, obj):
+        return obj.documents.count()

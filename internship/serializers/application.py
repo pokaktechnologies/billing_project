@@ -16,8 +16,8 @@ class InternshipDocumentSerializer(serializers.ModelSerializer):
 
 class InternshipApplicationSerializer(serializers.ModelSerializer):
     documents = InternshipDocumentSerializer(many=True, required=False)
-    academic_counselor_name = serializers.CharField(source="academic_counselor.get_full_name", read_only=True)
-
+    # academic_counselor_name = serializers.CharField(source="academic_counselor.get_full_name", read_only=True)
+    councellor_name = serializers.CharField(source="councellor.get_full_name", read_only=True)
     class Meta:
         model = InternshipApplication
         fields = [
@@ -46,8 +46,9 @@ class InternshipApplicationSerializer(serializers.ModelSerializer):
             "github_profile_url",
             "portfolio_url",
             # "academic_counselor",
-            "academic_counselor_name",
+            # "academic_counselor_name",
              "councellor",
+            "councellor_name",
             "documents",
             "created_at",
             "form_type",
@@ -259,6 +260,7 @@ class InternshipApplicationSerializer(serializers.ModelSerializer):
 
 
 class InternshipApplicationListSerializer(InternshipApplicationSerializer):
+    
     class Meta(InternshipApplicationSerializer.Meta):
         fields = [
             "id",
@@ -287,6 +289,7 @@ class InternshipApplicationListSerializer(InternshipApplicationSerializer):
             "portfolio_url",
             # "academic_counselor",
              "councellor",
+            "councellor_name",
             "created_at",
             "slot_amount",
             "is_converted",
@@ -436,4 +439,4 @@ class InternshipApplicationReportSerializer(serializers.ModelSerializer):
         return obj.converted_students.student_id if obj.converted_students else None
 
     def get_documents_count(self, obj):
-        return obj.documents.count()
+        return obj.documents.count()

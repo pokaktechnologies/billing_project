@@ -63,13 +63,12 @@ class InternshipApplicationAPIView(APIView):
                 | Q(primary_phone__icontains=search)
                 | Q(course_applied_for__icontains=search)
                 | Q(course__name__icontains=search)
+                | Q(councellor__first_name__icontains=search)
             )
 
-        academic_counselor = params.get("academic_counselor")
-        if academic_counselor:
-            queryset = queryset.filter(
-                academic_counselor__icontains=academic_counselor
-            )
+        councellor = params.get("councellor")
+        if councellor:
+            queryset = queryset.filter(councellor_id=councellor)
 
         qualification = params.get("qualification")
         if qualification:
@@ -327,4 +326,4 @@ class InternshipApplicationReportView(generics.ListAPIView):
             .prefetch_related("documents")
             .order_by("-created_at")
         )
-
+

@@ -106,9 +106,21 @@ class StudentReceiptService:
         ):
             return None
 
+        slot_receipt_data = receipt_data.copy()
+
+        slot_receipt_data.setdefault(
+            "remark",
+            "Slot Booking Payment",
+        )
+
+        slot_receipt_data.setdefault(
+            "description",
+            "Slot Booking",
+        )
+
         return StudentReceiptService.create_receipt(
             enrollment=enrollment,
-            receipt_data=receipt_data,
+            receipt_data=slot_receipt_data,
             user=user,
             amount=application.slot_amount,
             payment_date=application.slot_payment_date,

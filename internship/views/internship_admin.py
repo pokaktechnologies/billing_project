@@ -305,6 +305,12 @@ class StudentListCreateAPIView(generics.ListCreateAPIView):
                 receipt_data=receipt_data,
                 user=request.user,
             )
+            StudentReceiptService.create_slot_receipt(
+                enrollment=enrollment,
+                application=application,
+                receipt_data=receipt_data,
+                user=request.user,
+            )
 
             return Response(
                 StudentSerializer(

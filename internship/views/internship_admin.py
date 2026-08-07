@@ -245,6 +245,76 @@ class StudentListCreateAPIView(generics.ListCreateAPIView):
             )
 
         return qs.order_by("-created_at", "-id")
+    
+    def create(self, request, *args, **kwargs):
+
+        with transaction.atomic():
+
+            student_serializer = self.get_serializer(
+                data=request.data
+            )
+
+            student_serializer.is_valid(
+                raise_exception=True
+            )
+
+            enrollment_data = {
+                "batch": request.data.get("enrollment_batch"),
+                "payment_plan_type": request.data.get("enrollment_payment_plan_type"),
+                "installment_plan": request.data.get("enrollment_installment_plan"),
+                "custom_installments": request.data.get("enrollment_custom_installments"),
+                "advance_amount": request.data.get("enrollment_advance_amount"),
+                "payment_method": request.data.get("enrollment_payment_method"),
+                "transaction_id": request.data.get("enrollment_transaction_id"),
+                "payment_date": request.data.get("enrollment_payment_date"),
+                "discount_amount": request.data.get("enrollment_discount_amount"),
+                "discount_reason": request.data.get("enrollment_discount_reason"),
+            }
+
+            receipt = request.data.get("enrollment_receipt")
+
+            # Add receipt only if frontend sends it
+            if receipt:
+                enrollment_data["receipt"] = receipt
+
+            # Keep receipt separately because it is not an Enrollment model field
+            receipt_data = enrollment_data.pop("receipt", None)
+
+            enrollment_serializer = StudentCourseEnrollmentSerializer(
+                data=enrollment_data,
+                context=self.get_serializer_context(),
+            )
+
+            enrollment_serializer.is_valid(
+                raise_exception=True
+            )
+
+            student = student_serializer.save()
+
+            application = InternshipApplication.objects.filter(
+                converted_students=student
+            ).order_by("-created_at").first()
+
+            enrollment = enrollment_serializer.save(
+                student=student,
+                application=application,
+            )
+
+            StudentReceiptService.create_advance_receipt(
+                enrollment=enrollment,
+                receipt_data=receipt_data,
+                user=request.user,
+            )
+
+            return Response(
+                StudentSerializer(
+                    student,
+                    context=self.get_serializer_context(),
+                ).data,
+                status=status.HTTP_201_CREATED,
+            )
+
+
 
 class StudentCredentialsAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -362,22 +432,16 @@ class StudentCourseEnrollmentView(generics.ListCreateAPIView):
             application=application
         )
 
-        receipt_data = serializer.validated_data.pop("receipt", None)
+        receipt_data = serializer.validated_data.pop(
+            "receipt",
+            None,
+        )
 
-        if receipt_data:
-
-            advance_payment = CoursePayment.objects.filter(
-                enrollment=enrollment,
-                payment_type="advance"
-            ).first()
-
-            if advance_payment:
-                StudentReceiptService.create_receipt(
-                    enrollment=enrollment,
-                    payment=advance_payment,
-                    receipt_data=receipt_data,
-                    user=self.request.user,
-                )
+        StudentReceiptService.create_advance_receipt(
+            enrollment=enrollment,
+            receipt_data=receipt_data,
+            user=self.request.user,
+        )
 
 
 
@@ -436,15 +500,11 @@ class CoursePaymentListCreateAPIView(generics.ListCreateAPIView):
 
         payment = serializer.save()
 
-        if receipt_data:
-
-            StudentReceiptService.create_receipt(
-                enrollment=payment.enrollment,
-                payment=payment,
-                receipt_data=receipt_data,
-                user=self.request.user,
-            )
-    
+        StudentReceiptService.create_installment_receipt(
+            payment=payment,
+            receipt_data=receipt_data,
+            user=self.request.user,
+        )
 
 # aadyam student nn aayirunnu one student one course validastion maattiyappo ee api erro vaann appo student course enrollment nn edduth data 
 class StudentPaymentListAPIView(generics.ListAPIView):

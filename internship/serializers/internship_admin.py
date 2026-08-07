@@ -9,6 +9,7 @@ from twisted.test import obj
 
 from accounts.models import CustomUser, Department, ModulePermission, StaffProfile
 from ..models import (
+    PAYMENT_METHODS,
     Batch,
     Center,
     Course,
@@ -608,6 +609,79 @@ class StudentSerializer(serializers.ModelSerializer):
     )
     full_name = serializers.SerializerMethodField()
 
+
+    # enrollment related fields 
+    enrollment_batch = serializers.PrimaryKeyRelatedField(
+    queryset=Batch.objects.all(),
+    write_only=True,
+    required=False,
+    )
+
+    enrollment_payment_plan_type = serializers.ChoiceField(
+        choices=StudentCourseEnrollment.PAYMENT_PLAN_TYPES,
+        write_only=True,
+        required=False,
+    )
+
+    enrollment_installment_plan = serializers.PrimaryKeyRelatedField(
+        queryset=InstallmentPlan.objects.all(),
+        write_only=True,
+        required=False,
+        allow_null=True,
+    )
+
+    enrollment_custom_installments = serializers.IntegerField(
+        write_only=True,
+        required=False,
+        allow_null=True,
+    )
+
+    enrollment_advance_amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        write_only=True,
+        required=False,
+        default=0,
+    )
+
+    enrollment_payment_method = serializers.ChoiceField(
+        choices=PAYMENT_METHODS,
+        write_only=True,
+        required=False,
+        allow_null=True,
+    )
+
+    enrollment_transaction_id = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+    )
+
+    enrollment_payment_date = serializers.DateField(
+        write_only=True,
+        required=False,
+        allow_null=True,
+    )
+
+    enrollment_discount_amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        write_only=True,
+        required=False,
+        default=0,
+    )
+
+    enrollment_discount_reason = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+    )
+
+    enrollment_receipt = serializers.JSONField(
+        write_only=True,
+        required=False,
+    )
+
     class Meta:
         model = Student
         fields = [
@@ -627,7 +701,21 @@ class StudentSerializer(serializers.ModelSerializer):
             "councellor_name",
             "modules",
             "status",
-            "created_at"
+            "created_at",
+
+            # enrollment fileds
+            "enrollment_batch",
+            "enrollment_payment_plan_type",
+            "enrollment_installment_plan",
+            "enrollment_custom_installments",
+            "enrollment_advance_amount",
+            "enrollment_payment_method",
+            "enrollment_transaction_id",
+            "enrollment_payment_date",
+            "enrollment_discount_amount",
+            "enrollment_discount_reason",
+            "enrollment_receipt"
+            
         ]
         extra_kwargs = {
             "profile": {"required": False}
@@ -680,7 +768,17 @@ class StudentSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         with transaction.atomic():
             modules = validated_data.pop("modules", [])
-
+            validated_data.pop("enrollment_batch", None)
+            validated_data.pop("enrollment_payment_plan_type", None)
+            validated_data.pop("enrollment_installment_plan", None)
+            validated_data.pop("enrollment_custom_installments", None)
+            validated_data.pop("enrollment_advance_amount", None)
+            validated_data.pop("enrollment_payment_method", None)
+            validated_data.pop("enrollment_transaction_id", None)
+            validated_data.pop("enrollment_payment_date", None)
+            validated_data.pop("enrollment_discount_amount", None)
+            validated_data.pop("enrollment_discount_reason", None)
+            validated_data.pop("enrollment_receipt", None)
             # Extract nested data
             profile_data = validated_data.pop("profile", None)
 
@@ -830,6 +928,7 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
             "application",
             "receipt"
         ]
+        extra_kwargs = {"student":{"required": False}}
         read_only_fields = ["course"]
 
     def create(self, validated_data):

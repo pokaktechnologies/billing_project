@@ -18,6 +18,7 @@ class InternshipApplicationSerializer(serializers.ModelSerializer):
     documents = InternshipDocumentSerializer(many=True, required=False)
     # academic_counselor_name = serializers.CharField(source="academic_counselor.get_full_name", read_only=True)
     councellor_name = serializers.CharField(source="councellor.get_full_name", read_only=True)
+    courses_name = serializers.CharField(source="course.title", read_only=True)
     class Meta:
         model = InternshipApplication
         fields = [
@@ -32,6 +33,7 @@ class InternshipApplicationSerializer(serializers.ModelSerializer):
             "gender",
             "qualification",
             "course_name",
+            "courses_name",
             "address",
             "state",
             "district",
@@ -282,6 +284,7 @@ class InternshipApplicationListSerializer(InternshipApplicationSerializer):
             "other_source",
             # "course_applied_for",
             "course",
+            "courses_name",
             "course_duration",
             "course_type",
             "linkedin_profile_url",

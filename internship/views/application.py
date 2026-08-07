@@ -62,10 +62,14 @@ class InternshipApplicationAPIView(APIView):
                 | Q(email__icontains=search)
                 | Q(primary_phone__icontains=search)
                 | Q(course_applied_for__icontains=search)
-                | Q(course__name__icontains=search)
+                | Q(course__title__icontains=search)
                 | Q(councellor__first_name__icontains=search)
             )
 
+        course = params.get("course")
+        if course:
+            queryset = queryset.filter(course_id=course)
+            
         councellor = params.get("councellor")
         if councellor:
             queryset = queryset.filter(councellor_id=councellor)

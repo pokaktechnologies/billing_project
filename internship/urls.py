@@ -210,6 +210,8 @@ urlpatterns = [
     path('applications/', application.InternshipApplicationAPIView.as_view(), name='internship-application-list-create'),
     path('applications/<int:pk>/', application.InternshipApplicationAPIView.as_view(), name='internship-application-detail'),
     path("applications/<int:pk>/convert/", application.ConvertApplicationToStudentAPIView.as_view(), name="convert_application_to_student"),
+    path('public/courses/', application.PublicCourseListAPIView.as_view(), name='public-course-list'),
+    path('public/counsellors/', application.PublicCounsellorListAPIView.as_view(), name='public-counsellor-list'),
     path('report/', include(report_patterns)),
 ]
 

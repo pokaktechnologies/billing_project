@@ -1,18 +1,21 @@
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
-from rest_framework import status
+from rest_framework import status, filters, generics
 from rest_framework.exceptions import NotFound
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
-from ..models import InternshipApplication
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from accounts.models import SalesPerson
+from ..models import InternshipApplication, Course
 from ..serializers.application import (
     InternshipApplicationListSerializer,
     InternshipApplicationSerializer,
     ConvertToStudentSerializer
 )
+from ..serializers.internship_admin import CourseSerializer
+from ..serializers.report_serializers import SalesPersonSerializer
 from ..utils import StudentConversionService
 
 class InternshipApplicationPagination(PageNumberPagination):
@@ -330,4 +333,38 @@ class InternshipApplicationReportView(generics.ListAPIView):
             .prefetch_related("documents")
             .order_by("-created_at")
         )
+
+
+class PublicCourseListAPIView(generics.ListAPIView):
+    permission_classes = [AllowAny]
+    serializer_class = CourseSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = {
+        "department": ["exact"],
+        "is_active": ["exact"],
+    }
+    search_fields = ['title', 'description', 'department__name']
+
+    def get_queryset(self):
+        return Course.objects.select_related(
+            "department",
+            "tax_settings",
+        ).prefetch_related(
+            "batches__faculties__user__user",
+            "installment_plans__items",
+        ).annotate(
+            students_count=Count("enrollments__student", distinct=True)
+        ).order_by('-created_at')
+
+
+class PublicCounsellorListAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        counsellors = SalesPerson.objects.annotate(
+            total_students=Count("counselled_students")
+        )
+        serializer = SalesPersonSerializer(counsellors, many=True)
+        return Response(serializer.data)
+
 

@@ -16,7 +16,7 @@ from ..serializers.MarketingSerializers import *
 class LocationtView(APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request):
-        locations = Location.objects.all()
+        locations = Location.objects.all().order_by('-created_at', '-id')
         serializer = LocationSerializer(locations, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
@@ -80,7 +80,7 @@ class LocationtDetailView(APIView):
 class SourceAPIView(APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request):
-        sources = Source.objects.all()
+        sources = Source.objects.all().order_by('-created_at', '-id')
         serializer = SourceSerializer(sources, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
@@ -139,11 +139,12 @@ class SourceDetailView(APIView):
 
 
 
+
 class CategoryAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        categories = Category.objects.all()
+        categories = Category.objects.all().order_by('-created_at', '-id')
         serializer = CategorySerializer(categories, many=True)
         return Response(serializer.data)
 

@@ -568,7 +568,7 @@ class FacultyReportAPIView(generics.ListAPIView):
                 Q(user__user__last_name__icontains=search)
             )
 
-        return queryset.distinct()
+        return queryset.order_by("-id").distinct()
 
 
 class FacultyDetailReportAPIView(generics.RetrieveAPIView):

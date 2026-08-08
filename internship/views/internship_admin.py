@@ -18,7 +18,7 @@ from django.db.models.functions import TruncMonth
 
 from accounts.services.receipt_service import StudentReceiptService
 from internship.serializers.instructor import StudentReportSerializer
-from ..models import Section, Class, Student, Course, Faculty, StudentCourseEnrollment, CoursePayment, StudentReport
+from ..models import InternshipApplication, Section, Class, Student, Course, Faculty, StudentCourseEnrollment, CoursePayment, StudentReport
 from ..serializers.internship_admin import AvailableFacultySerializer, AvailableStudentSerializer, BatchInformationSerializer, ClassDetailSerializer, SectionSerializer, ClassListCreateSerializer, StudentPaymentDetailSerializer, StudentPaymentSerializer, StudentProfileDetailSerializer
 
 from accounts.models import CustomUser, StaffProfile
@@ -129,7 +129,7 @@ class FacultyQuerysetMixin:
     ).annotate(
         course_count=Count("batches__course", distinct=True),
         students_count=Count("batches__enrollments__student", distinct=True),
-    ).order_by("id")
+    ).order_by("-id")
 
 
 #Faculty
@@ -244,7 +244,83 @@ class StudentListCreateAPIView(generics.ListCreateAPIView):
                 enrollments__batch_id=batch
             )
 
-        return qs.distinct()
+        return qs.order_by("-created_at", "-id")
+    
+    def create(self, request, *args, **kwargs):
+
+        with transaction.atomic():
+
+            student_serializer = self.get_serializer(
+                data=request.data
+            )
+
+            student_serializer.is_valid(
+                raise_exception=True
+            )
+
+            enrollment_data = {
+                "batch": request.data.get("enrollment_batch"),
+                "payment_plan_type": request.data.get("enrollment_payment_plan_type"),
+                "installment_plan": request.data.get("enrollment_installment_plan"),
+                "custom_installments": request.data.get("enrollment_custom_installments"),
+                "advance_amount": request.data.get("enrollment_advance_amount"),
+                "payment_method": request.data.get("enrollment_payment_method"),
+                "transaction_id": request.data.get("enrollment_transaction_id"),
+                "payment_date": request.data.get("enrollment_payment_date"),
+                "discount_amount": request.data.get("enrollment_discount_amount"),
+                "discount_reason": request.data.get("enrollment_discount_reason"),
+            }
+
+            receipt = request.data.get("enrollment_receipt")
+
+            # Add receipt only if frontend sends it
+            if receipt:
+                enrollment_data["receipt"] = receipt
+
+            # Keep receipt separately because it is not an Enrollment model field
+            receipt_data = enrollment_data.pop("receipt", None)
+
+            enrollment_serializer = StudentCourseEnrollmentSerializer(
+                data=enrollment_data,
+                context=self.get_serializer_context(),
+            )
+
+            enrollment_serializer.is_valid(
+                raise_exception=True
+            )
+
+            student = student_serializer.save()
+
+            application = InternshipApplication.objects.filter(
+                converted_students=student
+            ).order_by("-created_at").first()
+
+            enrollment = enrollment_serializer.save(
+                student=student,
+                application=application,
+            )
+
+            StudentReceiptService.create_advance_receipt(
+                enrollment=enrollment,
+                receipt_data=receipt_data,
+                user=request.user,
+            )
+            StudentReceiptService.create_slot_receipt(
+                enrollment=enrollment,
+                application=application,
+                receipt_data=receipt_data,
+                user=request.user,
+            )
+
+            return Response(
+                StudentSerializer(
+                    student,
+                    context=self.get_serializer_context(),
+                ).data,
+                status=status.HTTP_201_CREATED,
+            )
+
+
 
 class StudentCredentialsAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -351,24 +427,27 @@ class StudentCourseEnrollmentView(generics.ListCreateAPIView):
     filterset_fields = ["course", "batch"]
 
     def perform_create(self, serializer):
-        enrollment = serializer.save()
 
-        receipt_data = serializer.validated_data.pop("receipt", None)
+        student = serializer.validated_data["student"]
 
-        if receipt_data:
+        application = InternshipApplication.objects.filter(
+            converted_students=student
+        ).order_by("-created_at").first()
 
-            advance_payment = CoursePayment.objects.filter(
-                enrollment=enrollment,
-                payment_type="advance"
-            ).first()
+        enrollment = serializer.save(
+            application=application
+        )
 
-            if advance_payment:
-                StudentReceiptService.create_receipt(
-                    enrollment=enrollment,
-                    payment=advance_payment,
-                    receipt_data=receipt_data,
-                    user=self.request.user,
-                )
+        receipt_data = serializer.validated_data.pop(
+            "receipt",
+            None,
+        )
+
+        StudentReceiptService.create_advance_receipt(
+            enrollment=enrollment,
+            receipt_data=receipt_data,
+            user=self.request.user,
+        )
 
 
 
@@ -427,15 +506,11 @@ class CoursePaymentListCreateAPIView(generics.ListCreateAPIView):
 
         payment = serializer.save()
 
-        if receipt_data:
-
-            StudentReceiptService.create_receipt(
-                enrollment=payment.enrollment,
-                payment=payment,
-                receipt_data=receipt_data,
-                user=self.request.user,
-            )
-    
+        StudentReceiptService.create_installment_receipt(
+            payment=payment,
+            receipt_data=receipt_data,
+            user=self.request.user,
+        )
 
 # aadyam student nn aayirunnu one student one course validastion maattiyappo ee api erro vaann appo student course enrollment nn edduth data 
 class StudentPaymentListAPIView(generics.ListAPIView):
@@ -507,7 +582,7 @@ class ClassListCreateAPIView(generics.ListCreateAPIView):
     def get_queryset(self):
         return Class.objects.select_related("center").prefetch_related(
             "sections__days", "sections__batch"
-        ).filter(is_active=True)
+        ).filter(is_active=True).order_by("-id")
 
 class ClassRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class   = ClassDetailSerializer
@@ -540,7 +615,7 @@ class SectionListCreateAPIView(generics.ListCreateAPIView):
         day = self.request.query_params.get("day")
         if day:
             qs = qs.filter(days__day=day)
-        return qs
+        return qs.order_by("-id")
 
 class SectionRetrieveUpdateDeleteAPIView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class   = SectionSerializer
@@ -803,7 +878,7 @@ class AvailableFacultyListAPIView(generics.ListAPIView):
                 Q(staff_email__icontains=search)
             )
 
-        return queryset
+        return queryset.order_by("-id")
 
 # student detail profile viewfor admin
 class StudentProfileDetailAPIView(APIView):
@@ -857,7 +932,7 @@ class BatchInformationAPIView(APIView):
 
 from datetime import timedelta
 
-from django.db.models import F, Q, Sum
+from django.db.models import F, Max, Q, Sum
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
@@ -923,7 +998,8 @@ class PaymentReportListAPIView(generics.ListAPIView):
                 discounted_fee=ExpressionWrapper(
                     F("course__total_fee") - F("discount_amount"),
                     output_field=DecimalField(max_digits=10, decimal_places=2)
-                )
+                ),
+                last_paid=Max("payments__payment_date"),
             )
         )
 
@@ -1083,5 +1159,24 @@ class PaymentReportListAPIView(generics.ListAPIView):
                 enrollment_date__month=today.month,
                 enrollment_date__year=today.year,
             )
+
+        # Last Paid Date
+        last_paid_from = params.get("last_paid_from")
+        last_paid_to = params.get("last_paid_to")
+
+        if last_paid_from and last_paid_to and last_paid_from == last_paid_to:
+            queryset = queryset.filter(
+                last_paid=last_paid_from
+            )
+        else:
+            if last_paid_from:
+                queryset = queryset.filter(
+                    last_paid__gte=last_paid_from
+                )
+
+            if last_paid_to:
+                queryset = queryset.filter(
+                    last_paid__lte=last_paid_to
+                )
 
         return queryset.distinct()

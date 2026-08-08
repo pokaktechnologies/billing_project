@@ -240,6 +240,8 @@ class StudentCourseEnrollment(models.Model):
     # descount integrations model
     discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     discount_reason = models.TextField(blank=True, null=True)
+
+    application = models.ForeignKey("InternshipApplication", on_delete=models.PROTECT, related_name="enrollments", null=True, blank=True)
     class Meta:
         unique_together = ['student', 'course']
 
@@ -328,8 +330,16 @@ class StudentCourseEnrollment(models.Model):
         if not self.student_installment_items.exists():
 
             course_fee = Decimal(str(self.course.total_fee))
+
+            slot_amount = Decimal("0.00")
+            if self.application:
+                slot_amount = Decimal(str(self.application.slot_amount or 0))
+
+            remaining_fee = course_fee - slot_amount
+
             discount_amount = Decimal(str(self.discount_amount or 0))
-            discounted_fee = course_fee - discount_amount
+            discounted_fee = remaining_fee - discount_amount
+
             advance_amount = Decimal(str(self.advance_amount or 0))
             balance_fee = discounted_fee - advance_amount
 
@@ -908,16 +918,32 @@ class InternshipApplication(models.Model):
     other_source = models.CharField(max_length=255, blank=True, null=True)
 
     # Course Info
-    course_applied_for = models.CharField(max_length=255)
+    course_applied_for = models.CharField(max_length=255, blank=True, null=True)# unused
     course_duration = models.PositiveIntegerField(help_text="Duration in months")
     course_type = models.CharField(max_length=10, choices=COURSE_TYPE_CHOICES)
-
+    course = models.ForeignKey(Course, on_delete=models.PROTECT, related_name="internship_applications", blank=True, null=True)
     # Profiles
     linkedin_profile_url = models.URLField(blank=True, null=True)
     github_profile_url = models.URLField(blank=True, null=True)
     portfolio_url = models.URLField(blank=True, null=True)
+    academic_counselor = models.CharField(max_length=50, blank=True, null=True)# unused
+    councellor = models.ForeignKey(
+        SalesPerson,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="internship_applications"
+    )
+    # slot booking
+    slot_amount = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    slot_payment_method = models.CharField(max_length=20, choices=PAYMENT_METHODS, blank=True, null=True)
+    slot_transaction_id = models.CharField(max_length=200, null=True, blank=True)
+    slot_payment_date = models.DateField(null=True, blank=True)
 
-    academic_counselor = models.CharField(max_length=50, blank=True, null=True)
+    #conversion fields
+    is_converted = models.BooleanField(default=False)
+    converted_students = models.ForeignKey(Student, on_delete=models.SET_NULL, null=True, blank=True, related_name="converted_applications")
+
 
     created_at = models.DateTimeField(auto_now_add=True)
 

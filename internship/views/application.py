@@ -6,13 +6,14 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
+from rest_framework.permissions import IsAuthenticated
 from ..models import InternshipApplication
 from ..serializers.application import (
     InternshipApplicationListSerializer,
     InternshipApplicationSerializer,
+    ConvertToStudentSerializer
 )
-
+from ..utils import StudentConversionService
 
 class InternshipApplicationPagination(PageNumberPagination):
     page_size = 10
@@ -61,13 +62,17 @@ class InternshipApplicationAPIView(APIView):
                 | Q(email__icontains=search)
                 | Q(primary_phone__icontains=search)
                 | Q(course_applied_for__icontains=search)
+                | Q(course__title__icontains=search)
+                | Q(councellor__first_name__icontains=search)
             )
 
-        academic_counselor = params.get("academic_counselor")
-        if academic_counselor:
-            queryset = queryset.filter(
-                academic_counselor__icontains=academic_counselor
-            )
+        course = params.get("course")
+        if course:
+            queryset = queryset.filter(course_id=course)
+            
+        councellor = params.get("councellor")
+        if councellor:
+            queryset = queryset.filter(councellor_id=councellor)
 
         qualification = params.get("qualification")
         if qualification:
@@ -175,3 +180,154 @@ class InternshipApplicationAPIView(APIView):
         application = get_object_or_404(self.get_queryset(), pk=pk)
         application.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ConvertApplicationToStudentAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+
+        application = get_object_or_404(
+            InternshipApplication,
+            pk=pk,
+        )
+
+        serializer = ConvertToStudentSerializer(
+            data=request.data
+        )
+
+        serializer.is_valid(raise_exception=True)
+
+        try:
+
+            student = StudentConversionService.convert(
+                application=application,
+                email=serializer.validated_data["email"],
+                password=serializer.validated_data["password"],
+                center=serializer.validated_data["center"],
+                start_date=serializer.validated_data["start_date"],
+                # councellor=serializer.validated_data.get("councellor"),# old
+                councellor=application.councellor,
+                status=serializer.validated_data["status"],
+            )
+
+        except ValueError as exc:
+
+            return Response(
+                {
+                    "status": "0",
+                    "message": str(exc),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            {
+                "status": "1",
+                "message": "Student converted successfully.",
+                "student_id": student.id,
+                "student_code": student.student_id,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+import django_filters
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import filters, generics
+from rest_framework.filters import OrderingFilter
+from ..serializers.application import InternshipApplicationReportSerializer
+
+
+class InternshipApplicationReportFilter(django_filters.FilterSet):
+    form_type = django_filters.CharFilter(field_name="form_type")
+    councellor = django_filters.NumberFilter(field_name="councellor")
+    course = django_filters.NumberFilter(field_name="course")
+    course_type = django_filters.CharFilter(field_name="course_type")
+    qualification = django_filters.CharFilter(field_name="qualification")
+    gender = django_filters.CharFilter(field_name="gender")
+    is_converted = django_filters.BooleanFilter(field_name="is_converted")
+    where_did_you_find_us = django_filters.CharFilter(field_name="where_did_you_find_us")
+    state = django_filters.CharFilter(field_name="state", lookup_expr="icontains")
+    district = django_filters.CharFilter(field_name="district", lookup_expr="icontains")
+
+    created_at__date = django_filters.DateFilter(field_name="created_at__date")
+    created_at__date__gte = django_filters.DateFilter(field_name="created_at__date", lookup_expr="gte")
+    created_at__date__lte = django_filters.DateFilter(field_name="created_at__date", lookup_expr="lte")
+
+    slot_payment_date = django_filters.DateFilter(field_name="slot_payment_date")
+    slot_payment_date__gte = django_filters.DateFilter(field_name="slot_payment_date", lookup_expr="gte")
+    slot_payment_date__lte = django_filters.DateFilter(field_name="slot_payment_date", lookup_expr="lte")
+
+    class Meta:
+        model = InternshipApplication
+        fields = []
+
+
+class InternshipApplicationOrderingFilter(OrderingFilter):
+    ordering_map = {
+        "created_at": "created_at",
+        "first_name": "first_name",
+        "last_name": "last_name",
+        "applicant_name": "first_name",
+        "email": "email",
+        "councellor": "councellor__first_name",
+        "course": "course__title",
+        "slot_amount": "slot_amount",
+        "slot_payment_date": "slot_payment_date",
+        "is_converted": "is_converted",
+    }
+
+    def get_ordering(self, request, queryset, view):
+        params = request.query_params.get(self.ordering_param)
+        if not params:
+            return getattr(view, "ordering", None)
+
+        ordering = []
+        for field in params.split(","):
+            desc = field.startswith("-")
+            key = field.lstrip("-")
+            mapped = self.ordering_map.get(key, key)
+            if desc:
+                mapped = "-" + mapped
+            ordering.append(mapped)
+
+        return ordering
+
+
+class InternshipApplicationReportView(generics.ListAPIView):
+    serializer_class = InternshipApplicationReportSerializer
+    pagination_class = InternshipApplicationPagination
+    filter_backends = [
+        DjangoFilterBackend,
+        filters.SearchFilter,
+        InternshipApplicationOrderingFilter,
+    ]
+    filterset_class = InternshipApplicationReportFilter
+
+    search_fields = [
+        "first_name",
+        "last_name",
+        "email",
+        "primary_phone",
+        "secondary_phone",
+        "course_name",
+        "course__title",
+        "academic_counselor",
+        "councellor__first_name",
+        "councellor__last_name",
+    ]
+
+    ordering = ["-created_at"]
+
+    def get_queryset(self):
+        return (
+            InternshipApplication.objects.select_related(
+                "course",
+                "councellor",
+                "converted_students",
+            )
+            .prefetch_related("documents")
+            .order_by("-created_at")
+        )
+

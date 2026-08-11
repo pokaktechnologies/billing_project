@@ -615,6 +615,13 @@ class StudentSerializer(serializers.ModelSerializer):
     queryset=Batch.objects.all(),
     write_only=True,
     required=False,
+    allow_null=True,
+    )
+
+    enrollment_course = serializers.PrimaryKeyRelatedField(
+        queryset=Course.objects.all(),
+        write_only=True,
+        required=False
     )
 
     enrollment_payment_plan_type = serializers.ChoiceField(
@@ -705,6 +712,7 @@ class StudentSerializer(serializers.ModelSerializer):
 
             # enrollment fileds
             "enrollment_batch",
+            "enrollment_course",
             "enrollment_payment_plan_type",
             "enrollment_installment_plan",
             "enrollment_custom_installments",
@@ -755,20 +763,27 @@ class StudentSerializer(serializers.ModelSerializer):
         return None
 
     def validate(self, attrs):
-        course = attrs.get("course")
-        batch = attrs.get("batch")
 
-        if batch and course and batch.course != course:
+        course = attrs.get("enrollment_course")
+        batch = attrs.get("enrollment_batch")
+
+        if not course:
             raise serializers.ValidationError({
-                "batch": "Selected batch does not belong to the selected course."
+                "enrollment_course": "Course is required."
+            })
+
+        if batch and batch.course_id != course.id:
+            raise serializers.ValidationError({
+                "enrollment_batch":
+                    "Selected batch does not belong to the selected course."
             })
 
         return attrs
-
     def create(self, validated_data):
         with transaction.atomic():
             modules = validated_data.pop("modules", [])
             validated_data.pop("enrollment_batch", None)
+            validated_data.pop("enrollment_course", None)
             validated_data.pop("enrollment_payment_plan_type", None)
             validated_data.pop("enrollment_installment_plan", None)
             validated_data.pop("enrollment_custom_installments", None)
@@ -900,6 +915,12 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
     total_installments = serializers.CharField(source="installment_plan.total_installments", read_only=True)
     receipt = serializers.JSONField(write_only=True, required=False)
     application = serializers.PrimaryKeyRelatedField(read_only=True)
+    course = serializers.PrimaryKeyRelatedField(queryset=Course.objects.all(), required=True)
+    student = serializers.PrimaryKeyRelatedField(
+    queryset=Student.objects.all(),
+    required=False,
+    allow_null=True,
+    )
 
     class Meta:
         model = StudentCourseEnrollment
@@ -928,8 +949,8 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
             "application",
             "receipt"
         ]
-        extra_kwargs = {"student":{"required": False}}
-        read_only_fields = ["course"]
+        # extra_kwargs = {"student":{"required": False}}
+        # read_only_fields = ["course"]
 
     def create(self, validated_data):
         # Remove receipt because it is not a model field
@@ -937,7 +958,16 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
     def validate(self, attrs):
-        batch = attrs.get("batch")
+        # Course is required
+        course = attrs.get(
+            "course",
+            getattr(self.instance, "course", None)
+        )
+
+        batch = attrs.get(
+            "batch",
+            getattr(self.instance, "batch", None)
+        )
         installment_plan = attrs.get("installment_plan")
         payment_plan_type = attrs.get(
             "payment_plan_type",
@@ -954,9 +984,17 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
         payment_date = attrs.get("payment_date", getattr(self.instance, "payment_date", None))
         discount_amount = attrs.get("discount_amount", getattr(self.instance, "discount_amount", 0))
 
-        # ── Batch required ──
-        if not batch:
-            raise serializers.ValidationError("Batch is required.")
+        if not course:
+            raise serializers.ValidationError({
+                "course": "Course is required."
+            })
+
+        # Batch is optional.
+        # If provided, it must belong to the selected course.
+        if batch and batch.course_id != course.id:
+            raise serializers.ValidationError({
+                "batch": "Selected batch does not belong to the selected course."
+            })
 
         # # ── Installment plan must match course ──
         # if installment_plan and installment_plan.course_id != batch.course_id:
@@ -973,10 +1011,10 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
                         "Installment plan is required."
                 })
 
-            if installment_plan.course_id != batch.course_id:
+            if installment_plan.course_id != course.id:
                 raise serializers.ValidationError({
                     "installment_plan":
-                        "Selected installment plan does not belong to this course."
+                        "Selected installment plan does not belong to the selected course."
                 })
 
         elif payment_plan_type == "custom_installment":
@@ -1016,24 +1054,25 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
         #         "This student is already enrolled in a course."
         #     )
 
-        # just a safty validation
-        course = batch.course
 
-        existing_qs = StudentCourseEnrollment.objects.filter(
-            student=student,
-            course=course,
-        )
+        if student:
 
-        if self.instance:
-            existing_qs = existing_qs.exclude(pk=self.instance.pk)
+            existing_qs = StudentCourseEnrollment.objects.filter(
+                student=student,
+                course=course,
+            )
 
-        if existing_qs.exists():
-            raise serializers.ValidationError({
-                "student": "Student is already enrolled in this course."
-            })
+            if self.instance:
+                existing_qs = existing_qs.exclude(
+                    pk=self.instance.pk
+                )
 
+            if existing_qs.exists():
+                raise serializers.ValidationError({
+                    "student": "Student is already enrolled in this course."
+                })
         # vaaalidation of advance pyment 
-        course_fee = batch.course.total_fee
+        course_fee = course.total_fee
 
         if discount_amount < 0:
             raise serializers.ValidationError({

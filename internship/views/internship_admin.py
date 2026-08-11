@@ -250,6 +250,9 @@ class StudentListCreateAPIView(generics.ListCreateAPIView):
 
         with transaction.atomic():
 
+            # -------------------------------------------------
+            # 1. Validate Student data
+            # -------------------------------------------------
             student_serializer = self.get_serializer(
                 data=request.data
             )
@@ -258,28 +261,86 @@ class StudentListCreateAPIView(generics.ListCreateAPIView):
                 raise_exception=True
             )
 
+            # -------------------------------------------------
+            # 2. Prepare Enrollment data
+            # -------------------------------------------------
             enrollment_data = {
+                "course": request.data.get("enrollment_course"),
                 "batch": request.data.get("enrollment_batch"),
-                "payment_plan_type": request.data.get("enrollment_payment_plan_type"),
-                "installment_plan": request.data.get("enrollment_installment_plan"),
-                "custom_installments": request.data.get("enrollment_custom_installments"),
-                "advance_amount": request.data.get("enrollment_advance_amount"),
-                "payment_method": request.data.get("enrollment_payment_method"),
-                "transaction_id": request.data.get("enrollment_transaction_id"),
-                "payment_date": request.data.get("enrollment_payment_date"),
-                "discount_amount": request.data.get("enrollment_discount_amount"),
-                "discount_reason": request.data.get("enrollment_discount_reason"),
+
+                "payment_plan_type": request.data.get(
+                    "enrollment_payment_plan_type"
+                ),
+
+                "installment_plan": request.data.get(
+                    "enrollment_installment_plan"
+                ),
+
+                "custom_installments": request.data.get(
+                    "enrollment_custom_installments"
+                ),
+
+                "advance_amount": request.data.get(
+                    "enrollment_advance_amount"
+                ),
+
+                "payment_method": request.data.get(
+                    "enrollment_payment_method"
+                ),
+
+                "transaction_id": request.data.get(
+                    "enrollment_transaction_id"
+                ),
+
+                "payment_date": request.data.get(
+                    "enrollment_payment_date"
+                ),
+
+                "discount_amount": request.data.get(
+                    "enrollment_discount_amount"
+                ),
+
+                "discount_reason": request.data.get(
+                    "enrollment_discount_reason"
+                ),
             }
 
-            receipt = request.data.get("enrollment_receipt")
+            # -------------------------------------------------
+            # 3. Receipt data
+            # -------------------------------------------------
+            receipt = request.data.get(
+                "enrollment_receipt"
+            )
 
-            # Add receipt only if frontend sends it
             if receipt:
                 enrollment_data["receipt"] = receipt
 
-            # Keep receipt separately because it is not an Enrollment model field
-            receipt_data = enrollment_data.pop("receipt", None)
+            # Receipt is not an Enrollment model field
+            receipt_data = enrollment_data.pop(
+                "receipt",
+                None
+            )
 
+            # -------------------------------------------------
+            # 4. Create Student FIRST
+            # -------------------------------------------------
+            student = student_serializer.save()
+
+            # -------------------------------------------------
+            # 5. Get converted application
+            # -------------------------------------------------
+            application = InternshipApplication.objects.filter(
+                converted_students=student
+            ).order_by("-created_at").first()
+
+            # -------------------------------------------------
+            # 6. Add student automatically to Enrollment data
+            # -------------------------------------------------
+            enrollment_data["student"] = student.id
+
+            # -------------------------------------------------
+            # 7. Validate Enrollment
+            # -------------------------------------------------
             enrollment_serializer = StudentCourseEnrollmentSerializer(
                 data=enrollment_data,
                 context=self.get_serializer_context(),
@@ -289,22 +350,25 @@ class StudentListCreateAPIView(generics.ListCreateAPIView):
                 raise_exception=True
             )
 
-            student = student_serializer.save()
-
-            application = InternshipApplication.objects.filter(
-                converted_students=student
-            ).order_by("-created_at").first()
-
+            # -------------------------------------------------
+            # 8. Create Enrollment
+            # -------------------------------------------------
             enrollment = enrollment_serializer.save(
-                student=student,
-                application=application,
+                application=application
             )
 
+            # -------------------------------------------------
+            # 9. Create Advance Receipt
+            # -------------------------------------------------
             StudentReceiptService.create_advance_receipt(
                 enrollment=enrollment,
                 receipt_data=receipt_data,
                 user=request.user,
             )
+
+            # -------------------------------------------------
+            # 10. Create Slot Receipt
+            # -------------------------------------------------
             StudentReceiptService.create_slot_receipt(
                 enrollment=enrollment,
                 application=application,
@@ -312,6 +376,9 @@ class StudentListCreateAPIView(generics.ListCreateAPIView):
                 user=request.user,
             )
 
+            # -------------------------------------------------
+            # 11. Return Student
+            # -------------------------------------------------
             return Response(
                 StudentSerializer(
                     student,
@@ -420,11 +487,87 @@ class StudentRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView)
 
 
 class StudentCourseEnrollmentView(generics.ListCreateAPIView):
-    queryset = StudentCourseEnrollment.objects.select_related("student", "batch", "installment_plan").all()
+
+    queryset = StudentCourseEnrollment.objects.select_related(
+        "student",
+        "batch",
+        "installment_plan",
+        "course",
+    ).all()
+
     serializer_class = StudentCourseEnrollmentSerializer
     permission_classes = [IsAuthenticated]
-    filter_backends = [DjangoFilterBackend, SearchFilter]
-    filterset_fields = ["course", "batch"]
+
+    filter_backends = [
+        DjangoFilterBackend,
+        SearchFilter,
+    ]
+
+    filterset_fields = [
+        "course",
+        "batch",
+    ]
+
+    search_fields = [
+        "student__student_id",
+        "student__profile__user__first_name",
+        "student__profile__user__last_name",
+        "student__profile__user__email",
+    ]
+
+    def get_queryset(self):
+
+        qs = StudentCourseEnrollment.objects.select_related(
+            "student",
+            "student__profile",
+            "student__profile__user",
+            "course",
+            "batch",
+            "installment_plan",
+        )
+
+        # -------------------------------------------------
+        # Existing course filter
+        # -------------------------------------------------
+        course_id = self.request.query_params.get("course")
+
+        if course_id:
+            qs = qs.filter(
+                course_id=course_id
+            )
+
+        # -------------------------------------------------
+        # Existing batch filter
+        # -------------------------------------------------
+        batch_id = self.request.query_params.get("batch")
+
+        if batch_id:
+            qs = qs.filter(
+                batch_id=batch_id
+            )
+
+        # -------------------------------------------------
+        # NEW:
+        # Return only students whose enrollment
+        # does not have a batch.
+        #
+        # Example:
+        # GET /enrollments/?course=1&unassigned=true
+        # -------------------------------------------------
+        unassigned = self.request.query_params.get(
+            "unassigned"
+        )
+
+        if unassigned == "true":
+            qs = qs.filter(
+                batch__isnull=True
+            )
+
+        return qs.order_by(
+            "student__profile__user__first_name",
+            "student__profile__user__last_name",
+            "-id",
+        )
 
     def perform_create(self, serializer):
 
@@ -448,7 +591,6 @@ class StudentCourseEnrollmentView(generics.ListCreateAPIView):
             receipt_data=receipt_data,
             user=self.request.user,
         )
-
 
 
 class StudentCourseEnrollmentDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -1180,3 +1322,212 @@ class PaymentReportListAPIView(generics.ListAPIView):
                 )
 
         return queryset.distinct()
+
+
+class BatchUnassignedStudentsAPIView(generics.ListAPIView):
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = StudentCourseEnrollmentSerializer
+
+    def get_queryset(self):
+
+        batch_id = self.kwargs.get("batch_id")
+
+        try:
+            batch = Batch.objects.select_related("course").get(
+                id=batch_id
+            )
+        except Batch.DoesNotExist:
+            return StudentCourseEnrollment.objects.none()
+
+        return StudentCourseEnrollment.objects.filter(
+            course=batch.course,
+            batch__isnull=True,
+        ).select_related(
+            "student",
+            "student__profile",
+            "student__profile__user",
+            "course",
+            "application",
+        ).order_by(
+            "student__profile__user__first_name",
+            "student__profile__user__last_name",
+        )
+
+
+class BatchAssignStudentsAPIView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, batch_id, *args, **kwargs):
+
+        enrollment_ids = request.data.get(
+            "enrollment_ids"
+        )
+
+        # -------------------------------------------------
+        # Validate request
+        # -------------------------------------------------
+        if not enrollment_ids:
+            return Response(
+                {
+                    "status": "0",
+                    "message": "enrollment_ids is required."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not isinstance(enrollment_ids, list):
+            return Response(
+                {
+                    "status": "0",
+                    "message": "enrollment_ids must be a list."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # -------------------------------------------------
+        # Get current batch
+        # -------------------------------------------------
+        try:
+
+            batch = Batch.objects.select_related(
+                "course"
+            ).get(
+                id=batch_id
+            )
+
+        except Batch.DoesNotExist:
+
+            return Response(
+                {
+                    "status": "0",
+                    "message": "Batch not found."
+                },
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # -------------------------------------------------
+        # Get selected enrollments
+        # -------------------------------------------------
+        enrollments = StudentCourseEnrollment.objects.filter(
+            id__in=enrollment_ids
+        ).select_related(
+            "student",
+            "course",
+            "batch",
+        )
+
+        # -------------------------------------------------
+        # Check whether all IDs exist
+        # -------------------------------------------------
+        found_ids = set(
+            enrollments.values_list(
+                "id",
+                flat=True
+            )
+        )
+
+        requested_ids = set(
+            enrollment_ids
+        )
+
+        missing_ids = requested_ids - found_ids
+
+        if missing_ids:
+
+            return Response(
+                {
+                    "status": "0",
+                    "message": "Some enrollment IDs were not found.",
+                    "missing_enrollment_ids": list(
+                        missing_ids
+                    ),
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # -------------------------------------------------
+        # Validate every enrollment
+        # -------------------------------------------------
+        invalid_enrollments = []
+
+        for enrollment in enrollments:
+
+            # Enrollment must belong to same course
+            if enrollment.course_id != batch.course_id:
+
+                invalid_enrollments.append({
+                    "enrollment_id": enrollment.id,
+                    "student_id": enrollment.student_id,
+                    "message": (
+                        "This enrollment belongs to "
+                        "a different course."
+                    ),
+                })
+
+                continue
+
+            # Enrollment must not already have a batch
+            if enrollment.batch_id is not None:
+
+                invalid_enrollments.append({
+                    "enrollment_id": enrollment.id,
+                    "student_id": enrollment.student_id,
+                    "message": (
+                        "This student is already "
+                        "assigned to a batch."
+                    ),
+                })
+
+        # -------------------------------------------------
+        # Stop if any enrollment is invalid
+        # -------------------------------------------------
+        if invalid_enrollments:
+
+            return Response(
+                {
+                    "status": "0",
+                    "message": (
+                        "Some students cannot be "
+                        "assigned to this batch."
+                    ),
+                    "invalid_enrollments": invalid_enrollments,
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # -------------------------------------------------
+        # Assign batch
+        # -------------------------------------------------
+        with transaction.atomic():
+
+            updated_count = (
+                StudentCourseEnrollment.objects.filter(
+                    id__in=enrollment_ids,
+                    course_id=batch.course_id,
+                    batch__isnull=True,
+                ).update(
+                    batch=batch
+                )
+            )
+
+        # -------------------------------------------------
+        # Response
+        # -------------------------------------------------
+        return Response(
+            {
+                "status": "1",
+                "message": (
+                    "Students added to batch successfully."
+                ),
+                "batch": {
+                    "id": batch.id,
+                    "batch_number": batch.batch_number,
+                    "course": batch.course_id,
+                },
+                "updated_count": updated_count,
+                "enrollment_ids": enrollment_ids,
+            },
+            status=status.HTTP_200_OK
+        )

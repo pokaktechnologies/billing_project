@@ -168,6 +168,8 @@ internship_admin_patterns = [
 
     # dashboard
     path("dashboard/academic/", internship_admin.AcademicDashboardAPIView.as_view()),
+    path("batches/<int:batch_id>/unassigned-students/", internship_admin.BatchUnassignedStudentsAPIView.as_view(), name="batch-unassigned-students",),
+    path("batches/<int:batch_id>/assign-students/", internship_admin.BatchAssignStudentsAPIView.as_view(), name="batch-assign-students",),
 ]
 
 report_patterns = [
@@ -200,6 +202,8 @@ report_patterns = [
 
     path("student-registration/", StudentRegistrationReportView.as_view(), name="student-registration-report"),
     path("application-report/", application.InternshipApplicationReportView.as_view(), name="internship-application-report"),
+
+    
 
 ]
 

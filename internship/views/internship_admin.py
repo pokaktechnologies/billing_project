@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.exceptions import ValidationError
 from rest_framework import generics, status
+import json
 from rest_framework.filters import SearchFilter
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
@@ -308,18 +309,20 @@ class StudentListCreateAPIView(generics.ListCreateAPIView):
             # -------------------------------------------------
             # 3. Receipt data
             # -------------------------------------------------
-            receipt = request.data.get(
-                "enrollment_receipt"
-            )
+            receipt = request.data.get("enrollment_receipt")
+
+            receipt_data = None
 
             if receipt:
-                enrollment_data["receipt"] = receipt
-
-            # Receipt is not an Enrollment model field
-            receipt_data = enrollment_data.pop(
-                "receipt",
-                None
-            )
+                if isinstance(receipt, str):
+                    try:
+                        receipt_data = json.loads(receipt)
+                    except json.JSONDecodeError:
+                        raise serializers.ValidationError({
+                            "enrollment_receipt": "Invalid JSON format."
+                        })
+                else:
+                    receipt_data = receipt
 
             # -------------------------------------------------
             # 4. Create Student FIRST

@@ -23,6 +23,8 @@ pipeline {
                         --exclude-dir=node_modules \
                         --exclude-dir=media \
                         --exclude-dir=.github \
+                        --exclude=Jenkinsfile \
+                        --exclude=Jenkinsfile.dev \
                         --binary-files=without-match; then
                         echo "Merge conflict markers found!"
                         exit 1

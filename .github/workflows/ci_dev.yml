@@ -1,9 +1,6 @@
 name: Billing DEV backend 
 
 on:
-  push:
-    branches:
-      - dev
   workflow_dispatch:
 
 jobs:

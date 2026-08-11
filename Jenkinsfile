@@ -1,0 +1,164 @@
+pipeline {
+    agent { label 'docker-agent' }
+    stages {
+        stage('Pull Latest Code') {
+            steps {
+                sh '''
+                    set -e
+                    cd /var/www/billing/billing_project
+                    git fetch origin main
+                    git checkout main
+                    git pull origin main
+                '''
+            }
+        }
+        stage('Check Merge Conflict Markers') {
+            steps {
+                sh '''
+                    set -e
+                    cd /var/www/billing/billing_project
+                    echo "Checking for merge conflict markers..."
+                    if grep -r "<<<<<<<" . \
+                        --exclude-dir=.git \
+                        --exclude-dir=node_modules \
+                        --exclude-dir=media \
+                        --exclude-dir=.github \
+                        --exclude=Jenkinsfile \
+                        --exclude=Jenkinsfile.dev \
+                        --binary-files=without-match; then
+                        echo "Merge conflict markers found!"
+                        exit 1
+                    fi
+                '''
+            }
+        }
+        stage('Build Backend Image') {
+            steps {
+                sh '''
+                    set -e
+                    cd /var/www/billing/billing_project
+                    echo "Building backend image..."
+                    docker compose build backend
+                '''
+            }
+        }
+        stage('Check Migrations') {
+            steps {
+                sh '''
+                    set -e
+                    cd /var/www/billing/billing_project
+                    echo "Checking migrations..."
+                    docker compose run --rm backend python manage.py makemigrations --check --dry-run
+                '''
+            }
+        }
+        stage('Django Checks') {
+            steps {
+                sh '''
+                    set -e
+                    cd /var/www/billing/billing_project
+                    echo "Running Django checks..."
+                    docker compose run --rm backend python manage.py check
+                '''
+            }
+        }
+        stage('Force Django URL Import') {
+            steps {
+                sh '''
+                    set -e
+                    cd /var/www/billing/billing_project
+                    echo "Forcing Django URL import..."
+                    docker compose run --rm backend python -c "
+import os
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
+import django
+django.setup()
+from django.urls import get_resolver
+get_resolver().url_patterns
+"
+                '''
+            }
+        }
+        stage('Run Migrations') {
+            steps {
+                sh '''
+                    set -e
+                    cd /var/www/billing/billing_project
+                    echo "Running migrations..."
+                    docker compose run --rm backend python manage.py migrate --noinput
+                '''
+            }
+        }
+        stage('Collect Static Files') {
+            steps {
+                sh '''
+                    set -e
+                    cd /var/www/billing/billing_project
+                    echo "Collecting static files..."
+                    docker compose run --rm backend python manage.py collectstatic --noinput
+                '''
+            }
+        }
+        stage('Restart Backend') {
+            steps {
+                sh '''
+                    set -e
+                    cd /var/www/billing/billing_project
+                    echo "Restarting backend container..."
+                    docker compose up -d backend
+                    sleep 5
+                '''
+            }
+        }
+        stage('Check Container Status') {
+            steps {
+                sh '''
+                    set -e
+                    cd /var/www/billing/billing_project
+                    echo "Checking container status..."
+                    if ! docker compose ps | grep -q "backend.*Up"; then
+                        echo "Backend container crashed"
+                        docker compose logs backend
+                        exit 1
+                    fi
+
+                    echo "Checking for runtime errors in logs..."
+                    if docker compose logs backend | grep -i "error\\|traceback"; then
+                        echo "Runtime errors detected in backend logs"
+                        exit 1
+                    fi
+
+                    echo "Backend logs:"
+                    docker compose logs --tail=50 backend
+                    echo "Deployment completed successfully"
+                '''
+            }
+        }
+    }
+    post {
+        success {
+            withCredentials([string(credentialsId: 'slack-backend-webhook', variable: 'SLACK_URL')]) {
+                sh '''
+                    cd /var/www/billing/billing_project
+                    COMMIT_MSG=$(git log -1 --pretty=%s)
+                    COMMIT_AUTHOR=$(git log -1 --pretty=%an)
+                    curl -X POST -H "Content-Type: application/json" \
+                    --data "{\\"text\\":\\"✅ *Billing Backend (main)* deployed successfully\\n*Build:* #${BUILD_NUMBER}\\n*Branch:* main\\n*Commit:* ${COMMIT_MSG}\\n*Author:* ${COMMIT_AUTHOR}\\n*Job:* <${BUILD_URL}|View Build>\\"}" \
+                    $SLACK_URL
+                '''
+            }
+        }
+        failure {
+            withCredentials([string(credentialsId: 'slack-backend-webhook', variable: 'SLACK_URL')]) {
+                sh '''
+                    cd /var/www/billing/billing_project
+                    COMMIT_MSG=$(git log -1 --pretty=%s)
+                    COMMIT_AUTHOR=$(git log -1 --pretty=%an)
+                    curl -X POST -H "Content-Type: application/json" \
+                    --data "{\\"text\\":\\"❌ *Billing Backend (main)* deployment failed\\n*Build:* #${BUILD_NUMBER}\\n*Branch:* main\\n*Commit:* ${COMMIT_MSG}\\n*Author:* ${COMMIT_AUTHOR}\\n*Logs:* <${BUILD_URL}console|View Logs>\\"}" \
+                    $SLACK_URL
+                '''
+            }
+        }
+    }
+}

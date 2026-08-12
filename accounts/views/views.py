@@ -1125,32 +1125,32 @@ class QuotationOrderAPI(BaseAPIView):
                 )
                 terms_data = TermsAndConditionsPointSerializer(terms_points, many=True).data
 
-                # Contract and Sections
-                contract_data = {}
+            # Contract and Sections
+            contract_data = {}
 
-                if quotation.contract:
-                    contract_data = ContractSerializer(quotation.contract).data
-                    sections = ContractSection.objects.filter(contract=quotation.contract)
-                    contract_data["sections"] = []
+            if quotation.contract:
+                contract_data = ContractSerializer(quotation.contract).data
+                sections = ContractSection.objects.filter(contract=quotation.contract)
+                contract_data["sections"] = []
 
-                    for section in sections:
-                        section_data = ContractSectionSerializer(section).data
-                        section_data["subtitles"] = []
+                for section in sections:
+                    section_data = ContractSectionSerializer(section).data
+                    section_data["subtitles"] = []
 
-                        subtitles = ContractSubtitle.objects.filter(section=section)
+                    subtitles = ContractSubtitle.objects.filter(section=section)
 
-                        for subtitle in subtitles:
-                            subtitle_data = ContractSubtitleSerializer(subtitle).data
+                    for subtitle in subtitles:
+                        subtitle_data = ContractSubtitleSerializer(subtitle).data
 
-                            points = ContractPoint.objects.filter(subtitle=subtitle)
-                            subtitle_data["points"] = ContractPointSerializer(
-                                points,
-                                many=True
-                            ).data
+                        points = ContractPoint.objects.filter(subtitle=subtitle)
+                        subtitle_data["points"] = ContractPointSerializer(
+                            points,
+                            many=True
+                        ).data
 
-                            section_data["subtitles"].append(subtitle_data)
+                        section_data["subtitles"].append(subtitle_data)
 
-                        contract_data["sections"].append(section_data)
+                    contract_data["sections"].append(section_data)
 
             # Quotation Items
             item_list = []

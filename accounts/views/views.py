@@ -1252,8 +1252,8 @@ class QuotationOrderAPI(BaseAPIView):
                 #     return Response({"error": "Invalid contract ID"}, status=status.HTTP_400_BAD_REQUEST)
                 
                 contract_data = data.get("contract", [])
-                # if not contract_data:
-                #     return Response({"error": "Quotation must have a contract."}, status=status.HTTP_400_BAD_REQUEST)
+                if not contract_data:
+                    return Response({"error": "Quotation must have a contract."}, status=status.HTTP_400_BAD_REQUEST)
                 # lead_id = data.get("lead")
 
                 # if lead_id:

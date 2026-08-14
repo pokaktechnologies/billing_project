@@ -1252,8 +1252,8 @@ class QuotationOrderAPI(BaseAPIView):
                 #     return Response({"error": "Invalid contract ID"}, status=status.HTTP_400_BAD_REQUEST)
                 
                 contract_data = data.get("contract", [])
-                if not contract_data:
-                    return Response({"error": "Quotation must have a contract."}, status=status.HTTP_400_BAD_REQUEST)
+                # if not contract_data:
+                #     return Response({"error": "Quotation must have a contract."}, status=status.HTTP_400_BAD_REQUEST)
                 # lead_id = data.get("lead")
 
                 # if lead_id:
@@ -1282,28 +1282,32 @@ class QuotationOrderAPI(BaseAPIView):
                     # bank_account_id= bank_account_id,
                     termsandconditions_id=terms_id  # Add terms and condition
                 )
-                contract = Contract.objects.create(title=contract_data['title'])
+                contract_data = data.get("contract")
 
-                for section_data in contract_data.get('sections', []):
-                    section = ContractSection.objects.create(
-                        contract=contract,
-                        title=section_data.get('title', '')
+                if contract_data:
+                    contract = Contract.objects.create(
+                        title=contract_data.get("title", "")
                     )
 
-                    for subtitle_data in section_data.get('subtitles', []):
-                        subtitle = ContractSubtitle.objects.create(
-                            section=section,
-                            title=subtitle_data.get('title', '')
+                    for section_data in contract_data.get("sections", []):
+                        section = ContractSection.objects.create(
+                            contract=contract,
+                            title=section_data.get("title", "")
                         )
 
-                        for point_data in subtitle_data.get('points', []):
-                            ContractPoint.objects.create(
-                                subtitle=subtitle,
-                                points=point_data.get('points', '')
+                        for subtitle_data in section_data.get("subtitles", []):
+                            subtitle = ContractSubtitle.objects.create(
+                                section=section,
+                                title=subtitle_data.get("title", "")
                             )
 
-                # return contract
-                quotation.contract = contract
+                            for point_data in subtitle_data.get("points", []):
+                                ContractPoint.objects.create(
+                                    subtitle=subtitle,
+                                    points=point_data.get("points", "")
+                                )
+
+                    quotation.contract = contract
 
                 # Create Quotation Items
                 items = data.get("items", [])

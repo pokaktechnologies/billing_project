@@ -50,15 +50,15 @@ class PayrollDetailSerializer(serializers.ModelSerializer):
         return None
 
 
-# class PayrollEditSerializer(serializers.ModelSerializer):
+class PayrollEditSerializer(serializers.ModelSerializer):
 
-#     class Meta:
-#         model = Payroll
-#         fields = [
-#             'gross_salary',
-#             'working_days',
-#             'paid_leave_used',
-#             'unpaid_leave_days',
-#             'deduction',
-#             'net_salary',
-#         ]
+    class Meta:
+        model = Payroll
+        fields = [
+            'gross_salary',
+            'working_days',
+            'paid_leave_used',
+            'unpaid_leave_days',
+            'deduction',
+            'net_salary',
+        ]

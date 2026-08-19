@@ -69,48 +69,48 @@ class BulkPayrollPayView(APIView):
         return Response(result, status=status.HTTP_200_OK)
 
 
-# class PayrollEditView(generics.UpdateAPIView):
-#     """
-#     PATCH/PUT → Edit an existing payroll record.
+class PayrollEditView(generics.UpdateAPIView):
+    """
+    PATCH/PUT → Edit an existing payroll record.
 
-#     Payroll generation remains completely automatic.
-#     This API only updates the generated payroll data.
-#     """
+    Payroll generation remains completely automatic.
+    This API only updates the generated payroll data.
+    """
 
-#     queryset = Payroll.objects.all()
-#     serializer_class = PayrollEditSerializer
+    queryset = Payroll.objects.all()
+    serializer_class = PayrollEditSerializer
 
-#     def update(self, request, *args, **kwargs):
+    def update(self, request, *args, **kwargs):
 
-#         payroll = self.get_object()
+        payroll = self.get_object()
 
-#         # Do not allow editing locked payroll
-#         if payroll.period and payroll.period.status == "locked":
-#             return Response(
-#                 {
-#                     "success": False,
-#                     "error": "Cannot edit payroll for a locked period."
-#                 },
-#                 status=status.HTTP_400_BAD_REQUEST
-#             )
+        # Do not allow editing locked payroll
+        if payroll.period and payroll.period.status == "locked":
+            return Response(
+                {
+                    "success": False,
+                    "error": "Cannot edit payroll for a locked period."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-#         # Do not allow editing already paid payroll
-#         if payroll.status == "Paid":
-#             return Response(
-#                 {
-#                     "success": False,
-#                     "error": "Cannot edit a payroll that has already been paid."
-#                 },
-#                 status=status.HTTP_400_BAD_REQUEST
-#             )
+        # Do not allow editing already paid payroll
+        if payroll.status == "Paid":
+            return Response(
+                {
+                    "success": False,
+                    "error": "Cannot edit a payroll that has already been paid."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-#         response = super().update(request, *args, **kwargs)
+        response = super().update(request, *args, **kwargs)
 
-#         return Response(
-#             {
-#                 "success": True,
-#                 "message": "Payroll updated successfully.",
-#                 "data": response.data
-#             },
-#             status=status.HTTP_200_OK
-#         )
+        return Response(
+            {
+                "success": True,
+                "message": "Payroll updated successfully.",
+                "data": response.data
+            },
+            status=status.HTTP_200_OK
+        )

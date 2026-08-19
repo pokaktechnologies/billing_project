@@ -3,7 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from ..models import Payroll
-from ..serializers.payroll import PayrollListSerializer, PayrollDetailSerializer
+from ..serializers.payroll import PayrollEditSerializer, PayrollListSerializer, PayrollDetailSerializer
 from ..filters import PayrollFilter
 from ..pagination import OptionalPagination
 from ..services import bulk_mark_payroll_as_paid
@@ -67,3 +67,50 @@ class BulkPayrollPayView(APIView):
             return Response(result, status=status.HTTP_400_BAD_REQUEST)
             
         return Response(result, status=status.HTTP_200_OK)
+
+
+class PayrollEditView(generics.UpdateAPIView):
+    """
+    PATCH/PUT → Edit an existing payroll record.
+
+    Payroll generation remains completely automatic.
+    This API only updates the generated payroll data.
+    """
+
+    queryset = Payroll.objects.all()
+    serializer_class = PayrollEditSerializer
+
+    def update(self, request, *args, **kwargs):
+
+        payroll = self.get_object()
+
+        # Do not allow editing locked payroll
+        if payroll.period and payroll.period.status == "locked":
+            return Response(
+                {
+                    "success": False,
+                    "error": "Cannot edit payroll for a locked period."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Do not allow editing already paid payroll
+        if payroll.status == "Paid":
+            return Response(
+                {
+                    "success": False,
+                    "error": "Cannot edit a payroll that has already been paid."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        response = super().update(request, *args, **kwargs)
+
+        return Response(
+            {
+                "success": True,
+                "message": "Payroll updated successfully.",
+                "data": response.data
+            },
+            status=status.HTTP_200_OK
+        )

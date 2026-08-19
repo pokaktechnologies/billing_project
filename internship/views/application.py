@@ -186,7 +186,7 @@ class InternshipApplicationAPIView(APIView):
 
 
 class ConvertApplicationToStudentAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
 
@@ -199,19 +199,74 @@ class ConvertApplicationToStudentAPIView(APIView):
             data=request.data
         )
 
-        serializer.is_valid(raise_exception=True)
+        serializer.is_valid(
+            raise_exception=True
+        )
 
         try:
 
             student = StudentConversionService.convert(
                 application=application,
+
                 email=serializer.validated_data["email"],
                 password=serializer.validated_data["password"],
+
                 center=serializer.validated_data["center"],
                 start_date=serializer.validated_data["start_date"],
-                # councellor=serializer.validated_data.get("councellor"),# old
+
                 councellor=application.councellor,
+
                 status=serializer.validated_data["status"],
+
+                # ---------------------------------
+                # Enrollment
+                # ---------------------------------
+
+                batch=serializer.validated_data.get(
+                    "enrollment_batch"
+                ),
+
+                payment_plan_type=serializer.validated_data[
+                    "enrollment_payment_plan_type"
+                ],
+
+                installment_plan=serializer.validated_data.get(
+                    "enrollment_installment_plan"
+                ),
+
+                custom_installments=serializer.validated_data.get(
+                    "enrollment_custom_installments"
+                ),
+
+                advance_amount=serializer.validated_data.get(
+                    "enrollment_advance_amount",
+                    0
+                ),
+
+                payment_method=serializer.validated_data.get(
+                    "enrollment_payment_method"
+                ),
+
+                transaction_id=serializer.validated_data.get(
+                    "enrollment_transaction_id"
+                ),
+
+                payment_date=serializer.validated_data.get(
+                    "enrollment_payment_date"
+                ),
+
+                discount_amount=serializer.validated_data.get(
+                    "enrollment_discount_amount",
+                    0
+                ),
+
+                discount_reason=serializer.validated_data.get(
+                    "enrollment_discount_reason"
+                ),
+
+                receipt_data=serializer.validated_data.get(
+                    "enrollment_receipt"
+                ),
             )
 
         except ValueError as exc:

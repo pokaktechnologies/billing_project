@@ -70,12 +70,6 @@ class BulkPayrollPayView(APIView):
 
 
 class PayrollEditView(generics.UpdateAPIView):
-    """
-    PATCH/PUT → Edit an existing payroll record.
-
-    Payroll generation remains completely automatic.
-    This API only updates the generated payroll data.
-    """
 
     queryset = Payroll.objects.all()
     serializer_class = PayrollEditSerializer
@@ -84,7 +78,6 @@ class PayrollEditView(generics.UpdateAPIView):
 
         payroll = self.get_object()
 
-        # Do not allow editing locked payroll
         if payroll.period and payroll.period.status == "locked":
             return Response(
                 {
@@ -94,7 +87,6 @@ class PayrollEditView(generics.UpdateAPIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Do not allow editing already paid payroll
         if payroll.status == "Paid":
             return Response(
                 {

@@ -130,7 +130,39 @@ class StaffDocument(models.Model):
     def __str__(self):
         return f"{self.staff.user.email} - {self.doc_type}"
 
+class StaffEarning(models.Model):
+    job_detail = models.ForeignKey(
+        JobDetail,
+        on_delete=models.CASCADE,
+        related_name="earnings"
+    )
+    earning_type = models.CharField(max_length=100)
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2
+    )
+    is_active = models.BooleanField(default=True)
 
+    def __str__(self):
+        return f"{self.job_detail.staff.get_full_name()} - {self.earning_type}"
+
+
+class StaffDeduction(models.Model):
+    job_detail = models.ForeignKey(
+        JobDetail,
+        on_delete=models.CASCADE,
+        related_name="deductions"
+    )
+    deduction_type = models.CharField(max_length=100)
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2
+    )
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"{self.job_detail.staff.get_full_name()} - {self.deduction_type}"
+    
 class Quotation(models.Model):
     customer_name = models.CharField(max_length=255)
     invoice_number = models.CharField(max_length=50, unique=True)

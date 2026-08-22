@@ -196,7 +196,10 @@ class ConvertApplicationToStudentAPIView(APIView):
         )
 
         serializer = ConvertToStudentSerializer(
-            data=request.data
+            data=request.data,
+            context={
+                "application": application
+            }
         )
 
         serializer.is_valid(

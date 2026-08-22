@@ -342,7 +342,7 @@ class ConvertToStudentSerializer(serializers.Serializer):
 
 
     enrollment_batch = serializers.PrimaryKeyRelatedField(
-        queryset=Batch.objects.all(),
+        queryset=Batch.objects.none(),
         required=False,
         allow_null=True,
     )
@@ -405,7 +405,16 @@ class ConvertToStudentSerializer(serializers.Serializer):
         required=False,
         allow_null=True,
     )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
+        application = self.context.get("application")
+
+        if application and application.course:
+            self.fields["enrollment_batch"].queryset = Batch.objects.filter(
+                course=application.course
+            )
     def validate(self, attrs):
 
         if attrs["password"] != attrs["confirm_password"]:

@@ -120,6 +120,7 @@ class PayrollEditSerializer(serializers.ModelSerializer):
         fields = [
             'gross_salary',
             'working_days',
+            'total_working_hours',
             'paid_leave_used',
             'unpaid_leave_days',
             'deduction',

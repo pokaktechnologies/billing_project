@@ -42,6 +42,7 @@ class Payroll(models.Model):
 
     gross_salary = models.DecimalField(max_digits=10, decimal_places=2)
     working_days = models.PositiveSmallIntegerField()
+    total_working_hours = models.DecimalField(max_digits=7, decimal_places=2, default=0.0)
 
     paid_leave_used = models.PositiveSmallIntegerField()
     unpaid_leave_days = models.DecimalField(max_digits=5, decimal_places=2)

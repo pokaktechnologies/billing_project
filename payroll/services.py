@@ -6,7 +6,7 @@ from attendance.models import DailyAttendance
 from .models import AttendanceSummary, Payroll, PayrollDeduction, PayrollEarning, PayrollPeriod
 from accounts.models import StaffProfile
 from django.db import transaction
-
+from django.db.models import Sum
 PAID_LEAVE_LIMIT = 1
 
 def generate_attendance_summary(staff, period):
@@ -85,6 +85,24 @@ def create_payroll_record(summary, monthly_salary):
     # -----------------------------------
 
     salary_decimal = Decimal(str(monthly_salary))
+
+    # -----------------------------------
+    # 3. Total working hours
+    # -----------------------------------
+
+    year, month = map(int, summary.period.month.split("-"))
+
+    total_working_hours = DailyAttendance.objects.filter(
+        staff=summary.staff,
+        date__year=year,
+        date__month=month
+    ).aggregate(
+        total=Sum("total_working_hours")
+    )["total"] or Decimal("0.00")
+
+    total_working_hours = Decimal(
+        str(total_working_hours)
+    ).quantize(Decimal("0.01"))
 
     # -----------------------------------
     # 3. Attendance deduction
@@ -182,7 +200,8 @@ def create_payroll_record(summary, monthly_salary):
         unpaid_leave_days=unpaid_days_total,
         deduction=total_deduction,
         net_salary=net_salary,
-        status="Draft"
+        status="Draft",
+        total_working_hours=total_working_hours,
     )
 
     # -----------------------------------

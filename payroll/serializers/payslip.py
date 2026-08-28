@@ -46,7 +46,7 @@ class EmployeePayslipSerializer(serializers.ModelSerializer):
     class Meta:
         model = Payroll
         fields = [
-            'id', 'staff_details', 'period_month', 'gross_salary',
+            'id', 'staff_details', 'period_month', 'gross_salary', 'total_working_hours',
             'working_days', 'paid_leave_used', 'unpaid_leave_days',
             'deduction', 'net_salary', 'status', 'created_at',
             'attendance_summary', 'earnings', 'deductions'

@@ -280,6 +280,7 @@ class CreateStaffWithPermissionsView(BaseAPIView):
         status = request.query_params.get('status')
         search = request.query_params.get('search')  # name/email/employee_id
         job_type = request.query_params.get('job_type')
+        period_id = request.query_params.get('period_id')
 
         # ===========================
         #  SINGLE STAFF
@@ -311,7 +312,11 @@ class CreateStaffWithPermissionsView(BaseAPIView):
         ).prefetch_related(
             'module_permissions'
         ).order_by('-id')
-
+        if period_id:
+            staff_users = staff_users.exclude(
+                staff_profile__payrolls__period_id=period_id
+            )
+            
         # Filter: department
         if department:
             staff_users = staff_users.filter(

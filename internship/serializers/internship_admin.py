@@ -1256,6 +1256,14 @@ class StudentSerializer(serializers.ModelSerializer):
 
                 if enrollment_course is not None:
 
+                    # If course is changed, the existing batch may
+                    # belong to the old course.
+                    if (
+                        enrollment.batch
+                        and enrollment.batch.course_id != enrollment_course.id
+                    ):
+                        enrollment.batch = None
+
                     enrollment.course = enrollment_course
 
                 # ---------------------------------------------

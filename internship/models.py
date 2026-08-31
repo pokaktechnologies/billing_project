@@ -244,7 +244,7 @@ class StudentCourseEnrollment(models.Model):
     application = models.ForeignKey("InternshipApplication", on_delete=models.PROTECT, related_name="enrollments", null=True, blank=True)
     class Meta:
         unique_together = ['student', 'course']
-
+        
     def save(self, *args, **kwargs):
         from decimal import Decimal
         from .models import StudentInstallmentItem, CoursePayment
@@ -253,6 +253,7 @@ class StudentCourseEnrollment(models.Model):
         old_payment_plan_type = None
         old_custom_installments = None
         old_discount_amount = None
+        old_advance_amount = None
 
         # -------------------------------------------------
         # Only fetch old values while updating
@@ -266,6 +267,7 @@ class StudentCourseEnrollment(models.Model):
                     "payment_plan_type",
                     "custom_installments",
                     "discount_amount",
+                    "advance_amount",
                 ).first()
 
                 if old_data:
@@ -273,6 +275,7 @@ class StudentCourseEnrollment(models.Model):
                     old_payment_plan_type = old_data["payment_plan_type"]
                     old_custom_installments = old_data["custom_installments"]
                     old_discount_amount = old_data["discount_amount"]
+                    old_advance_amount = old_data["advance_amount"]
 
             except Exception:
                 pass
@@ -290,20 +293,26 @@ class StudentCourseEnrollment(models.Model):
                 or old_custom_installments != self.custom_installments
                 or Decimal(str(old_discount_amount or 0))
                 != Decimal(str(self.discount_amount or 0))
+                or Decimal(str(old_advance_amount or 0))
+                != Decimal(str(self.advance_amount or 0))
             )
 
         # -------------------------------------------------
-        # Prevent changing structure after payments
+        # Prevent changing structure AFTER an
+        # INSTALLMENT payment has been made
+        #
+        # Advance payment alone does NOT block editing.
         # -------------------------------------------------
         if payment_structure_changed:
 
-            has_payments = CoursePayment.objects.filter(
-                installments__enrollment=self
+            has_installment_payment = CoursePayment.objects.filter(
+                enrollment=self,
+                installments__isnull=False
             ).exists()
 
-            if has_payments:
+            if has_installment_payment:
                 raise ValidationError(
-                    "Cannot change payment structure because payments have already been made."
+                    "Cannot edit enrollment details because an installment payment has already been made."
                 )
 
         # -------------------------------------------------
@@ -332,15 +341,24 @@ class StudentCourseEnrollment(models.Model):
             course_fee = Decimal(str(self.course.total_fee))
 
             slot_amount = Decimal("0.00")
+
             if self.application:
-                slot_amount = Decimal(str(self.application.slot_amount or 0))
+                slot_amount = Decimal(
+                    str(self.application.slot_amount or 0)
+                )
 
             remaining_fee = course_fee - slot_amount
 
-            discount_amount = Decimal(str(self.discount_amount or 0))
+            discount_amount = Decimal(
+                str(self.discount_amount or 0)
+            )
+
             discounted_fee = remaining_fee - discount_amount
 
-            advance_amount = Decimal(str(self.advance_amount or 0))
+            advance_amount = Decimal(
+                str(self.advance_amount or 0)
+            )
+
             balance_fee = discounted_fee - advance_amount
 
             student_items = []
@@ -372,16 +390,24 @@ class StudentCourseEnrollment(models.Model):
                     balance_fee / total_installments
                 ).quantize(Decimal("0.01"))
 
-                for index, item in enumerate(global_items, start=1):
+                for index, item in enumerate(
+                    global_items,
+                    start=1
+                ):
 
                     amount = installment_amount
 
                     if index == total_installments:
-                        assigned_total = installment_amount * (
-                            total_installments - 1
+
+                        assigned_total = (
+                            installment_amount
+                            * (total_installments - 1)
                         )
 
-                        amount = balance_fee - assigned_total
+                        amount = (
+                            balance_fee
+                            - assigned_total
+                        )
 
                     student_items.append(
                         StudentInstallmentItem(
@@ -410,16 +436,24 @@ class StudentCourseEnrollment(models.Model):
 
                 DEFAULT_INTERVAL_DAYS = 30
 
-                for number in range(1, total_installments + 1):
+                for number in range(
+                    1,
+                    total_installments + 1
+                ):
 
                     amount = installment_amount
 
                     if number == total_installments:
-                        assigned_total = installment_amount * (
-                            total_installments - 1
+
+                        assigned_total = (
+                            installment_amount
+                            * (total_installments - 1)
                         )
 
-                        amount = balance_fee - assigned_total
+                        amount = (
+                            balance_fee
+                            - assigned_total
+                        )
 
                     student_items.append(
                         StudentInstallmentItem(
@@ -435,7 +469,9 @@ class StudentCourseEnrollment(models.Model):
                     "Invalid payment plan type."
                 )
 
-            StudentInstallmentItem.objects.bulk_create(student_items)
+            StudentInstallmentItem.objects.bulk_create(
+                student_items
+            )
 
         # -------------------------------------------------
         # Create Advance Payment
@@ -459,6 +495,8 @@ class StudentCourseEnrollment(models.Model):
                     payment_type="advance",
                     payment_date=self.payment_date,
                 )
+
+
     def __str__(self):
         return f"{self.student.profile.user.email} - {self.course.title}"
 

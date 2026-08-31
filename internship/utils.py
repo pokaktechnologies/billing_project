@@ -6,6 +6,7 @@ from django.db.models import Count, OuterRef, Prefetch, Q, Subquery, Sum
 from django.db.models import IntegerField
 from django.db.models.functions import Cast, Right
 
+from accounts.services.receipt_service import StudentReceiptService
 from internship.models import TestQuestion
 
 def generate_batch_number(model, field_name: str, prefix: str, length: int, use_lock=False):
@@ -402,7 +403,7 @@ from accounts.models import (
     StaffProfile,
 )
 
-from .models import InternshipApplication, Student
+from .models import InternshipApplication, Student, StudentCourseEnrollment
 class StudentConversionService:
 
     @staticmethod
@@ -416,6 +417,22 @@ class StudentConversionService:
         start_date,
         councellor,
         status,
+
+        # ==========================================
+        # Enrollment
+        # ==========================================
+
+        batch=None,
+        payment_plan_type=None,
+        installment_plan=None,
+        custom_installments=None,
+        advance_amount=0,
+        payment_method=None,
+        transaction_id=None,
+        payment_date=None,
+        discount_amount=0,
+        discount_reason=None,
+        receipt_data=None,
     ):
 
         # ---------------------------------------
@@ -426,6 +443,17 @@ class StudentConversionService:
             raise ValueError(
                 "This application has already been converted."
             )
+
+        # ---------------------------------------
+        # Application must have a course
+        # ---------------------------------------
+
+        if not application.course:
+            raise ValueError(
+                "Cannot convert student because the application has no course."
+            )
+
+        course = application.course
 
         # ---------------------------------------
         # Email already exists
@@ -457,7 +485,6 @@ class StudentConversionService:
             first_name=application.first_name,
             last_name=application.last_name,
             gender=application.gender,
-            # is_active=True,
         )
 
         # ---------------------------------------
@@ -487,9 +514,109 @@ class StudentConversionService:
             councellor=application.councellor,
         )
 
-        # ---------------------------------------
+        # ==========================================
+        # CREATE ENROLLMENT
+        # ==========================================
+
+        enrollment_data = {
+            "student": student,
+            "course": course,
+            "batch": batch if batch else None,
+
+            "payment_plan_type": payment_plan_type,
+            "installment_plan": (
+                installment_plan
+                if installment_plan
+                else None
+            ),
+
+            "custom_installments": custom_installments,
+
+            "advance_amount": advance_amount,
+            "payment_method": payment_method,
+            "transaction_id": transaction_id,
+            "payment_date": payment_date,
+
+            "discount_amount": discount_amount,
+            "discount_reason": discount_reason,
+        }
+
+        # ------------------------------------------
+        # Validate batch belongs to application course
+        # ------------------------------------------
+
+        if batch and batch.course_id != course.id:
+            raise ValueError(
+                "Selected batch does not belong to the application course."
+            )
+
+        # ------------------------------------------
+        # Validate installment plan belongs to course
+        # ------------------------------------------
+
+        if (
+            payment_plan_type == "default_installment"
+            and not installment_plan
+        ):
+            raise ValueError(
+                "Installment plan is required."
+            )
+
+        if (
+            installment_plan
+            and installment_plan.course_id != course.id
+        ):
+            raise ValueError(
+                "Selected installment plan does not belong to the application course."
+            )
+
+        # ------------------------------------------
+        # Custom installment validation
+        # ------------------------------------------
+
+        if payment_plan_type == "custom_installment":
+
+            if not custom_installments:
+                raise ValueError(
+                    "Number of installments is required."
+                )
+
+            if custom_installments > 24:
+                raise ValueError(
+                    "Maximum 24 installments are allowed."
+                )
+
+        # ------------------------------------------
+        # Create Enrollment
+        # ------------------------------------------
+
+        enrollment = StudentCourseEnrollment.objects.create(
+            **enrollment_data,
+            application=application,
+        )
+
+        # ==========================================
+        # RECEIPTS
+        # ==========================================
+
+        if receipt_data:
+
+            StudentReceiptService.create_advance_receipt(
+                enrollment=enrollment,
+                receipt_data=receipt_data,
+                user=user,
+            )
+
+            StudentReceiptService.create_slot_receipt(
+                enrollment=enrollment,
+                application=application,
+                receipt_data=receipt_data,
+                user=user,
+            )
+
+        # ==========================================
         # Update Application
-        # ---------------------------------------
+        # ==========================================
 
         application.converted_students = student
         application.is_converted = True
@@ -501,9 +628,9 @@ class StudentConversionService:
             ]
         )
 
-        # ---------------------------------------
+        # ==========================================
         # Send Mail
-        # ---------------------------------------
+        # ==========================================
 
         try:
 

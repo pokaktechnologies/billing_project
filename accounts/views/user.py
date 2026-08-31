@@ -1,3 +1,5 @@
+import json
+
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from accounts.serializers.user import *
@@ -155,9 +157,10 @@ class CreateStaffWithPermissionsView(BaseAPIView):
                     address=request.data.get("address")
                 )
 
-                # Create job detail if provided
+                job_detail = None
+
                 if employee_id:
-                    JobDetail.objects.create(
+                    job_detail = JobDetail.objects.create(
                         staff=staff_profile,
                         employee_id=employee_id,
                         department=department,
@@ -168,6 +171,68 @@ class CreateStaffWithPermissionsView(BaseAPIView):
                         start_date=request.data.get("start_date"),
                         status=request.data.get("status", "active"),
                     )
+
+                    # =========================
+                    # ADDITIONAL EARNINGS
+                    # =========================
+
+                    earnings_data = request.data.get("earnings")
+
+                    if earnings_data:
+                        try:
+                            earnings_data = json.loads(earnings_data)
+                        except (json.JSONDecodeError, TypeError):
+                            raise ValueError("Invalid earnings JSON format.")
+
+                        if not isinstance(earnings_data, list):
+                            raise ValueError("Earnings must be a list.")
+
+                        for earning in earnings_data:
+
+                            earning_type = earning.get("earning_type")
+                            amount = earning.get("amount")
+
+                            if not earning_type or amount is None:
+                                raise ValueError(
+                                    "Each earning must contain earning_type and amount."
+                                )
+
+                            StaffEarning.objects.create(
+                                job_detail=job_detail,
+                                earning_type=earning_type,
+                                amount=amount,
+                            )
+
+                    # =========================
+                    # ADDITIONAL DEDUCTIONS
+                    # =========================
+
+                    deductions_data = request.data.get("deductions")
+
+                    if deductions_data:
+                        try:
+                            deductions_data = json.loads(deductions_data)
+                        except (json.JSONDecodeError, TypeError):
+                            raise ValueError("Invalid deductions JSON format.")
+
+                        if not isinstance(deductions_data, list):
+                            raise ValueError("Deductions must be a list.")
+
+                        for deduction in deductions_data:
+
+                            deduction_type = deduction.get("deduction_type")
+                            amount = deduction.get("amount")
+
+                            if not deduction_type or amount is None:
+                                raise ValueError(
+                                    "Each deduction must contain deduction_type and amount."
+                                )
+
+                            StaffDeduction.objects.create(
+                                job_detail=job_detail,
+                                deduction_type=deduction_type,
+                                amount=amount,
+                            )
 
                 # Handle multiple documents
                 i = 0
@@ -215,6 +280,7 @@ class CreateStaffWithPermissionsView(BaseAPIView):
         status = request.query_params.get('status')
         search = request.query_params.get('search')  # name/email/employee_id
         job_type = request.query_params.get('job_type')
+        period_id = request.query_params.get('period_id')
 
         # ===========================
         #  SINGLE STAFF
@@ -246,7 +312,11 @@ class CreateStaffWithPermissionsView(BaseAPIView):
         ).prefetch_related(
             'module_permissions'
         ).order_by('-id')
-
+        if period_id:
+            staff_users = staff_users.exclude(
+                staff_profile__payrolls__period_id=period_id
+            )
+            
         # Filter: department
         if department:
             staff_users = staff_users.filter(

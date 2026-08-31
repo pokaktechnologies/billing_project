@@ -1,4 +1,6 @@
 from rest_framework import serializers
+
+from ..serializers.payroll import PayrollDeductionSerializer, PayrollEarningSerializer
 from ..models import Payroll, AttendanceSummary
 from accounts.models import StaffProfile
 
@@ -31,14 +33,23 @@ class EmployeePayslipSerializer(serializers.ModelSerializer):
     staff_details = PayslipStaffSerializer(source='staff', read_only=True)
     attendance_summary = serializers.SerializerMethodField()
     period_month = serializers.CharField(source='period.month', read_only=True)
+    earnings = PayrollEarningSerializer(
+        many=True,
+        read_only=True
+    )
+
+    deductions = PayrollDeductionSerializer(
+        many=True,
+        read_only=True
+    )
 
     class Meta:
         model = Payroll
         fields = [
-            'id', 'staff_details', 'period_month', 'gross_salary',
+            'id', 'staff_details', 'period_month', 'gross_salary', 'total_working_hours',
             'working_days', 'paid_leave_used', 'unpaid_leave_days',
             'deduction', 'net_salary', 'status', 'created_at',
-            'attendance_summary'
+            'attendance_summary', 'earnings', 'deductions'
         ]
 
     def get_attendance_summary(self, obj):

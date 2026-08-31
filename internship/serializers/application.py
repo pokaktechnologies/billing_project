@@ -4,7 +4,7 @@ from django.core.mail import send_mail
 from django.db import transaction
 from rest_framework import serializers
 from django.conf import settings
-from ..models import InternshipApplication, InternshipDocument
+from ..models import PAYMENT_METHODS, Batch, InstallmentPlan, InternshipApplication, InternshipDocument, StudentCourseEnrollment
 
 
 class InternshipDocumentSerializer(serializers.ModelSerializer):
@@ -304,7 +304,8 @@ from rest_framework import serializers
 from ..models import Center, SalesPerson
 
 
-class  ConvertToStudentSerializer(serializers.Serializer):
+class ConvertToStudentSerializer(serializers.Serializer):
+
     center = serializers.PrimaryKeyRelatedField(
         queryset=Center.objects.all()
     )
@@ -339,15 +340,88 @@ class  ConvertToStudentSerializer(serializers.Serializer):
         write_only=True
     )
 
+
+    enrollment_batch = serializers.PrimaryKeyRelatedField(
+        queryset=Batch.objects.none(),
+        required=False,
+        allow_null=True,
+    )
+
+    enrollment_payment_plan_type = serializers.ChoiceField(
+        choices=StudentCourseEnrollment.PAYMENT_PLAN_TYPES,
+        required=True,
+    )
+
+    enrollment_installment_plan = serializers.PrimaryKeyRelatedField(
+        queryset=InstallmentPlan.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+
+    enrollment_custom_installments = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        min_value=1,
+    )
+
+    enrollment_advance_amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        required=False,
+        default=0,
+    )
+
+    enrollment_payment_method = serializers.ChoiceField(
+        choices=PAYMENT_METHODS,
+        required=False,
+        allow_null=True,
+    )
+
+    enrollment_transaction_id = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
+
+    enrollment_payment_date = serializers.DateField(
+        required=False,
+        allow_null=True,
+    )
+
+    enrollment_discount_amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        required=False,
+        default=0,
+    )
+
+    enrollment_discount_reason = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
+
+    enrollment_receipt = serializers.JSONField(
+        required=False,
+        allow_null=True,
+    )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        application = self.context.get("application")
+
+        if application and application.course:
+            self.fields["enrollment_batch"].queryset = Batch.objects.filter(
+                course=application.course
+            )
     def validate(self, attrs):
 
         if attrs["password"] != attrs["confirm_password"]:
-            raise serializers.ValidationError(
-                {
-                    "confirm_password":
+            raise serializers.ValidationError({
+                "confirm_password":
                     "Passwords do not match."
-                }
-            )
+            })
 
         return attrs
 

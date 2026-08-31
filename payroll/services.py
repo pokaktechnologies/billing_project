@@ -3,10 +3,10 @@ from datetime import date
 from django.utils import timezone
 from decimal import Decimal
 from attendance.models import DailyAttendance
-from .models import AttendanceSummary, Payroll, PayrollPeriod
+from .models import AttendanceSummary, Payroll, PayrollDeduction, PayrollEarning, PayrollPeriod
 from accounts.models import StaffProfile
 from django.db import transaction
-
+from django.db.models import Sum
 PAID_LEAVE_LIMIT = 1
 
 def generate_attendance_summary(staff, period):
@@ -49,49 +49,207 @@ def generate_attendance_summary(staff, period):
 
 def create_payroll_record(summary, monthly_salary):
     """
-    Calculates and saves a Payroll record based on the attendance summary.
+    Calculates and saves a Payroll record based on the attendance summary,
+    staff salary configuration, and additional earnings/deductions.
     """
-    # 4. Generate Payroll Records Rules:
-    # First 2 leave days = paid
-    # Remaining leave days = unpaid
-    # Absents = unpaid
-    # Half-day = 0.5 unpaid
-    
-    paid_leave_used = min(summary.leave_days, PAID_LEAVE_LIMIT)
-    unpaid_leave_count = Decimal(max(summary.leave_days - paid_leave_used, 0))
-    absent_unpaid_count = Decimal(summary.absent_days)
-    half_day_unpaid_count = Decimal(summary.half_days) * Decimal('0.5')
 
-    unpaid_days_total = unpaid_leave_count + absent_unpaid_count + half_day_unpaid_count
+    # -----------------------------------
+    # 1. Attendance / Leave calculation
+    # -----------------------------------
 
-    # Calculate:
-    # per_day_salary = monthly_salary / working_days
-    # deduction = unpaid_days * per_day_salary
-    # net_salary = monthly_salary - deduction
-    
+    paid_leave_used = min(
+        summary.leave_days,
+        PAID_LEAVE_LIMIT
+    )
+
+    unpaid_leave_count = Decimal(
+        max(summary.leave_days - paid_leave_used, 0)
+    )
+
+    absent_unpaid_count = Decimal(
+        summary.absent_days
+    )
+
+    half_day_unpaid_count = (
+        Decimal(summary.half_days) * Decimal("0.5")
+    )
+
+    unpaid_days_total = (
+        unpaid_leave_count
+        + absent_unpaid_count
+        + half_day_unpaid_count
+    )
+
+    # -----------------------------------
+    # 2. Basic salary
+    # -----------------------------------
+
     salary_decimal = Decimal(str(monthly_salary))
-    working_days_decimal = Decimal(summary.working_days)
-    
-    if working_days_decimal > 0:
-        per_day_salary = salary_decimal / working_days_decimal
-    else:
-        per_day_salary = Decimal('0')
 
-    deduction = (unpaid_days_total * per_day_salary).quantize(Decimal('0.01'))
-    net_salary = (salary_decimal - deduction).quantize(Decimal('0.01'))
+    # -----------------------------------
+    # 3. Total working hours
+    # -----------------------------------
+
+    year, month = map(int, summary.period.month.split("-"))
+
+    total_working_hours = DailyAttendance.objects.filter(
+        staff=summary.staff,
+        date__year=year,
+        date__month=month
+    ).aggregate(
+        total=Sum("total_working_hours")
+    )["total"] or Decimal("0.00")
+
+    total_working_hours = Decimal(
+        str(total_working_hours)
+    ).quantize(Decimal("0.01"))
+
+    # -----------------------------------
+    # 3. Attendance deduction
+    # -----------------------------------
+
+    working_days_decimal = Decimal(
+        summary.working_days
+    )
+
+    if working_days_decimal > 0:
+        per_day_salary = (
+            salary_decimal / working_days_decimal
+        )
+    else:
+        per_day_salary = Decimal("0")
+
+    attendance_deduction = (
+        unpaid_days_total * per_day_salary
+    ).quantize(Decimal("0.01"))
+
+    # -----------------------------------
+    # 4. Staff additional earnings
+    # -----------------------------------
+
+    staff_earnings = summary.staff.job_detail.earnings.filter(
+        is_active=True
+    )
+
+    additional_earnings_total = sum(
+        (
+            Decimal(str(earning.amount))
+            for earning in staff_earnings
+        ),
+        Decimal("0")
+    )
+
+    # -----------------------------------
+    # 5. Gross salary
+    # -----------------------------------
+
+    gross_salary = (
+        salary_decimal
+        + additional_earnings_total
+    ).quantize(Decimal("0.01"))
+
+    # -----------------------------------
+    # 6. Staff additional deductions
+    # -----------------------------------
+
+    staff_deductions = summary.staff.job_detail.deductions.filter(
+        is_active=True
+    )
+
+    additional_deductions_total = sum(
+        (
+            Decimal(str(deduction.amount))
+            for deduction in staff_deductions
+        ),
+        Decimal("0")
+    )
+
+    # -----------------------------------
+    # 7. Total deductions
+    # -----------------------------------
+
+    total_deduction = (
+        attendance_deduction
+        + additional_deductions_total
+    ).quantize(Decimal("0.01"))
+
+    # -----------------------------------
+    # 8. Net salary
+    # -----------------------------------
+
+    net_salary = (
+        gross_salary - total_deduction
+    ).quantize(Decimal("0.01"))
+
+    net_salary = max(
+        net_salary,
+        Decimal("0")
+    )
+
+    # -----------------------------------
+    # 9. Create Payroll
+    # -----------------------------------
 
     payroll = Payroll.objects.create(
         staff=summary.staff,
         period=summary.period,
         month=summary.month,
-        gross_salary=monthly_salary,
+        gross_salary=gross_salary,
         working_days=summary.working_days,
         paid_leave_used=paid_leave_used,
         unpaid_leave_days=unpaid_days_total,
-        deduction=deduction,
-        net_salary=max(net_salary, Decimal('0')),
-        status="Draft"
+        deduction=total_deduction,
+        net_salary=net_salary,
+        status="Draft",
+        total_working_hours=total_working_hours,
     )
+
+    # -----------------------------------
+    # 10. Create Basic Salary earning
+    # -----------------------------------
+
+    PayrollEarning.objects.create(
+        payroll=payroll,
+        earning_type="Basic Salary",
+        amount=salary_decimal
+    )
+
+    # -----------------------------------
+    # 11. Copy Staff Earnings
+    # -----------------------------------
+
+    PayrollEarning.objects.bulk_create([
+        PayrollEarning(
+            payroll=payroll,
+            earning_type=earning.earning_type,
+            amount=earning.amount
+        )
+        for earning in staff_earnings
+    ])
+
+    # -----------------------------------
+    # 12. Create Attendance Deduction
+    # -----------------------------------
+
+    if attendance_deduction > 0:
+        PayrollDeduction.objects.create(
+            payroll=payroll,
+            deduction_type="Attendance Deduction",
+            amount=attendance_deduction
+        )
+
+    # -----------------------------------
+    # 13. Copy Staff Deductions
+    # -----------------------------------
+
+    PayrollDeduction.objects.bulk_create([
+        PayrollDeduction(
+            payroll=payroll,
+            deduction_type=deduction.deduction_type,
+            amount=deduction.amount
+        )
+        for deduction in staff_deductions
+    ])
 
     return payroll
 

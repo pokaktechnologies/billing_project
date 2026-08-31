@@ -100,13 +100,48 @@ class StaffDocumentSerializer(serializers.ModelSerializer):
     class Meta:
         model = StaffDocument
         fields = ['id', 'doc_type', 'file']
+class StaffEarningSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StaffEarning
+        fields = [
+            "id",
+            "earning_type",
+            "amount",
+            "is_active",
+        ]
+        extra_kwargs = {
+            "id": {"required": False}
+        }
 
+
+class StaffDeductionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StaffDeduction
+        fields = [
+            "id",
+            "deduction_type",
+            "amount",
+            "is_active",
+        ]
+        extra_kwargs = {
+            "id": {"required": False}
+        }
 class JobDetailSerializer(serializers.ModelSerializer):
     department = serializers.CharField(source='department.name', default=None)
+    earnings = StaffEarningSerializer(
+        many=True,
+        read_only=True
+    )
+
+    deductions = StaffDeductionSerializer(
+        many=True,
+        read_only=True
+    )
 
     class Meta:
         model = JobDetail
-        fields = ['id','employee_id', 'department', 'job_type','signature_image', 'role', 'salary', 'start_date', 'status']
+        fields = ['id','employee_id', 'department', 'job_type','signature_image', 'role', 'salary', 'start_date', 'status', 'earnings',
+            'deductions',]
 
 class StaffProfileSerializer(serializers.ModelSerializer):
     job_detail = JobDetailSerializer(read_only=True)
@@ -170,6 +205,7 @@ class StaffProfileUpdateSerializer(serializers.ModelSerializer):
         return data
 
 
+
 class StaffUserUpdateSerializer(serializers.ModelSerializer):
     staff_profile = StaffProfileUpdateSerializer()
 
@@ -202,9 +238,127 @@ class StaffUserUpdateSerializer(serializers.ModelSerializer):
 
 
 class JobDetailUpdateSerializer(serializers.ModelSerializer):
+
+    earnings = StaffEarningSerializer(
+        many=True,
+        required=False
+    )
+
+    deductions = StaffDeductionSerializer(
+        many=True,
+        required=False
+    )
+
     class Meta:
         model = JobDetail
-        fields = ["employee_id", "department", "job_type", "signature_image", "role", "salary", "start_date", "status"]
+        fields = [
+            "employee_id",
+            "department",
+            "job_type",
+            "signature_image",
+            "role",
+            "salary",
+            "start_date",
+            "status",
+            "earnings",
+            "deductions",
+        ]
+
+    def update(self, instance, validated_data):
+
+        earnings_data = validated_data.pop("earnings", None)
+        deductions_data = validated_data.pop("deductions", None)
+
+        # --------------------------------
+        # Update normal JobDetail fields
+        # --------------------------------
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        instance.save()
+
+        # --------------------------------
+        # Update Earnings
+        # --------------------------------
+
+        if earnings_data is not None:
+
+            existing_earning_ids = []
+
+            for earning_data in earnings_data:
+
+                earning_id = earning_data.pop("id", None)
+
+                if earning_id:
+                    earning = StaffEarning.objects.get(
+                        id=earning_id,
+                        job_detail=instance
+                    )
+
+                    for attr, value in earning_data.items():
+                        setattr(earning, attr, value)
+
+                    earning.save()
+
+                    existing_earning_ids.append(earning.id)
+
+                else:
+                    earning = StaffEarning.objects.create(
+                        job_detail=instance,
+                        **earning_data
+                    )
+
+                    existing_earning_ids.append(earning.id)
+
+            # Delete removed earnings
+            StaffEarning.objects.filter(
+                job_detail=instance
+            ).exclude(
+                id__in=existing_earning_ids
+            ).delete()
+
+        # --------------------------------
+        # Update Deductions
+        # --------------------------------
+
+        if deductions_data is not None:
+
+            existing_deduction_ids = []
+
+            for deduction_data in deductions_data:
+
+                deduction_id = deduction_data.pop("id", None)
+
+                if deduction_id:
+                    deduction = StaffDeduction.objects.get(
+                        id=deduction_id,
+                        job_detail=instance
+                    )
+
+                    for attr, value in deduction_data.items():
+                        setattr(deduction, attr, value)
+
+                    deduction.save()
+
+                    existing_deduction_ids.append(deduction.id)
+
+                else:
+                    deduction = StaffDeduction.objects.create(
+                        job_detail=instance,
+                        **deduction_data
+                    )
+
+                    existing_deduction_ids.append(deduction.id)
+
+            # Delete removed deductions
+            StaffDeduction.objects.filter(
+                job_detail=instance
+            ).exclude(
+                id__in=existing_deduction_ids
+            ).delete()
+
+        return instance
 
 class StaffDocumentSerializer(serializers.ModelSerializer):
     class Meta:

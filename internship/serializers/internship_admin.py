@@ -764,18 +764,125 @@ class StudentSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
 
-        course = attrs.get("enrollment_course")
-        batch = attrs.get("enrollment_batch")
+        enrollment_course = attrs.get("enrollment_course")
+        enrollment_batch = attrs.get("enrollment_batch")
+        enrollment_installment_plan = attrs.get("enrollment_installment_plan")
+        payment_plan_type = attrs.get("enrollment_payment_plan_type")
 
-        if not course:
+        # -------------------------------------------------
+        # GET EXISTING ENROLLMENT DURING UPDATE
+        # -------------------------------------------------
+
+        existing_enrollment = None
+
+        if self.instance:
+            existing_enrollment = (
+                self.instance.enrollments
+                .select_related("course", "batch", "installment_plan")
+                .first()
+            )
+
+        # -------------------------------------------------
+        # COURSE
+        # -------------------------------------------------
+
+        if not enrollment_course:
+
+            # During UPDATE, course can be omitted.
+            # Use the student's existing enrollment course.
+            if self.instance and existing_enrollment:
+                enrollment_course = existing_enrollment.course
+
+            else:
+                # During CREATE, course is required.
+                raise serializers.ValidationError({
+                    "enrollment_course": "Course is required."
+                })
+
+        # -------------------------------------------------
+        # BATCH MUST BELONG TO COURSE
+        # -------------------------------------------------
+
+        if enrollment_batch:
+
+            if enrollment_batch.course_id != enrollment_course.id:
+                raise serializers.ValidationError({
+                    "enrollment_batch":
+                        "Selected batch does not belong to the selected course."
+                })
+
+        # -------------------------------------------------
+        # INSTALLMENT PLAN
+        # -------------------------------------------------
+
+        if payment_plan_type == "default_installment":
+
+            if not enrollment_installment_plan:
+
+                if self.instance and existing_enrollment:
+                    enrollment_installment_plan = (
+                        existing_enrollment.installment_plan
+                    )
+
+                else:
+                    raise serializers.ValidationError({
+                        "enrollment_installment_plan":
+                            "Installment plan is required."
+                    })
+
+            if enrollment_installment_plan:
+
+                if enrollment_installment_plan.course_id != enrollment_course.id:
+                    raise serializers.ValidationError({
+                        "enrollment_installment_plan":
+                            "Selected installment plan does not belong "
+                            "to the selected course."
+                    })
+
+        # -------------------------------------------------
+        # CUSTOM INSTALLMENT
+        # -------------------------------------------------
+
+        elif payment_plan_type == "custom_installment":
+
+            custom_installments = attrs.get(
+                "enrollment_custom_installments"
+            )
+
+            if custom_installments is None:
+
+                if self.instance and existing_enrollment:
+                    custom_installments = (
+                        existing_enrollment.custom_installments
+                    )
+
+                else:
+                    raise serializers.ValidationError({
+                        "enrollment_custom_installments":
+                            "Number of installments is required."
+                    })
+
+            if custom_installments > 24:
+                raise serializers.ValidationError({
+                    "enrollment_custom_installments":
+                        "Maximum 24 installments are allowed."
+                })
+
+        elif payment_plan_type is not None:
+
             raise serializers.ValidationError({
-                "enrollment_course": "Course is required."
+                "enrollment_payment_plan_type":
+                    "Invalid payment plan type."
             })
 
-        if batch and batch.course_id != course.id:
+        # -------------------------------------------------
+        # RECEIPT CANNOT BE EDITED
+        # -------------------------------------------------
+
+        if self.instance and "enrollment_receipt" in attrs:
             raise serializers.ValidationError({
-                "enrollment_batch":
-                    "Selected batch does not belong to the selected course."
+                "enrollment_receipt":
+                    "Receipt cannot be edited."
             })
 
         return attrs
@@ -856,36 +963,148 @@ class StudentSerializer(serializers.ModelSerializer):
             )
 
     def update(self, instance, validated_data):
+
         with transaction.atomic():
 
-            modules = validated_data.pop("modules", None)
-            profile_data = validated_data.pop("profile", None)
+            # =================================================
+            # 1. REMOVE ENROLLMENT FIELDS FROM STUDENT DATA
+            # =================================================
 
-            profile = instance.profile
-            user = profile.user  # FIX: always define
+            enrollment_batch = validated_data.pop(
+                "enrollment_batch",
+                None
+            )
 
-            #  Update Student fields
+            enrollment_course = validated_data.pop(
+                "enrollment_course",
+                None
+            )
+
+            enrollment_payment_plan_type = validated_data.pop(
+                "enrollment_payment_plan_type",
+                None
+            )
+
+            enrollment_installment_plan = validated_data.pop(
+                "enrollment_installment_plan",
+                None
+            )
+
+            enrollment_custom_installments = validated_data.pop(
+                "enrollment_custom_installments",
+                None
+            )
+
+            enrollment_advance_amount = validated_data.pop(
+                "enrollment_advance_amount",
+                None
+            )
+
+            enrollment_payment_method = validated_data.pop(
+                "enrollment_payment_method",
+                None
+            )
+
+            enrollment_transaction_id = validated_data.pop(
+                "enrollment_transaction_id",
+                None
+            )
+
+            enrollment_payment_date = validated_data.pop(
+                "enrollment_payment_date",
+                None
+            )
+
+            enrollment_discount_amount = validated_data.pop(
+                "enrollment_discount_amount",
+                None
+            )
+
+            enrollment_discount_reason = validated_data.pop(
+                "enrollment_discount_reason",
+                None
+            )
+
+            # Receipt is NEVER editable
+            validated_data.pop(
+                "enrollment_receipt",
+                None
+            )
+
+            # =================================================
+            # 2. MODULES
+            # =================================================
+
+            modules = validated_data.pop(
+                "modules",
+                None
+            )
+
+            # =================================================
+            # 3. PROFILE DATA
+            # =================================================
+
+            profile_data = validated_data.pop(
+                "profile",
+                None
+            )
+
+            # =================================================
+            # 4. UPDATE STUDENT FIELDS
+            # =================================================
+
             for attr, value in validated_data.items():
                 setattr(instance, attr, value)
+
             instance.save()
 
-            #  Update Profile + User
-            if profile_data:
-                user_data = profile_data.pop("user", None)
+            # =================================================
+            # 5. UPDATE PROFILE + USER
+            # =================================================
 
-                # Update StaffProfile
+            profile = instance.profile
+            user = profile.user
+
+            if profile_data:
+
+                user_data = profile_data.pop(
+                    "user",
+                    None
+                )
+
+                # -----------------------------
+                # Staff Profile
+                # -----------------------------
+
                 for attr, value in profile_data.items():
                     setattr(profile, attr, value)
+
                 profile.save()
 
-                if user_data:
-                    email = user_data.get("email")
-                    password = user_data.pop("password", None)
+                # -----------------------------
+                # Custom User
+                # -----------------------------
 
-                    # Email uniqueness check
-                    if email and CustomUser.objects.filter(email=email).exclude(id=user.id).exists():
+                if user_data:
+
+                    email = user_data.get("email")
+
+                    password = user_data.pop(
+                        "password",
+                        None
+                    )
+
+                    if (
+                        email
+                        and CustomUser.objects.filter(
+                            email=email
+                        ).exclude(
+                            id=user.id
+                        ).exists()
+                    ):
                         raise serializers.ValidationError({
-                            "email": "Email already exists"
+                            "email":
+                                "Email already exists."
                         })
 
                     for attr, value in user_data.items():
@@ -896,14 +1115,198 @@ class StudentSerializer(serializers.ModelSerializer):
 
                     user.save()
 
-            #  Update module permissions
+            # =================================================
+            # 6. UPDATE MODULE PERMISSIONS
+            # =================================================
+
             if modules is not None:
-                ModulePermission.objects.filter(user=user).delete()
+
+                ModulePermission.objects.filter(
+                    user=user
+                ).delete()
 
                 ModulePermission.objects.bulk_create([
-                    ModulePermission(user=user, module_name=module)
+                    ModulePermission(
+                        user=user,
+                        module_name=module
+                    )
                     for module in modules
                 ])
+
+            # =================================================
+            # 7. UPDATE ENROLLMENT
+            # =================================================
+
+            enrollment_fields_sent = any([
+                enrollment_batch is not None,
+                enrollment_course is not None,
+                enrollment_payment_plan_type is not None,
+                enrollment_installment_plan is not None,
+                enrollment_custom_installments is not None,
+                enrollment_advance_amount is not None,
+                enrollment_payment_method is not None,
+                enrollment_transaction_id is not None,
+                enrollment_payment_date is not None,
+                enrollment_discount_amount is not None,
+                enrollment_discount_reason is not None,
+            ])
+
+            if enrollment_fields_sent:
+
+                enrollment = (
+                    instance.enrollments
+                    .select_related(
+                        "course",
+                        "batch",
+                        "installment_plan"
+                    )
+                    .first()
+                )
+
+                if not enrollment:
+                    raise serializers.ValidationError({
+                        "enrollment":
+                            "This student does not have an enrollment."
+                    })
+
+                # ---------------------------------------------
+                # Course
+                # ---------------------------------------------
+
+                if enrollment_course is not None:
+
+                    enrollment.course = enrollment_course
+
+                # ---------------------------------------------
+                # Batch
+                # ---------------------------------------------
+
+                if enrollment_batch is not None:
+
+                    if enrollment_batch.course_id != enrollment.course_id:
+                        raise serializers.ValidationError({
+                            "enrollment_batch":
+                                "Selected batch does not belong "
+                                "to the selected course."
+                        })
+
+                    enrollment.batch = enrollment_batch
+
+                # ---------------------------------------------
+                # Payment Plan Type
+                # ---------------------------------------------
+
+                if enrollment_payment_plan_type is not None:
+
+                    enrollment.payment_plan_type = (
+                        enrollment_payment_plan_type
+                    )
+
+                # ---------------------------------------------
+                # Installment Plan
+                # ---------------------------------------------
+
+                if enrollment_installment_plan is not None:
+
+                    if (
+                        enrollment_installment_plan.course_id
+                        != enrollment.course_id
+                    ):
+                        raise serializers.ValidationError({
+                            "enrollment_installment_plan":
+                                "Selected installment plan does not "
+                                "belong to the selected course."
+                        })
+
+                    enrollment.installment_plan = (
+                        enrollment_installment_plan
+                    )
+
+                # ---------------------------------------------
+                # Custom Installments
+                # ---------------------------------------------
+
+                if enrollment_custom_installments is not None:
+
+                    if enrollment_custom_installments > 24:
+                        raise serializers.ValidationError({
+                            "enrollment_custom_installments":
+                                "Maximum 24 installments are allowed."
+                        })
+
+                    enrollment.custom_installments = (
+                        enrollment_custom_installments
+                    )
+
+                # ---------------------------------------------
+                # Advance Amount
+                # ---------------------------------------------
+
+                if enrollment_advance_amount is not None:
+
+                    enrollment.advance_amount = (
+                        enrollment_advance_amount
+                    )
+
+                # ---------------------------------------------
+                # Payment Method
+                # ---------------------------------------------
+
+                if enrollment_payment_method is not None:
+
+                    enrollment.payment_method = (
+                        enrollment_payment_method
+                    )
+
+                # ---------------------------------------------
+                # Transaction ID
+                # ---------------------------------------------
+
+                if enrollment_transaction_id is not None:
+
+                    enrollment.transaction_id = (
+                        enrollment_transaction_id
+                    )
+
+                # ---------------------------------------------
+                # Payment Date
+                # ---------------------------------------------
+
+                if enrollment_payment_date is not None:
+
+                    enrollment.payment_date = (
+                        enrollment_payment_date
+                    )
+
+                # ---------------------------------------------
+                # Discount Amount
+                # ---------------------------------------------
+
+                if enrollment_discount_amount is not None:
+
+                    enrollment.discount_amount = (
+                        enrollment_discount_amount
+                    )
+
+                # ---------------------------------------------
+                # Discount Reason
+                # ---------------------------------------------
+
+                if enrollment_discount_reason is not None:
+
+                    enrollment.discount_reason = (
+                        enrollment_discount_reason
+                    )
+
+                # ---------------------------------------------
+                # SAVE ENROLLMENT
+                # ---------------------------------------------
+
+                enrollment.save()
+
+            # =================================================
+            # 8. RETURN UPDATED STUDENT
+            # =================================================
 
             return instance
 

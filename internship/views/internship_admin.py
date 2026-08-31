@@ -650,22 +650,22 @@ class CoursePaymentListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = CoursePaymentSerializer
     permission_classes = [IsAuthenticated]
 
-def perform_create(self, serializer):
+    def perform_create(self, serializer):
 
-    with transaction.atomic():
+        with transaction.atomic():
 
-        receipt_data = serializer.validated_data.pop(
-            "receipt",
-            None
-        )
+            receipt_data = serializer.validated_data.pop(
+                "receipt",
+                None
+            )
 
-        payment = serializer.save()
+            payment = serializer.save()
 
-        StudentReceiptService.create_installment_receipt(
-            payment=payment,
-            receipt_data=receipt_data,
-            user=self.request.user,
-        )
+            StudentReceiptService.create_installment_receipt(
+                payment=payment,
+                receipt_data=receipt_data,
+                user=self.request.user,
+            )
 
 # aadyam student nn aayirunnu one student one course validastion maattiyappo ee api erro vaann appo student course enrollment nn edduth data 
 class StudentPaymentListAPIView(generics.ListAPIView):

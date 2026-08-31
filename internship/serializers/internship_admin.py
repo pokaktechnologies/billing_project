@@ -886,6 +886,87 @@ class StudentSerializer(serializers.ModelSerializer):
             })
 
         return attrs
+    def to_representation(self, instance):
+
+        data = super().to_representation(instance)
+
+        enrollment = (
+            instance.enrollments
+            .select_related(
+                "course",
+                "batch",
+                "installment_plan"
+            )
+            .first()
+        )
+
+        if enrollment:
+
+            data["enrollment_course"] = (
+                enrollment.course.id
+                if enrollment.course
+                else None
+            )
+
+            data["enrollment_batch"] = (
+                enrollment.batch.id
+                if enrollment.batch
+                else None
+            )
+
+            data["enrollment_payment_plan_type"] = (
+                enrollment.payment_plan_type
+            )
+
+            data["enrollment_installment_plan"] = (
+                enrollment.installment_plan.id
+                if enrollment.installment_plan
+                else None
+            )
+
+            data["enrollment_custom_installments"] = (
+                enrollment.custom_installments
+            )
+
+            data["enrollment_advance_amount"] = (
+                enrollment.advance_amount
+            )
+
+            data["enrollment_payment_method"] = (
+                enrollment.payment_method
+            )
+
+            data["enrollment_transaction_id"] = (
+                enrollment.transaction_id
+            )
+
+            data["enrollment_payment_date"] = (
+                enrollment.payment_date
+            )
+
+            data["enrollment_discount_amount"] = (
+                enrollment.discount_amount
+            )
+
+            data["enrollment_discount_reason"] = (
+                enrollment.discount_reason
+            )
+
+        else:
+
+            data["enrollment_course"] = None
+            data["enrollment_batch"] = None
+            data["enrollment_payment_plan_type"] = None
+            data["enrollment_installment_plan"] = None
+            data["enrollment_custom_installments"] = None
+            data["enrollment_advance_amount"] = None
+            data["enrollment_payment_method"] = None
+            data["enrollment_transaction_id"] = None
+            data["enrollment_payment_date"] = None
+            data["enrollment_discount_amount"] = None
+            data["enrollment_discount_reason"] = None
+
+        return data
     def create(self, validated_data):
         with transaction.atomic():
             modules = validated_data.pop("modules", [])

@@ -1215,7 +1215,7 @@ class StudentSerializer(serializers.ModelSerializer):
                 ])
 
             # =================================================
-            # 7. UPDATE ENROLLMENT
+            # 7. UPDATE / CREATE ENROLLMENT
             # =================================================
 
             enrollment_fields_sent = any([
@@ -1244,154 +1244,284 @@ class StudentSerializer(serializers.ModelSerializer):
                     .first()
                 )
 
+                # =================================================
+                # OLD STUDENT WITHOUT ENROLLMENT
+                # =================================================
+
                 if not enrollment:
-                    raise serializers.ValidationError({
-                        "enrollment":
-                            "This student does not have an enrollment."
-                    })
 
-                # ---------------------------------------------
-                # Course
-                # ---------------------------------------------
+                    # Course is mandatory when creating
+                    # the first enrollment.
+                    if enrollment_course is None:
+                        raise serializers.ValidationError({
+                            "enrollment_course":
+                                "Course is required to create an enrollment."
+                        })
 
-                if enrollment_course is not None:
+                    # Payment plan is mandatory
+                    if enrollment_payment_plan_type is None:
+                        raise serializers.ValidationError({
+                            "enrollment_payment_plan_type":
+                                "Payment plan type is required."
+                        })
 
-                    # If course is changed, the existing batch may
-                    # belong to the old course.
+                    # ---------------------------------------------
+                    # Create Enrollment
+                    # ---------------------------------------------
+
+                    enrollment = StudentCourseEnrollment(
+                        student=instance,
+                        course=enrollment_course,
+                        batch=enrollment_batch,
+                        payment_plan_type=enrollment_payment_plan_type,
+                        installment_plan=enrollment_installment_plan,
+                        custom_installments=enrollment_custom_installments,
+                        advance_amount=(
+                            enrollment_advance_amount
+                            if enrollment_advance_amount is not None
+                            else 0
+                        ),
+                        payment_method=enrollment_payment_method,
+                        transaction_id=enrollment_transaction_id,
+                        payment_date=enrollment_payment_date,
+                        discount_amount=(
+                            enrollment_discount_amount
+                            if enrollment_discount_amount is not None
+                            else 0
+                        ),
+                        discount_reason=enrollment_discount_reason,
+                    )
+
+                    # ---------------------------------------------
+                    # Batch must belong to course
+                    # ---------------------------------------------
+
                     if (
-                        enrollment.batch
-                        and enrollment.batch.course_id != enrollment_course.id
+                        enrollment_batch
+                        and enrollment_batch.course_id
+                        != enrollment_course.id
                     ):
-                        enrollment.batch = None
-
-                    enrollment.course = enrollment_course
-
-                # ---------------------------------------------
-                # Batch
-                # ---------------------------------------------
-
-                if enrollment_batch is not None:
-
-                    if enrollment_batch.course_id != enrollment.course_id:
                         raise serializers.ValidationError({
                             "enrollment_batch":
                                 "Selected batch does not belong "
                                 "to the selected course."
                         })
 
-                    enrollment.batch = enrollment_batch
+                    # ---------------------------------------------
+                    # Installment Plan Validation
+                    # ---------------------------------------------
 
-                # ---------------------------------------------
-                # Payment Plan Type
-                # ---------------------------------------------
+                    if enrollment_payment_plan_type == "default_installment":
 
-                if enrollment_payment_plan_type is not None:
+                        if not enrollment_installment_plan:
+                            raise serializers.ValidationError({
+                                "enrollment_installment_plan":
+                                    "Installment plan is required."
+                            })
 
-                    enrollment.payment_plan_type = (
-                        enrollment_payment_plan_type
-                    )
+                        if (
+                            enrollment_installment_plan.course_id
+                            != enrollment_course.id
+                        ):
+                            raise serializers.ValidationError({
+                                "enrollment_installment_plan":
+                                    "Selected installment plan does not "
+                                    "belong to the selected course."
+                            })
 
-                # ---------------------------------------------
-                # Installment Plan
-                # ---------------------------------------------
+                    elif enrollment_payment_plan_type == "custom_installment":
 
-                if enrollment_installment_plan is not None:
+                        if not enrollment_custom_installments:
+                            raise serializers.ValidationError({
+                                "enrollment_custom_installments":
+                                    "Number of installments is required."
+                            })
 
-                    if (
-                        enrollment_installment_plan.course_id
-                        != enrollment.course_id
-                    ):
+                        if enrollment_custom_installments > 24:
+                            raise serializers.ValidationError({
+                                "enrollment_custom_installments":
+                                    "Maximum 24 installments are allowed."
+                            })
+
+                    else:
                         raise serializers.ValidationError({
-                            "enrollment_installment_plan":
-                                "Selected installment plan does not "
-                                "belong to the selected course."
+                            "enrollment_payment_plan_type":
+                                "Invalid payment plan type."
                         })
 
-                    enrollment.installment_plan = (
-                        enrollment_installment_plan
+                    # ---------------------------------------------
+                    # Find Application
+                    # ---------------------------------------------
+
+                    application = (
+                        InternshipApplication.objects
+                        .filter(
+                            converted_students=instance
+                        )
+                        .order_by("-created_at")
+                        .first()
                     )
 
-                # ---------------------------------------------
-                # Custom Installments
-                # ---------------------------------------------
+                    enrollment.application = application
 
-                if enrollment_custom_installments is not None:
+                    # ---------------------------------------------
+                    # SAVE NEW ENROLLMENT
+                    # ---------------------------------------------
 
-                    if enrollment_custom_installments > 24:
-                        raise serializers.ValidationError({
-                            "enrollment_custom_installments":
-                                "Maximum 24 installments are allowed."
-                        })
+                    enrollment.save()
 
-                    enrollment.custom_installments = (
-                        enrollment_custom_installments
-                    )
+                # =================================================
+                # EXISTING ENROLLMENT
+                # =================================================
 
-                # ---------------------------------------------
-                # Advance Amount
-                # ---------------------------------------------
+                else:
 
-                if enrollment_advance_amount is not None:
+                    # ---------------------------------------------
+                    # Course
+                    # ---------------------------------------------
 
-                    enrollment.advance_amount = (
-                        enrollment_advance_amount
-                    )
+                    if enrollment_course is not None:
 
-                # ---------------------------------------------
-                # Payment Method
-                # ---------------------------------------------
+                        # If course changes, old batch may no
+                        # longer belong to the new course.
+                        if (
+                            enrollment.batch
+                            and enrollment.batch.course_id
+                            != enrollment_course.id
+                        ):
+                            enrollment.batch = None
 
-                if enrollment_payment_method is not None:
+                        enrollment.course = enrollment_course
 
-                    enrollment.payment_method = (
-                        enrollment_payment_method
-                    )
+                    # ---------------------------------------------
+                    # Batch
+                    # ---------------------------------------------
 
-                # ---------------------------------------------
-                # Transaction ID
-                # ---------------------------------------------
+                    if enrollment_batch is not None:
 
-                if enrollment_transaction_id is not None:
+                        if (
+                            enrollment_batch.course_id
+                            != enrollment.course_id
+                        ):
+                            raise serializers.ValidationError({
+                                "enrollment_batch":
+                                    "Selected batch does not belong "
+                                    "to the selected course."
+                            })
 
-                    enrollment.transaction_id = (
-                        enrollment_transaction_id
-                    )
+                        enrollment.batch = enrollment_batch
 
-                # ---------------------------------------------
-                # Payment Date
-                # ---------------------------------------------
+                    # ---------------------------------------------
+                    # Payment Plan Type
+                    # ---------------------------------------------
 
-                if enrollment_payment_date is not None:
+                    if enrollment_payment_plan_type is not None:
 
-                    enrollment.payment_date = (
-                        enrollment_payment_date
-                    )
+                        enrollment.payment_plan_type = (
+                            enrollment_payment_plan_type
+                        )
 
-                # ---------------------------------------------
-                # Discount Amount
-                # ---------------------------------------------
+                    # ---------------------------------------------
+                    # Installment Plan
+                    # ---------------------------------------------
 
-                if enrollment_discount_amount is not None:
+                    if enrollment_installment_plan is not None:
 
-                    enrollment.discount_amount = (
-                        enrollment_discount_amount
-                    )
+                        if (
+                            enrollment_installment_plan.course_id
+                            != enrollment.course_id
+                        ):
+                            raise serializers.ValidationError({
+                                "enrollment_installment_plan":
+                                    "Selected installment plan does not "
+                                    "belong to the selected course."
+                            })
 
-                # ---------------------------------------------
-                # Discount Reason
-                # ---------------------------------------------
+                        enrollment.installment_plan = (
+                            enrollment_installment_plan
+                        )
 
-                if enrollment_discount_reason is not None:
+                    # ---------------------------------------------
+                    # Custom Installments
+                    # ---------------------------------------------
 
-                    enrollment.discount_reason = (
-                        enrollment_discount_reason
-                    )
+                    if enrollment_custom_installments is not None:
 
-                # ---------------------------------------------
-                # SAVE ENROLLMENT
-                # ---------------------------------------------
+                        if enrollment_custom_installments > 24:
+                            raise serializers.ValidationError({
+                                "enrollment_custom_installments":
+                                    "Maximum 24 installments are allowed."
+                            })
 
-                enrollment.save()
+                        enrollment.custom_installments = (
+                            enrollment_custom_installments
+                        )
+
+                    # ---------------------------------------------
+                    # Advance Amount
+                    # ---------------------------------------------
+
+                    if enrollment_advance_amount is not None:
+
+                        enrollment.advance_amount = (
+                            enrollment_advance_amount
+                        )
+
+                    # ---------------------------------------------
+                    # Payment Method
+                    # ---------------------------------------------
+
+                    if enrollment_payment_method is not None:
+
+                        enrollment.payment_method = (
+                            enrollment_payment_method
+                        )
+
+                    # ---------------------------------------------
+                    # Transaction ID
+                    # ---------------------------------------------
+
+                    if enrollment_transaction_id is not None:
+
+                        enrollment.transaction_id = (
+                            enrollment_transaction_id
+                        )
+
+                    # ---------------------------------------------
+                    # Payment Date
+                    # ---------------------------------------------
+
+                    if enrollment_payment_date is not None:
+
+                        enrollment.payment_date = (
+                            enrollment_payment_date
+                        )
+
+                    # ---------------------------------------------
+                    # Discount Amount
+                    # ---------------------------------------------
+
+                    if enrollment_discount_amount is not None:
+
+                        enrollment.discount_amount = (
+                            enrollment_discount_amount
+                        )
+
+                    # ---------------------------------------------
+                    # Discount Reason
+                    # ---------------------------------------------
+
+                    if enrollment_discount_reason is not None:
+
+                        enrollment.discount_reason = (
+                            enrollment_discount_reason
+                        )
+
+                    # ---------------------------------------------
+                    # SAVE EXISTING ENROLLMENT
+                    # ---------------------------------------------
+
+                    enrollment.save()
 
             # =================================================
             # 8. RETURN UPDATED STUDENT

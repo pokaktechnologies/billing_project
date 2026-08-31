@@ -633,7 +633,11 @@ class CenterRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
 
 
+from django.db import transaction
+
+
 class CoursePaymentListCreateAPIView(generics.ListCreateAPIView):
+
     queryset = CoursePayment.objects.select_related(
         "student",
         "student__profile",
@@ -642,12 +646,18 @@ class CoursePaymentListCreateAPIView(generics.ListCreateAPIView):
         "installments__enrollment",
         "installments__enrollment__course"
     )
+
     serializer_class = CoursePaymentSerializer
     permission_classes = [IsAuthenticated]
 
-    def perform_create(self, serializer):
+def perform_create(self, serializer):
 
-        receipt_data = serializer.validated_data.pop("receipt", None)
+    with transaction.atomic():
+
+        receipt_data = serializer.validated_data.pop(
+            "receipt",
+            None
+        )
 
         payment = serializer.save()
 

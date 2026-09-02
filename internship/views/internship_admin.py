@@ -62,7 +62,7 @@ class CourseListCreateAPIView(generics.ListCreateAPIView):
         "installment_plans__items",
     ).annotate(
         students_count=Count("enrollments__student", distinct=True)
-    ).order_by('-created_at')
+    ).order_by('title')
 
     serializer_class = CourseSerializer
     permission_classes = [IsAuthenticated]

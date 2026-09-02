@@ -1,5 +1,8 @@
+from datetime import datetime
+
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import status, filters, generics
 from rest_framework.exceptions import NotFound
 from rest_framework.pagination import PageNumberPagination
@@ -56,7 +59,6 @@ class InternshipApplicationAPIView(APIView):
         if form_type:
             queryset = queryset.filter(form_type=form_type)
 
-            
         search = params.get("search")
         if search:
             queryset = queryset.filter(
@@ -112,6 +114,36 @@ class InternshipApplicationAPIView(APIView):
         created_at_before = params.get("created_at_before")
         if created_at_before:
             queryset = queryset.filter(created_at__date__lte=created_at_before)
+
+        # Month-wise filter
+        month = params.get("month")
+        year = params.get("year")
+
+        if month:
+            month = int(month)
+
+            if year:
+                year = int(year)
+            else:
+                year = timezone.now().year
+
+            start_date = timezone.make_aware(
+                datetime(year, month, 1)
+            )
+
+            if month == 12:
+                end_date = timezone.make_aware(
+                    datetime(year + 1, 1, 1)
+                )
+            else:
+                end_date = timezone.make_aware(
+                    datetime(year, month + 1, 1)
+                )
+
+            queryset = queryset.filter(
+                created_at__gte=start_date,
+                created_at__lt=end_date,
+            )
 
         return queryset
 

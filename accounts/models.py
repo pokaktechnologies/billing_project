@@ -792,7 +792,12 @@ class ReceiptModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True,null=True,blank=True)
 
     def __str__(self):
-        return f"Receipt {self.receipt_number} - {self.client}"
+        if self.receipt_type == 'intern':
+            student_name = self.intern.user.get_full_name() if self.intern and self.intern.user else "Unknown Student"
+            return f"Receipt {self.receipt_number} - Student: {student_name}"
+
+        client_name = self.client.name if self.client else "Unknown Client"
+        return f"Receipt {self.receipt_number} - Client: {client_name}"
 
 
 class SalesReturnModel(models.Model):

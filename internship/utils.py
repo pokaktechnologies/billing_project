@@ -518,28 +518,28 @@ class StudentConversionService:
         # CREATE ENROLLMENT
         # ==========================================
 
-        enrollment_data = {
-            "student": student,
-            "course": course,
-            "batch": batch if batch else None,
+        # enrollment_data = {
+        #     "student": student,
+        #     "course": course,
+        #     "batch": batch if batch else None,
 
-            "payment_plan_type": payment_plan_type,
-            "installment_plan": (
-                installment_plan
-                if installment_plan
-                else None
-            ),
+        #     "payment_plan_type": payment_plan_type,
+        #     "installment_plan": (
+        #         installment_plan
+        #         if installment_plan
+        #         else None
+        #     ),
 
-            "custom_installments": custom_installments,
+        #     "custom_installments": custom_installments,
 
-            "advance_amount": advance_amount,
-            "payment_method": payment_method,
-            "transaction_id": transaction_id,
-            "payment_date": payment_date,
+        #     "advance_amount": advance_amount,
+        #     "payment_method": payment_method,
+        #     "transaction_id": transaction_id,
+        #     "payment_date": payment_date,
 
-            "discount_amount": discount_amount,
-            "discount_reason": discount_reason,
-        }
+        #     "discount_amount": discount_amount,
+        #     "discount_reason": discount_reason,
+        # }
 
         # ------------------------------------------
         # Validate batch belongs to application course
@@ -590,10 +590,10 @@ class StudentConversionService:
         # Create Enrollment
         # ------------------------------------------
 
-        enrollment = StudentCourseEnrollment.objects.create(
-            **enrollment_data,
-            application=application,
-        )
+        # enrollment = StudentCourseEnrollment.objects.create(
+        #     **enrollment_data,
+        #     application=application,
+        # )
 
         # ==========================================
         # RECEIPTS

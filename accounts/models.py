@@ -796,7 +796,7 @@ class ReceiptModel(models.Model):
             student_name = self.intern.user.get_full_name() if self.intern and self.intern.user else "Unknown Student"
             return f"Receipt {self.receipt_number} - Student: {student_name}"
 
-        client_name = self.client.name if self.client else "Unknown Client"
+        client_name = self.client.get_full_name() if self.client else "Unknown Client"
         return f"Receipt {self.receipt_number} - Client: {client_name}"
 
 
@@ -1068,6 +1068,11 @@ class Customer(models.Model):
     gst_number = models.CharField(max_length=15, blank=True, null=True)
     phone = models.CharField(max_length=15, blank=True, null=True)
     mobile = models.CharField(max_length=15)
+
+    def get_full_name(self):
+        if self.customer_type == 'individual':
+            return f"{self.first_name} {self.last_name}".strip()
+        return self.company_name
 
     def __str__(self):
         if self.customer_type == 'individual':

@@ -296,7 +296,7 @@ class JournalEntry(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"Entry #{self.id} on {self.date.date()} – {self.type or 'No Number'}"
+        return f"Entry #{self.id} # number = {self.type_number} on {self.date.date()} – {self.type or 'No Number'}"
 
 
 # ----------------------

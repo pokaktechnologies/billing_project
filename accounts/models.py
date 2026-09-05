@@ -1340,3 +1340,51 @@ class ModulePermission(models.Model):
 
     def __str__(self):
         return f"{self.user.email} - {self.module_name}"
+
+
+# staff registration from 
+
+class EmployeeRegistration(models.Model):
+
+    GENDER_CHOICES = (
+        ('male', 'Male'),
+        ('female', 'Female'),
+        ('other', 'Other'),
+    )
+
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('reviewed', 'Reviewed'),
+        ('converted', 'Converted'),
+        ('rejected', 'Rejected'),
+    )
+
+    # Personal Details
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
+    email = models.EmailField()
+    phone_number = models.CharField(max_length=20)
+    qualification = models.CharField(max_length=255, blank=True, null=True)
+    gender = models.CharField(max_length=20, choices=GENDER_CHOICES, blank=True, null=True)
+    emergency_contact = models.CharField(max_length=20, blank=True, null=True)
+    country = models.CharField(max_length=100, blank=True, null=True)
+    date_of_birth = models.DateField(blank=True, null=True)
+    address = models.TextField(blank=True, null=True)
+    profile_photo = models.ImageField(upload_to='employee_registrations/profile_photos/', blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.first_name} {self.last_name}"
+
+
+class EmployeeRegistrationDocument(models.Model):
+    registration = models.ForeignKey(EmployeeRegistration, on_delete=models.CASCADE, related_name='documents')
+    document_type = models.CharField(max_length=100)
+    document_file = models.FileField(upload_to='employee_registrations/documents/')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.registration.first_name} - {self.document_type}"

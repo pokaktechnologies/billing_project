@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 from activity_logs.base_view import BaseAPIView, BaseGenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import AllowAny
 from django.shortcuts import get_object_or_404
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db import transaction
@@ -1070,4 +1071,102 @@ class AdminProfileAPIView(APIView):
                 "errors": serializer.errors
             },
             status=status.HTTP_400_BAD_REQUEST
+        )
+class EmployeeRegistrationCreateView(APIView):
+
+    # permission_classes = [AllowAny]
+
+    parser_classes = [MultiPartParser, FormParser]
+
+    @transaction.atomic
+    def post(self, request):
+
+        data = request.data
+
+        # Remove documents from serializer data.
+        # Documents are handled separately because they contain files.
+        documents = []
+
+        index = 0
+
+        while True:
+
+            doc_type_key = f'documents[{index}][doc_type]'
+            file_key = f'documents[{index}][file]'
+
+            if doc_type_key not in request.data and file_key not in request.FILES:
+                break
+
+            doc_type = request.data.get(doc_type_key)
+            document_file = request.FILES.get(file_key)
+
+            if not doc_type:
+                return Response(
+                    {
+                        "error": f"Document type is required for document {index + 1}."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if not document_file:
+                return Response(
+                    {
+                        "error": f"Document file is required for document {index + 1}."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            documents.append({
+                'document_type': doc_type,
+                'document_file': document_file
+            })
+
+            index += 1
+
+        serializer = EmployeeRegistrationSerializer(data=data)
+
+        if not serializer.is_valid():
+            return Response(
+                serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        registration = serializer.save()
+
+        # Save documents
+        for document in documents:
+            registration.documents.create(
+                document_type=document['document_type'],
+                document_file=document['document_file']
+            )
+
+        response_serializer = EmployeeRegistrationSerializer(
+            registration,
+            context={'request': request}
+        )
+
+        return Response(
+            {
+                "message": "Employee registration submitted successfully.",
+                "data": response_serializer.data
+            },
+            status=status.HTTP_201_CREATED
+        )
+
+    def get(self, request):
+
+        registrations = EmployeeRegistration.objects.all().order_by('-created_at')
+
+        serializer = EmployeeRegistrationSerializer(
+            registrations,
+            many=True,
+            context={'request': request}
+        )
+
+        return Response(
+            {
+                "message": "Employee registrations fetched successfully.",
+                "data": serializer.data
+            },
+            status=status.HTTP_200_OK
         )

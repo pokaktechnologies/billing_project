@@ -481,3 +481,54 @@ class AdminStaffProfileSerializer(serializers.ModelSerializer):
             "date_of_birth",
             "address",
         ]
+
+
+# staff reg
+class EmployeeRegistrationDocumentSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = EmployeeRegistrationDocument
+        fields = [
+            'id',
+            'document_type',
+            'document_file',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'created_at']
+
+
+class EmployeeRegistrationSerializer(serializers.ModelSerializer):
+
+    documents = EmployeeRegistrationDocumentSerializer(
+        many=True,
+        read_only=True
+    )
+
+    class Meta:
+        model = EmployeeRegistration
+        fields = [
+            'id',
+            'first_name',
+            'last_name',
+            'email',
+            'phone_number',
+            'qualification',
+            'gender',
+            'emergency_contact',
+            'country',
+            'date_of_birth',
+            'address',
+            'profile_photo',
+            'status',
+            'documents',
+            'created_at',
+            'updated_at',
+        ]
+
+        read_only_fields = [
+            'id',
+            'status',
+            'documents',
+            'created_at',
+            'updated_at',
+        ]

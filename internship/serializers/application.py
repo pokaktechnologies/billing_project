@@ -349,7 +349,7 @@ class ConvertToStudentSerializer(serializers.Serializer):
 
     enrollment_payment_plan_type = serializers.ChoiceField(
         choices=StudentCourseEnrollment.PAYMENT_PLAN_TYPES,
-        required=True,
+        required=False,# ippo use akkathond false use aakuvaaneeel true aakkanam
     )
 
     enrollment_installment_plan = serializers.PrimaryKeyRelatedField(

@@ -303,17 +303,17 @@ class StudentCourseEnrollment(models.Model):
         #
         # Advance payment alone does NOT block editing.
         # -------------------------------------------------
-        if payment_structure_changed:
+        # if payment_structure_changed:
 
-            has_installment_payment = CoursePayment.objects.filter(
-                enrollment=self,
-                installments__isnull=False
-            ).exists()
+        #     has_installment_payment = CoursePayment.objects.filter(
+        #         enrollment=self,
+        #         installments__isnull=False
+        #     ).exists()
 
-            if has_installment_payment:
-                raise ValidationError(
-                    "Cannot edit enrollment details because an installment payment has already been made."
-                )
+        #     if has_installment_payment:
+        #         raise ValidationError(
+        #             "Cannot edit enrollment details because an installment payment has already been made."
+        #         )
 
         # -------------------------------------------------
         # Assign Course

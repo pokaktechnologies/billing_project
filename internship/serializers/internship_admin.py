@@ -781,6 +781,90 @@ class StudentSerializer(serializers.ModelSerializer):
                 .select_related("course", "batch", "installment_plan")
                 .first()
             )
+            
+        if self.instance and existing_enrollment:
+
+            has_installment_payment = CoursePayment.objects.filter(
+                enrollment=existing_enrollment,
+                installments__isnull=False
+            ).exists()
+
+            if has_installment_payment:
+
+                enrollment_changes = {
+                    "enrollment_course": existing_enrollment.course_id,
+                    "enrollment_batch": (
+                        existing_enrollment.batch_id
+                        if existing_enrollment.batch_id
+                        else None
+                    ),
+                    "enrollment_payment_plan_type": (
+                        existing_enrollment.payment_plan_type
+                    ),
+                    "enrollment_installment_plan": (
+                        existing_enrollment.installment_plan_id
+                        if existing_enrollment.installment_plan_id
+                        else None
+                    ),
+                    "enrollment_custom_installments": (
+                        existing_enrollment.custom_installments
+                    ),
+                    "enrollment_advance_amount": (
+                        existing_enrollment.advance_amount
+                    ),
+                    "enrollment_payment_method": (
+                        existing_enrollment.payment_method
+                    ),
+                    "enrollment_transaction_id": (
+                        existing_enrollment.transaction_id
+                    ),
+                    "enrollment_payment_date": (
+                        existing_enrollment.payment_date
+                    ),
+                    "enrollment_discount_amount": (
+                        existing_enrollment.discount_amount
+                    ),
+                    "enrollment_discount_reason": (
+                        existing_enrollment.discount_reason
+                    ),
+                }
+
+                for field_name, old_value in enrollment_changes.items():
+
+                    if field_name not in attrs:
+                        continue
+
+                    new_value = attrs[field_name]
+
+                    # Normalize Decimal values
+                    if isinstance(old_value, Decimal):
+                        old_value = Decimal(str(old_value or 0))
+                        new_value = Decimal(str(new_value or 0))
+
+                    # Foreign keys are returned as model objects
+                    elif field_name in [
+                        "enrollment_course",
+                        "enrollment_batch",
+                        "enrollment_installment_plan",
+                    ]:
+                        old_id = old_value
+                        new_id = new_value.id if new_value else None
+
+                        if old_id != new_id:
+                            raise serializers.ValidationError({
+                                field_name:
+                                    "Cannot edit enrollment details because "
+                                    "an installment payment has already been made."
+                            })
+
+                        continue
+
+                    if old_value != new_value:
+                        raise serializers.ValidationError({
+                            field_name:
+                                "Cannot edit enrollment details because "
+                                "an installment payment has already been made."
+                        })
 
         # -------------------------------------------------
         # COURSE

@@ -880,11 +880,19 @@ class AcademicDashboardAPIView(APIView):
             })
 
         # top faculty
+        today = timezone.now().date()
         faculty_data = (
-            Faculty.objects.annotate(
+            Faculty.objects.filter(is_active=True)
+            .annotate(
                 student_count=Count(
                     "batches__enrollments__student",
-                    distinct=True
+                    filter=Q(
+                        batches__is_active=True,
+                        batches__end_date__gte=today,
+                        batches__enrollments__student__status="active",
+                        batches__enrollments__student__is_active=True,
+                    ),
+                    distinct=True,
                 )
             )
             .order_by("-student_count")[:5]

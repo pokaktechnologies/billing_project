@@ -2248,10 +2248,7 @@ class ReceiptView(BaseAPIView):
         end_date = request.query_params.get('end_date')
 
         if rec_id:
-            if request.user.is_superuser:
-                receipt = get_object_or_404(ReceiptModel, id=rec_id)
-            else:
-                receipt = get_object_or_404(ReceiptModel, id=rec_id)
+            receipt = get_object_or_404(ReceiptModel, id=rec_id)
             serializer = ReceiptSerializer(receipt)
             return Response({
                 'Status': '1',
@@ -2259,10 +2256,7 @@ class ReceiptView(BaseAPIView):
                 'Data': [serializer.data] 
             })
         else:
-            if request.user.is_superuser:
-                receipts = ReceiptModel.objects.all().order_by('-created_at')
-            else:
-                receipts = ReceiptModel.objects.all().order_by('-created_at')
+            receipts = ReceiptModel.objects.all().order_by('-created_at')
 
             if receipt_type:
                 receipts = receipts.filter(receipt_type=receipt_type)
@@ -2325,10 +2319,7 @@ class ReceiptView(BaseAPIView):
         }, status=status.HTTP_201_CREATED)
 
     def patch(self, request, rec_id=None):
-        if request.user.is_superuser:
-            receipt = get_object_or_404(ReceiptModel, id=rec_id)
-        else:
-            receipt = get_object_or_404(ReceiptModel, id=rec_id, user=request.user)
+        receipt = get_object_or_404(ReceiptModel, id=rec_id)
         
         serializer = ReceiptSerializer(receipt, data=request.data, partial=True)
         if serializer.is_valid():
@@ -2351,10 +2342,7 @@ class ReceiptView(BaseAPIView):
             )
 
         with transaction.atomic():
-            if request.user.is_superuser:
-                receipt = get_object_or_404(ReceiptModel, id=rec_id)
-            else:
-                receipt = get_object_or_404(ReceiptModel, id=rec_id, user=request.user)
+            receipt = get_object_or_404(ReceiptModel, id=rec_id)
             ReceiptFactory.delete(receipt)
 
         return Response(

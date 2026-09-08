@@ -32,6 +32,7 @@ urlpatterns = [
     path("staff/<int:id>/update/", UpdateStaffUserView.as_view(), name="update_staff_user"),
     path("job-detail/<int:id>/update/", UpdateJobDetailView.as_view(), name="update_job_detail"),
     path('employee-registration/', EmployeeRegistrationCreateView.as_view(), name='employee-registration'),
+    path('employee-registration/<int:pk>/', EmployeeRegistrationDetailView.as_view(), name='employee-registration-detail'),
     path("staff-documents/create/", StaffDocumentCreateView.as_view(), name="staff-document-create"),
     
     path("staff-documents/<int:id>/update/", StaffDocumentUpdateView.as_view(), name="staffdocument-update"),

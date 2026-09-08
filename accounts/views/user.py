@@ -1170,3 +1170,28 @@ class EmployeeRegistrationCreateView(APIView):
             },
             status=status.HTTP_200_OK
         )
+
+
+class EmployeeRegistrationDetailView(APIView):
+
+    def get(self, request, pk):
+        try:
+            registration = EmployeeRegistration.objects.get(pk=pk)
+        except EmployeeRegistration.DoesNotExist:
+            return Response(
+                {"error": "Employee registration not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = EmployeeRegistrationSerializer(
+            registration,
+            context={'request': request}
+        )
+
+        return Response(
+            {
+                "message": "Employee registration details fetched successfully.",
+                "data": serializer.data
+            },
+            status=status.HTTP_200_OK
+        )

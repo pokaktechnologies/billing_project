@@ -1256,6 +1256,7 @@ class ModulePermission(models.Model):
         ("hr_holidays", "HR Holidays"),
         ("hr_leaves", "HR Leaves"),
         ("hr_payroll", "HR Payroll"),
+        ("hr_faculty", "HR Faculty"),
         ("hr_salary_statements", "HR Salary Statements"),
 
         # TASK

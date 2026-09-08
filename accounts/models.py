@@ -1373,6 +1373,14 @@ class EmployeeRegistration(models.Model):
     address = models.TextField(blank=True, null=True)
     profile_photo = models.ImageField(upload_to='employee_registrations/profile_photos/', blank=True, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    is_converted = models.BooleanField(default=False)
+    converted_staff = models.ForeignKey(
+        'StaffProfile',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='converted_registrations'
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

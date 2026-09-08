@@ -33,6 +33,7 @@ urlpatterns = [
     path("job-detail/<int:id>/update/", UpdateJobDetailView.as_view(), name="update_job_detail"),
     path('employee-registration/', EmployeeRegistrationCreateView.as_view(), name='employee-registration'),
     path('employee-registration/<int:pk>/', EmployeeRegistrationDetailView.as_view(), name='employee-registration-detail'),
+    path('employee-registration/<int:pk>/convert/', ConvertEmployeeRegistrationToStaffAPIView.as_view(), name='convert_employee_registration_to_staff'),
     path("staff-documents/create/", StaffDocumentCreateView.as_view(), name="staff-document-create"),
     
     path("staff-documents/<int:id>/update/", StaffDocumentUpdateView.as_view(), name="staffdocument-update"),

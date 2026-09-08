@@ -2,6 +2,7 @@ import json
 
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from django_countries import countries
 from accounts.serializers.user import *
 from accounts.permissions import HasModulePermission, PARENT_MODULE_MAP
 from accounts.models import CustomUser, ModulePermission, Department, StaffProfile, JobDetail, StaffDocument, \
@@ -1194,4 +1195,169 @@ class EmployeeRegistrationDetailView(APIView):
                 "data": serializer.data
             },
             status=status.HTTP_200_OK
-        )
+        )
+
+
+class ConvertEmployeeRegistrationToStaffAPIView(APIView):
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        registration = get_object_or_404(EmployeeRegistration, pk=pk)
+
+        if registration.is_converted:
+            return Response(
+                {
+                    "status": "0",
+                    "message": "This employee registration has already been converted."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        email = registration.email
+        if CustomUser.objects.filter(email=email).exists():
+            return Response(
+                {
+                    "status": "0",
+                    "message": f"A user with email '{email}' already exists."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = ConvertEmployeeRegistrationToStaffSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        validated_data = serializer.validated_data
+        password = validated_data["password"]
+        modules = validated_data["modules"]
+        employee_id = validated_data["employee_id"]
+        department = validated_data.get("department")
+        job_type = validated_data.get("job_type")
+        role = validated_data["role"]
+        salary = validated_data["salary"]
+        start_date = validated_data["start_date"]
+        job_status = validated_data.get("status", "active")
+        signature_image = request.FILES.get("signature_image")
+
+        # 1. Create CustomUser
+        country_code = registration.country
+        if country_code:
+            # CountryField expects 2-letter country code (e.g. 'IN')
+            if len(country_code) != 2:
+                matched_code = countries.by_name(country_code)
+                country_code = matched_code if matched_code else ""
+
+        user = CustomUser.objects.create_user(
+            email=email,
+            password=password,
+            first_name=registration.first_name,
+            last_name=registration.last_name,
+            gender=registration.gender,
+            emergency_contact=registration.emergency_contact,
+            country=country_code,
+        )
+        user.is_staff = True
+        user.save()
+
+        # 2. Assign Module Permissions
+        ModulePermission.objects.bulk_create([
+            ModulePermission(user=user, module_name=module) for module in modules
+        ])
+
+        # 3. Create StaffProfile
+        staff_profile = StaffProfile.objects.create(
+            user=user,
+            phone_number=registration.phone_number,
+            qulification=registration.qualification,
+            staff_email=email,
+            profile_image=registration.profile_photo,
+            date_of_birth=registration.date_of_birth,
+            address=registration.address,
+        )
+
+        # 4. Create JobDetail
+        job_detail = JobDetail.objects.create(
+            staff=staff_profile,
+            employee_id=employee_id,
+            department=department,
+            job_type=job_type,
+            signature_image=signature_image,
+            role=role,
+            salary=salary,
+            start_date=start_date,
+            status=job_status,
+        )
+
+        # 5. Earnings
+        earnings_data = validated_data.get("earnings")
+        if earnings_data:
+            if isinstance(earnings_data, str):
+                try:
+                    earnings_data = json.loads(earnings_data)
+                except (json.JSONDecodeError, TypeError):
+                    return Response(
+                        {"status": "0", "message": "Invalid earnings JSON format."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            if isinstance(earnings_data, list):
+                for earning in earnings_data:
+                    earning_type = earning.get("earning_type")
+                    amount = earning.get("amount")
+                    if earning_type and amount is not None:
+                        StaffEarning.objects.create(
+                            job_detail=job_detail,
+                            earning_type=earning_type,
+                            amount=amount,
+                        )
+
+        # 6. Deductions
+        deductions_data = validated_data.get("deductions")
+        if deductions_data:
+            if isinstance(deductions_data, str):
+                try:
+                    deductions_data = json.loads(deductions_data)
+                except (json.JSONDecodeError, TypeError):
+                    return Response(
+                        {"status": "0", "message": "Invalid deductions JSON format."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            if isinstance(deductions_data, list):
+                for deduction in deductions_data:
+                    deduction_type = deduction.get("deduction_type")
+                    amount = deduction.get("amount")
+                    if deduction_type and amount is not None:
+                        StaffDeduction.objects.create(
+                            job_detail=job_detail,
+                            deduction_type=deduction_type,
+                            amount=amount,
+                        )
+
+        # 7. Copy Documents to StaffDocument
+        for doc in registration.documents.all():
+            if doc.document_file:
+                StaffDocument.objects.create(
+                    staff=staff_profile,
+                    doc_type=doc.document_type or "Other",
+                    file=doc.document_file
+                )
+
+        # 8. Update EmployeeRegistration
+        registration.is_converted = True
+        registration.converted_staff = staff_profile
+        registration.status = "converted"
+        registration.save(update_fields=["is_converted", "converted_staff", "status", "updated_at"])
+
+        return Response(
+            {
+                "status": "1",
+                "message": "Employee registration converted to staff successfully.",
+                "user_id": user.id,
+                "staff_profile_id": staff_profile.id,
+                "employee_id": job_detail.employee_id,
+            },
+            status=status.HTTP_201_CREATED
+        )
+

@@ -503,6 +503,7 @@ class EmployeeRegistrationSerializer(serializers.ModelSerializer):
         many=True,
         read_only=True
     )
+    converted_staff_id = serializers.SerializerMethodField()
 
     class Meta:
         model = EmployeeRegistration
@@ -520,6 +521,8 @@ class EmployeeRegistrationSerializer(serializers.ModelSerializer):
             'address',
             'profile_photo',
             'status',
+            'is_converted',
+            'converted_staff_id',
             'documents',
             'created_at',
             'updated_at',
@@ -528,7 +531,67 @@ class EmployeeRegistrationSerializer(serializers.ModelSerializer):
         read_only_fields = [
             'id',
             'status',
+            'is_converted',
+            'converted_staff_id',
             'documents',
             'created_at',
             'updated_at',
         ]
+
+    def get_converted_staff_id(self, obj):
+        return obj.converted_staff.id if obj.converted_staff else None
+
+
+class ConvertEmployeeRegistrationToStaffSerializer(serializers.Serializer):
+    employee_id = serializers.CharField(max_length=50)
+    password = serializers.CharField(write_only=True, min_length=6)
+    confirm_password = serializers.CharField(write_only=True)
+    modules = serializers.ListField(
+        child=serializers.ChoiceField(choices=ModulePermission.MODULE_CHOICES),
+        allow_empty=False
+    )
+    role = serializers.CharField(max_length=100)
+    salary = serializers.DecimalField(max_digits=10, decimal_places=2)
+    start_date = serializers.DateField()
+    department = serializers.PrimaryKeyRelatedField(
+        queryset=Department.objects.all(),
+        required=False,
+        allow_null=True
+    )
+    job_type = serializers.ChoiceField(
+        choices=[
+            ("full_day", "Full Day"),
+            ("part_time", "Part Time"),
+            ("internship", "Internship"),
+            ("contract", "Contract")
+        ],
+        required=False,
+        allow_null=True
+    )
+    status = serializers.ChoiceField(
+        choices=[
+            ("active", "Active"),
+            ("probation", "Probation"),
+            ("resigned", "Resigned"),
+            ("terminated", "Terminated"),
+            ("inactive", "Inactive"),
+        ],
+        default="active"
+    )
+    signature_image = serializers.ImageField(required=False, allow_null=True)
+    earnings = serializers.JSONField(required=False, allow_null=True)
+    deductions = serializers.JSONField(required=False, allow_null=True)
+
+    def validate_employee_id(self, value):
+        if JobDetail.objects.filter(employee_id=value).exists():
+            raise serializers.ValidationError(
+                f"Employee ID '{value}' already exists. Please use a unique ID."
+            )
+        return value
+
+    def validate(self, attrs):
+        if attrs.get("password") != attrs.get("confirm_password"):
+            raise serializers.ValidationError({
+                "confirm_password": "Passwords do not match."
+            })
+        return attrs

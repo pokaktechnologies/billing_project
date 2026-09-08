@@ -66,6 +66,7 @@ PARENT_MODULE_MAP = [
         "submodules": [
             "hr_enquiries",
             "hr_staff_management",
+            "hr_faculty",
             "hr_attendance",
             "hr_holidays",
             "hr_leaves",

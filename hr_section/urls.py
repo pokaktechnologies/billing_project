@@ -48,4 +48,6 @@ urlpatterns = [
     path('dashboard/recruitment/jobs-summary/', HrDashboardRecruitmentJobsSummaryAPIView.as_view(), name='hr_dashboard_recruitment_jobs'),
     path('dashboard/recruitment/recent-applications/', HrDashboardRecentApplicationsAPIView.as_view(), name='hr_dashboard_recent_applications'),
     path('dashboard/payroll/current-status/', HrDashboardPayrollStatusAPIView.as_view(), name='hr_dashboard_payroll_status'),
+    path('dashboard/staff-interns/', HrDashboardStaffInternsAPIView.as_view(), name='hr_dashboard_staff_interns'),
+    path('dashboard/staff-milestones/', HrDashboardStaffMilestonesAPIView.as_view(), name='hr_dashboard_staff_milestones'),
 ]

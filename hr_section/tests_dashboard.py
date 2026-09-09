@@ -216,3 +216,137 @@ class HrDashboardAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["total_records"], 1)
         self.assertEqual(response.data["draft_records"], 1)
+
+    def test_hr_dashboard_completed_interns(self):
+        self.client.force_authenticate(user=self.hr_user)
+        # Create an intern who started 4 months ago
+        intern_user = User.objects.create_user(
+            email="intern_completed@example.com",
+            password="password123",
+            first_name="Intern",
+            last_name="Done"
+        )
+        intern_profile = StaffProfile.objects.create(user=intern_user)
+        JobDetail.objects.create(
+            staff=intern_profile,
+            employee_id="INT-001",
+            role="Python Intern",
+            job_type="internship",
+            salary=15000,
+            start_date=timezone.localdate() - timedelta(days=120),  # ~4 months ago
+            status="active"
+        )
+
+        response = self.client.get("/hr/dashboard/staff-interns/?status=completed&duration_months=3")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(response.data["total_completed"], 1)
+        self.assertEqual(response.data["results"][0]["employee_id"], "INT-001")
+
+    def test_hr_dashboard_upcoming_completed_interns(self):
+        self.client.force_authenticate(user=self.hr_user)
+        # Create an intern who started 75 days ago (ends at ~90 days, so ~15 days left)
+        upcoming_user = User.objects.create_user(
+            email="intern_upcoming@example.com",
+            password="password123",
+            first_name="Intern",
+            last_name="Soon"
+        )
+        upcoming_profile = StaffProfile.objects.create(user=upcoming_user)
+        JobDetail.objects.create(
+            staff=upcoming_profile,
+            employee_id="INT-002",
+            role="React Intern",
+            job_type="internship",
+            salary=15000,
+            start_date=timezone.localdate() - timedelta(days=75),
+            status="active"
+        )
+
+        response = self.client.get("/hr/dashboard/staff-interns/?status=upcoming&duration_months=3&days_ahead=30")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(response.data["total_upcoming"], 1)
+        self.assertEqual(response.data["results"][0]["employee_id"], "INT-002")
+        self.assertLessEqual(response.data["results"][0]["days_remaining"], 30)
+
+    def test_hr_dashboard_completed_milestones(self):
+        self.client.force_authenticate(user=self.hr_user)
+        # Create a staff who started 370 days ago (1 year completed ~5 days ago)
+        u1 = User.objects.create_user(email="staff_1yr@example.com", password="pass", first_name="One", last_name="Year")
+        p1 = StaffProfile.objects.create(user=u1)
+        JobDetail.objects.create(
+            staff=p1,
+            employee_id="STF-1YR",
+            role="Engineer",
+            job_type="full_day",
+            salary=60000,
+            start_date=timezone.localdate() - timedelta(days=370),
+            status="active"
+        )
+
+        response = self.client.get("/hr/dashboard/staff-milestones/?status=completed&milestone=1_year&recent_days=30")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(response.data["total_completed"], 1)
+        self.assertTrue(any(r["employee_id"] == "STF-1YR" for r in response.data["results"]))
+
+    def test_hr_dashboard_upcoming_milestones(self):
+        self.client.force_authenticate(user=self.hr_user)
+        # Create a staff who started 170 days ago (6 months milestone in ~12 days)
+        u2 = User.objects.create_user(email="staff_6mo@example.com", password="pass", first_name="Six", last_name="Months")
+        p2 = StaffProfile.objects.create(user=u2)
+        JobDetail.objects.create(
+            staff=p2,
+            employee_id="STF-6MO",
+            role="Executive",
+            job_type="full_day",
+            salary=40000,
+            start_date=timezone.localdate() - timedelta(days=170),
+            status="active"
+        )
+
+        response = self.client.get("/hr/dashboard/staff-milestones/?status=upcoming&milestone=6_months&days_ahead=30")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(response.data["total_upcoming"], 1)
+        self.assertTrue(any(r["employee_id"] == "STF-6MO" for r in response.data["results"]))
+
+    def test_hr_dashboard_unified_staff_interns(self):
+        self.client.force_authenticate(user=self.hr_user)
+        # 1. status=all (default)
+        res_all = self.client.get("/hr/dashboard/staff-interns/")
+        self.assertEqual(res_all.status_code, status.HTTP_200_OK)
+        self.assertIn("upcoming", res_all.data)
+        self.assertIn("completed", res_all.data)
+
+        # 2. status=upcoming
+        res_up = self.client.get("/hr/dashboard/staff-interns/?status=upcoming")
+        self.assertEqual(res_up.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_up.data["status"], "upcoming")
+        self.assertIn("results", res_up.data)
+
+        # 3. status=completed
+        res_comp = self.client.get("/hr/dashboard/staff-interns/?status=completed")
+        self.assertEqual(res_comp.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_comp.data["status"], "completed")
+        self.assertIn("results", res_comp.data)
+
+    def test_hr_dashboard_unified_staff_milestones(self):
+        self.client.force_authenticate(user=self.hr_user)
+        # 1. status=all (default)
+        res_all = self.client.get("/hr/dashboard/staff-milestones/")
+        self.assertEqual(res_all.status_code, status.HTTP_200_OK)
+        self.assertIn("upcoming", res_all.data)
+        self.assertIn("completed", res_all.data)
+
+        # 2. status=upcoming
+        res_up = self.client.get("/hr/dashboard/staff-milestones/?status=upcoming")
+        self.assertEqual(res_up.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_up.data["status"], "upcoming")
+        self.assertIn("results", res_up.data)
+
+        # 3. status=completed
+        res_comp = self.client.get("/hr/dashboard/staff-milestones/?status=completed")
+        self.assertEqual(res_comp.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_comp.data["status"], "completed")
+        self.assertIn("results", res_comp.data)
+
+
+

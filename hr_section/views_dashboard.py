@@ -544,3 +544,303 @@ class HrDashboardPayrollStatusAPIView(BaseHrDashboardAPIView):
             "total_net_payable": str(agg["total_net"] or "0.00"),
             "total_deductions": str(agg["total_deductions"] or "0.00"),
         }, status=status.HTTP_200_OK)
+
+
+# ---------------------------------------------------------------------------
+# Internship Duration Helper
+# ---------------------------------------------------------------------------
+import calendar
+
+def calculate_completion_date(start_date, months):
+    """
+    Adds exact `months` count to a given start_date.
+    Example: 2026-01-15 + 3 months -> 2026-04-15.
+    """
+    month_target = start_date.month - 1 + months
+    year_target = start_date.year + month_target // 12
+    month_target = month_target % 12 + 1
+    day_max = calendar.monthrange(year_target, month_target)[1]
+    day_target = min(start_date.day, day_max)
+    return start_date.replace(year=year_target, month=month_target, day=day_target)
+
+
+# ---------------------------------------------------------------------------
+# 11. Staff Internship - Unified Interns Completion API
+# ---------------------------------------------------------------------------
+class HrDashboardStaffInternsAPIView(BaseHrDashboardAPIView):
+    """
+    GET -> Unified API for Staff Internships (completed, upcoming, or all).
+    Query params:
+      - status: upcoming, completed, all (default: all)
+      - duration_months: int (default: 3)
+      - days_ahead: int (default: 30) - for upcoming
+      - recent_days: int (default: 30) - for completed
+      - department: int (optional)
+      - limit: int (optional)
+    """
+    default_status = "all"
+
+    def get(self, request):
+        today = timezone.localdate()
+        default_val = getattr(self, "default_status", "all")
+        status_filter = request.query_params.get("status", default_val).lower()
+
+        try:
+            duration_months = int(request.query_params.get("duration_months", 3))
+        except ValueError:
+            duration_months = 3
+
+        try:
+            days_ahead = int(request.query_params.get("days_ahead", 30))
+        except ValueError:
+            days_ahead = 30
+
+        try:
+            recent_days = int(request.query_params.get("recent_days", 30))
+        except ValueError:
+            recent_days = 30
+
+        dept_filter = request.query_params.get("department")
+        limit_param = request.query_params.get("limit")
+
+        future_cutoff = today + timedelta(days=days_ahead)
+        past_cutoff = today - timedelta(days=recent_days)
+
+        intern_qs = JobDetail.objects.filter(
+            job_type="internship"
+        ).select_related("staff__user", "department").order_by("start_date")
+
+        if dept_filter and dept_filter.isdigit():
+            intern_qs = intern_qs.filter(department_id=int(dept_filter))
+
+        completed_list = []
+        upcoming_list = []
+
+        for jd in intern_qs:
+            completion_date = calculate_completion_date(jd.start_date, duration_months)
+
+            # Check completed (within recent_days window)
+            if past_cutoff <= completion_date <= today:
+                completed_list.append({
+                    "staff_id": jd.staff_id,
+                    "employee_id": jd.employee_id,
+                    "name": jd.staff.get_full_name(),
+                    "email": jd.staff.user.email,
+                    "phone": jd.staff.phone_number,
+                    "role": jd.role,
+                    "department": jd.department.name if jd.department else None,
+                    "job_type": jd.job_type,
+                    "status": jd.status,
+                    "salary": str(jd.salary),
+                    "start_date": str(jd.start_date),
+                    "duration_months": duration_months,
+                    "completion_date": str(completion_date),
+                    "days_since_completed": (today - completion_date).days
+                })
+
+            # Check upcoming (active interns completing within days_ahead)
+            if jd.status == "active" and today < completion_date <= future_cutoff:
+                upcoming_list.append({
+                    "staff_id": jd.staff_id,
+                    "employee_id": jd.employee_id,
+                    "name": jd.staff.get_full_name(),
+                    "email": jd.staff.user.email,
+                    "phone": jd.staff.phone_number,
+                    "role": jd.role,
+                    "department": jd.department.name if jd.department else None,
+                    "job_type": jd.job_type,
+                    "status": jd.status,
+                    "salary": str(jd.salary),
+                    "start_date": str(jd.start_date),
+                    "duration_months": duration_months,
+                    "completion_date": str(completion_date),
+                    "days_remaining": (completion_date - today).days
+                })
+
+        completed_list.sort(key=lambda x: x["days_since_completed"])
+        upcoming_list.sort(key=lambda x: x["days_remaining"])
+
+        if limit_param and limit_param.isdigit():
+            lim = int(limit_param)
+            completed_list = completed_list[:lim]
+            upcoming_list = upcoming_list[:lim]
+
+        if status_filter == "completed":
+            return Response({
+                "status": "completed",
+                "duration_months_used": duration_months,
+                "recent_days_window": recent_days,
+                "total_completed": len(completed_list),
+                "results": completed_list
+            }, status=status.HTTP_200_OK)
+
+        elif status_filter == "upcoming":
+            return Response({
+                "status": "upcoming",
+                "duration_months_used": duration_months,
+                "days_ahead_window": days_ahead,
+                "total_upcoming": len(upcoming_list),
+                "results": upcoming_list
+            }, status=status.HTTP_200_OK)
+
+        else:
+            return Response({
+                "status": "all",
+                "duration_months_used": duration_months,
+                "days_ahead_window": days_ahead,
+                "recent_days_window": recent_days,
+                "total_upcoming": len(upcoming_list),
+                "total_completed": len(completed_list),
+                "upcoming": upcoming_list,
+                "completed": completed_list
+            }, status=status.HTTP_200_OK)
+
+
+# ---------------------------------------------------------------------------
+# Staff Service Milestones Definitions
+# ---------------------------------------------------------------------------
+MILESTONE_DEFINITIONS = [
+    {"key": "6_months", "months": 6, "label": "6 Months"},
+    {"key": "1_year", "months": 12, "label": "1 Year"},
+    {"key": "2_years", "months": 24, "label": "2 Years"},
+    {"key": "3_years", "months": 36, "label": "3 Years"},
+    {"key": "5_years", "months": 60, "label": "5 Years"},
+]
+
+
+# ---------------------------------------------------------------------------
+# 12. Staff Service Milestones - Unified Tenure Milestones API
+# ---------------------------------------------------------------------------
+class HrDashboardStaffMilestonesAPIView(BaseHrDashboardAPIView):
+    """
+    GET -> Unified API for Staff Service Milestones (completed, upcoming, or all).
+    Excludes interns (job_type='internship').
+    Query params:
+      - status: upcoming, completed, all (default: all)
+      - milestone: 6_months, 1_year, 2_years, 3_years, 5_years, all (default: all)
+      - days_ahead: int (default: 30) - for upcoming
+      - recent_days: int (default: 30) - for completed
+      - department: int (optional)
+      - limit: int (optional)
+    """
+    default_status = "all"
+
+    def get(self, request):
+        today = timezone.localdate()
+        default_val = getattr(self, "default_status", "all")
+        status_filter = request.query_params.get("status", default_val).lower()
+        milestone_filter = request.query_params.get("milestone", "all")
+
+        try:
+            days_ahead = int(request.query_params.get("days_ahead", 30))
+        except ValueError:
+            days_ahead = 30
+
+        try:
+            recent_days = int(request.query_params.get("recent_days", 30))
+        except ValueError:
+            recent_days = 30
+
+        dept_filter = request.query_params.get("department")
+        limit_param = request.query_params.get("limit")
+
+        future_cutoff = today + timedelta(days=days_ahead)
+        past_cutoff = today - timedelta(days=recent_days)
+
+        definitions = MILESTONE_DEFINITIONS
+        if milestone_filter != "all":
+            definitions = [m for m in MILESTONE_DEFINITIONS if m["key"] == milestone_filter]
+
+        staff_qs = JobDetail.objects.filter(
+            status="active"
+        ).exclude(
+            job_type="internship"
+        ).select_related("staff__user", "department")
+
+        if dept_filter and dept_filter.isdigit():
+            staff_qs = staff_qs.filter(department_id=int(dept_filter))
+
+        completed_list = []
+        upcoming_list = []
+
+        for jd in staff_qs:
+            for m in definitions:
+                target_date = calculate_completion_date(jd.start_date, m["months"])
+
+                # Check completed within recent_days
+                if past_cutoff <= target_date <= today:
+                    completed_list.append({
+                        "staff_id": jd.staff_id,
+                        "employee_id": jd.employee_id,
+                        "name": jd.staff.get_full_name(),
+                        "email": jd.staff.user.email,
+                        "phone": jd.staff.phone_number,
+                        "role": jd.role,
+                        "department": jd.department.name if jd.department else None,
+                        "start_date": str(jd.start_date),
+                        "milestone": m["key"],
+                        "milestone_label": f"{m['label']} Completed",
+                        "completed_date": str(target_date),
+                        "days_ago": (today - target_date).days
+                    })
+
+                # Check upcoming within days_ahead
+                if today < target_date <= future_cutoff:
+                    upcoming_list.append({
+                        "staff_id": jd.staff_id,
+                        "employee_id": jd.employee_id,
+                        "name": jd.staff.get_full_name(),
+                        "email": jd.staff.user.email,
+                        "phone": jd.staff.phone_number,
+                        "role": jd.role,
+                        "department": jd.department.name if jd.department else None,
+                        "start_date": str(jd.start_date),
+                        "milestone": m["key"],
+                        "milestone_label": f"{m['label']} Milestone",
+                        "target_date": str(target_date),
+                        "days_remaining": (target_date - today).days
+                    })
+
+        completed_list.sort(key=lambda x: x["days_ago"])
+        upcoming_list.sort(key=lambda x: x["days_remaining"])
+
+        if limit_param and limit_param.isdigit():
+            lim = int(limit_param)
+            completed_list = completed_list[:lim]
+            upcoming_list = upcoming_list[:lim]
+
+        if status_filter == "completed":
+            return Response({
+                "status": "completed",
+                "milestone_filter": milestone_filter,
+                "recent_days_window": recent_days,
+                "total_completed": len(completed_list),
+                "results": completed_list
+            }, status=status.HTTP_200_OK)
+
+        elif status_filter == "upcoming":
+            return Response({
+                "status": "upcoming",
+                "milestone_filter": milestone_filter,
+                "days_ahead_window": days_ahead,
+                "total_upcoming": len(upcoming_list),
+                "results": upcoming_list
+            }, status=status.HTTP_200_OK)
+
+        else:
+            return Response({
+                "status": "all",
+                "milestone_filter": milestone_filter,
+                "days_ahead_window": days_ahead,
+                "recent_days_window": recent_days,
+                "total_upcoming": len(upcoming_list),
+                "total_completed": len(completed_list),
+                "upcoming": upcoming_list,
+                "completed": completed_list
+            }, status=status.HTTP_200_OK)
+
+
+
+
+
+

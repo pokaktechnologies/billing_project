@@ -597,6 +597,7 @@ class StudentSerializer(serializers.ModelSerializer):
     batch = serializers.SerializerMethodField()
     batch_number = serializers.SerializerMethodField()
     courses = serializers.SerializerMethodField()
+    faculty = serializers.SerializerMethodField()
     center_name = serializers.CharField(source="center.name", read_only=True)
     councellor_name = serializers.CharField(source="councellor.get_full_name", read_only=True)
     payment_type = serializers.SerializerMethodField()
@@ -699,6 +700,7 @@ class StudentSerializer(serializers.ModelSerializer):
             "center",
             "center_name",
             "courses",
+            "faculty",
             "batch",
             "batch_number",
             "payment_type",
@@ -751,6 +753,20 @@ class StudentSerializer(serializers.ModelSerializer):
             for enrollment in enrollments
             if enrollment.course
         ]
+    def get_faculty(self, obj):
+        faculties = {}
+
+        for enrollment in obj.enrollments.all():
+            if not enrollment.batch:
+                continue
+
+            for faculty in enrollment.batch.faculties.all():
+                faculties[faculty.id] = {
+                    "id": faculty.id,
+                    "name": faculty.get_full_name(),
+                }
+
+        return list(faculties.values())
 
     def get_payment_type(self, obj):
         enrollment = obj.enrollments.first()

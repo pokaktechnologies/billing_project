@@ -217,6 +217,14 @@ class StudentListCreateAPIView(generics.ListCreateAPIView):
 
     def get_queryset(self):
 
+        enrollment_queryset = StudentCourseEnrollment.objects.select_related(
+            "course",
+            "batch",
+            "installment_plan"
+        ).prefetch_related(
+            "batch__faculties"
+        )
+
         qs = Student.objects.select_related(
             "profile__user",
             "center",
@@ -224,16 +232,18 @@ class StudentListCreateAPIView(generics.ListCreateAPIView):
         ).prefetch_related(
             Prefetch(
                 "enrollments",
-                queryset=StudentCourseEnrollment.objects.select_related(
-                    "course",
-                    "batch",
-                    "installment_plan"
-                )
+                queryset=enrollment_queryset
             )
         ).distinct()
 
         course = self.request.query_params.get("course")
         batch = self.request.query_params.get("batch")
+        faculty = self.request.query_params.get("faculty")
+
+        if faculty:
+            qs = qs.filter(
+                enrollments__batch__faculties__id=faculty
+            )
 
         if course:
             qs = qs.filter(

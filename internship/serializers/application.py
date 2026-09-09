@@ -61,7 +61,17 @@ class InternshipApplicationSerializer(serializers.ModelSerializer):
             "is_converted",
             "converted_students",
         ]
-        read_only_fields = ["id", "created_at", "is_converted", "converted_students"]
+        read_only_fields = [
+            "id",
+            "created_at",
+            "is_converted",
+            "converted_students",
+            # Slot payment is entered by HR, not by student
+            "slot_amount",
+            "slot_payment_method",
+            "slot_transaction_id",
+            "slot_payment_date",
+        ]
 
     def to_internal_value(self, data):
         internal_value = super().to_internal_value(data)
@@ -75,12 +85,16 @@ class InternshipApplicationSerializer(serializers.ModelSerializer):
         return internal_value
 
     def validate(self, attrs):
+
         where_did_you_find_us = attrs.get("where_did_you_find_us")
         other_source = attrs.get("other_source")
 
         if where_did_you_find_us == "other" and not other_source:
             raise serializers.ValidationError(
-                {"other_source": "This field is required when 'other' is selected."}
+                {
+                    "other_source":
+                        "This field is required when 'other' is selected."
+                }
             )
 
         if where_did_you_find_us != "other" and other_source:
@@ -92,24 +106,15 @@ class InternshipApplicationSerializer(serializers.ModelSerializer):
                     )
                 }
             )
-        
+
         form_type = attrs.get("form_type")
 
         if form_type == "free_course_form":
-
             attrs["slot_amount"] = None
             attrs["slot_payment_method"] = None
             attrs["slot_transaction_id"] = None
             attrs["slot_payment_date"] = None
 
-        elif form_type == "internship_form":
-
-            slot_amount = attrs.get("slot_amount")
-
-            if slot_amount is not None and slot_amount < 0:
-                raise serializers.ValidationError({
-                    "slot_amount": "Slot amount cannot be negative."
-                })
         return attrs
 
     @transaction.atomic
@@ -402,6 +407,13 @@ class ConvertToStudentSerializer(serializers.Serializer):
     )
 
     enrollment_receipt = serializers.JSONField(
+        required=False,
+        allow_null=True,
+    )
+
+    slot_amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
         required=False,
         allow_null=True,
     )

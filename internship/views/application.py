@@ -237,7 +237,8 @@ class ConvertApplicationToStudentAPIView(APIView):
         serializer.is_valid(
             raise_exception=True
         )
-
+        # print("SLOT AMOUNT FROM REQUEST:", request.data.get("slot_amount"))
+        # print("SLOT AMOUNT VALIDATED:", serializer.validated_data.get("slot_amount"))
         try:
 
             student = StudentConversionService.convert(
@@ -252,6 +253,7 @@ class ConvertApplicationToStudentAPIView(APIView):
                 councellor=application.councellor,
 
                 status=serializer.validated_data["status"],
+                slot_amount=serializer.validated_data.get("slot_amount"),
 
                 # ---------------------------------
                 # Enrollment

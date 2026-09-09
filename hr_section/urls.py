@@ -50,4 +50,5 @@ urlpatterns = [
     path('dashboard/payroll/current-status/', HrDashboardPayrollStatusAPIView.as_view(), name='hr_dashboard_payroll_status'),
     path('dashboard/staff-interns/', HrDashboardStaffInternsAPIView.as_view(), name='hr_dashboard_staff_interns'),
     path('dashboard/staff-milestones/', HrDashboardStaffMilestonesAPIView.as_view(), name='hr_dashboard_staff_milestones'),
+    path('dashboard/staff-birthdays/', HrDashboardStaffBirthdaysAPIView.as_view(), name='hr_dashboard_staff_birthdays'),
 ]

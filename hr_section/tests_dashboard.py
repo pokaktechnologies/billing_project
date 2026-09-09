@@ -348,5 +348,67 @@ class HrDashboardAPITests(APITestCase):
         self.assertEqual(res_comp.data["status"], "completed")
         self.assertIn("results", res_comp.data)
 
+    def test_hr_dashboard_staff_birthdays(self):
+        self.client.force_authenticate(user=self.hr_user)
+        today = timezone.localdate()
+
+        # 1. Create a staff with birthday TODAY
+        u_today = User.objects.create_user(email="bday_today@example.com", password="pwd", first_name="Birthday", last_name="Today")
+        p_today = StaffProfile.objects.create(
+            user=u_today,
+            date_of_birth=today.replace(year=today.year - 25)
+        )
+        JobDetail.objects.create(
+            staff=p_today,
+            employee_id="BDAY-01",
+            role="Developer",
+            job_type="full_day",
+            salary=50000,
+            start_date=today - timedelta(days=200),
+            status="active"
+        )
+
+        # 2. Create an intern with birthday in 5 days (UPCOMING)
+        upcoming_date = today + timedelta(days=5)
+        u_up = User.objects.create_user(email="bday_upcoming@example.com", password="pwd", first_name="Birthday", last_name="Upcoming")
+        p_up = StaffProfile.objects.create(
+            user=u_up,
+            date_of_birth=upcoming_date.replace(year=upcoming_date.year - 22)
+        )
+        JobDetail.objects.create(
+            staff=p_up,
+            employee_id="BDAY-02",
+            role="Design Intern",
+            job_type="internship",
+            salary=15000,
+            start_date=today - timedelta(days=40),
+            status="active"
+        )
+
+        # Test status=all (default)
+        res_all = self.client.get("/hr/dashboard/staff-birthdays/?days_ahead=15")
+        self.assertEqual(res_all.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_all.data["status"], "all")
+        self.assertGreaterEqual(res_all.data["today_count"], 1)
+        self.assertGreaterEqual(res_all.data["upcoming_count"], 1)
+        self.assertTrue(any(b["employee_id"] == "BDAY-01" for b in res_all.data["today"]))
+        self.assertTrue(any(b["employee_id"] == "BDAY-02" for b in res_all.data["upcoming"]))
+
+        # Test status=today
+        res_today = self.client.get("/hr/dashboard/staff-birthdays/?status=today")
+        self.assertEqual(res_today.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_today.data["status"], "today")
+        self.assertGreaterEqual(res_today.data["today_count"], 1)
+        self.assertTrue(any(b["employee_id"] == "BDAY-01" for b in res_today.data["results"]))
+        self.assertFalse(any(b["employee_id"] == "BDAY-02" for b in res_today.data["results"]))
+
+        # Test status=upcoming
+        res_upcoming = self.client.get("/hr/dashboard/staff-birthdays/?status=upcoming&days_ahead=10")
+        self.assertEqual(res_upcoming.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_upcoming.data["status"], "upcoming")
+        self.assertGreaterEqual(res_upcoming.data["upcoming_count"], 1)
+        self.assertTrue(any(b["employee_id"] == "BDAY-02" for b in res_upcoming.data["results"]))
+        self.assertFalse(any(b["employee_id"] == "BDAY-01" for b in res_upcoming.data["results"]))
+
 
 

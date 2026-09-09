@@ -840,6 +840,131 @@ class HrDashboardStaffMilestonesAPIView(BaseHrDashboardAPIView):
             }, status=status.HTTP_200_OK)
 
 
+# ---------------------------------------------------------------------------
+# 13. Staff Birthdays - Today & Upcoming API (All Staff + Interns)
+# ---------------------------------------------------------------------------
+class HrDashboardStaffBirthdaysAPIView(BaseHrDashboardAPIView):
+    """
+    GET -> Today and Upcoming birthdays for all staff (including interns).
+    Query params:
+      - status: today, upcoming, all (default: all)
+      - days_ahead: int (default: 30)
+      - department: int (optional)
+      - job_type: str (optional)
+      - limit: int (optional)
+    """
+    def get(self, request):
+        today = timezone.localdate()
+        status_filter = request.query_params.get("status", "all").lower()
+
+        try:
+            days_ahead = int(request.query_params.get("days_ahead", 30))
+        except ValueError:
+            days_ahead = 30
+
+        department_param = request.query_params.get("department")
+        job_type_param = request.query_params.get("job_type")
+        limit_param = request.query_params.get("limit")
+
+        # Fetch active staff with date_of_birth recorded
+        profiles_qs = StaffProfile.objects.filter(
+            date_of_birth__isnull=False,
+            user__is_active=True
+        ).select_related("user", "job_detail__department")
+
+        if department_param and department_param.isdigit():
+            profiles_qs = profiles_qs.filter(job_detail__department_id=int(department_param))
+
+        if job_type_param:
+            profiles_qs = profiles_qs.filter(job_detail__job_type=job_type_param)
+
+        today_list = []
+        upcoming_list = []
+
+        for profile in profiles_qs:
+            dob = profile.date_of_birth
+            if not dob:
+                continue
+
+            # Calculate next birthday in the current or next year
+            # Handle Feb 29 for leap years
+            try:
+                bday_this_year = dob.replace(year=today.year)
+            except ValueError:
+                # Leap day fallback
+                bday_this_year = dob.replace(year=today.year, day=28)
+
+            if bday_this_year < today:
+                # Birthday has already passed this year, next one is next year
+                try:
+                    next_bday = dob.replace(year=today.year + 1)
+                except ValueError:
+                    next_bday = dob.replace(year=today.year + 1, day=28)
+            else:
+                next_bday = bday_this_year
+
+            days_diff = (next_bday - today).days
+
+            # Turning age calculation
+            turning_age = next_bday.year - dob.year
+
+            jd = getattr(profile, "job_detail", None)
+            item = {
+                "staff_id": profile.id,
+                "user_id": profile.user_id,
+                "name": profile.get_full_name(),
+                "employee_id": jd.employee_id if jd else None,
+                "role": jd.role if jd else None,
+                "job_type": jd.job_type if jd else None,
+                "department": jd.department.name if jd and jd.department else None,
+                "department_id": jd.department.id if jd and jd.department else None,
+                "date_of_birth": str(dob),
+                "birthday_date": str(next_bday),
+                "day_and_month": next_bday.strftime("%d %b"),
+                "turning_age": turning_age,
+                "days_remaining": days_diff,
+                "is_today": (days_diff == 0)
+            }
+
+            if days_diff == 0:
+                today_list.append(item)
+            elif 0 < days_diff <= days_ahead:
+                upcoming_list.append(item)
+
+        today_list.sort(key=lambda x: x["name"])
+        upcoming_list.sort(key=lambda x: x["days_remaining"])
+
+        if limit_param and limit_param.isdigit():
+            lim = int(limit_param)
+            today_list = today_list[:lim]
+            upcoming_list = upcoming_list[:lim]
+
+        if status_filter == "today":
+            return Response({
+                "status": "today",
+                "today_count": len(today_list),
+                "results": today_list
+            }, status=status.HTTP_200_OK)
+
+        elif status_filter == "upcoming":
+            return Response({
+                "status": "upcoming",
+                "days_ahead_window": days_ahead,
+                "upcoming_count": len(upcoming_list),
+                "results": upcoming_list
+            }, status=status.HTTP_200_OK)
+
+        else:
+            return Response({
+                "status": "all",
+                "days_ahead_window": days_ahead,
+                "today_count": len(today_list),
+                "upcoming_count": len(upcoming_list),
+                "today": today_list,
+                "upcoming": upcoming_list
+            }, status=status.HTTP_200_OK)
+
+
 
 
 

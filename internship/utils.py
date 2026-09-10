@@ -415,9 +415,9 @@ class StudentConversionService:
         password: str,
         center,
         start_date,
-        slot_amount=None,
         councellor,
         status,
+        slot_amount=None,
 
         # ==========================================
         # Enrollment
@@ -514,6 +514,7 @@ class StudentConversionService:
             start_date=start_date,
             status=status,
             councellor=application.councellor,
+            slot_amount=slot_amount
         )
 
         # ==========================================

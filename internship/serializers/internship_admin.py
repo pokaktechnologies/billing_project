@@ -689,6 +689,12 @@ class StudentSerializer(serializers.ModelSerializer):
         write_only=True,
         required=False,
     )
+    slot_amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        required=False,
+        allow_null=True,
+    )
 
     class Meta:
         model = Student
@@ -709,6 +715,7 @@ class StudentSerializer(serializers.ModelSerializer):
             "councellor",
             "councellor_name",
             "modules",
+            "slot_amount",
             "status",
             "created_at",
 
@@ -731,6 +738,46 @@ class StudentSerializer(serializers.ModelSerializer):
             "profile": {"required": False}
         }
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+
+        # If Student has slot amount, use it
+        if instance.slot_amount is not None:
+            data["slot_amount"] = instance.slot_amount
+            return data
+
+        # For old converted students, get slot amount from application
+        application = (
+            InternshipApplication.objects
+            .filter(converted_students=instance)
+            .order_by("-created_at")
+            .first()
+        )
+
+        if application and application.slot_amount is not None:
+            data["slot_amount"] = application.slot_amount
+        else:
+            data["slot_amount"] = None
+
+        return data
+    def get_slot_amount(self, obj):
+        # First use the Student's own slot amount
+        if obj.slot_amount is not None:
+            return obj.slot_amount
+
+        # For old converted students, get slot amount from application
+        application = (
+            InternshipApplication.objects
+            .filter(converted_students=obj)
+            .order_by("-created_at")
+            .first()
+        )
+
+        if application:
+            return application.slot_amount
+
+        return None
+    
     def get_full_name(self, obj):
         return obj.get_full_name()
 
@@ -2109,18 +2156,23 @@ class StudentPaymentDetailSerializer(serializers.ModelSerializer):
     def format_decimal(self, value):
         return str(Decimal(str(value)).quantize(Decimal("0.00")))
 
-    def get_slot_amount(self, obj):
-        amount = Decimal("0.00")
 
-        if obj.application and obj.application.slot_amount:
-            amount = Decimal(str(obj.application.slot_amount))
-
-        return self.format_decimal(amount)
     def _slot_amount_decimal(self, obj):
-        if obj.application and obj.application.slot_amount:
+        # New students: use Student.slot_amount
+        if obj.student.slot_amount is not None:
+            return Decimal(str(obj.student.slot_amount))
+
+        # Old converted students: fallback to Application.slot_amount
+        if obj.application and obj.application.slot_amount is not None:
             return Decimal(str(obj.application.slot_amount))
 
         return Decimal("0.00")
+
+    def get_slot_amount(self, obj):
+        return self.format_decimal(
+            self._slot_amount_decimal(obj)
+        )
+    
     def get_discount_amount(self, obj):
         return self.format_decimal(
             obj.discount_amount
@@ -2490,7 +2542,11 @@ class StudentPaymentSerializer(serializers.ModelSerializer):
         )
 
     def _slot_amount_decimal(self, obj):
-        if obj.application and obj.application.slot_amount:
+        if obj.student.slot_amount is not None:
+            return Decimal(str(obj.student.slot_amount))
+
+        # Fallback for old converted students
+        if obj.application and obj.application.slot_amount is not None:
             return Decimal(str(obj.application.slot_amount))
 
         return Decimal("0.00")

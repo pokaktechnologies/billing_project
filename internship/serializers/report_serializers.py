@@ -1038,3 +1038,46 @@ class RegistrationReportSerializer(serializers.ModelSerializer):
         return CertificateRecord.objects.filter(user_id=obj.profile_id).exists()
 
 
+# ── Counsellor Conversion Report ─────────────────────────────
+
+class CounsellorConversionStudentSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+    course = serializers.SerializerMethodField()
+    first_payment = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Student
+        fields = [
+            "id",
+            "student_id",
+            "name",
+            "course",
+            "created_at",
+            "first_payment",
+        ]
+
+    def get_name(self, obj):
+        return obj.get_full_name()
+
+    def _get_enrollment(self, obj):
+        if not hasattr(obj, "_cached_enrollment"):
+            enrollments = list(obj.enrollments.all())
+            obj._cached_enrollment = enrollments[0] if enrollments else None
+        return obj._cached_enrollment
+
+    def get_course(self, obj):
+        enrollment = self._get_enrollment(obj)
+        return enrollment.course.title if enrollment and enrollment.course else None
+
+    def get_first_payment(self, obj):
+        payments = list(obj.course_payments.all())
+        if not payments:
+            return None
+
+        first = min(payments, key=lambda p: p.payment_date)
+        return {
+            "amount": f"{first.amount_paid:.2f}",
+            "payment_method": first.payment_method,
+            "payment_date": str(first.payment_date),
+            "payment_type": first.payment_type,
+        }

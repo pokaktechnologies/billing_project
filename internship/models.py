@@ -24,6 +24,7 @@ class Student(models.Model):
     batch = models.ForeignKey('Batch', on_delete=models.SET_NULL, null=True, blank=True, related_name="students") # Unused
     payment_type = models.ForeignKey('InstallmentPlan', on_delete=models.SET_NULL, null=True, blank=True, related_name="students") # Unused
     start_date = models.DateField()
+    slot_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     is_active = models.BooleanField(default=True)
     
     STATUS_CHOICES = [
@@ -340,12 +341,9 @@ class StudentCourseEnrollment(models.Model):
 
             course_fee = Decimal(str(self.course.total_fee))
 
-            slot_amount = Decimal("0.00")
-
-            if self.application:
-                slot_amount = Decimal(
-                    str(self.application.slot_amount or 0)
-                )
+            slot_amount = Decimal(
+                str(self.student.slot_amount or 0)
+            )
 
             remaining_fee = course_fee - slot_amount
 

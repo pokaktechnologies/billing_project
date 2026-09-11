@@ -191,6 +191,7 @@ report_patterns = [
 
     path('counsellors/', report_view.CounsellorListAPIView.as_view()),
     path('counsellors/<int:counsellor_id>/students/', report_view.CounsellorStudentsAPIView.as_view()),
+    path('counsellors/<int:counsellor_id>/conversion/', report_view.CounsellorConversionReportAPIView.as_view()),
 
     path("faculty/", report_view.FacultyReportAPIView.as_view(), name="faculty-reports"),
     path("faculty/<int:pk>/", report_view.FacultyDetailReportAPIView.as_view(), name="faculty-detail-report"),

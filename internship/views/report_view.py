@@ -9,7 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.db.models import Count, Q, F, Sum
 from django.shortcuts import get_object_or_404
 from accounts.models import StaffProfile, SalesPerson
-from internship.serializers.report_serializers import SalesPersonSerializer, RegistrationReportSerializer
+from internship.serializers.report_serializers import SalesPersonSerializer, RegistrationReportSerializer, CounsellorConversionStudentSerializer
 from accounts.permissions import HasModulePermission
 from internship.models import Center, Task, TaskSubmission, AssignedStaffCourse, TaskAssignment, CoursePayment, Student
 from internship.serializers.report_serializers import CenterDetailReportSerializer, CenterReportsSerializer, TaskReportSerializer, InternTaskPerformanceReportSerializer, \
@@ -521,6 +521,56 @@ class CounsellorStudentsAPIView(APIView):
             "counsellor": counsellor.get_full_name(),
             "total_students": students.count(),
             "students": serializer.data
+        })
+
+
+# counsellor conversion report
+class CounsellorConversionReportAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, counsellor_id):
+        counsellor = get_object_or_404(SalesPerson, id=counsellor_id)
+
+        # ── base queryset: all students under this counsellor ──
+        all_students = Student.objects.filter(councellor=counsellor)
+        total_students_all_time = all_students.count()
+
+        # ── filtered queryset ──
+        students = all_students.select_related(
+            "profile__user",
+        ).prefetch_related(
+            "enrollments__course",
+            "course_payments",
+        )
+
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
+        course_id = request.query_params.get("course_id")
+
+        if start_date:
+            students = students.filter(created_at__date__gte=start_date)
+        if end_date:
+            students = students.filter(created_at__date__lte=end_date)
+        if course_id:
+            students = students.filter(enrollments__course_id=course_id)
+
+        students = students.distinct().order_by("-created_at")
+
+        serializer = CounsellorConversionStudentSerializer(students, many=True)
+
+        return Response({
+            "counsellor": {
+                "id": counsellor.id,
+                "name": counsellor.get_full_name(),
+                "email": counsellor.email,
+                "phone": counsellor.phone,
+                "designation": counsellor.designation,
+            },
+            "summary": {
+                "total_students": students.count(),
+                "total_students_all_time": total_students_all_time,
+            },
+            "students": serializer.data,
         })
 
 

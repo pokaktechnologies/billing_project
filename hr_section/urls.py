@@ -1,5 +1,6 @@
 from django.urls import path
 from .views import *
+from .views_dashboard import *
 
 urlpatterns = [
     path('enquiry/', EnquiryCreateView.as_view(), name='enquiry'),
@@ -35,6 +36,19 @@ urlpatterns = [
     path("offer-letters/", OfferLetterListCreateAPIView.as_view(), name="offer-letter-list-create"),
     path("offer-letters/<int:pk>/", OfferLetterDetailAPIView.as_view(), name="offer-letter-detail"),
     
-    #Dashaboard
+    # Dashboard
     path('dashboard/', HrDashaboardView.as_view(), name='hr_dashboard_overview'),
+    path('dashboard/metrics/', HrDashboardMetricsAPIView.as_view(), name='hr_dashboard_metrics'),
+    path('dashboard/action-items/', HrDashboardActionItemsAPIView.as_view(), name='hr_dashboard_action_items'),
+    path('dashboard/attendance-live/', HrDashboardLiveAttendanceAPIView.as_view(), name='hr_dashboard_attendance_live'),
+    path('dashboard/leaves/active-upcoming/', HrDashboardLeavesActiveUpcomingAPIView.as_view(), name='hr_dashboard_leaves_active_upcoming'),
+    path('dashboard/holidays/upcoming/', HrDashboardUpcomingHolidaysAPIView.as_view(), name='hr_dashboard_holidays_upcoming'),
+    path('dashboard/departments-summary/', HrDashboardDepartmentsSummaryAPIView.as_view(), name='hr_dashboard_departments_summary'),
+    path('dashboard/employee-milestones/', HrDashboardMilestonesAPIView.as_view(), name='hr_dashboard_milestones'),
+    path('dashboard/recruitment/jobs-summary/', HrDashboardRecruitmentJobsSummaryAPIView.as_view(), name='hr_dashboard_recruitment_jobs'),
+    path('dashboard/recruitment/recent-applications/', HrDashboardRecentApplicationsAPIView.as_view(), name='hr_dashboard_recent_applications'),
+    path('dashboard/payroll/current-status/', HrDashboardPayrollStatusAPIView.as_view(), name='hr_dashboard_payroll_status'),
+    path('dashboard/staff-interns/', HrDashboardStaffInternsAPIView.as_view(), name='hr_dashboard_staff_interns'),
+    path('dashboard/staff-milestones/', HrDashboardStaffMilestonesAPIView.as_view(), name='hr_dashboard_staff_milestones'),
+    path('dashboard/staff-birthdays/', HrDashboardStaffBirthdaysAPIView.as_view(), name='hr_dashboard_staff_birthdays'),
 ]

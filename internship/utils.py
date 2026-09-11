@@ -417,6 +417,7 @@ class StudentConversionService:
         start_date,
         councellor,
         status,
+        slot_amount=None,
 
         # ==========================================
         # Enrollment
@@ -434,6 +435,7 @@ class StudentConversionService:
         discount_reason=None,
         receipt_data=None,
     ):
+        
 
         # ---------------------------------------
         # Already converted
@@ -512,6 +514,7 @@ class StudentConversionService:
             start_date=start_date,
             status=status,
             councellor=application.councellor,
+            slot_amount=slot_amount
         )
 
         # ==========================================
@@ -617,12 +620,13 @@ class StudentConversionService:
         # ==========================================
         # Update Application
         # ==========================================
-
+        application.slot_amount = slot_amount
         application.converted_students = student
         application.is_converted = True
 
         application.save(
             update_fields=[
+                "slot_amount",
                 "converted_students",
                 "is_converted",
             ]

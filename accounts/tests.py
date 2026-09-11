@@ -282,3 +282,178 @@ class ReceiptJournalSyncTests(TestCase):
         self.assertFalse(ReceiptModel.objects.filter(receipt_number="REC-1001").exists())
         self.assertFalse(JournalEntry.objects.filter(type="receipt", type_number="REC-1001").exists())
         self.assertFalse(JournalEntry.objects.filter(type="tax_payment", type_number="REC-1001_TAX").exists())
+
+
+from rest_framework.test import APITestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
+from accounts.models import (
+    EmployeeRegistration,
+    EmployeeRegistrationDocument,
+    Department,
+    JobDetail,
+    StaffProfile,
+    StaffDocument,
+    StaffEarning,
+    StaffDeduction,
+)
+
+class EmployeeRegistrationConvertAPITests(APITestCase):
+
+    def setUp(self):
+        self.department = Department.objects.create(name="Engineering")
+        self.photo = SimpleUploadedFile("test_photo.jpg", b"photo content", content_type="image/jpeg")
+        self.registration = EmployeeRegistration.objects.create(
+            first_name="Jane",
+            last_name="Doe",
+            email="janedoe@example.com",
+            phone_number="9876543210",
+            qualification="B.Tech Computer Science",
+            gender="female",
+            emergency_contact="9876543211",
+            country="India",
+            date_of_birth=date(1999, 4, 12),
+            address="456 Elm Street, City",
+            profile_photo=self.photo,
+        )
+        # Add a document
+        self.doc_file = SimpleUploadedFile("resume.pdf", b"pdf document content", content_type="application/pdf")
+        EmployeeRegistrationDocument.objects.create(
+            registration=self.registration,
+            document_type="Resume",
+            document_file=self.doc_file
+        )
+
+        self.convert_url = f"/accounts/employee-registration/{self.registration.id}/convert/"
+
+        self.valid_payload = {
+            "employee_id": "EMP-9001",
+            "password": "Password@123",
+            "confirm_password": "Password@123",
+            "role": "Backend Engineer",
+            "salary": "45000.00",
+            "start_date": "2026-10-01",
+            "department": self.department.id,
+            "job_type": "full_day",
+            "status": "active",
+            "modules": ["dashboard", "hr_staff_management", "hr_attendance"],
+            "earnings": [
+                {"earning_type": "Dearness Allowance", "amount": 3000.00}
+            ],
+            "deductions": [
+                {"deduction_type": "Provident Fund", "amount": 1800.00}
+            ]
+        }
+
+    def test_successful_conversion(self):
+        """Outcome 1: Successful conversion with complete entities generated."""
+        response = self.client.post(self.convert_url, data=self.valid_payload, format="json")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["status"], "1")
+        self.assertEqual(response.data["employee_id"], "EMP-9001")
+
+        # Verify Registration is marked converted
+        self.registration.refresh_from_db()
+        self.assertTrue(self.registration.is_converted)
+        self.assertEqual(self.registration.status, "converted")
+        self.assertIsNotNone(self.registration.converted_staff)
+
+        # Verify CustomUser
+        user = CustomUser.objects.get(email="janedoe@example.com")
+        self.assertEqual(user.first_name, "Jane")
+        self.assertEqual(user.last_name, "Doe")
+        self.assertEqual(user.gender, "female")
+        self.assertTrue(user.is_staff)
+        self.assertTrue(user.check_password("Password@123"))
+
+        # Verify Permissions
+        perms = list(user.module_permissions.values_list("module_name", flat=True))
+        self.assertCountEqual(perms, ["dashboard", "hr_staff_management", "hr_attendance"])
+
+        # Verify StaffProfile
+        staff_profile = StaffProfile.objects.get(user=user)
+        self.assertEqual(staff_profile.phone_number, "9876543210")
+        self.assertEqual(staff_profile.qulification, "B.Tech Computer Science")
+        self.assertEqual(staff_profile.date_of_birth, date(1999, 4, 12))
+
+        # Verify JobDetail
+        job_detail = JobDetail.objects.get(staff=staff_profile)
+        self.assertEqual(job_detail.employee_id, "EMP-9001")
+        self.assertEqual(job_detail.department, self.department)
+        self.assertEqual(job_detail.role, "Backend Engineer")
+        self.assertEqual(Decimal(str(job_detail.salary)), Decimal("45000.00"))
+        self.assertEqual(job_detail.status, "active")
+
+        # Verify Documents Cloned
+        self.assertEqual(StaffDocument.objects.filter(staff=staff_profile).count(), 1)
+        self.assertEqual(StaffDocument.objects.filter(staff=staff_profile).first().doc_type, "Resume")
+
+        # Verify Earnings and Deductions
+        self.assertEqual(StaffEarning.objects.filter(job_detail=job_detail).count(), 1)
+        self.assertEqual(StaffDeduction.objects.filter(job_detail=job_detail).count(), 1)
+
+    def test_already_converted_error(self):
+        """Outcome 2: Error when attempting to convert an already-converted registration."""
+        self.registration.is_converted = True
+        self.registration.save()
+
+        response = self.client.post(self.convert_url, data=self.valid_payload, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["status"], "0")
+        self.assertIn("already been converted", response.data["message"])
+
+    def test_duplicate_email_error(self):
+        """Outcome 3: Error when user email already exists in CustomUser."""
+        CustomUser.objects.create_user(
+            first_name="Existing",
+            last_name="User",
+            email="janedoe@example.com",
+            password="pass"
+        )
+        response = self.client.post(self.convert_url, data=self.valid_payload, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["status"], "0")
+        self.assertIn("already exists", response.data["message"])
+
+    def test_duplicate_employee_id_error(self):
+        """Outcome 4: Error when employee_id is already assigned to another JobDetail."""
+        other_user = CustomUser.objects.create_user(first_name="A", last_name="B", email="ab@example.com", password="pwd")
+        other_staff = StaffProfile.objects.create(user=other_user)
+        JobDetail.objects.create(
+            staff=other_staff,
+            employee_id="EMP-9001",
+            role="Lead",
+            salary="50000.00",
+            start_date="2026-01-01"
+        )
+
+        response = self.client.post(self.convert_url, data=self.valid_payload, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("employee_id", response.data)
+
+    def test_password_mismatch_error(self):
+        """Outcome 5: Error when password and confirm_password differ."""
+        payload = self.valid_payload.copy()
+        payload["confirm_password"] = "MismatchedPassword@999"
+
+        response = self.client.post(self.convert_url, data=payload, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("confirm_password", response.data)
+
+    def test_missing_required_fields_error(self):
+        """Outcome 6: Error when required fields are missing."""
+        response = self.client.post(self.convert_url, data={}, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("employee_id", response.data)
+        self.assertIn("password", response.data)
+        self.assertIn("confirm_password", response.data)
+        self.assertIn("role", response.data)
+        self.assertIn("salary", response.data)
+        self.assertIn("start_date", response.data)
+        self.assertIn("modules", response.data)
+
+    def test_not_found_error(self):
+        """Outcome 7: 404 error when registration ID does not exist."""
+        url = "/accounts/employee-registration/999999/convert/"
+        response = self.client.post(url, data=self.valid_payload, format="json")
+        self.assertEqual(response.status_code, 404)
+

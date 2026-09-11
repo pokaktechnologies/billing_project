@@ -871,6 +871,7 @@ class RegistrationReportSerializer(serializers.ModelSerializer):
     phone_number = serializers.CharField(source="profile.phone_number", default=None)
     discount_amount = serializers.SerializerMethodField()
     discounted_fee = serializers.SerializerMethodField()
+    registration_date = serializers.SerializerMethodField()
 
     class Meta:
         model = Student
@@ -895,6 +896,7 @@ class RegistrationReportSerializer(serializers.ModelSerializer):
             "phone_number",
             "discount_amount",
             "discounted_fee",
+            "registration_date",
         ]
 
     def _get_enrollment(self, obj):
@@ -902,6 +904,14 @@ class RegistrationReportSerializer(serializers.ModelSerializer):
             enrollments = list(obj.enrollments.all())
             obj._cached_enrollment = enrollments[0] if enrollments else None
         return obj._cached_enrollment
+    
+    def get_registration_date(self, obj):
+        enrollment = self._get_enrollment(obj)
+
+        if not enrollment or not enrollment.enrollment_date:
+            return None
+
+        return enrollment.enrollment_date.strftime("%Y-%m-%d")
 
     def get_student_name(self, obj):
         return obj.get_full_name()

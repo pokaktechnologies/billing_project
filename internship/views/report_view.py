@@ -635,7 +635,7 @@ from decimal import Decimal
 
 
 class RegistrationReportAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
 
     def get(self, request):
         queryset = Student.objects.select_related(
@@ -669,9 +669,14 @@ class RegistrationReportAPIView(APIView):
         if status is not None:
             queryset = queryset.filter(status=status)
         if start_date:
-            queryset = queryset.filter(start_date__gte=start_date)
+            queryset = queryset.filter(
+                enrollments__enrollment_date__gte=start_date
+            )
+
         if end_date:
-            queryset = queryset.filter(start_date__lte=end_date)
+            queryset = queryset.filter(
+                enrollments__enrollment_date__lte=end_date
+            )
         if faculty_id:
             queryset = queryset.filter(enrollments__batch__faculties__id=faculty_id)
         if search:

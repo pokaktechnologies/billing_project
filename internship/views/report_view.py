@@ -689,7 +689,7 @@ class RegistrationReportAPIView(APIView):
         queryset = queryset.distinct().order_by("start_date")
 
         students_list = list(queryset)
-
+ 
         student_profile_ids = [student.profile_id for student in students_list]
         from certificates.models import CertificateRecord
         certified_profile_ids = set(

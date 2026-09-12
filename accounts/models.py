@@ -765,6 +765,12 @@ class ReceiptModel(models.Model):
         ('client', 'Client'),
         ('intern', 'Intern'),
     )
+    RECEIPT_FOR_CHOICES = (
+        ("slot", "Slot"),
+        ("advance", "Advance"),
+        ("installment", "Installment"),
+        ("other", "Other"),
+    )
     receipt_type = models.CharField(
         max_length=20,
         choices=RECEIPT_TYPES,
@@ -790,6 +796,12 @@ class ReceiptModel(models.Model):
     prepared_by = models.CharField(max_length=255, blank=True, null=True)
     recived_by = models.CharField(max_length=255, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True,null=True,blank=True)
+    receipt_for = models.CharField(
+        max_length=20,
+        choices=RECEIPT_FOR_CHOICES,
+        null=True,
+        blank=True,
+    )
 
     def __str__(self):
         if self.receipt_type == 'intern':

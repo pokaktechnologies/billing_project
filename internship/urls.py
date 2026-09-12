@@ -170,6 +170,12 @@ internship_admin_patterns = [
     path("dashboard/academic/", internship_admin.AcademicDashboardAPIView.as_view()),
     path("batches/<int:batch_id>/unassigned-students/", internship_admin.BatchUnassignedStudentsAPIView.as_view(), name="batch-unassigned-students",),
     path("batches/<int:batch_id>/assign-students/", internship_admin.BatchAssignStudentsAPIView.as_view(), name="batch-assign-students",),
+
+    # reciept
+    path(
+        "students/payment-receipt/<int:pk>/",
+        internship_admin.StudentAdmissionReceiptAPIView.as_view(),
+    ),
 ]
 
 report_patterns = [

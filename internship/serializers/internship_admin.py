@@ -3413,3 +3413,49 @@ class PaymentReportSerializer(serializers.ModelSerializer):
             return payment.payment_method
 
         return None
+
+
+class StudentAdmissionReceiptSerializer(serializers.Serializer):
+
+    debit_id = serializers.IntegerField()
+    credit_id = serializers.IntegerField()
+
+    prepared_by = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+
+    recived_by = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+
+    bank_name = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
+
+    cheque_number = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
+
+    tax_rate = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        required=False,
+        default=0,
+    )
+
+    remark = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+
+    description = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )

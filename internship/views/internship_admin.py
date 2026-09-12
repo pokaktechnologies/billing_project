@@ -1,7 +1,7 @@
 from decimal import Decimal
 from django.db.migrations import serializer
 from django.utils import timezone
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Q, Count, Prefetch, Sum, DecimalField, Value, ExpressionWrapper
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
@@ -20,7 +20,7 @@ from django.db.models.functions import TruncMonth
 from accounts.services.receipt_service import StudentReceiptService
 from internship.serializers.instructor import StudentReportSerializer
 from ..models import InternshipApplication, Section, Class, Student, Course, Faculty, StudentCourseEnrollment, CoursePayment, StudentReport
-from ..serializers.internship_admin import AvailableFacultySerializer, AvailableStudentSerializer, BatchInformationSerializer, ClassDetailSerializer, SectionSerializer, ClassListCreateSerializer, StudentPaymentDetailSerializer, StudentPaymentSerializer, StudentProfileDetailSerializer
+from ..serializers.internship_admin import AvailableFacultySerializer, AvailableStudentSerializer, BatchInformationSerializer, ClassDetailSerializer, SectionSerializer, ClassListCreateSerializer, StudentAdmissionReceiptSerializer, StudentPaymentDetailSerializer, StudentPaymentSerializer, StudentProfileDetailSerializer
 
 from accounts.models import CustomUser, StaffProfile
 from internship.utils import (
@@ -1561,4 +1561,77 @@ class BatchAssignStudentsAPIView(APIView):
                 "enrollment_ids": enrollment_ids,
             },
             status=status.HTTP_200_OK
+        )
+
+
+class StudentAdmissionReceiptAPIView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+
+        enrollment = get_object_or_404(
+            StudentCourseEnrollment.objects.select_related(
+                "student__profile__user",
+                "course",
+            ),
+            pk=pk,
+        )
+
+        serializer = StudentAdmissionReceiptSerializer(
+            data=request.data
+        )
+
+        serializer.is_valid(
+            raise_exception=True
+        )
+
+        try:
+
+            with transaction.atomic():
+
+                result = StudentReceiptService.create_admission_receipts(
+                    enrollment=enrollment,
+                    receipt_data=serializer.validated_data,
+                    user=request.user,
+                )
+
+        except ValueError as exc:
+
+            return Response(
+                {
+                    "status": "0",
+                    "message": str(exc),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        except IntegrityError:
+
+            return Response(
+                {
+                    "status": "0",
+                    "message": "Receipt could not be created because of a database integrity error.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        except Exception as exc:
+
+            return Response(
+                {
+                    "status": "0",
+                    "message": f"Receipt creation failed: {str(exc)}",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            {
+                "status": "1",
+                "message": "Receipt processing completed.",
+                "created": result["created"],
+                "skipped": result["skipped"],
+            },
+            status=status.HTTP_201_CREATED,
         )

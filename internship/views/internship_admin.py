@@ -1632,6 +1632,8 @@ class StudentAdmissionReceiptAPIView(APIView):
                 "message": "Receipt processing completed.",
                 "created": result["created"],
                 "skipped": result["skipped"],
+                "advance_created": result["advance_created"],
+                "slot_created": result["slot_created"],
             },
             status=status.HTTP_201_CREATED,
         )

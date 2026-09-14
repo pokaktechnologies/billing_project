@@ -294,6 +294,14 @@ class StudentReceiptService:
         return {
             "created": created_receipts,
             "skipped": skipped_receipts,
+            "advance_created": "advance" in skipped_receipts or any(
+                item["type"] == "advance"
+                for item in created_receipts
+            ),
+            "slot_created": "slot" in skipped_receipts or any(
+                item["type"] == "slot"
+                for item in created_receipts
+            ),
         }
 
     @staticmethod

@@ -1270,6 +1270,7 @@ class ModulePermission(models.Model):
         ("hr_payroll", "HR Payroll"),
         ("hr_faculty", "HR Faculty"),
         ("hr_salary_statements", "HR Salary Statements"),
+        ("hr_admissions", "HR Admissions"),
 
         # TASK
         ("task_all", "All Tasks"),
@@ -1332,6 +1333,7 @@ class ModulePermission(models.Model):
         ('classes', "Classes"),
         ('form_submissions', "Form Submissions"),
         ('internship_reports', "Internship Reports"),
+        ('admissions', "Admissions"),
 
         # FACULTY MANAGEMENT
         ('all_tasks', "All Tasks"),

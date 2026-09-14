@@ -1,6 +1,6 @@
-from datetime import timedelta
-from datetime import datetime
+from datetime import timedelta, datetime, time
 from django.utils.timezone import now, make_aware
+from django.utils.dateparse import parse_date
 from rest_framework import generics
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -9,9 +9,14 @@ from rest_framework.permissions import IsAuthenticated
 from django.db.models import Count, Q, F, Sum
 from django.shortcuts import get_object_or_404
 from accounts.models import StaffProfile, SalesPerson
-from internship.serializers.report_serializers import SalesPersonSerializer, RegistrationReportSerializer, CounsellorConversionStudentSerializer
-from accounts.permissions import HasModulePermission
-from internship.models import Center, Task, TaskSubmission, AssignedStaffCourse, TaskAssignment, CoursePayment, Student
+from internship.models import Center, Task, TaskSubmission, AssignedStaffCourse, TaskAssignment, CoursePayment, Student, CounsellorHRSubmission
+from internship.serializers.report_serializers import (
+    SalesPersonSerializer,
+    RegistrationReportSerializer,
+    CounsellorConversionStudentSerializer,
+    CounsellorHRSubmissionSerializer,
+    CounsellorProceedToHRSerializer,
+)
 from internship.serializers.report_serializers import CenterDetailReportSerializer, CenterReportsSerializer, TaskReportSerializer, InternTaskPerformanceReportSerializer, \
     TaskSubmissionReportSerializer, InternPaymentSummaryReportSerializer, InternSummaryReportSerializer, \
     EnrollmentReportSerializer, StudentInSerializer
@@ -548,15 +553,35 @@ class CounsellorConversionReportAPIView(APIView):
         course_id = request.query_params.get("course_id")
 
         if start_date:
-            students = students.filter(created_at__date__gte=start_date)
+            d_start = parse_date(start_date)
+            if d_start:
+                students = students.filter(created_at__gte=make_aware(datetime.combine(d_start, time.min)))
+            else:
+                students = students.filter(created_at__date__gte=start_date)
+
         if end_date:
-            students = students.filter(created_at__date__lte=end_date)
+            d_end = parse_date(end_date)
+            if d_end:
+                students = students.filter(created_at__lte=make_aware(datetime.combine(d_end, time.max)))
+            else:
+                students = students.filter(created_at__date__lte=end_date)
+
         if course_id:
             students = students.filter(enrollments__course_id=course_id)
 
         students = students.distinct().order_by("-created_at")
 
         serializer = CounsellorConversionStudentSerializer(students, many=True)
+
+        submission_status = None
+        if start_date and end_date:
+            submission = CounsellorHRSubmission.objects.filter(
+                counsellor=counsellor,
+                start_date=start_date,
+                end_date=end_date,
+            ).first()
+            if submission:
+                submission_status = CounsellorHRSubmissionSerializer(submission).data
 
         return Response({
             "counsellor": {
@@ -570,6 +595,7 @@ class CounsellorConversionReportAPIView(APIView):
                 "total_students": students.count(),
                 "total_students_all_time": total_students_all_time,
             },
+            "submission_status": submission_status,
             "students": serializer.data,
         })
 
@@ -720,3 +746,163 @@ class RegistrationReportAPIView(APIView):
             "total_paid": f"{total_paid:.2f}",
             "students": students_data,
         })
+
+
+class CounsellorProceedToHRAPIView(APIView):
+    """
+    POST: Proceed a counsellor's verified conversions for a specific date range to HR.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, counsellor_id):
+        counsellor = get_object_or_404(SalesPerson, id=counsellor_id)
+        serializer = CounsellorProceedToHRSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        start_date = serializer.validated_data["start_date"]
+        end_date = serializer.validated_data["end_date"]
+        period_label = serializer.validated_data.get("period_label")
+        remarks = serializer.validated_data.get("remarks")
+
+        # Check if already submitted for this exact date range
+        existing = CounsellorHRSubmission.objects.filter(
+            counsellor=counsellor,
+            start_date=start_date,
+            end_date=end_date,
+        ).first()
+
+        if existing:
+            if existing.status == "submitted":
+                return Response(
+                    {"detail": "A submission for this counsellor and date range is already pending with HR."},
+                    status=400,
+                )
+            elif existing.status == "approved":
+                return Response(
+                    {"detail": "Conversions for this counsellor and date range have already been approved by HR."},
+                    status=400,
+                )
+            # If previously rejected, allow re-submission
+            existing.status = "submitted"
+            existing.period_label = period_label or existing.period_label
+            existing.remarks = remarks or existing.remarks
+            existing.submitted_by = request.user
+            existing.reviewed_by = None
+            existing.reviewed_at = None
+            existing.save()
+            submission = existing
+        else:
+            submission = CounsellorHRSubmission.objects.create(
+                counsellor=counsellor,
+                start_date=start_date,
+                end_date=end_date,
+                period_label=period_label,
+                remarks=remarks,
+                submitted_by=request.user,
+                status="submitted",
+            )
+
+        # Count students in this range for quick response feedback
+        student_count = Student.objects.filter(
+            councellor=counsellor,
+            created_at__gte=make_aware(datetime.combine(start_date, time.min)),
+            created_at__lte=make_aware(datetime.combine(end_date, time.max)),
+        ).count()
+
+        return Response({
+            "message": "Conversions successfully submitted to HR.",
+            "submission": CounsellorHRSubmissionSerializer(submission).data,
+            "total_students": student_count,
+        }, status=201)
+
+
+class HRSubmissionsListAPIView(APIView):
+    """
+    GET: List all counsellor HR submissions. Supports filtering by status, counsellor_id, month, year.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        queryset = CounsellorHRSubmission.objects.select_related("counsellor", "submitted_by", "reviewed_by").all()
+
+        counsellor_id = request.query_params.get("counsellor_id")
+        status_filter = request.query_params.get("status")
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
+
+        if counsellor_id:
+            queryset = queryset.filter(counsellor_id=counsellor_id)
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        if start_date:
+            queryset = queryset.filter(start_date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(end_date__lte=end_date)
+
+        serializer = CounsellorHRSubmissionSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+
+class HRSubmissionDetailAPIView(APIView):
+    """
+    GET: Retrieve details of a specific submission, dynamically fetching the students in that date range.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        submission = get_object_or_404(
+            CounsellorHRSubmission.objects.select_related("counsellor", "submitted_by", "reviewed_by"),
+            pk=pk
+        )
+
+        students = Student.objects.filter(
+            councellor=submission.counsellor,
+            created_at__gte=make_aware(datetime.combine(submission.start_date, time.min)),
+            created_at__lte=make_aware(datetime.combine(submission.end_date, time.max)),
+        ).select_related(
+            "profile__user"
+        ).prefetch_related(
+            "enrollments__course",
+            "course_payments"
+        ).distinct().order_by("-created_at")
+
+        student_serializer = CounsellorConversionStudentSerializer(students, many=True)
+
+        return Response({
+            "submission": CounsellorHRSubmissionSerializer(submission).data,
+            "summary": {
+                "total_students": students.count(),
+            },
+            "students": student_serializer.data,
+        })
+
+
+class HRSubmissionActionAPIView(APIView):
+    """
+    POST: Approve or reject an HR submission.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        submission = get_object_or_404(CounsellorHRSubmission, pk=pk)
+        action = request.data.get("action")
+        remarks = request.data.get("remarks")
+
+        if action not in ["approved", "rejected"]:
+            return Response(
+                {"detail": "Invalid action. Must be 'approved' or 'rejected'."},
+                status=400,
+            )
+
+        submission.status = action
+        submission.reviewed_by = request.user
+        submission.reviewed_at = now()
+        if remarks:
+            submission.remarks = remarks
+        submission.save()
+
+        return Response({
+            "message": f"Submission successfully {action}.",
+            "submission": CounsellorHRSubmissionSerializer(submission).data,
+        })
+

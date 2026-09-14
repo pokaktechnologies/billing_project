@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 from accounts.models import Department, SalesPerson, StaffProfile
 from project_management.models import STATUS_CHOICES
@@ -1131,3 +1132,54 @@ class ReportFieldValue(models.Model):
 
     def __str__(self):
         return f"{self.report} - {self.field.label}"
+
+
+class CounsellorHRSubmission(models.Model):
+    STATUS_CHOICES = [
+        ('submitted', 'Submitted to HR'),
+        ('approved', 'Approved by HR'),
+        ('rejected', 'Rejected by HR'),
+    ]
+
+    counsellor = models.ForeignKey(
+        SalesPerson,
+        on_delete=models.CASCADE,
+        related_name="hr_submissions"
+    )
+    start_date = models.DateField(help_text="Start date of conversion period")
+    end_date = models.DateField(help_text="End date of conversion period")
+    period_label = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="e.g. 'April 2026' or 'Q1 2026'"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='submitted'
+    )
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="submitted_counsellor_hr_batches"
+    )
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_counsellor_hr_batches"
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    remarks = models.TextField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['-submitted_at']
+        unique_together = ['counsellor', 'start_date', 'end_date']
+
+    def __str__(self):
+        return f"{self.counsellor} ({self.start_date} to {self.end_date}) - {self.status}"

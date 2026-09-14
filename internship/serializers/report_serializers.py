@@ -6,7 +6,7 @@ from django.utils.timezone import now
 from rest_framework import serializers
 
 from accounts.models import StaffProfile, SalesPerson
-from internship.models import Batch, Center, Course, Student, TaskSubmission, AssignedStaffCourse, CoursePayment, TaskAssignment, Faculty, InstallmentItem, StudentInstallmentItem
+from internship.models import Batch, Center, Course, Student, TaskSubmission, AssignedStaffCourse, CoursePayment, TaskAssignment, Faculty, InstallmentItem, StudentInstallmentItem, CounsellorHRSubmission
 from internship.serializers.internship_admin import InstallmentPlanSerializer
 from internship.utils import (
     get_installment_due_date_for_staff,
@@ -1091,3 +1091,61 @@ class CounsellorConversionStudentSerializer(serializers.ModelSerializer):
             "payment_date": str(first.payment_date),
             "payment_type": first.payment_type,
         }
+
+
+class CounsellorHRSubmissionSerializer(serializers.ModelSerializer):
+    counsellor_name = serializers.CharField(source="counsellor.get_full_name", read_only=True)
+    submitted_by_name = serializers.SerializerMethodField()
+    reviewed_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CounsellorHRSubmission
+        fields = [
+            "id",
+            "counsellor",
+            "counsellor_name",
+            "start_date",
+            "end_date",
+            "period_label",
+            "status",
+            "submitted_by",
+            "submitted_by_name",
+            "submitted_at",
+            "reviewed_by",
+            "reviewed_by_name",
+            "reviewed_at",
+            "remarks",
+        ]
+        read_only_fields = [
+            "id",
+            "status",
+            "submitted_by",
+            "submitted_at",
+            "reviewed_by",
+            "reviewed_at",
+        ]
+
+    def get_submitted_by_name(self, obj):
+        if obj.submitted_by:
+            return f"{obj.submitted_by.first_name} {obj.submitted_by.last_name}".strip() or obj.submitted_by.username
+        return None
+
+    def get_reviewed_by_name(self, obj):
+        if obj.reviewed_by:
+            return f"{obj.reviewed_by.first_name} {obj.reviewed_by.last_name}".strip() or obj.reviewed_by.username
+        return None
+
+
+class CounsellorProceedToHRSerializer(serializers.Serializer):
+    start_date = serializers.DateField(required=True)
+    end_date = serializers.DateField(required=True)
+    period_label = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    remarks = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        start_date = attrs.get("start_date")
+        end_date = attrs.get("end_date")
+        if start_date and end_date and start_date > end_date:
+            raise serializers.ValidationError({"end_date": "end_date must be greater than or equal to start_date."})
+        return attrs
+

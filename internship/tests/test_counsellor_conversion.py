@@ -25,6 +25,7 @@ from internship.models import (
     InternshipApplication,
     Student,
     StudentCourseEnrollment,
+    CounsellorHRSubmission,
 )
 from internship.utils import StudentConversionService
 
@@ -406,6 +407,71 @@ class CounsellorConversionReportTests(TestCase):
         self.assertEqual(counsellor_a_data["total_students"], 3)
 
         self._print_result("test_counsellor_list_includes_test_data", response, True)
+
+    # ──────────────────────────────────────────────────────────
+    # Tests for Proceed to HR & HR Submissions
+    # ──────────────────────────────────────────────────────────
+
+    def test_proceed_to_hr_success_and_duplicate_prevention(self):
+        """Test submitting to HR, checking status, preventing duplicates, and multi-range submissions."""
+        # 1. Proceed April to HR
+        url = f"/internship/report/counsellors/{self.counsellor_a.id}/proceed-to-hr/"
+        payload = {
+            "start_date": "2026-04-01",
+            "end_date": "2026-04-30",
+            "period_label": "April 2026",
+            "remarks": "April batch verified"
+        }
+        response = self.client.post(url, data=payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        data = response.json()
+        self.assertEqual(data["submission"]["status"], "submitted")
+        self.assertEqual(data["submission"]["period_label"], "April 2026")
+        submission_id = data["submission"]["id"]
+
+        # 2. Duplicate submission for same period should fail with 400
+        dup_resp = self.client.post(url, data=payload, format="json")
+        self.assertEqual(dup_resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # 3. Another month (June 2026) for the SAME counsellor should SUCCEED
+        june_payload = {
+            "start_date": "2026-06-01",
+            "end_date": "2026-06-30",
+            "period_label": "June 2026"
+        }
+        june_resp = self.client.post(url, data=june_payload, format="json")
+        self.assertEqual(june_resp.status_code, status.HTTP_201_CREATED)
+
+        # 4. Conversion report endpoint now shows submission_status
+        conv_url = f"/internship/report/counsellors/{self.counsellor_a.id}/conversion/?start_date=2026-04-01&end_date=2026-04-30"
+        conv_resp = self.client.get(conv_url)
+        self.assertEqual(conv_resp.status_code, status.HTTP_200_OK)
+        conv_data = conv_resp.json()
+        self.assertIsNotNone(conv_data["submission_status"])
+        self.assertEqual(conv_data["submission_status"]["status"], "submitted")
+
+        # 5. HR List submissions
+        hr_list_resp = self.client.get("/internship/report/hr/counsellor-submissions/")
+        self.assertEqual(hr_list_resp.status_code, status.HTTP_200_OK)
+        submissions_list = hr_list_resp.json()
+        self.assertTrue(any(s["id"] == submission_id for s in submissions_list))
+
+        # 6. HR Submission detail (dynamically querying students)
+        hr_detail_resp = self.client.get(f"/internship/report/hr/counsellor-submissions/{submission_id}/")
+        self.assertEqual(hr_detail_resp.status_code, status.HTTP_200_OK)
+        detail_data = hr_detail_resp.json()
+        self.assertIn("students", detail_data)
+        self.assertIn("summary", detail_data)
+
+        # 7. HR Approve action
+        action_resp = self.client.post(
+            f"/internship/report/hr/counsellor-submissions/{submission_id}/action/",
+            data={"action": "approved", "remarks": "Approved by HR"},
+            format="json"
+        )
+        self.assertEqual(action_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(action_resp.json()["submission"]["status"], "approved")
+
 
     # ──────────────────────────────────────────────────────────
     # Print final summary

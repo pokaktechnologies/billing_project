@@ -72,7 +72,8 @@ PARENT_MODULE_MAP = [
             "hr_leaves",
             "hr_payroll",
             "hr_salary_statements",
-            "hr_reports"
+            "hr_reports",
+            "hr_admissions"
         ]
     },
 
@@ -87,7 +88,8 @@ PARENT_MODULE_MAP = [
             "centers",
             "classes",
             "form_submissions",
-            "internship_reports"
+            "internship_reports",
+            "admissions"
         ]
     },
 

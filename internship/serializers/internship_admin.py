@@ -596,6 +596,7 @@ class StudentSerializer(serializers.ModelSerializer):
     profile = StaffProfileSerializer(required=False, allow_null=True)
     batch = serializers.SerializerMethodField()
     batch_number = serializers.SerializerMethodField()
+    enrollment_id = serializers.SerializerMethodField()
     courses = serializers.SerializerMethodField()
     faculty = serializers.SerializerMethodField()
     center_name = serializers.CharField(source="center.name", read_only=True)
@@ -832,7 +833,16 @@ class StudentSerializer(serializers.ModelSerializer):
                 }
 
         return list(faculties.values())
+    
+    def get_enrollment_id(self, obj):
+        enrollment = (
+            StudentCourseEnrollment.objects
+            .filter(student=obj)
+            .order_by("-id")
+            .first()
+        )
 
+        return enrollment.id if enrollment else None
     def get_payment_type(self, obj):
         enrollment = obj.enrollments.first()
         return enrollment.installment_plan.id if enrollment and enrollment.installment_plan else None

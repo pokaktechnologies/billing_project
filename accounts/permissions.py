@@ -125,7 +125,8 @@ PARENT_MODULE_MAP = [
             "trial_balance",
             "balance_sheet",
             "profit_loss",
-            "financial_year"
+            "financial_year",
+            "accounts_admissions"
         ]
     },
 

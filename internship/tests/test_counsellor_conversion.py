@@ -232,6 +232,33 @@ class CounsellorConversionReportTests(TestCase):
             councellor=cls.counsellor_a,
         )
 
+        # ──────────────────────────────────────────────────────
+        # Application (Unconverted - New Registration with Slot Amount)
+        # ──────────────────────────────────────────────────────
+        cls.unconverted_app = InternshipApplication.objects.create(
+            first_name="RegApp",
+            last_name="Pending",
+            primary_phone="+919876500099",
+            email="regapp_pending@example.com",
+            dob="2001-05-20",
+            gender="female",
+            qualification="ug",
+            course_name="Data Science",
+            address="Test Address Pending",
+            state="Kerala",
+            district="Ernakulam",
+            pincode="682001",
+            course_duration=6,
+            course_type="offline",
+            course=cls.course_2,
+            councellor=cls.counsellor_a,
+            slot_amount=2000,
+            slot_payment_method="upi",
+            slot_payment_date=today - timedelta(days=2),
+            slot_transaction_id="TXN-SLOT-001",
+            is_converted=False,
+        )
+
         # ── Store IDs for report ──
         cls.created_data = {
             "counsellor_a": cls.counsellor_a.id,
@@ -276,7 +303,7 @@ class CounsellorConversionReportTests(TestCase):
     # ──────────────────────────────────────────────────────────
 
     def test_conversion_report_no_filters(self):
-        """All students under counsellor_a should be returned."""
+        """All students & registrations under counsellor_a should be returned."""
         url = self.base_url.format(self.counsellor_a.id)
         response = self.client.get(url)
 
@@ -285,9 +312,11 @@ class CounsellorConversionReportTests(TestCase):
         data = response.json()
         self.assertEqual(data["counsellor"]["id"], self.counsellor_a.id)
         self.assertEqual(data["counsellor"]["name"], "TestCounsellor A")
-        self.assertEqual(data["summary"]["total_students"], 3)
+        self.assertEqual(data["summary"]["total_records"], 4)
+        self.assertEqual(data["summary"]["new_admissions_count"], 3)
+        self.assertEqual(data["summary"]["new_registrations_count"], 1)
         self.assertEqual(data["summary"]["total_students_all_time"], 3)
-        self.assertEqual(len(data["students"]), 3)
+        self.assertEqual(len(data["records"]), 4)
 
         self._print_result("test_conversion_report_no_filters", response, True)
 
@@ -309,7 +338,7 @@ class CounsellorConversionReportTests(TestCase):
 
         data = response.json()
         # total_students should be filtered count
-        self.assertLessEqual(data["summary"]["total_students"], 3)
+        self.assertLessEqual(data["summary"]["new_admissions_count"], 3)
         # total_students_all_time should still be all
         self.assertEqual(data["summary"]["total_students_all_time"], 3)
 
@@ -320,16 +349,16 @@ class CounsellorConversionReportTests(TestCase):
     # ──────────────────────────────────────────────────────────
 
     def test_conversion_report_course_filter(self):
-        """Only students enrolled in the specified course should be returned."""
+        """Only records enrolled/applied in the specified course should be returned."""
         url = self.base_url.format(self.counsellor_a.id)
         response = self.client.get(url, {"course_id": self.course_2.id})
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         data = response.json()
-        # Only student_2 is enrolled in course_2
-        self.assertEqual(data["summary"]["total_students"], 1)
-        self.assertEqual(data["students"][0]["name"], "DirectStudent Two")
+        names = [r["name"] for r in data["records"]]
+        self.assertIn("DirectStudent Two", names)
+        self.assertIn("RegApp Pending", names)
 
         self._print_result("test_conversion_report_course_filter", response, True)
 
@@ -427,6 +456,11 @@ class CounsellorConversionReportTests(TestCase):
         data = response.json()
         self.assertEqual(data["submission"]["status"], "submitted")
         self.assertEqual(data["submission"]["period_label"], "April 2026")
+        self.assertIn("summary", data)
+        self.assertIn("total_records", data)
+        self.assertIn("new_admissions_count", data["summary"])
+        self.assertIn("new_registrations_count", data["summary"])
+        self.assertIn("summary", data["submission"])
         submission_id = data["submission"]["id"]
 
         # 2. Duplicate submission for same period should fail with 400
@@ -471,6 +505,82 @@ class CounsellorConversionReportTests(TestCase):
         )
         self.assertEqual(action_resp.status_code, status.HTTP_200_OK)
         self.assertEqual(action_resp.json()["submission"]["status"], "approved")
+
+        # 8. HR Rejection validation (remarks required)
+        # Create another submission to test rejection
+        sub_july = self.client.post(
+            f"/internship/report/counsellors/{self.counsellor_a.id}/proceed-to-hr/",
+            data={"start_date": "2026-07-01", "end_date": "2026-07-31", "period_label": "July 2026"},
+            format="json"
+        ).json()["submission"]["id"]
+
+        reject_fail_resp = self.client.post(
+            f"/internship/report/hr/counsellor-submissions/{sub_july}/action/",
+            data={"action": "rejected"},
+            format="json"
+        )
+        self.assertEqual(reject_fail_resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Remarks are required", reject_fail_resp.json()["detail"])
+
+        # Reject with remarks succeeds
+        reject_ok_resp = self.client.post(
+            f"/internship/report/hr/counsellor-submissions/{sub_july}/action/",
+            data={"action": "rejected", "remarks": "Need more student details."},
+            format="json"
+        )
+        self.assertEqual(reject_ok_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(reject_ok_resp.json()["submission"]["status"], "rejected")
+
+        # 9. Test HR List filters (month, year, search)
+        list_filtered = self.client.get("/internship/report/hr/counsellor-submissions/", {"year": "2026", "month": "7"})
+        self.assertEqual(list_filtered.status_code, status.HTTP_200_OK)
+        self.assertTrue(any(s["id"] == sub_july for s in list_filtered.json()))
+
+        list_search = self.client.get("/internship/report/hr/counsellor-submissions/", {"search": "July"})
+        self.assertEqual(list_search.status_code, status.HTTP_200_OK)
+        self.assertTrue(any(s["id"] == sub_july for s in list_search.json()))
+
+        # 10. Test HR Detail filters (type=admission, type=registration, course)
+        detail_adm = self.client.get(f"/internship/report/hr/counsellor-submissions/{sub_july}/", {"type": "admission"})
+        self.assertEqual(detail_adm.status_code, status.HTTP_200_OK)
+        self.assertIn("counsellor", detail_adm.json())
+        self.assertTrue(all(r["record_type"] == "admission" for r in detail_adm.json()["records"]))
+
+    # ──────────────────────────────────────────────────────────
+    # Test 8: New Admissions vs New Registrations with Type Filter
+    # ──────────────────────────────────────────────────────────
+
+    def test_conversion_report_type_filter_and_registrations(self):
+        """Test type=all, type=admission, and type=registration filtering with slot booking amount."""
+        url = self.base_url.format(self.counsellor_a.id)
+
+        # 1. type=all (default) -> should return 3 admissions + 1 unconverted application
+        resp_all = self.client.get(url, {"type": "all"})
+        self.assertEqual(resp_all.status_code, status.HTTP_200_OK)
+        data_all = resp_all.json()
+        self.assertEqual(data_all["summary"]["new_admissions_count"], 3)
+        self.assertEqual(data_all["summary"]["new_registrations_count"], 1)
+        self.assertEqual(data_all["summary"]["total_records"], 4)
+
+        # 2. type=admission -> only admissions (3)
+        resp_adm = self.client.get(url, {"type": "admission"})
+        self.assertEqual(resp_adm.status_code, status.HTTP_200_OK)
+        data_adm = resp_adm.json()
+        self.assertEqual(data_adm["summary"]["total_records"], 3)
+        self.assertTrue(all(r["record_type"] == "admission" for r in data_adm["records"]))
+
+        # 3. type=registration -> only unconverted application (1) with slot amount
+        resp_reg = self.client.get(url, {"type": "registration"})
+        self.assertEqual(resp_reg.status_code, status.HTTP_200_OK)
+        data_reg = resp_reg.json()
+        self.assertEqual(data_reg["summary"]["total_records"], 1)
+        reg_item = data_reg["records"][0]
+        self.assertEqual(reg_item["record_type"], "registration")
+        self.assertEqual(reg_item["name"], "RegApp Pending")
+        self.assertEqual(reg_item["payment"]["payment_label"], "Slot Booking Amount")
+        self.assertEqual(reg_item["payment"]["amount"], "2000.00")
+        self.assertEqual(reg_item["payment"]["payment_method"], "upi")
+
 
 
     # ──────────────────────────────────────────────────────────

@@ -7,7 +7,7 @@ from django.db.models import Sum,Q
 from rest_framework import serializers
 from twisted.test import obj
 
-from accounts.models import CustomUser, Department, ModulePermission, StaffProfile
+from accounts.models import CustomUser, Department, ModulePermission, ReceiptModel, StaffProfile
 from ..models import (
     PAYMENT_METHODS,
     Batch,
@@ -603,6 +603,8 @@ class StudentSerializer(serializers.ModelSerializer):
     payment_type = serializers.SerializerMethodField()
     payment_installment_count = serializers.SerializerMethodField()
     student_id = serializers.CharField(read_only=True)
+    advance_created = serializers.SerializerMethodField()
+    slot_created = serializers.SerializerMethodField()
     modules = serializers.ListField(
         child=serializers.ChoiceField(choices=ModulePermission.MODULE_CHOICES),
         write_only=True,
@@ -731,8 +733,9 @@ class StudentSerializer(serializers.ModelSerializer):
             "enrollment_payment_date",
             "enrollment_discount_amount",
             "enrollment_discount_reason",
-            "enrollment_receipt"
-            
+            "enrollment_receipt",
+            "slot_created",
+            "advance_created"
         ]
         extra_kwargs = {
             "profile": {"required": False}
@@ -777,6 +780,22 @@ class StudentSerializer(serializers.ModelSerializer):
             return application.slot_amount
 
         return None
+    def get_slot_created(self, obj):
+        return ReceiptModel.objects.filter(
+            receipt_type="intern",
+            receipt_for="slot",
+            intern=obj.student.profile,
+            course=obj.course,
+        ).exists()
+
+
+    def get_advance_created(self, obj):
+        return ReceiptModel.objects.filter(
+            receipt_type="intern",
+            receipt_for="advance",
+            intern=obj.student.profile,
+            course=obj.course,
+        ).exists()
     
     def get_full_name(self, obj):
         return obj.get_full_name()

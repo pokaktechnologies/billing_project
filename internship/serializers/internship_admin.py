@@ -706,6 +706,7 @@ class StudentSerializer(serializers.ModelSerializer):
             "student_id",
             "profile",
             "full_name",
+            "enrollment_id",
             "center",
             "center_name",
             "courses",

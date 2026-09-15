@@ -9,11 +9,12 @@ from rest_framework.permissions import IsAuthenticated
 from django.db.models import Count, Q, F, Sum
 from django.shortcuts import get_object_or_404
 from accounts.models import StaffProfile, SalesPerson
-from internship.models import Center, Task, TaskSubmission, AssignedStaffCourse, TaskAssignment, CoursePayment, Student, CounsellorHRSubmission
+from internship.models import Center, Task, TaskSubmission, AssignedStaffCourse, TaskAssignment, CoursePayment, Student, CounsellorHRSubmission, InternshipApplication
 from internship.serializers.report_serializers import (
     SalesPersonSerializer,
     RegistrationReportSerializer,
     CounsellorConversionStudentSerializer,
+    CounsellorRegistrationApplicationSerializer,
     CounsellorHRSubmissionSerializer,
     CounsellorProceedToHRSerializer,
 )
@@ -536,43 +537,99 @@ class CounsellorConversionReportAPIView(APIView):
     def get(self, request, counsellor_id):
         counsellor = get_object_or_404(SalesPerson, id=counsellor_id)
 
-        # ── base queryset: all students under this counsellor ──
-        all_students = Student.objects.filter(councellor=counsellor)
-        total_students_all_time = all_students.count()
-
-        # ── filtered queryset ──
-        students = all_students.select_related(
-            "profile__user",
-        ).prefetch_related(
-            "enrollments__course",
-            "course_payments",
-        )
-
         start_date = request.query_params.get("start_date")
         end_date = request.query_params.get("end_date")
         course_id = request.query_params.get("course_id")
+        record_type_filter = request.query_params.get("type", "all").lower().strip()
 
+        # Parse date bounds safely
+        d_start = None
         if start_date:
-            d_start = parse_date(start_date)
-            if d_start:
-                students = students.filter(created_at__gte=make_aware(datetime.combine(d_start, time.min)))
-            else:
-                students = students.filter(created_at__date__gte=start_date)
+            try:
+                d_start = parse_date(start_date)
+                if not d_start:
+                    return Response({"detail": f"Invalid start_date format '{start_date}'. Use YYYY-MM-DD."}, status=400)
+            except ValueError as e:
+                return Response({"detail": f"Invalid start_date '{start_date}': {str(e)}."}, status=400)
 
+        d_end = None
         if end_date:
-            d_end = parse_date(end_date)
-            if d_end:
-                students = students.filter(created_at__lte=make_aware(datetime.combine(d_end, time.max)))
-            else:
-                students = students.filter(created_at__date__lte=end_date)
+            try:
+                d_end = parse_date(end_date)
+                if not d_end:
+                    return Response({"detail": f"Invalid end_date format '{end_date}'. Use YYYY-MM-DD."}, status=400)
+            except ValueError as e:
+                return Response({"detail": f"Invalid end_date '{end_date}': {str(e)}."}, status=400)
 
-        if course_id:
-            students = students.filter(enrollments__course_id=course_id)
+        if d_start and d_end and d_start > d_end:
+            return Response({"detail": "end_date must be greater than or equal to start_date."}, status=400)
 
-        students = students.distinct().order_by("-created_at")
+        dt_start = make_aware(datetime.combine(d_start, time.min)) if d_start else None
+        dt_end = make_aware(datetime.combine(d_end, time.max)) if d_end else None
 
-        serializer = CounsellorConversionStudentSerializer(students, many=True)
+        # ── 1. New Admissions (Students) ──
+        all_students = Student.objects.filter(councellor=counsellor)
+        total_students_all_time = all_students.count()
 
+        admissions_data = []
+        if record_type_filter in ["all", "admission"]:
+            students = all_students.select_related(
+                "profile__user",
+            ).prefetch_related(
+                "enrollments__course",
+                "course_payments",
+            )
+            if dt_start:
+                students = students.filter(created_at__gte=dt_start)
+            if dt_end:
+                students = students.filter(created_at__lte=dt_end)
+            if course_id:
+                students = students.filter(enrollments__course_id=course_id)
+
+            students = students.distinct().order_by("-created_at")
+            admissions_data = CounsellorConversionStudentSerializer(students, many=True).data
+
+        # ── 2. New Registrations (Unconverted Applications) ──
+        registrations_data = []
+        if record_type_filter in ["all", "registration"]:
+            applications = InternshipApplication.objects.filter(
+                councellor=counsellor,
+                is_converted=False,
+            ).select_related("course")
+
+            if dt_start:
+                applications = applications.filter(created_at__gte=dt_start)
+            if dt_end:
+                applications = applications.filter(created_at__lte=dt_end)
+            if course_id:
+                applications = applications.filter(course_id=course_id)
+
+            applications = applications.distinct().order_by("-created_at")
+            registrations_data = CounsellorRegistrationApplicationSerializer(applications, many=True).data
+
+        # ── 3. Combined Records ──
+        if record_type_filter == "admission":
+            combined_records = admissions_data
+        elif record_type_filter == "registration":
+            combined_records = registrations_data
+        else:
+            combined_records = sorted(
+                admissions_data + registrations_data,
+                key=lambda r: r.get("created_at") or "",
+                reverse=True,
+            )
+
+        # ── 4. Payment Totals ──
+        total_payments = Decimal("0.00")
+        for rec in combined_records:
+            p = rec.get("payment")
+            if p and p.get("amount"):
+                try:
+                    total_payments += Decimal(str(p["amount"]))
+                except Exception:
+                    pass
+
+        # ── 5. Submission Status ──
         submission_status = None
         if start_date and end_date:
             submission = CounsellorHRSubmission.objects.filter(
@@ -583,6 +640,18 @@ class CounsellorConversionReportAPIView(APIView):
             if submission:
                 submission_status = CounsellorHRSubmissionSerializer(submission).data
 
+        # ── 6. Team Leader Info ──
+        team_leader_info = None
+        # Check if designation contains Team Leader or if assigned_staff has a team lead
+        if hasattr(counsellor, "team_leader") and counsellor.team_leader:
+            tl = counsellor.team_leader
+            team_leader_info = {
+                "id": tl.id,
+                "name": tl.get_full_name(),
+                "email": getattr(tl, "email", None),
+                "phone": getattr(tl, "phone", None),
+            }
+
         return Response({
             "counsellor": {
                 "id": counsellor.id,
@@ -590,13 +659,19 @@ class CounsellorConversionReportAPIView(APIView):
                 "email": counsellor.email,
                 "phone": counsellor.phone,
                 "designation": counsellor.designation,
+                "team_leader": team_leader_info,
             },
             "summary": {
-                "total_students": students.count(),
+                "total_records": len(combined_records),
+                "new_admissions_count": len(admissions_data),
+                "new_registrations_count": len(registrations_data),
+                "total_students": len(admissions_data),  # Backwards compatibility
                 "total_students_all_time": total_students_all_time,
+                "total_payment_collected": f"{total_payments:.2f}",
             },
             "submission_status": submission_status,
-            "students": serializer.data,
+            "records": combined_records,
+            "students": combined_records,  # Backwards compatibility alias
         })
 
 
@@ -802,42 +877,117 @@ class CounsellorProceedToHRAPIView(APIView):
                 status="submitted",
             )
 
-        # Count students in this range for quick response feedback
-        student_count = Student.objects.filter(
+        # Count admissions and registrations in this range for quick response feedback
+        dt_start = make_aware(datetime.combine(start_date, time.min))
+        dt_end = make_aware(datetime.combine(end_date, time.max))
+
+        admissions_qs = Student.objects.filter(
             councellor=counsellor,
-            created_at__gte=make_aware(datetime.combine(start_date, time.min)),
-            created_at__lte=make_aware(datetime.combine(end_date, time.max)),
-        ).count()
+            created_at__gte=dt_start,
+            created_at__lte=dt_end,
+        ).prefetch_related("course_payments")
+        admissions_count = admissions_qs.count()
+
+        registrations_qs = InternshipApplication.objects.filter(
+            councellor=counsellor,
+            is_converted=False,
+            created_at__gte=dt_start,
+            created_at__lte=dt_end,
+        )
+        registrations_count = registrations_qs.count()
+
+        total_payment = Decimal("0.00")
+        for st in admissions_qs:
+            payments = list(st.course_payments.all())
+            if payments:
+                sorted_payments = sorted(
+                    payments,
+                    key=lambda p: (p.payment_date or (p.created_at.date() if p.created_at else date.min))
+                )
+                first_pay = sorted_payments[0]
+                pay_amt = getattr(first_pay, "amount_paid", None)
+                if pay_amt is None:
+                    pay_amt = getattr(first_pay, "amount", None)
+                if pay_amt:
+                    total_payment += Decimal(str(pay_amt))
+
+        for app in registrations_qs:
+            if app.slot_amount:
+                total_payment += Decimal(str(app.slot_amount))
+
+        summary = {
+            "total_records": admissions_count + registrations_count,
+            "new_admissions_count": admissions_count,
+            "new_registrations_count": registrations_count,
+            "total_students": admissions_count,
+            "total_payment_collected": f"{total_payment:.2f}",
+        }
 
         return Response({
             "message": "Conversions successfully submitted to HR.",
             "submission": CounsellorHRSubmissionSerializer(submission).data,
-            "total_students": student_count,
+            "summary": summary,
+            "total_records": summary["total_records"],
+            "total_students": admissions_count,
         }, status=201)
 
 
 class HRSubmissionsListAPIView(APIView):
     """
-    GET: List all counsellor HR submissions. Supports filtering by status, counsellor_id, month, year.
+    GET: List all counsellor HR submissions. Supports filtering by status, counsellor_id, month, year, search, and date range.
     """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        queryset = CounsellorHRSubmission.objects.select_related("counsellor", "submitted_by", "reviewed_by").all()
+        queryset = CounsellorHRSubmission.objects.select_related("counsellor", "submitted_by", "reviewed_by").all().order_by("-submitted_at")
 
         counsellor_id = request.query_params.get("counsellor_id")
         status_filter = request.query_params.get("status")
         start_date = request.query_params.get("start_date")
         end_date = request.query_params.get("end_date")
+        month = request.query_params.get("month")
+        year = request.query_params.get("year")
+        search = request.query_params.get("search")
 
         if counsellor_id:
             queryset = queryset.filter(counsellor_id=counsellor_id)
         if status_filter:
             queryset = queryset.filter(status=status_filter)
+
+        if year:
+            try:
+                queryset = queryset.filter(start_date__year=int(year))
+            except (ValueError, TypeError):
+                pass
+        if month:
+            try:
+                queryset = queryset.filter(start_date__month=int(month))
+            except (ValueError, TypeError):
+                pass
+
         if start_date:
-            queryset = queryset.filter(start_date__gte=start_date)
+            try:
+                d = parse_date(start_date)
+                if d:
+                    queryset = queryset.filter(start_date__gte=d)
+            except ValueError:
+                return Response({"error": "Invalid start_date format."}, status=400)
+
         if end_date:
-            queryset = queryset.filter(end_date__lte=end_date)
+            try:
+                d = parse_date(end_date)
+                if d:
+                    queryset = queryset.filter(end_date__lte=d)
+            except ValueError:
+                return Response({"error": "Invalid end_date format."}, status=400)
+
+        if search:
+            queryset = queryset.filter(
+                Q(counsellor__first_name__icontains=search) |
+                Q(counsellor__last_name__icontains=search) |
+                Q(period_label__icontains=search) |
+                Q(remarks__icontains=search)
+            )
 
         serializer = CounsellorHRSubmissionSerializer(queryset, many=True)
         return Response(serializer.data)
@@ -845,7 +995,8 @@ class HRSubmissionsListAPIView(APIView):
 
 class HRSubmissionDetailAPIView(APIView):
     """
-    GET: Retrieve details of a specific submission, dynamically fetching the students in that date range.
+    GET: Retrieve details of a specific submission, dynamically fetching the admissions and registrations in that date range.
+    Supports filtering by ?type=all|admission|registration and ?course=<id>.
     """
     permission_classes = [IsAuthenticated]
 
@@ -855,25 +1006,95 @@ class HRSubmissionDetailAPIView(APIView):
             pk=pk
         )
 
-        students = Student.objects.filter(
-            councellor=submission.counsellor,
-            created_at__gte=make_aware(datetime.combine(submission.start_date, time.min)),
-            created_at__lte=make_aware(datetime.combine(submission.end_date, time.max)),
-        ).select_related(
-            "profile__user"
-        ).prefetch_related(
-            "enrollments__course",
-            "course_payments"
-        ).distinct().order_by("-created_at")
+        dt_start = make_aware(datetime.combine(submission.start_date, time.min))
+        dt_end = make_aware(datetime.combine(submission.end_date, time.max))
 
-        student_serializer = CounsellorConversionStudentSerializer(students, many=True)
+        record_type = request.query_params.get("type", "all").lower()
+        course_id = request.query_params.get("course")
+
+        # Admissions Query
+        admissions_data = []
+        if record_type in ["all", "admission"]:
+            students = Student.objects.filter(
+                councellor=submission.counsellor,
+                created_at__gte=dt_start,
+                created_at__lte=dt_end,
+            ).select_related(
+                "profile__user"
+            ).prefetch_related(
+                "enrollments__course",
+                "course_payments"
+            ).distinct().order_by("-created_at")
+
+            if course_id:
+                students = students.filter(enrollments__course_id=course_id)
+
+            admissions_data = CounsellorConversionStudentSerializer(students, many=True).data
+
+        # Registrations Query
+        registrations_data = []
+        if record_type in ["all", "registration"]:
+            applications = InternshipApplication.objects.filter(
+                councellor=submission.counsellor,
+                is_converted=False,
+                created_at__gte=dt_start,
+                created_at__lte=dt_end,
+            ).select_related("course").distinct().order_by("-created_at")
+
+            if course_id:
+                applications = applications.filter(course_id=course_id)
+
+            registrations_data = CounsellorRegistrationApplicationSerializer(applications, many=True).data
+
+        combined_records = sorted(
+            admissions_data + registrations_data,
+            key=lambda r: r.get("created_at") or "",
+            reverse=True,
+        )
+
+        total_payments = Decimal("0.00")
+        for rec in combined_records:
+            p = rec.get("payment")
+            if p and p.get("amount"):
+                try:
+                    total_payments += Decimal(str(p["amount"]))
+                except Exception:
+                    pass
+
+        # Build counsellor & team leader info
+        counsellor = submission.counsellor
+        team_leader_data = None
+        if hasattr(counsellor, "team_leader") and counsellor.team_leader:
+            tl = counsellor.team_leader
+            team_leader_data = {
+                "id": tl.id,
+                "name": tl.get_full_name(),
+                "email": getattr(tl, "email", None),
+                "phone": getattr(tl, "phone", None),
+                "designation": getattr(tl, "designation", None),
+            }
+
+        counsellor_data = {
+            "id": counsellor.id,
+            "name": counsellor.get_full_name(),
+            "email": getattr(counsellor, "email", None),
+            "phone": getattr(counsellor, "phone", None),
+            "designation": getattr(counsellor, "designation", None),
+            "team_leader": team_leader_data,
+        }
 
         return Response({
             "submission": CounsellorHRSubmissionSerializer(submission).data,
+            "counsellor": counsellor_data,
             "summary": {
-                "total_students": students.count(),
+                "total_records": len(combined_records),
+                "new_admissions_count": len(admissions_data),
+                "new_registrations_count": len(registrations_data),
+                "total_students": len(admissions_data),
+                "total_payment_collected": f"{total_payments:.2f}",
             },
-            "students": student_serializer.data,
+            "records": combined_records,
+            "students": combined_records,
         })
 
 
@@ -891,6 +1112,12 @@ class HRSubmissionActionAPIView(APIView):
         if action not in ["approved", "rejected"]:
             return Response(
                 {"detail": "Invalid action. Must be 'approved' or 'rejected'."},
+                status=400,
+            )
+
+        if action == "rejected" and not remarks:
+            return Response(
+                {"detail": "Remarks are required when rejecting a submission so the counsellor knows what needs correction."},
                 status=400,
             )
 

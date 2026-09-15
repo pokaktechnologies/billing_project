@@ -780,12 +780,12 @@ class StudentSerializer(serializers.ModelSerializer):
             return application.slot_amount
 
         return None
+    
     def get_slot_created(self, obj):
         return ReceiptModel.objects.filter(
             receipt_type="intern",
             receipt_for="slot",
-            intern=obj.student.profile,
-            course=obj.course,
+            intern=obj.profile,
         ).exists()
 
 
@@ -793,8 +793,7 @@ class StudentSerializer(serializers.ModelSerializer):
         return ReceiptModel.objects.filter(
             receipt_type="intern",
             receipt_for="advance",
-            intern=obj.student.profile,
-            course=obj.course,
+            intern=obj.profile,
         ).exists()
     
     def get_full_name(self, obj):

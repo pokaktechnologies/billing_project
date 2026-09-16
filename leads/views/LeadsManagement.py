@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from accounts.permissions import HasModulePermission
+from ..views.LeadsViews import SalesPersonBaseView
 from ..serializers.LeadsSerializers import *
 from accounts.models import SalesPerson, StaffProfile
 from datetime import datetime, time
@@ -510,3 +511,373 @@ class SalespersonLeadStatsView(APIView):
             "message": "success",
             "data": data
         }, status=200)
+
+
+def get_academic_dashboard_data(request, leads):
+    """
+    Common Academic Dashboard logic.
+
+    `leads` is already restricted according to
+    Admin or Staff before calling this function.
+    """
+
+    # ------------------------------------------------
+    # FILTERS
+    # ------------------------------------------------
+
+    course = request.query_params.get("course")
+    salesperson = request.query_params.get("salesperson")
+    name = request.query_params.get("name")
+
+    start_date = request.query_params.get("start_date")
+    end_date = request.query_params.get("end_date")
+
+    if course:
+        leads = leads.filter(
+            course_id=course
+        )
+
+    if salesperson:
+        leads = leads.filter(
+            salesperson_id=salesperson
+        )
+
+    if name:
+        leads = leads.filter(
+            name__icontains=name.strip()
+        )
+
+    # ------------------------------------------------
+    # START DATE
+    # ------------------------------------------------
+
+    if start_date:
+
+        try:
+
+            parsed_start_date = datetime.strptime(
+                start_date,
+                "%Y-%m-%d"
+            ).date()
+
+            leads = leads.filter(
+                lead_date__gte=parsed_start_date
+            )
+
+        except ValueError:
+
+            return None, Response(
+                {
+                    "status": "0",
+                    "message":
+                        "Invalid start_date format. "
+                        "Use YYYY-MM-DD."
+                },
+                status=400
+            )
+
+    # ------------------------------------------------
+    # END DATE
+    # ------------------------------------------------
+
+    if end_date:
+
+        try:
+
+            parsed_end_date = datetime.strptime(
+                end_date,
+                "%Y-%m-%d"
+            ).date()
+
+            leads = leads.filter(
+                lead_date__lte=parsed_end_date
+            )
+
+        except ValueError:
+
+            return None, Response(
+                {
+                    "status": "0",
+                    "message":
+                        "Invalid end_date format. "
+                        "Use YYYY-MM-DD."
+                },
+                status=400
+            )
+
+    # ------------------------------------------------
+    # COUNTS
+    # ------------------------------------------------
+
+    counts = {
+
+        "new": leads.filter(
+            academic_status__isnull=True
+        ).count(),
+
+        "hot": leads.filter(
+            academic_status="hot"
+        ).count(),
+
+        "not_respond": leads.filter(
+            academic_status="not_respond"
+        ).count(),
+
+        "number_not_valid": leads.filter(
+            academic_status="number_not_valid"
+        ).count(),
+
+        "not_connected": leads.filter(
+            academic_status="not_connected"
+        ).count(),
+
+        "invalid": leads.filter(
+            academic_status="invalid"
+        ).count(),
+    }
+
+    # ------------------------------------------------
+    # TAB
+    # ------------------------------------------------
+
+    tab = request.query_params.get(
+        "tab",
+        "new"
+    )
+
+    allowed_tabs = {
+        "new": None,
+        "hot": "hot",
+        "not_respond": "not_respond",
+        "number_not_valid": "number_not_valid",
+        "not_connected": "not_connected",
+        "invalid": "invalid",
+    }
+
+    if tab not in allowed_tabs:
+
+        return None, Response(
+            {
+                "status": "0",
+                "message": (
+                    "Invalid tab. Allowed values: "
+                    "new, hot, not_respond, "
+                    "number_not_valid, "
+                    "not_connected, invalid"
+                )
+            },
+            status=400
+        )
+
+    selected_status = allowed_tabs[tab]
+
+    # NEW means academic_status is NULL
+    if selected_status is None:
+
+        leads = leads.filter(
+            academic_status__isnull=True
+        )
+
+    else:
+
+        leads = leads.filter(
+            academic_status=selected_status
+        )
+
+    # ------------------------------------------------
+    # FOLLOW-UP DATA
+    # ------------------------------------------------
+
+    today = timezone.localdate()
+
+    leads = leads.annotate(
+
+        call_count=Count(
+            "follow_ups",
+            filter=Q(
+                follow_ups__types__contains=["call"]
+            ),
+            distinct=True
+        ),
+
+        next_call_followup_date=Min(
+            "follow_ups__date",
+            filter=Q(
+                follow_ups__types__contains=["call"],
+                follow_ups__status="new",
+                follow_ups__date__gte=today
+            )
+        )
+    )
+
+    # ------------------------------------------------
+    # ORDER
+    # ------------------------------------------------
+
+    leads = leads.order_by(
+        "next_call_followup_date",
+        "-lead_date"
+    )
+
+    return {
+        "leads": leads,
+        "counts": counts,
+        "tab": tab,
+    }, None
+
+from django.db.models import Count, Q, Min
+class AdminAcademicDashboardView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        # --------------------------------------------
+        # ALL ACADEMIC / INTERN LEADS
+        # --------------------------------------------
+
+        leads = Lead.objects.filter(
+            lead_category="intern"
+        ).select_related(
+            "course",
+            "salesperson"
+        )
+
+        result, error_response = get_academic_dashboard_data(
+            request,
+            leads
+        )
+
+        if error_response:
+            return error_response
+
+        leads = result["leads"]
+        counts = result["counts"]
+        tab = result["tab"]
+
+        # --------------------------------------------
+        # PAGINATION
+        # --------------------------------------------
+
+        # paginator = Pagination()
+
+        # paginated_leads = paginator.paginate_queryset(
+        #     leads,
+        #     request
+        # )
+
+        # if paginated_leads is not None:
+
+        #     serializer = AcademicLeadDashboardSerializer(
+        #         paginated_leads,
+        #         many=True
+        #     )
+
+        #     return paginator.get_paginated_response({
+        #         "status": "1",
+        #         "message": "success",
+        #         "tab": tab,
+        #         "counts": counts,
+        #         "data": serializer.data
+        #     })
+
+        serializer = AcademicLeadDashboardSerializer(
+            leads,
+            many=True
+        )
+
+        return Response({
+            "status": "1",
+            "message": "success",
+            "tab": tab,
+            "counts": counts,
+            "data": serializer.data
+        })
+    
+class StaffAcademicDashboardView(SalesPersonBaseView, APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        # --------------------------------------------
+        # GET SALESPERSON
+        # --------------------------------------------
+
+        salesperson = self.get_salesperson(
+            request.user
+        )
+
+        if not salesperson:
+
+            return Response(
+                {
+                    "status": "0",
+                    "message":
+                        "No salesperson assigned to this staff"
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # --------------------------------------------
+        # ONLY THIS SALESPERSON'S INTERN LEADS
+        # --------------------------------------------
+
+        leads = Lead.objects.filter(
+            salesperson=salesperson,
+            lead_category="intern"
+        ).select_related(
+            "course",
+            "salesperson"
+        )
+
+        result, error_response = get_academic_dashboard_data(
+            request,
+            leads
+        )
+
+        if error_response:
+            return error_response
+
+        leads = result["leads"]
+        counts = result["counts"]
+        tab = result["tab"]
+
+        # --------------------------------------------
+        # PAGINATION
+        # --------------------------------------------
+
+        # paginator = Pagination()
+
+        # paginated_leads = paginator.paginate_queryset(
+        #     leads,
+        #     request
+        # )
+
+        # if paginated_leads is not None:
+
+        #     serializer = AcademicLeadDashboardSerializer(
+        #         paginated_leads,
+        #         many=True
+        #     )
+
+        #     return paginator.get_paginated_response({
+        #         "status": "1",
+        #         "message": "success",
+        #         "tab": tab,
+        #         "counts": counts,
+        #         "data": serializer.data
+        #     })
+
+        serializer = AcademicLeadDashboardSerializer(
+            leads,
+            many=True
+        )
+
+        return Response({
+            "status": "1",
+            "message": "success",
+            "tab": tab,
+            "counts": counts,
+            "data": serializer.data
+        })

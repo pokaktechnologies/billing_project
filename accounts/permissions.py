@@ -47,6 +47,7 @@ PARENT_MODULE_MAP = [
     {
         "name": "marketing",
         "submodules": [
+            "staff_lead_dashboard",
             "marketing_data",
             "marketing_leads",
             "marketing_report"
@@ -56,6 +57,7 @@ PARENT_MODULE_MAP = [
     {
         "name": "leads_management",
         "submodules": [
+            "admin_lead_dashboard",
             "leads_management",
             "crm_reports"
         ]

@@ -1253,11 +1253,13 @@ class ModulePermission(models.Model):
         ("purchase_reports", "Purchase Reports"),
 
         # MARKETING
+        ("staff_lead_dashboard", "Staff Lead Dashboard"),
         ("marketing_data", "Marketing Data"),
         ("marketing_leads", "Marketing Leads"),
         ("marketing_report", "Marketing Report"),
 
         # CRM
+        ("admin_lead_dashboard", "Admin Lead Dashboard"),
         ("leads_management", "Leads Management"),
         ("crm_reports", "CRM Reports"),
 

@@ -817,13 +817,14 @@ class AcademicDashboardAPIView(APIView):
         for enrollment in enrollments:
             total_paid = (
                     CoursePayment.objects.filter(
-                        student=enrollment.student
+                        student=enrollment.student,
+                        enrollment=enrollment,
                     ).aggregate(
                         total=Sum("amount_paid")
                     )["total"] or 0
             )
 
-            if total_paid < enrollment.course.total_fee:
+            if total_paid < enrollment.effective_discounted_fee:
                 pending_payments += 1
 
 

@@ -103,26 +103,45 @@ class StudentRegistrationReportSerializer(serializers.ModelSerializer):
             return (obj.batch.end_date - obj.batch.start_date).days
         return None
 
+    def _course_fee_decimal(self, obj):
+        if obj.course_fee is not None:
+            return Decimal(str(obj.course_fee))
+        if obj.course and getattr(obj.course, "total_fee", None) is not None:
+            return Decimal(str(obj.course.total_fee))
+        return Decimal("0.00")
+
+    def _slot_amount_decimal(self, obj):
+        if obj.student and obj.student.slot_amount is not None:
+            return Decimal(str(obj.student.slot_amount))
+        if obj.application and obj.application.slot_amount is not None:
+            return Decimal(str(obj.application.slot_amount))
+        return Decimal("0.00")
+
+    def _discounted_fee_decimal(self, obj):
+        course_fee = self._course_fee_decimal(obj)
+        slot_amount = self._slot_amount_decimal(obj)
+        discount_amount = Decimal(str(obj.discount_amount or 0))
+        return max(Decimal("0.00"), course_fee - slot_amount - discount_amount)
+
     def get_course_fee(self, obj):
-        return obj.course.total_fee if obj.course else None
+        return float(self._course_fee_decimal(obj))
 
     def get_batch_end_date(self, obj):
         return obj.batch.end_date if obj.batch else None
 
-    def get_balance(self, obj):
-        fee = self.get_course_fee(obj)
-        if fee is None:
-            return None
-        return f"{(fee - Decimal(self.get_paid_amount(obj))):.2f}"
-
-
-
     def get_paid_amount(self, obj):
-        total = sum(
-            payment.amount_paid
-            for payment in obj.student.course_payments.all()
-        )
+        payments = [
+            p for p in obj.student.course_payments.all()
+            if p.enrollment_id == obj.id
+        ]
+        total = sum((p.amount_paid for p in payments), Decimal("0.00"))
         return f"{total:.2f}"
+
+    def get_balance(self, obj):
+        discounted_fee = self._discounted_fee_decimal(obj)
+        paid = Decimal(self.get_paid_amount(obj))
+        balance = max(Decimal("0.00"), discounted_fee - paid)
+        return f"{balance:.2f}"
 
     def _payment(self, obj, number):
         item = obj.student_installment_items.filter(
@@ -135,7 +154,8 @@ class StudentRegistrationReportSerializer(serializers.ModelSerializer):
         paid = sum(
             payment.amount_paid
             for payment in item.course_payments.filter(
-                student=obj.student
+                student=obj.student,
+                enrollment=obj
             )
         )
 
@@ -152,17 +172,13 @@ class StudentRegistrationReportSerializer(serializers.ModelSerializer):
         return self._payment(obj, 3)
 
     def get_payment_status(self, obj):
-        fee = self.get_course_fee(obj)
-
-        if fee is None:
-            return None
-
+        discounted_fee = self._discounted_fee_decimal(obj)
         paid = Decimal(self.get_paid_amount(obj))
 
         if paid == 0:
             return "Unpaid"
 
-        if paid >= fee:
+        if paid >= discounted_fee:
             return "Paid"
 
         return "Partial"

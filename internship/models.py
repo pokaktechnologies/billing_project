@@ -498,6 +498,52 @@ class StudentCourseEnrollment(models.Model):
                 )
 
 
+    @property
+    def effective_course_fee(self):
+        from decimal import Decimal
+        if self.course_fee is not None:
+            return Decimal(str(self.course_fee))
+        if self.course and getattr(self.course, "total_fee", None) is not None:
+            return Decimal(str(self.course.total_fee))
+        return Decimal("0.00")
+
+    @property
+    def effective_slot_amount(self):
+        from decimal import Decimal
+        if self.student and self.student.slot_amount is not None:
+            return Decimal(str(self.student.slot_amount))
+        if self.application and self.application.slot_amount is not None:
+            return Decimal(str(self.application.slot_amount))
+        return Decimal("0.00")
+
+    @property
+    def effective_discounted_fee(self):
+        from decimal import Decimal
+        discount = Decimal(str(self.discount_amount or 0))
+        net = self.effective_course_fee - self.effective_slot_amount - discount
+        return max(Decimal("0.00"), net)
+
+    @property
+    def effective_balance_fee(self):
+        from decimal import Decimal
+        advance = Decimal(str(self.advance_amount or 0))
+        balance = self.effective_discounted_fee - advance
+        return max(Decimal("0.00"), balance)
+
+    @property
+    def total_paid_amount(self):
+        from decimal import Decimal
+        payments = [
+            p for p in self.student.course_payments.all()
+            if p.enrollment_id == self.id
+        ]
+        return sum((p.amount_paid for p in payments), Decimal("0.00"))
+
+    @property
+    def pending_balance(self):
+        from decimal import Decimal
+        return max(Decimal("0.00"), self.effective_discounted_fee - self.total_paid_amount)
+
     def __str__(self):
         return f"{self.student.profile.user.email} - {self.course.title}"
 

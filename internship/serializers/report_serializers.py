@@ -924,17 +924,32 @@ class RegistrationReportSerializer(serializers.ModelSerializer):
         return f"{Decimal(str(enrollment.discount_amount or 0)):.2f}"
 
 
+    def _course_fee_decimal(self, enrollment):
+        if not enrollment:
+            return Decimal("0.00")
+        if enrollment.course_fee is not None:
+            return Decimal(str(enrollment.course_fee))
+        if enrollment.course and getattr(enrollment.course, "total_fee", None) is not None:
+            return Decimal(str(enrollment.course.total_fee))
+        return Decimal("0.00")
+
+    def _slot_amount_decimal(self, obj, enrollment):
+        if obj.slot_amount is not None:
+            return Decimal(str(obj.slot_amount))
+        if enrollment and enrollment.application and enrollment.application.slot_amount is not None:
+            return Decimal(str(enrollment.application.slot_amount))
+        return Decimal("0.00")
+
     def get_discounted_fee(self, obj):
         enrollment = self._get_enrollment(obj)
-
         if not enrollment:
             return None
 
-        discounted_fee = (
-            Decimal(str(enrollment.course.total_fee))
-            - Decimal(str(enrollment.discount_amount or 0))
-        )
+        course_fee = self._course_fee_decimal(enrollment)
+        slot_amount = self._slot_amount_decimal(obj, enrollment)
+        discount_amount = Decimal(str(enrollment.discount_amount or 0))
 
+        discounted_fee = max(Decimal("0.00"), course_fee - slot_amount - discount_amount)
         return f"{discounted_fee:.2f}"
     
     def get_place(self, obj):
@@ -961,28 +976,26 @@ class RegistrationReportSerializer(serializers.ModelSerializer):
 
     def get_course_fee(self, obj):
         enrollment = self._get_enrollment(obj)
-        return enrollment.course.total_fee if enrollment and enrollment.course else None
+        if not enrollment:
+            return None
+        return float(self._course_fee_decimal(enrollment))
 
     def get_paid_amount(self, obj):
-        payments = obj.course_payments.all()
-        total = sum(p.amount_paid for p in payments)
+        enrollment = self._get_enrollment(obj)
+        if not enrollment:
+            return "0.00"
+        payments = [p for p in obj.course_payments.all() if p.enrollment_id == enrollment.id]
+        total = sum((p.amount_paid for p in payments), Decimal("0.00"))
         return f"{total:.2f}"
 
     def get_balance(self, obj):
         enrollment = self._get_enrollment(obj)
-
         if not enrollment:
             return None
 
-        discounted_fee = (
-            Decimal(str(enrollment.course.total_fee))
-            - Decimal(str(enrollment.discount_amount or 0))
-        )
-
+        discounted_fee = Decimal(self.get_discounted_fee(obj))
         paid = Decimal(self.get_paid_amount(obj))
-
-        balance = discounted_fee - paid
-
+        balance = max(Decimal("0.00"), discounted_fee - paid)
         return f"{balance:.2f}"
 
     def get_batch_end_date(self, obj):

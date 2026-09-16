@@ -2982,7 +2982,7 @@ class StudentCourseSummarySerializer(serializers.ModelSerializer):
         return "Active"
 
     def get_total_fee(self, obj):
-        return self.format_decimal(obj.course.total_fee)
+        return self.format_decimal(obj.effective_course_fee)
     
     def get_discount_amount(self, obj):
         return self.format_decimal(
@@ -2991,31 +2991,13 @@ class StudentCourseSummarySerializer(serializers.ModelSerializer):
 
 
     def get_discounted_fee(self, obj):
-        return self.format_decimal(
-            Decimal(str(obj.course.total_fee))
-            - Decimal(str(obj.discount_amount or 0))
-        )
+        return self.format_decimal(obj.effective_discounted_fee)
 
     def get_paid_amount(self, obj):
-
-        total = obj.payments.aggregate(
-            total=Sum("amount_paid")
-        )["total"] or Decimal("0.00")
-
-        return self.format_decimal(total)
+        return self.format_decimal(obj.total_paid_amount)
 
     def get_pending_amount(self, obj):
-
-        discounted_fee = (
-            Decimal(str(obj.course.total_fee))
-            - Decimal(str(obj.discount_amount or 0))
-        )
-
-        paid = Decimal(self.get_paid_amount(obj))
-
-        return self.format_decimal(
-            discounted_fee - paid
-        )
+        return self.format_decimal(obj.pending_balance)
 
     def get_student_full_name(self, obj):
         return obj.student.get_full_name()
@@ -3352,9 +3334,7 @@ class PaymentReportSerializer(serializers.ModelSerializer):
     # ---------------------------------------------------------
 
     def get_course_fee(self, obj):
-        return self.format_decimal(
-            obj.course.total_fee
-        )
+        return self.format_decimal(obj.effective_course_fee)
 
     def get_advance_amount(self, obj):
         return self.format_decimal(
@@ -3362,49 +3342,21 @@ class PaymentReportSerializer(serializers.ModelSerializer):
         )
 
     def get_balance_fee(self, obj):
+        return self.format_decimal(obj.effective_balance_fee)
 
-        return self.format_decimal(
-            Decimal(str(obj.course.total_fee))
-            - Decimal(str(obj.discount_amount or 0))
-            - Decimal(str(obj.advance_amount or 0))
-        )
     def get_paid_amount(self, obj):
-
-        total = obj.payments.aggregate(
-            total=Sum("amount_paid")
-        )["total"] or Decimal("0.00")
-
-        return self.format_decimal(total)
+        return self.format_decimal(obj.total_paid_amount)
 
     def get_pending_fee(self, obj):
-
-        discounted_fee = (
-            Decimal(str(obj.course.total_fee))
-            - Decimal(str(obj.discount_amount or 0))
-        )
-
-        paid = Decimal(
-            self.get_paid_amount(obj)
-        )
-
-        return self.format_decimal(
-            discounted_fee - paid
-        )
+        return self.format_decimal(obj.pending_balance)
 
     # ---------------------------------------------------------
     # Status
     # ---------------------------------------------------------
 
     def get_payment_status(self, obj):
-
-        paid = Decimal(
-            self.get_paid_amount(obj)
-        )
-
-        discounted_fee = (
-            Decimal(str(obj.course.total_fee))
-            - Decimal(str(obj.discount_amount or 0))
-        )
+        paid = obj.total_paid_amount
+        discounted_fee = obj.effective_discounted_fee
 
         if paid <= Decimal("0.00"):
             return "Pending"

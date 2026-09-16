@@ -228,6 +228,15 @@ class StudentCourseEnrollment(models.Model):
     installment_plan = models.ForeignKey(InstallmentPlan, on_delete=models.SET_NULL, null=True, blank=True, related_name="enrollments")
     enrollment_date = models.DateField(auto_now_add=True)
 
+    # Snapshot of course fee agreed upon at enrollment
+    course_fee = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Snapshot of the course fee agreed upon at enrollment"
+    )
+
     # advance payment fields
     advance_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     payment_method = models.CharField(max_length=20, choices=PAYMENT_METHODS, null=True, blank=True)
@@ -256,6 +265,7 @@ class StudentCourseEnrollment(models.Model):
         old_custom_installments = None
         old_discount_amount = None
         old_advance_amount = None
+        old_course_fee = None
 
         # -------------------------------------------------
         # Only fetch old values while updating
@@ -270,6 +280,7 @@ class StudentCourseEnrollment(models.Model):
                     "custom_installments",
                     "discount_amount",
                     "advance_amount",
+                    "course_fee",
                 ).first()
 
                 if old_data:
@@ -278,6 +289,7 @@ class StudentCourseEnrollment(models.Model):
                     old_custom_installments = old_data["custom_installments"]
                     old_discount_amount = old_data["discount_amount"]
                     old_advance_amount = old_data["advance_amount"]
+                    old_course_fee = old_data["course_fee"]
 
             except Exception:
                 pass
@@ -297,25 +309,9 @@ class StudentCourseEnrollment(models.Model):
                 != Decimal(str(self.discount_amount or 0))
                 or Decimal(str(old_advance_amount or 0))
                 != Decimal(str(self.advance_amount or 0))
+                or Decimal(str(old_course_fee or 0))
+                != Decimal(str(self.course_fee or 0))
             )
-
-        # -------------------------------------------------
-        # Prevent changing structure AFTER an
-        # INSTALLMENT payment has been made
-        #
-        # Advance payment alone does NOT block editing.
-        # -------------------------------------------------
-        # if payment_structure_changed:
-
-        #     has_installment_payment = CoursePayment.objects.filter(
-        #         enrollment=self,
-        #         installments__isnull=False
-        #     ).exists()
-
-        #     if has_installment_payment:
-        #         raise ValidationError(
-        #             "Cannot edit enrollment details because an installment payment has already been made."
-        #         )
 
         # -------------------------------------------------
         # Assign Course
@@ -326,6 +322,12 @@ class StudentCourseEnrollment(models.Model):
             raise ValueError(
                 "Course must be set either directly or via batch."
             )
+
+        # -------------------------------------------------
+        # Snapshot Course Fee if not already set
+        # -------------------------------------------------
+        if self.course_fee is None and self.course:
+            self.course_fee = self.course.total_fee
 
         super().save(*args, **kwargs)
 
@@ -340,7 +342,7 @@ class StudentCourseEnrollment(models.Model):
         # -------------------------------------------------
         if not self.student_installment_items.exists():
 
-            course_fee = Decimal(str(self.course.total_fee))
+            course_fee = Decimal(str(self.course_fee or (self.course.total_fee if self.course else 0)))
 
             slot_amount = Decimal(
                 str(self.student.slot_amount or 0)

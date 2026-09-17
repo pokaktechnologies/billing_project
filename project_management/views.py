@@ -1858,10 +1858,186 @@ class ReportView(BaseAPIView):
                 "message": "Report updated successfully"
             }, status=status.HTTP_200_OK)
 
+class ReportPrefillView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        report_type = request.query_params.get('type')  # 'weekly' or 'monthly'
+        project_id = request.query_params.get('project')
+
+        if not project_id:
+            return Response(
+                {"status": "0", "message": "project query parameter is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if report_type not in ['weekly', 'monthly']:
+            return Response(
+                {"status": "0", "message": "type must be 'weekly' or 'monthly'"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        user = request.user
+
+        # Ensure user is a project member or has access
+        member = Member.objects.filter(user=user).first()
+        if not member:
+            return Response(
+                {"status": "0", "message": "User is not a project member"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        is_member = ProjectMember.objects.filter(
+            project_id=project_id,
+            member=member
+        ).exists()
+
+        if not is_member:
+            return Response(
+                {"status": "0", "message": "You are not a member of this project"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # 1. Determine Date Range
+        if report_type == 'weekly':
+            week_start_str = request.query_params.get('week_start')
+            week_end_str = request.query_params.get('week_end')
+
+            if not week_start_str or not week_end_str:
+                return Response(
+                    {"status": "0", "message": "week_start and week_end are required for weekly prefill"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            try:
+                start_date = datetime.strptime(week_start_str, "%Y-%m-%d").date()
+                end_date = datetime.strptime(week_end_str, "%Y-%m-%d").date()
+            except ValueError:
+                return Response(
+                    {"status": "0", "message": "Invalid date format. Use YYYY-MM-DD"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if start_date > end_date:
+                return Response(
+                    {"status": "0", "message": "week_start cannot be after week_end"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        else:  # monthly
+            month_str = request.query_params.get('month')
+            year_str = request.query_params.get('year')
+
+            if not month_str or not year_str:
+                return Response(
+                    {"status": "0", "message": "month and year are required for monthly prefill"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            try:
+                month = int(month_str)
+                year = int(year_str)
+                if not (1 <= month <= 12):
+                    raise ValueError
+                start_date = date(year, month, 1)
+                end_date = date(year, month, monthrange(year, month)[1])
+            except (ValueError, TypeError):
+                return Response(
+                    {"status": "0", "message": "Invalid month (1-12) or year"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        # 2. Fetch daily reports in the given date range for this user & project
+        daily_reports = Report.objects.filter(
+            project_id=project_id,
+            submitted_by=user,
+            report_type='daily',
+            report_date__range=(start_date, end_date)
+        ).prefetch_related(
+            'tasks',
+            'challenges',
+            'links'
+        ).order_by('report_date', 'submitted_at')
+
+        # 3. Collect each day's tasks separately (no merging, preserving exact details)
+        tasks_list = []
+        total_hours = 0.0
+
+        for r in daily_reports:
+            report_date_str = r.report_date.strftime("%Y-%m-%d") if r.report_date else ""
+            day_str = r.report_date.strftime("%a, %d %b") if r.report_date else ""
+
+            for t in r.tasks.all():
+                task_hours = float(t.hours)
+                total_hours += task_hours
+                tasks_list.append({
+                    "date": report_date_str,
+                    "day": day_str,
+                    "task_name": t.task_name,
+                    "task_description": t.task_description,
+                    "status": t.status,
+                    "progress_percentage": t.progress_percentage,
+                    "hours": task_hours
+                })
+
+        # 4. Collect Challenges across the period
+        challenges_list = []
+        seen_challenges = set()
+        for r in daily_reports:
+            for c in r.challenges.all():
+                ch_key = (c.issue.strip().lower(), c.impact.strip().lower())
+                if ch_key not in seen_challenges:
+                    seen_challenges.add(ch_key)
+                    challenges_list.append({
+                        "issue": c.issue,
+                        "impact": c.impact,
+                        "resolution": c.resolution
+                    })
+
+        # 5. Collect Links across the period
+        links_list = []
+        seen_urls = set()
+        for r in daily_reports:
+            for l in r.links.all():
+                if l.url not in seen_urls:
+                    seen_urls.add(l.url)
+                    links_list.append({"url": l.url})
+
+        # 6. Draft Executive Summary
+        total_hours_rounded = round(total_hours, 2)
+        if report_type == 'weekly':
+            period_label = f"{start_date.strftime('%d %b %Y')} to {end_date.strftime('%d %b %Y')}"
+            summary_draft = f"Weekly summary for {period_label}: Completed {len(tasks_list)} task entries totaling {total_hours_rounded} worked hours across {daily_reports.count()} daily report(s)."
+        else:
+            summary_draft = f"Monthly summary for {start_date.strftime('%B %Y')}: Completed {len(tasks_list)} task entries totaling {total_hours_rounded} worked hours across {daily_reports.count()} daily report(s)."
+
+        response_data = {
+            "project": int(project_id),
+            "report_type": report_type,
+            "total_daily_reports": daily_reports.count(),
+            "total_worked_hours": total_hours_rounded,
+            "executive_summary": summary_draft,
+            "next_period_plan": "",
+            "tasks": tasks_list,
+            "challenges": challenges_list,
+            "links": links_list
+        }
+
+        if report_type == 'weekly':
+            response_data["week_start"] = start_date.strftime("%Y-%m-%d")
+            response_data["week_end"] = end_date.strftime("%Y-%m-%d")
+        else:
+            response_data["month"] = start_date.month
+            response_data["year"] = start_date.year
+
         return Response({
-            "status": "0",
-            "errors": serializer.errors
-        }, status=status.HTTP_400_BAD_REQUEST)
+            "status": "1",
+            "message": f"{report_type.capitalize()} prefill data generated successfully",
+            "data": response_data
+        }, status=status.HTTP_200_OK)
+
+
 class ReportListManagerView(generics.ListAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]

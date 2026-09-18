@@ -539,7 +539,7 @@ class CounsellorConversionReportAPIView(APIView):
 
         start_date = request.query_params.get("start_date")
         end_date = request.query_params.get("end_date")
-        course_id = request.query_params.get("course_id")
+        course_id = request.query_params.get("course") or request.query_params.get("course_id")
         record_type_filter = request.query_params.get("type", "all").lower().strip()
 
         # Parse date bounds safely
@@ -1010,7 +1010,7 @@ class HRSubmissionDetailAPIView(APIView):
         dt_end = make_aware(datetime.combine(submission.end_date, time.max))
 
         record_type = request.query_params.get("type", "all").lower()
-        course_id = request.query_params.get("course")
+        course_id = request.query_params.get("course") or request.query_params.get("course_id")
 
         # Admissions Query
         admissions_data = []

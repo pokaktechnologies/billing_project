@@ -349,16 +349,25 @@ class CounsellorConversionReportTests(TestCase):
     # ──────────────────────────────────────────────────────────
 
     def test_conversion_report_course_filter(self):
-        """Only records enrolled/applied in the specified course should be returned."""
+        """Only records enrolled/applied in the specified course should be returned (supports ?course_id= and ?course=)."""
         url = self.base_url.format(self.counsellor_a.id)
+
+        # Test using ?course_id=
         response = self.client.get(url, {"course_id": self.course_2.id})
-
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-
         data = response.json()
         names = [r["name"] for r in data["records"]]
         self.assertIn("DirectStudent Two", names)
         self.assertIn("RegApp Pending", names)
+
+        # Test using ?course= (as documented in frontend guide)
+        response_alias = self.client.get(url, {"course": self.course_2.id})
+        self.assertEqual(response_alias.status_code, status.HTTP_200_OK)
+        data_alias = response_alias.json()
+        names_alias = [r["name"] for r in data_alias["records"]]
+        self.assertIn("DirectStudent Two", names_alias)
+        self.assertIn("RegApp Pending", names_alias)
+        self.assertEqual(data["summary"]["total_records"], data_alias["summary"]["total_records"])
 
         self._print_result("test_conversion_report_course_filter", response, True)
 

@@ -215,8 +215,11 @@ report_patterns = [
     path("student-registration/", StudentRegistrationReportView.as_view(), name="student-registration-report"),
     path("application-report/", application.InternshipApplicationReportView.as_view(), name="internship-application-report"),
 
-    
-
+    # Breakdown Standalone Reports (Pure Lists)
+    path("admissions/", report_view.AdmissionsReportListAPIView.as_view(), name="report-admissions"),
+    path("admissions/summary/", report_view.AdmissionsSummaryReportAPIView.as_view(), name="report-admissions-summary"),
+    path("registrations/", report_view.RegistrationsReportListAPIView.as_view(), name="report-registrations"),
+    path("payments/", report_view.PaymentsReportListAPIView.as_view(), name="report-payments"),
 ]
 
 urlpatterns = [

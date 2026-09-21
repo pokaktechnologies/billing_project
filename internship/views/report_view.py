@@ -17,11 +17,14 @@ from internship.serializers.report_serializers import (
     CounsellorRegistrationApplicationSerializer,
     CounsellorHRSubmissionSerializer,
     CounsellorProceedToHRSerializer,
+    AdmissionsBreakdownSerializer,
+    RegistrationsBreakdownSerializer,
+    PaymentsBreakdownSerializer,
 )
 from internship.serializers.report_serializers import CenterDetailReportSerializer, CenterReportsSerializer, TaskReportSerializer, InternTaskPerformanceReportSerializer, \
     TaskSubmissionReportSerializer, InternPaymentSummaryReportSerializer, InternSummaryReportSerializer, \
     EnrollmentReportSerializer, StudentInSerializer
-from internship.utils import get_installment_due_date_for_staff, get_next_unpaid_installment_item
+from internship.utils import get_installment_due_date_for_staff, get_next_unpaid_installment_item, parse_flexible_date
 
 
 # report based on tasks
@@ -1132,4 +1135,677 @@ class HRSubmissionActionAPIView(APIView):
             "message": f"Submission successfully {action}.",
             "submission": CounsellorHRSubmissionSerializer(submission).data,
         })
+
+
+# ── Breakdown Standalone Report Views (Pure Lists, No Summary) ─
+
+class AdmissionsReportListAPIView(APIView):
+    """
+    GET: List all New Admissions (Students).
+    Returns a pure list [] by default.
+    Activates pagination ({count, next, previous, results}) only if ?page= or ?page_size= is provided.
+    Filters:
+      - counsellor / counselor: Counsellor ID or 'all'
+      - course: Course ID or 'all'
+      - start_date / end_date: DD-MM-YYYY or YYYY-MM-DD
+      - search: Search in student name, email, phone, or student_id
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        queryset = Student.objects.select_related(
+            "profile__user",
+            "councellor",
+        ).prefetch_related(
+            "enrollments__course",
+            "course_payments",
+        )
+
+        # Counsellor filter
+        counsellor_param = request.query_params.get("counsellor") or request.query_params.get("counselor")
+        if counsellor_param and counsellor_param.strip().lower() not in ["", "all"]:
+            try:
+                queryset = queryset.filter(councellor_id=int(counsellor_param))
+            except (ValueError, TypeError):
+                return Response({"detail": f"Invalid counsellor filter '{counsellor_param}'."}, status=400)
+
+        # Course filter
+        course_param = request.query_params.get("course") or request.query_params.get("course_id")
+        if course_param and course_param.strip().lower() not in ["", "all"]:
+            try:
+                queryset = queryset.filter(enrollments__course_id=int(course_param))
+            except (ValueError, TypeError):
+                return Response({"detail": f"Invalid course filter '{course_param}'."}, status=400)
+
+        # Date filters
+        start_date_str = request.query_params.get("start_date")
+        end_date_str = request.query_params.get("end_date")
+        d_start, d_end = None, None
+
+        if start_date_str:
+            try:
+                d_start = parse_flexible_date(start_date_str)
+            except ValueError as e:
+                return Response({"detail": str(e)}, status=400)
+
+        if end_date_str:
+            try:
+                d_end = parse_flexible_date(end_date_str)
+            except ValueError as e:
+                return Response({"detail": str(e)}, status=400)
+
+        if d_start and d_end and d_start > d_end:
+            return Response({"detail": "end_date must be greater than or equal to start_date."}, status=400)
+
+        if d_start:
+            dt_start = make_aware(datetime.combine(d_start, time.min))
+            queryset = queryset.filter(created_at__gte=dt_start)
+        if d_end:
+            dt_end = make_aware(datetime.combine(d_end, time.max))
+            queryset = queryset.filter(created_at__lte=dt_end)
+
+        # Search filter
+        search = request.query_params.get("search")
+        if search and search.strip():
+            s = search.strip()
+            queryset = queryset.filter(
+                Q(profile__user__first_name__icontains=s) |
+                Q(profile__user__last_name__icontains=s) |
+                Q(profile__user__email__icontains=s) |
+                Q(profile__phone_number__icontains=s) |
+                Q(student_id__icontains=s)
+            )
+
+        queryset = queryset.distinct().order_by("-created_at")
+
+        # Conditional Pagination: activate ONLY if page or page_size is in query params
+        page = request.query_params.get("page")
+        page_size = request.query_params.get("page_size")
+        if page is not None or page_size is not None:
+            from rest_framework.pagination import PageNumberPagination
+            paginator = PageNumberPagination()
+            if page_size:
+                try:
+                    paginator.page_size = int(page_size)
+                except (ValueError, TypeError):
+                    pass
+            page_qs = paginator.paginate_queryset(queryset, request)
+            serializer = AdmissionsBreakdownSerializer(page_qs, many=True)
+            return paginator.get_paginated_response(serializer.data)
+
+        # Pure list by default
+        serializer = AdmissionsBreakdownSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+
+class RegistrationsReportListAPIView(APIView):
+    """
+    GET: List all New Registrations (Unconverted Applications).
+    Returns a pure list [] by default.
+    Activates pagination ({count, next, previous, results}) only if ?page= or ?page_size= is provided.
+    Filters:
+      - counsellor / counselor: Counsellor ID or 'all'
+      - course: Course ID or 'all'
+      - start_date / end_date: DD-MM-YYYY or YYYY-MM-DD
+      - search: Search in first_name, last_name, email, primary_phone, secondary_phone
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        queryset = InternshipApplication.objects.filter(
+            is_converted=False
+        ).select_related(
+            "course",
+            "councellor",
+        )
+
+        # Counsellor filter
+        counsellor_param = request.query_params.get("counsellor") or request.query_params.get("counselor")
+        if counsellor_param and counsellor_param.strip().lower() not in ["", "all"]:
+            try:
+                queryset = queryset.filter(councellor_id=int(counsellor_param))
+            except (ValueError, TypeError):
+                return Response({"detail": f"Invalid counsellor filter '{counsellor_param}'."}, status=400)
+
+        # Course filter
+        course_param = request.query_params.get("course") or request.query_params.get("course_id")
+        if course_param and course_param.strip().lower() not in ["", "all"]:
+            try:
+                queryset = queryset.filter(course_id=int(course_param))
+            except (ValueError, TypeError):
+                return Response({"detail": f"Invalid course filter '{course_param}'."}, status=400)
+
+        # Date filters
+        start_date_str = request.query_params.get("start_date")
+        end_date_str = request.query_params.get("end_date")
+        d_start, d_end = None, None
+
+        if start_date_str:
+            try:
+                d_start = parse_flexible_date(start_date_str)
+            except ValueError as e:
+                return Response({"detail": str(e)}, status=400)
+
+        if end_date_str:
+            try:
+                d_end = parse_flexible_date(end_date_str)
+            except ValueError as e:
+                return Response({"detail": str(e)}, status=400)
+
+        if d_start and d_end and d_start > d_end:
+            return Response({"detail": "end_date must be greater than or equal to start_date."}, status=400)
+
+        if d_start:
+            dt_start = make_aware(datetime.combine(d_start, time.min))
+            queryset = queryset.filter(created_at__gte=dt_start)
+        if d_end:
+            dt_end = make_aware(datetime.combine(d_end, time.max))
+            queryset = queryset.filter(created_at__lte=dt_end)
+
+        # Search filter
+        search = request.query_params.get("search")
+        if search and search.strip():
+            s = search.strip()
+            queryset = queryset.filter(
+                Q(first_name__icontains=s) |
+                Q(last_name__icontains=s) |
+                Q(email__icontains=s) |
+                Q(primary_phone__icontains=s) |
+                Q(secondary_phone__icontains=s)
+            )
+
+        queryset = queryset.distinct().order_by("-created_at")
+
+        # Conditional Pagination: activate ONLY if page or page_size is in query params
+        page = request.query_params.get("page")
+        page_size = request.query_params.get("page_size")
+        if page is not None or page_size is not None:
+            from rest_framework.pagination import PageNumberPagination
+            paginator = PageNumberPagination()
+            if page_size:
+                try:
+                    paginator.page_size = int(page_size)
+                except (ValueError, TypeError):
+                    pass
+            page_qs = paginator.paginate_queryset(queryset, request)
+            serializer = RegistrationsBreakdownSerializer(page_qs, many=True)
+            return paginator.get_paginated_response(serializer.data)
+
+        # Pure list by default
+        serializer = RegistrationsBreakdownSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+
+class PaymentsReportListAPIView(APIView):
+    """
+    GET: List all Payments (Course payments + Application slot payments).
+    Returns a pure list [] by default.
+    Activates pagination ({count, next, previous, results}) only if ?page= or ?page_size= is provided.
+    Filters:
+      - counsellor / counselor: Counsellor ID or 'all'
+      - course: Course ID or 'all'
+      - start_date / end_date: DD-MM-YYYY or YYYY-MM-DD
+      - payment_type: 'slot', 'installment', 'advance', 'all'
+      - search: Search in payer name, student_id, transaction_id, or email
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        counsellor_param = request.query_params.get("counsellor") or request.query_params.get("counselor")
+        counsellor_id = None
+        if counsellor_param and counsellor_param.strip().lower() not in ["", "all"]:
+            try:
+                counsellor_id = int(counsellor_param)
+            except (ValueError, TypeError):
+                return Response({"detail": f"Invalid counsellor filter '{counsellor_param}'."}, status=400)
+
+        course_param = request.query_params.get("course") or request.query_params.get("course_id")
+        course_id = None
+        if course_param and course_param.strip().lower() not in ["", "all"]:
+            try:
+                course_id = int(course_param)
+            except (ValueError, TypeError):
+                return Response({"detail": f"Invalid course filter '{course_param}'."}, status=400)
+
+        start_date_str = request.query_params.get("start_date")
+        end_date_str = request.query_params.get("end_date")
+        d_start, d_end = None, None
+
+        if start_date_str:
+            try:
+                d_start = parse_flexible_date(start_date_str)
+            except ValueError as e:
+                return Response({"detail": str(e)}, status=400)
+
+        if end_date_str:
+            try:
+                d_end = parse_flexible_date(end_date_str)
+            except ValueError as e:
+                return Response({"detail": str(e)}, status=400)
+
+        if d_start and d_end and d_start > d_end:
+            return Response({"detail": "end_date must be greater than or equal to start_date."}, status=400)
+
+        payment_type_filter = request.query_params.get("payment_type", "all").strip().lower()
+        search = (request.query_params.get("search") or "").strip()
+
+        combined_payments = []
+
+        # ── 1. Course Payments (Admissions / Installments / Advances) ──
+        if payment_type_filter in ["all", "installment", "advance", "admission"]:
+            cp_qs = CoursePayment.objects.select_related(
+                "student__profile__user",
+                "student__councellor",
+                "enrollment__course",
+                "installments__enrollment__course",
+            )
+
+            if counsellor_id:
+                cp_qs = cp_qs.filter(student__councellor_id=counsellor_id)
+
+            if course_id:
+                cp_qs = cp_qs.filter(
+                    Q(enrollment__course_id=course_id) |
+                    Q(installments__enrollment__course_id=course_id) |
+                    Q(student__enrollments__course_id=course_id)
+                )
+
+            if d_start:
+                cp_qs = cp_qs.filter(payment_date__gte=d_start)
+            if d_end:
+                cp_qs = cp_qs.filter(payment_date__lte=d_end)
+
+            if payment_type_filter in ["installment", "advance"]:
+                cp_qs = cp_qs.filter(payment_type=payment_type_filter)
+
+            if search:
+                cp_qs = cp_qs.filter(
+                    Q(student__profile__user__first_name__icontains=search) |
+                    Q(student__profile__user__last_name__icontains=search) |
+                    Q(student__profile__user__email__icontains=search) |
+                    Q(student__student_id__icontains=search) |
+                    Q(transaction_id__icontains=search)
+                )
+
+            cp_qs = cp_qs.distinct()
+
+            for cp in cp_qs:
+                student = cp.student
+                user = student.profile.user if student and student.profile else None
+                counsellor = student.councellor if student else None
+
+                # Resolve course title and id
+                crs_title, crs_id = None, None
+                if cp.enrollment and cp.enrollment.course:
+                    crs_title = cp.enrollment.course.title
+                    crs_id = cp.enrollment.course.id
+                elif cp.installments and cp.installments.enrollment and cp.installments.enrollment.course:
+                    crs_title = cp.installments.enrollment.course.title
+                    crs_id = cp.installments.enrollment.course.id
+                elif student:
+                    enr = student.enrollments.first()
+                    if enr and enr.course:
+                        crs_title = enr.course.title
+                        crs_id = enr.course.id
+
+                # Identify if this was the first payment for the student
+                category = "installment"
+                if cp.payment_type == "advance":
+                    category = "advance"
+                else:
+                    if student:
+                        first_pay = min(
+                            list(student.course_payments.all()),
+                            key=lambda p: (p.payment_date or (p.created_at.date() if hasattr(p, "created_at") and p.created_at else date.min)),
+                            default=None
+                        )
+                        if first_pay and first_pay.id == cp.id:
+                            category = "admission_first_payment"
+
+                combined_payments.append({
+                    "id": f"CP-{cp.id}",
+                    "payment_category": category,
+                    "student_id": student.student_id if student else None,
+                    "payer_name": student.get_full_name() if student else "",
+                    "email": user.email if user else None,
+                    "phone": student.profile.phone_number if student and student.profile else None,
+                    "course": {"id": crs_id, "title": crs_title} if crs_title else None,
+                    "counsellor": {"id": counsellor.id, "name": counsellor.get_full_name()} if counsellor else None,
+                    "amount": f"{cp.amount_paid:.2f}",
+                    "payment_method": cp.payment_method,
+                    "transaction_id": cp.transaction_id,
+                    "payment_date": str(cp.payment_date) if cp.payment_date else None,
+                    "payment_type": cp.payment_type,
+                })
+
+        # ── 2. Application Slot Payments ──
+        if payment_type_filter in ["all", "slot", "slot_amount"]:
+            app_qs = InternshipApplication.objects.filter(
+                slot_amount__isnull=False,
+                slot_amount__gt=0,
+            ).select_related("course", "councellor")
+
+            if counsellor_id:
+                app_qs = app_qs.filter(councellor_id=counsellor_id)
+
+            if course_id:
+                app_qs = app_qs.filter(course_id=course_id)
+
+            if d_start:
+                app_qs = app_qs.filter(
+                    Q(slot_payment_date__gte=d_start) |
+                    Q(slot_payment_date__isnull=True, created_at__date__gte=d_start)
+                )
+            if d_end:
+                app_qs = app_qs.filter(
+                    Q(slot_payment_date__lte=d_end) |
+                    Q(slot_payment_date__isnull=True, created_at__date__lte=d_end)
+                )
+
+            if search:
+                app_qs = app_qs.filter(
+                    Q(first_name__icontains=search) |
+                    Q(last_name__icontains=search) |
+                    Q(email__icontains=search) |
+                    Q(primary_phone__icontains=search) |
+                    Q(slot_transaction_id__icontains=search)
+                )
+
+            app_qs = app_qs.distinct()
+
+            for app in app_qs:
+                p_date = app.slot_payment_date or (app.created_at.date() if app.created_at else None)
+                crs_title = app.course.title if app.course else (app.course_name or None)
+                crs_id = app.course.id if app.course else None
+
+                combined_payments.append({
+                    "id": f"SLOT-{app.id}",
+                    "payment_category": "slot_amount",
+                    "student_id": None,
+                    "payer_name": f"{app.first_name} {app.last_name}".strip(),
+                    "email": app.email,
+                    "phone": app.primary_phone,
+                    "course": {"id": crs_id, "title": crs_title} if crs_title else None,
+                    "counsellor": {"id": app.councellor.id, "name": app.councellor.get_full_name()} if app.councellor else None,
+                    "amount": f"{app.slot_amount:.2f}",
+                    "payment_method": app.slot_payment_method,
+                    "transaction_id": app.slot_transaction_id,
+                    "payment_date": str(p_date) if p_date else None,
+                    "payment_type": "slot_amount",
+                })
+
+        # Sort payments newest first
+        combined_payments.sort(
+            key=lambda p: p.get("payment_date") or "",
+            reverse=True,
+        )
+
+        # Conditional Pagination: activate ONLY if page or page_size is in query params
+        page = request.query_params.get("page")
+        page_size = request.query_params.get("page_size")
+        if page is not None or page_size is not None:
+            from rest_framework.pagination import PageNumberPagination
+            paginator = PageNumberPagination()
+            if page_size:
+                try:
+                    paginator.page_size = int(page_size)
+                except (ValueError, TypeError):
+                    pass
+            page_items = paginator.paginate_queryset(combined_payments, request)
+            serializer = PaymentsBreakdownSerializer(page_items, many=True)
+            return paginator.get_paginated_response(serializer.data)
+
+        # Pure list by default
+        serializer = PaymentsBreakdownSerializer(combined_payments, many=True)
+        return Response(serializer.data)
+
+
+# ── Admissions & Conversions Dashboard Summary API ────────────
+
+class AdmissionsSummaryReportAPIView(APIView):
+    """
+    GET /internship/report/admissions/summary/
+    Returns comprehensive KPI overview statistics for the Admissions/Conversions dashboard:
+      - Total Registrations (with % change from previous month)
+      - Total Admissions (with % intake conversion vs registrations)
+      - Total Payments (successful transaction count)
+      - Pending Payments (number of enrolled students with pending balance)
+      - Total Amount Collected (advance + course fees + slot booking amounts)
+      - Conversion Rate (% of registrations converted or admitted)
+      - Today's Registrations (entries created today)
+      - Today's Admissions (students admitted today)
+    Supports filters:
+      - counsellor / counselor
+      - course
+      - start_date / end_date (supports DD-MM-YYYY or YYYY-MM-DD)
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        today = now().date()
+        dt_today_start = make_aware(datetime.combine(today, time.min))
+        dt_today_end = make_aware(datetime.combine(today, time.max))
+
+        # Filter parameters
+        counsellor_param = request.query_params.get("counsellor") or request.query_params.get("counselor")
+        counsellor_id = None
+        if counsellor_param and counsellor_param.strip().lower() not in ["", "all"]:
+            try:
+                counsellor_id = int(counsellor_param)
+            except (ValueError, TypeError):
+                return Response({"detail": f"Invalid counsellor filter '{counsellor_param}'."}, status=400)
+
+        course_param = request.query_params.get("course") or request.query_params.get("course_id")
+        course_id = None
+        if course_param and course_param.strip().lower() not in ["", "all"]:
+            try:
+                course_id = int(course_param)
+            except (ValueError, TypeError):
+                return Response({"detail": f"Invalid course filter '{course_param}'."}, status=400)
+
+        start_date_str = request.query_params.get("start_date")
+        end_date_str = request.query_params.get("end_date")
+        d_start, d_end = None, None
+
+        if start_date_str:
+            try:
+                d_start = parse_flexible_date(start_date_str)
+            except ValueError as e:
+                return Response({"detail": str(e)}, status=400)
+
+        if end_date_str:
+            try:
+                d_end = parse_flexible_date(end_date_str)
+            except ValueError as e:
+                return Response({"detail": str(e)}, status=400)
+
+        if d_start and d_end and d_start > d_end:
+            return Response({"detail": "end_date must be greater than or equal to start_date."}, status=400)
+
+        dt_start = make_aware(datetime.combine(d_start, time.min)) if d_start else None
+        dt_end = make_aware(datetime.combine(d_end, time.max)) if d_end else None
+
+        # Base querysets
+        admissions_qs = Student.objects.all()
+        registrations_qs = InternshipApplication.objects.all()
+        course_payments_qs = CoursePayment.objects.all()
+        slot_payments_qs = InternshipApplication.objects.filter(slot_amount__isnull=False, slot_amount__gt=0)
+
+        # Apply counsellor filter
+        if counsellor_id:
+            admissions_qs = admissions_qs.filter(councellor_id=counsellor_id)
+            registrations_qs = registrations_qs.filter(councellor_id=counsellor_id)
+            course_payments_qs = course_payments_qs.filter(student__councellor_id=counsellor_id)
+            slot_payments_qs = slot_payments_qs.filter(councellor_id=counsellor_id)
+
+        # Apply course filter
+        if course_id:
+            admissions_qs = admissions_qs.filter(enrollments__course_id=course_id)
+            registrations_qs = registrations_qs.filter(course_id=course_id)
+            course_payments_qs = course_payments_qs.filter(
+                Q(enrollment__course_id=course_id) |
+                Q(installments__enrollment__course_id=course_id) |
+                Q(student__enrollments__course_id=course_id)
+            )
+            slot_payments_qs = slot_payments_qs.filter(course_id=course_id)
+
+        # Range-filtered querysets
+        admissions_filtered = admissions_qs
+        registrations_filtered = registrations_qs
+        course_payments_filtered = course_payments_qs
+        slot_payments_filtered = slot_payments_qs
+
+        if dt_start:
+            admissions_filtered = admissions_filtered.filter(created_at__gte=dt_start)
+            registrations_filtered = registrations_filtered.filter(created_at__gte=dt_start)
+            course_payments_filtered = course_payments_filtered.filter(payment_date__gte=d_start)
+            slot_payments_filtered = slot_payments_filtered.filter(
+                Q(slot_payment_date__gte=d_start) |
+                Q(slot_payment_date__isnull=True, created_at__date__gte=d_start)
+            )
+
+        if dt_end:
+            admissions_filtered = admissions_filtered.filter(created_at__lte=dt_end)
+            registrations_filtered = registrations_filtered.filter(created_at__lte=dt_end)
+            course_payments_filtered = course_payments_filtered.filter(payment_date__lte=d_end)
+            slot_payments_filtered = slot_payments_filtered.filter(
+                Q(slot_payment_date__lte=d_end) |
+                Q(slot_payment_date__isnull=True, created_at__date__lte=d_end)
+            )
+
+        # Distinct counts
+        total_admissions = admissions_filtered.distinct().count()
+        total_registrations = registrations_filtered.distinct().count()
+
+        # Payments calculations
+        course_pay_count = course_payments_filtered.distinct().count()
+        slot_pay_count = slot_payments_filtered.distinct().count()
+        total_payments = course_pay_count + slot_pay_count
+
+        course_amount_sum = course_payments_filtered.distinct().aggregate(t=Sum("amount_paid"))["t"] or Decimal("0.00")
+        slot_amount_sum = slot_payments_filtered.distinct().aggregate(t=Sum("slot_amount"))["t"] or Decimal("0.00")
+        total_amount_collected = Decimal(str(course_amount_sum)) + Decimal(str(slot_amount_sum))
+
+        # Today's counts
+        today_registrations = registrations_qs.filter(
+            created_at__gte=dt_today_start,
+            created_at__lte=dt_today_end,
+        ).distinct().count()
+
+        today_admissions = admissions_qs.filter(
+            created_at__gte=dt_today_start,
+            created_at__lte=dt_today_end,
+        ).distinct().count()
+
+        # Month-over-month calculation for Registrations
+        # Current month: 1st of this month to today
+        curr_month_start = make_aware(datetime(today.year, today.month, 1, 0, 0))
+        # Previous month: 1st of last month to same relative days
+        if today.month == 1:
+            prev_month_start = make_aware(datetime(today.year - 1, 12, 1, 0, 0))
+            prev_month_end = make_aware(datetime(today.year - 1, 12, min(today.day, 31), 23, 59, 59))
+        else:
+            prev_month_start = make_aware(datetime(today.year, today.month - 1, 1, 0, 0))
+            # Handle shorter month length (e.g. Feb)
+            import calendar
+            max_days_prev = calendar.monthrange(today.year, today.month - 1)[1]
+            prev_month_end = make_aware(datetime(today.year, today.month - 1, min(today.day, max_days_prev), 23, 59, 59))
+
+        curr_month_reg = registrations_qs.filter(created_at__gte=curr_month_start, created_at__lte=dt_today_end).distinct().count()
+        prev_month_reg = registrations_qs.filter(created_at__gte=prev_month_start, created_at__lte=prev_month_end).distinct().count()
+
+        if prev_month_reg > 0:
+            reg_pct_change = round(((curr_month_reg - prev_month_reg) / prev_month_reg) * 100, 1)
+            reg_growth_str = f"{'+' if reg_pct_change >= 0 else ''}{reg_pct_change}% from last month"
+        elif curr_month_reg > 0:
+            reg_growth_str = "+100% from last month"
+        else:
+            reg_growth_str = "0% from last month"
+
+        # Conversion Rate
+        if total_registrations > 0:
+            conversion_rate_val = round((total_admissions / total_registrations) * 100, 1)
+        else:
+            conversion_rate_val = 0.0
+
+        intake_conversion_str = f"{conversion_rate_val}% intake conversion"
+
+        # Pending Payments count: Students in this scope who still have pending course fees
+        pending_payments_count = 0
+        students_in_scope = admissions_filtered.prefetch_related(
+            "enrollments__course",
+            "enrollments__student_installment_items",
+            "course_payments",
+        ).distinct()
+
+        for student in students_in_scope:
+            enrollment = student.enrollments.first()
+            if enrollment:
+                if enrollment.pending_balance > Decimal("0.00"):
+                    pending_payments_count += 1
+            else:
+                # Student with no enrollment record or fee not fully paid
+                payments_sum = sum((p.amount_paid for p in student.course_payments.all()), Decimal("0.00"))
+                if payments_sum == Decimal("0.00"):
+                    pending_payments_count += 1
+
+        return Response({
+            "total_registrations": {
+                "value": total_registrations,
+                "label": "Total Registrations",
+                "subtext": reg_growth_str,
+            },
+            "total_admissions": {
+                "value": total_admissions,
+                "label": "Total Admissions",
+                "subtext": intake_conversion_str,
+            },
+            "total_payments": {
+                "value": total_payments,
+                "label": "Total Payments",
+                "subtext": "Successful transactions",
+            },
+            "pending_payments": {
+                "value": pending_payments_count,
+                "label": "Pending Payments",
+                "subtext": "Pending fee clearance",
+            },
+            "total_amount_collected": {
+                "value": f"{total_amount_collected:.2f}",
+                "formatted": f"₹{total_amount_collected:,.2f}",
+                "label": "Total Amount Collected",
+                "subtext": "Advance & course fees",
+            },
+            "conversion_rate": {
+                "value": conversion_rate_val,
+                "formatted": f"{conversion_rate_val}%",
+                "label": "Conversion Rate",
+                "subtext": "Target ratio achieved" if conversion_rate_val >= 50 else "In progress",
+            },
+            "today_registrations": {
+                "value": today_registrations,
+                "label": "Today's Registrations",
+                "subtext": "New lead entries",
+            },
+            "today_admissions": {
+                "value": today_admissions,
+                "label": "Today's Admissions",
+                "subtext": "Enrolled students",
+            },
+            # Raw summary object for direct programmatic access
+            "summary": {
+                "total_registrations": total_registrations,
+                "registrations_growth": reg_growth_str,
+                "total_admissions": total_admissions,
+                "admissions_intake_conversion": intake_conversion_str,
+                "total_payments": total_payments,
+                "pending_payments": pending_payments_count,
+                "total_amount_collected": f"{total_amount_collected:.2f}",
+                "conversion_rate": conversion_rate_val,
+                "today_registrations": today_registrations,
+                "today_admissions": today_admissions,
+            }
+        })
+
+
 

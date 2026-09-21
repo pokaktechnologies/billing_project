@@ -80,6 +80,7 @@ def get_payment_student(actor):
     if student:
         return student
 
+
     return getattr(actor, "student_profile", None)
 
 
@@ -660,3 +661,25 @@ class StudentConversionService:
             print("Email sending failed:", exc)
 
         return student
+
+
+def parse_flexible_date(date_str):
+    """
+    Parses date strings supporting multiple formats:
+    - DD-MM-YYYY (e.g. 20-07-2026)
+    - DD/MM/YYYY (e.g. 20/07/2026)
+    - YYYY-MM-DD (e.g. 2026-07-20)
+    Returns datetime.date or None if date_str is empty/None.
+    Raises ValueError if format is invalid.
+    """
+    if not date_str:
+        return None
+    s = str(date_str).strip()
+    if not s:
+        return None
+    for fmt in ("%d-%m-%Y", "%d/%m/%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
+    raise ValueError(f"Invalid date format '{date_str}'. Expected DD-MM-YYYY or YYYY-MM-DD.")

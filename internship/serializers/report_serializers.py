@@ -1295,3 +1295,169 @@ class CounsellorProceedToHRSerializer(serializers.Serializer):
             raise serializers.ValidationError({"end_date": "end_date must be greater than or equal to start_date."})
         return attrs
 
+
+# ── Breakdown Standalone Report Serializers (Pure Lists) ────────
+
+class AdmissionsBreakdownSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+    email = serializers.SerializerMethodField()
+    phone = serializers.SerializerMethodField()
+    course = serializers.SerializerMethodField()
+    counsellor = serializers.SerializerMethodField()
+    admission_date = serializers.DateTimeField(source="created_at", read_only=True)
+    payment = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Student
+        fields = [
+            "id",
+            "student_id",
+            "name",
+            "email",
+            "phone",
+            "course",
+            "counsellor",
+            "admission_date",
+            "payment",
+        ]
+
+    def get_name(self, obj):
+        return obj.get_full_name()
+
+    def get_email(self, obj):
+        if obj.profile and obj.profile.user:
+            return obj.profile.user.email
+        return None
+
+    def get_phone(self, obj):
+        if obj.profile:
+            return obj.profile.phone_number
+        return None
+
+    def _get_enrollment(self, obj):
+        if not hasattr(obj, "_cached_enrollment"):
+            enrollments = list(obj.enrollments.all())
+            obj._cached_enrollment = enrollments[0] if enrollments else None
+        return obj._cached_enrollment
+
+    def get_course(self, obj):
+        enrollment = self._get_enrollment(obj)
+        if enrollment and enrollment.course:
+            return {
+                "id": enrollment.course.id,
+                "title": enrollment.course.title,
+            }
+        return None
+
+    def get_counsellor(self, obj):
+        if obj.councellor:
+            return {
+                "id": obj.councellor.id,
+                "name": obj.councellor.get_full_name(),
+            }
+        return None
+
+    def _get_first_payment(self, obj):
+        payments = list(obj.course_payments.all())
+        if not payments:
+            return None
+        return min(
+            payments,
+            key=lambda p: (p.payment_date or (p.created_at.date() if hasattr(p, "created_at") and p.created_at else date.min))
+        )
+
+    def get_payment(self, obj):
+        first = self._get_first_payment(obj)
+        if not first:
+            return None
+        amt = getattr(first, "amount_paid", None)
+        if amt is None:
+            amt = getattr(first, "amount", None)
+        return {
+            "amount": f"{amt:.2f}" if amt is not None else None,
+            "payment_method": first.payment_method,
+            "transaction_id": getattr(first, "transaction_id", None),
+            "payment_date": str(first.payment_date) if first.payment_date else None,
+            "payment_type": getattr(first, "payment_type", "installment"),
+        }
+
+
+class RegistrationsBreakdownSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+    phone = serializers.CharField(source="primary_phone", read_only=True)
+    course = serializers.SerializerMethodField()
+    counsellor = serializers.SerializerMethodField()
+    registration_date = serializers.DateTimeField(source="created_at", read_only=True)
+    slot_payment = serializers.SerializerMethodField()
+
+    class Meta:
+        model = InternshipApplication
+        fields = [
+            "id",
+            "name",
+            "email",
+            "phone",
+            "course",
+            "counsellor",
+            "registration_date",
+            "slot_payment",
+        ]
+
+    def get_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}".strip()
+
+    def get_course(self, obj):
+        if obj.course:
+            return {
+                "id": obj.course.id,
+                "title": obj.course.title,
+            }
+        elif obj.course_name:
+            return {
+                "id": None,
+                "title": obj.course_name,
+            }
+        return None
+
+    def get_counsellor(self, obj):
+        if obj.councellor:
+            return {
+                "id": obj.councellor.id,
+                "name": obj.councellor.get_full_name(),
+            }
+        return None
+
+    def get_slot_payment(self, obj):
+        if obj.slot_amount is None:
+            return None
+        return {
+            "amount": f"{obj.slot_amount:.2f}",
+            "payment_method": obj.slot_payment_method,
+            "transaction_id": obj.slot_transaction_id,
+            "payment_date": str(obj.slot_payment_date) if obj.slot_payment_date else None,
+            "payment_type": "slot_amount",
+        }
+
+
+class PaymentsBreakdownSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    payment_category = serializers.CharField()
+    student_id = serializers.CharField(allow_null=True)
+    payer_name = serializers.CharField()
+    email = serializers.CharField(allow_null=True)
+    phone = serializers.CharField(allow_null=True)
+    course = serializers.SerializerMethodField()
+    counsellor = serializers.SerializerMethodField()
+    amount = serializers.CharField()
+    payment_method = serializers.CharField(allow_null=True)
+    transaction_id = serializers.CharField(allow_null=True)
+    payment_date = serializers.CharField(allow_null=True)
+    payment_type = serializers.CharField(allow_null=True)
+
+    def get_course(self, obj):
+        return obj.get("course")
+
+    def get_counsellor(self, obj):
+        return obj.get("counsellor")
+
+

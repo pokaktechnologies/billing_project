@@ -5,7 +5,7 @@ from django.db import transaction
 from rest_framework import serializers
 from django.conf import settings
 from ..models import PAYMENT_METHODS, Batch, InstallmentPlan, InternshipApplication, InternshipDocument, StudentCourseEnrollment
-
+from django.shortcuts import get_object_or_404
 
 class InternshipDocumentSerializer(serializers.ModelSerializer):
     class Meta:
@@ -116,6 +116,46 @@ class InternshipApplicationSerializer(serializers.ModelSerializer):
             attrs["slot_payment_date"] = None
 
         return attrs
+    
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        documents_data = validated_data.pop("documents", None)
+
+        # Update application fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        instance.full_clean()
+        instance.save()
+
+        # Update documents only if documents were included
+        if documents_data is not None:
+            for document_data in documents_data:
+                document_id = document_data.get("id")
+
+                if document_id:
+                    document = get_object_or_404(
+                        InternshipDocument,
+                        pk=document_id,
+                        application=instance,
+                    )
+
+                    for attr, value in document_data.items():
+                        if attr != "id":
+                            setattr(document, attr, value)
+
+                    document.full_clean()
+                    document.save()
+
+                else:
+                    document = InternshipDocument(
+                        application=instance,
+                        **document_data,
+                    )
+                    document.full_clean()
+                    document.save()
+
+        return instance
 
     @transaction.atomic
     def create(self, validated_data):

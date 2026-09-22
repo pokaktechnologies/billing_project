@@ -205,6 +205,70 @@ class InternshipApplicationAPIView(APIView):
         )
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
+    def put(self, request, pk=None):
+        if pk is None:
+            return Response(
+                {"detail": "Application id is required for update."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        application = get_object_or_404(
+            self.get_queryset(),
+            pk=pk,
+        )
+
+        serializer = InternshipApplicationSerializer(
+            application,
+            data=request.data,
+            context={"request": request},
+        )
+
+        serializer.is_valid(raise_exception=True)
+        application = serializer.save()
+
+        response_serializer = InternshipApplicationSerializer(
+            application,
+            context={"request": request},
+        )
+
+        return Response(
+            response_serializer.data,
+            status=status.HTTP_200_OK,
+        )
+
+
+    def patch(self, request, pk=None):
+        if pk is None:
+            return Response(
+                {"detail": "Application id is required for update."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        application = get_object_or_404(
+            self.get_queryset(),
+            pk=pk,
+        )
+
+        serializer = InternshipApplicationSerializer(
+            application,
+            data=request.data,
+            partial=True,
+            context={"request": request},
+        )
+
+        serializer.is_valid(raise_exception=True)
+        application = serializer.save()
+
+        response_serializer = InternshipApplicationSerializer(
+            application,
+            context={"request": request},
+        )
+
+        return Response(
+            response_serializer.data,
+            status=status.HTTP_200_OK,
+        )
+
     def delete(self, request, pk=None):
         if pk is None:
             return Response(

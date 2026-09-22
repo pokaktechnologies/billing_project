@@ -364,6 +364,7 @@ class ReportSerializer(serializers.ModelSerializer):
             'report_type',
             'executive_summary',
             'next_period_plan',
+            'remark',
             'report_date',
             'week_start',
             'week_end',
@@ -469,6 +470,7 @@ class ReportUpdateSerializer(serializers.ModelSerializer):
         fields = [
             'executive_summary',
             'next_period_plan',
+            'remark',
             'report_date',
             'week_start',
             'week_end',
@@ -525,6 +527,7 @@ class ReportResponseSerializer(serializers.ModelSerializer):
             'report_type',
             'executive_summary',
             'next_period_plan',
+            'remark',
             'report_date',
             'week_start',
             'week_end',

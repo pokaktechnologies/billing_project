@@ -252,7 +252,42 @@ class OfferLetterCreateSerializer(serializers.ModelSerializer):
         if any(not isinstance(item, str) for item in value):
             raise serializers.ValidationError("Each responsibility must be a string.")
         return value
+    
+    def validate_allowances(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError(
+                "allowances must be a list."
+            )
 
+        for allowance in value:
+            if not isinstance(allowance, dict):
+                raise serializers.ValidationError(
+                    "Each allowance must be an object."
+                )
+
+            if not allowance.get("name"):
+                raise serializers.ValidationError(
+                    "Each allowance must have a name."
+                )
+
+            if "amount" not in allowance:
+                raise serializers.ValidationError(
+                    "Each allowance must have an amount."
+                )
+
+            try:
+                amount = float(allowance["amount"])
+            except (TypeError, ValueError):
+                raise serializers.ValidationError(
+                    "Allowance amount must be a valid number."
+                )
+
+            if amount < 0:
+                raise serializers.ValidationError(
+                    "Allowance amount cannot be negative."
+                )
+
+        return value
     def validate(self, attrs):
         # If target-based, target_details should be provided
         if attrs.get("is_target_based") and not attrs.get("target_details"):
@@ -260,12 +295,12 @@ class OfferLetterCreateSerializer(serializers.ModelSerializer):
                 {"target_details": "target_details is required when is_target_based is True."}
             )
         # basic_salary should not exceed monthly_salary
-        basic = attrs.get("basic_salary")
-        monthly = attrs.get("monthly_salary")
-        if basic and monthly and basic > monthly:
-            raise serializers.ValidationError(
-                {"basic_salary": "basic_salary cannot be greater than monthly_salary."}
-            )
+        # basic = attrs.get("basic_salary")
+        # monthly = attrs.get("monthly_salary")
+        # if basic and monthly and basic > monthly:
+        #     raise serializers.ValidationError(
+        #         {"basic_salary": "basic_salary cannot be greater than monthly_salary."}
+        #     )
         return attrs
 
     def create(self, validated_data):
@@ -292,7 +327,41 @@ class OfferLetterPatchSerializer(serializers.ModelSerializer):
         if any(not isinstance(item, str) for item in value):
             raise serializers.ValidationError("Each responsibility must be a string.")
         return value
+    def validate_allowances(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError(
+                "allowances must be a list."
+            )
 
+        for allowance in value:
+            if not isinstance(allowance, dict):
+                raise serializers.ValidationError(
+                    "Each allowance must be an object."
+                )
+
+            if not allowance.get("name"):
+                raise serializers.ValidationError(
+                    "Each allowance must have a name."
+                )
+
+            if "amount" not in allowance:
+                raise serializers.ValidationError(
+                    "Each allowance must have an amount."
+                )
+
+            try:
+                amount = float(allowance["amount"])
+            except (TypeError, ValueError):
+                raise serializers.ValidationError(
+                    "Allowance amount must be a valid number."
+                )
+
+            if amount < 0:
+                raise serializers.ValidationError(
+                    "Allowance amount cannot be negative."
+                )
+
+        return value
     def validate(self, attrs):
         instance = self.instance
 
@@ -303,12 +372,12 @@ class OfferLetterPatchSerializer(serializers.ModelSerializer):
                 {"target_details": "target_details is required when is_target_based is True."}
             )
 
-        basic   = attrs.get("basic_salary", instance.basic_salary)
-        monthly = attrs.get("monthly_salary", instance.monthly_salary)
-        if basic and monthly and basic > monthly:
-            raise serializers.ValidationError(
-                {"basic_salary": "basic_salary cannot be greater than monthly_salary."}
-            )
+        # basic   = attrs.get("basic_salary", instance.basic_salary)
+        # monthly = attrs.get("monthly_salary", instance.monthly_salary)
+        # if basic and monthly and basic > monthly:
+        #     raise serializers.ValidationError(
+        #         {"basic_salary": "basic_salary cannot be greater than monthly_salary."}
+        #     )
         return attrs
 
 

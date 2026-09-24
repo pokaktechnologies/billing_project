@@ -42,7 +42,7 @@ class Student(models.Model):
         return f"{user.first_name} {user.last_name}"
     
     def __str__(self):
-        return self.profile.user.first_name
+        return f"{self.profile.user.first_name} {self.profile.user.last_name} {self.profile.user.email} - {self.student_id}"
 
 class Faculty(models.Model):
     user = models.OneToOneField(StaffProfile, on_delete=models.CASCADE, related_name="faculty_profile")
@@ -1230,4 +1230,4 @@ class CounsellorHRSubmission(models.Model):
         unique_together = ['counsellor', 'start_date', 'end_date']
 
     def __str__(self):
-        return f"{self.counsellor} ({self.start_date} to {self.end_date}) - {self.status}"
+        return f"{self.counsellor} ({self.start_date} to {self.end_date}) - {self.status}"

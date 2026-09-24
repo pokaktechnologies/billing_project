@@ -1,6 +1,6 @@
 import re
 
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives, send_mail
 from django.db import transaction
 from rest_framework import serializers
 from django.conf import settings
@@ -177,56 +177,221 @@ class InternshipApplicationSerializer(serializers.ModelSerializer):
         # Send confirmation email
         # -----------------------------------------
         try:
+            subject = "Internship Application Received | Pokak Technologies"
 
-            subject = "Internship Application Submitted Successfully"
+            context = {
+                "first_name": application.first_name,
+                "last_name": application.last_name,
+                "email": application.email,
+                "course": application.course,
+                "course_type": application.course_type,
+                "course_duration": application.course_duration,
+            }
 
             message = f"""
-    Dear {application.first_name} {application.last_name},
+            Dear {context['first_name']} {context['last_name']},
 
-    Thank you for submitting your internship application with Pokak Technologies.
+            Thank you for submitting your application to Pokak Technologies.
 
-    Application Details
+            We have successfully received your application. Our team will review
+            your details and contact you regarding the next steps.
 
-    Name:
-    {application.first_name} {application.last_name}
+            APPLICATION DETAILS
 
-    Course:
-    {application.course}
+            Name: {context['first_name']} {context['last_name']}
+            Email: {context['email']}
+            Course: {context['course']}
+            Course Type: {context['course_type']}
+            Duration: {context['course_duration']} month(s)
 
-    Course Type:
-    {application.course_type}
+            We appreciate your interest in Pokak Technologies and look forward
+            to connecting with you.
 
-    Duration:
-    {application.course_duration} Month(s)
+            Best regards,
+            Admissions Team
+            Pokak Technologies
+            """
 
-    """
+            html_message = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            </head>
 
-            if application.form_type == "internship_form":
-                message += f"""
-    Slot Amount:
-    ₹{application.slot_amount or 0}
-    """
+            <body style="margin:0; padding:0; background-color:#f3f4f6;
+                        font-family:Arial,Helvetica,sans-serif;">
 
-            message += """
+                <table width="100%" cellpadding="0" cellspacing="0"
+                    style="background-color:#f3f4f6; padding:30px 10px;">
+                    <tr>
+                        <td align="center">
 
-    Our team will review your application and contact you shortly.
+                            <table width="600" cellpadding="0" cellspacing="0"
+                                style="max-width:600px; width:100%;
+                                        background-color:#ffffff;
+                                        border-radius:10px; overflow:hidden;">
 
-    Thank you.
+                                <!-- Header -->
+                                <tr>
+                                    <td style="background-color:#173b67;
+                                            padding:28px 30px;
+                                            text-align:center;">
+                                        <h1 style="margin:0; color:#ffffff;
+                                                font-size:24px;">
+                                            Pokak Technologies
+                                        </h1>
+                                        <p style="margin:8px 0 0; color:#dbeafe;
+                                                font-size:14px;">
+                                            Internship Application Confirmation
+                                        </p>
+                                    </td>
+                                </tr>
 
-    Regards,
-    Pokak Technologies
-    """
+                                <!-- Content -->
+                                <tr>
+                                    <td style="padding:30px; color:#333333;
+                                            font-size:15px; line-height:1.7;">
 
-            send_mail(
-                subject,
-                message,
-                settings.DEFAULT_FROM_EMAIL,
-                [application.email],
-                fail_silently=False,
+                                        <h2 style="color:#173b67; margin-top:0;">
+                                            Application Received!
+                                        </h2>
+
+                                        <p>
+                                            Dear <strong>
+                                            {context['first_name']}
+                                            {context['last_name']}
+                                            </strong>,
+                                        </p>
+
+                                        <p>
+                                            Thank you for submitting your application
+                                            to Pokak Technologies. We have successfully
+                                            received your details.
+                                        </p>
+
+                                        <p>
+                                            Our team will review your application and
+                                            contact you regarding the next steps.
+                                        </p>
+
+                                        <!-- Application Details -->
+                                        <table width="100%" cellpadding="10"
+                                            cellspacing="0"
+                                            style="border-collapse:collapse;
+                                                    background-color:#f8fafc;
+                                                    border:1px solid #e5e7eb;
+                                                    margin:22px 0;">
+
+                                            <tr>
+                                                <td colspan="2"
+                                                    style="background-color:#eaf1f8;
+                                                        color:#173b67;
+                                                        font-weight:bold;">
+                                                    Application Details
+                                                </td>
+                                            </tr>
+
+                                            <tr>
+                                                <td style="border-bottom:1px solid #e5e7eb;">
+                                                    Name
+                                                </td>
+                                                <td style="border-bottom:1px solid #e5e7eb;
+                                                        font-weight:bold;">
+                                                    {context['first_name']}
+                                                    {context['last_name']}
+                                                </td>
+                                            </tr>
+
+                                            <tr>
+                                                <td style="border-bottom:1px solid #e5e7eb;">
+                                                    Email
+                                                </td>
+                                                <td style="border-bottom:1px solid #e5e7eb;">
+                                                    {context['email']}
+                                                </td>
+                                            </tr>
+
+                                            <tr>
+                                                <td style="border-bottom:1px solid #e5e7eb;">
+                                                    Course
+                                                </td>
+                                                <td style="border-bottom:1px solid #e5e7eb;
+                                                        font-weight:bold;">
+                                                    {context['course']}
+                                                </td>
+                                            </tr>
+
+                                            <tr>
+                                                <td style="border-bottom:1px solid #e5e7eb;">
+                                                    Course Type
+                                                </td>
+                                                <td style="border-bottom:1px solid #e5e7eb;">
+                                                    {context['course_type']}
+                                                </td>
+                                            </tr>
+
+                                            <tr>
+                                                <td>Duration</td>
+                                                <td>
+                                                    {context['course_duration']} month(s)
+                                                </td>
+                                            </tr>
+
+                                        </table>
+
+                                        <p>
+                                            We appreciate your interest in
+                                            Pokak Technologies and look forward
+                                            to connecting with you.
+                                        </p>
+
+                                        <p style="margin-bottom:0;">
+                                            Best regards,<br>
+                                            <strong>Admissions Team</strong><br>
+                                            Pokak Technologies
+                                        </p>
+
+                                    </td>
+                                </tr>
+
+                                <!-- Footer -->
+                                <tr>
+                                    <td style="background-color:#f8fafc;
+                                            padding:18px 30px;
+                                            text-align:center;
+                                            color:#6b7280;
+                                            font-size:12px;">
+                                        This is an automated confirmation email.
+                                        Please do not reply directly to this message.
+                                        <br><br>
+                                        &copy; Pokak Technologies
+                                    </td>
+                                </tr>
+
+                            </table>
+
+                        </td>
+                    </tr>
+                </table>
+
+            </body>
+            </html>
+            """
+
+            email = EmailMultiAlternatives(
+                subject=subject,
+                body=message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[application.email],
             )
 
+            email.attach_alternative(html_message, "text/html")
+            email.send(fail_silently=False)
+
         except Exception as e:
-            print("Email sending failed:", e)
+            print("Application confirmation email failed:", e)
 
         return application
 

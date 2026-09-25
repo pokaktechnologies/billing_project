@@ -416,3 +416,27 @@ class OfferLetterDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = OfferLetter
         fields = "__all__"
+
+class OfferLetterShareSerializer(serializers.Serializer):
+
+    email = serializers.EmailField()
+
+    subject = serializers.CharField(
+        max_length=255
+    )
+
+    message = serializers.CharField(
+        required=False,
+        allow_blank=True
+    )
+
+    pdf = serializers.FileField()
+
+    def validate_pdf(self, value):
+
+        if value.content_type != "application/pdf":
+            raise serializers.ValidationError(
+                "Only PDF files are allowed."
+            )
+
+        return value

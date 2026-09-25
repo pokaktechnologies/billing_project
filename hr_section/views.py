@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 from accounts.serializers.user import StaffProfileSerializer
 from activity_logs.base_view import BaseAPIView
 from attendance.models import DailyAttendance
+from core import settings
 
 from .models import *
 from .serializers import *
@@ -829,3 +830,75 @@ class OfferLetterDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
         offer = self.get_object()
         offer.delete()
         return api_response(message="Offer letter deleted successfully.")
+
+from django.core.mail import EmailMessage
+from django.shortcuts import get_object_or_404
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+class OfferLetterShareAPIView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+
+        offer = get_object_or_404(
+            OfferLetter,
+            pk=pk
+        )
+
+        serializer = OfferLetterShareSerializer(
+            data=request.data
+        )
+
+        if not serializer.is_valid():
+
+            return api_response(
+                status="0",
+                message="Validation failed.",
+                data=serializer.errors
+            )
+
+        email = serializer.validated_data["email"]
+        subject = serializer.validated_data["subject"]
+        message = serializer.validated_data.get(
+            "message",
+            ""
+        )
+        pdf = serializer.validated_data["pdf"]
+
+        try:
+
+            mail = EmailMessage(
+                subject=subject,
+                body=message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[email],
+            )
+
+            mail.attach(
+                pdf.name,
+                pdf.read(),
+                "application/pdf"
+            )
+
+            mail.send(
+                fail_silently=False
+            )
+
+            return api_response(
+                message="Offer letter sent successfully.",
+                data={
+                    "offer_letter_id": offer.id,
+                    "email": email,
+                }
+            )
+
+        except Exception as e:
+
+            return api_response(
+                status="0",
+                message="Failed to send offer letter.",
+                data={
+                    "error": str(e)
+                }
+            )

@@ -83,7 +83,25 @@ class InternshipApplicationSerializer(serializers.ModelSerializer):
             )
 
         return internal_value
+    
+    def validate_email(self, value):
+        email = value.strip().lower()
 
+        queryset = InternshipApplication.objects.filter(
+            email__iexact=email
+        )
+
+        # During edit/update, don't reject the application's own email
+        if self.instance:
+            queryset = queryset.exclude(pk=self.instance.pk)
+
+        if queryset.exists():
+            raise serializers.ValidationError(
+                "An application with this email address already exists."
+            )
+
+        return email
+    
     def validate(self, attrs):
 
         where_did_you_find_us = attrs.get("where_did_you_find_us")

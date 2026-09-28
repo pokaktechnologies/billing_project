@@ -58,6 +58,7 @@ urlpatterns = [
     path('task/<int:member_id>/members/search/', TaskSearchByMembersView.as_view(), name='task_search_by_members'),
 
     # Employee Report
+    path('report/prefill/', ReportPrefillView.as_view(), name='project_report_prefill'),
     path('report/', ReportView.as_view(), name='project_report'),
     path('report/<int:id>/', ReportView.as_view(), name='project_report_detail'), # RETRIVE/CREATE/UPDATE
     

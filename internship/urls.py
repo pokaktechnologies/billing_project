@@ -170,6 +170,12 @@ internship_admin_patterns = [
     path("dashboard/academic/", internship_admin.AcademicDashboardAPIView.as_view()),
     path("batches/<int:batch_id>/unassigned-students/", internship_admin.BatchUnassignedStudentsAPIView.as_view(), name="batch-unassigned-students",),
     path("batches/<int:batch_id>/assign-students/", internship_admin.BatchAssignStudentsAPIView.as_view(), name="batch-assign-students",),
+
+    # reciept
+    path(
+        "students/payment-receipt/<int:pk>/",
+        internship_admin.StudentAdmissionReceiptAPIView.as_view(),
+    ),
 ]
 
 report_patterns = [
@@ -192,6 +198,11 @@ report_patterns = [
     path('counsellors/', report_view.CounsellorListAPIView.as_view()),
     path('counsellors/<int:counsellor_id>/students/', report_view.CounsellorStudentsAPIView.as_view()),
     path('counsellors/<int:counsellor_id>/conversion/', report_view.CounsellorConversionReportAPIView.as_view()),
+    path('counsellors/<int:counsellor_id>/proceed-to-hr/', report_view.CounsellorProceedToHRAPIView.as_view()),
+
+    path('hr/counsellor-submissions/', report_view.HRSubmissionsListAPIView.as_view()),
+    path('hr/counsellor-submissions/<int:pk>/', report_view.HRSubmissionDetailAPIView.as_view()),
+    path('hr/counsellor-submissions/<int:pk>/action/', report_view.HRSubmissionActionAPIView.as_view()),
 
     path("faculty/", report_view.FacultyReportAPIView.as_view(), name="faculty-reports"),
     path("faculty/<int:pk>/", report_view.FacultyDetailReportAPIView.as_view(), name="faculty-detail-report"),
@@ -204,8 +215,11 @@ report_patterns = [
     path("student-registration/", StudentRegistrationReportView.as_view(), name="student-registration-report"),
     path("application-report/", application.InternshipApplicationReportView.as_view(), name="internship-application-report"),
 
-    
-
+    # Breakdown Standalone Reports (Pure Lists)
+    path("admissions/", report_view.AdmissionsReportListAPIView.as_view(), name="report-admissions"),
+    path("admissions/summary/", report_view.AdmissionsSummaryReportAPIView.as_view(), name="report-admissions-summary"),
+    path("registrations/", report_view.RegistrationsReportListAPIView.as_view(), name="report-registrations"),
+    path("payments/", report_view.PaymentsReportListAPIView.as_view(), name="report-payments"),
 ]
 
 urlpatterns = [

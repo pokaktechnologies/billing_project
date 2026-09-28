@@ -95,12 +95,24 @@ class CertificateSignatorySerializer(serializers.ModelSerializer):
 
 class CertificateRecordSerializer(serializers.ModelSerializer):
     signatories = CertificateSignatorySerializer(many=True, required=False)
+    application_number = serializers.SerializerMethodField()
 
     class Meta:
         model = CertificateRecord
         fields = '__all__'
-        read_only_fields = ['id', 'issue_date', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'issue_date', 'created_at', 'updated_at', 'application_number',]
 
+    def get_application_number(self, obj):
+        if not obj.user:
+            return None
+
+        student = getattr(obj.user, 'student_profile', None)
+
+        if student:
+            return student.student_id
+
+        return None
+    
     def create(self, validated_data):
         signatories_data = validated_data.pop('signatories', [])
         certificate = CertificateRecord.objects.create(**validated_data)

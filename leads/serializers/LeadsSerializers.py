@@ -35,10 +35,17 @@ class LeadSerializer(serializers.ModelSerializer):
         category = data.get('lead_category', getattr(self.instance, 'lead_category', None))
         detail = data.get('other_category_detail', getattr(self.instance, 'other_category_detail', None))
         course = data.get('course', getattr(self.instance, 'course', None))
+        academic_status = data.get('academic_status', getattr(self.instance, 'academic_status', None))
 
         if category == 'other' and not detail:
             raise serializers.ValidationError({
                 'other_category_detail': "This field is required when category is 'Other'."
+            })
+
+        if category != 'intern' and academic_status:
+            raise serializers.ValidationError({
+                'academic_status':
+                    'Academic status can only be used for Intern leads.'
             })
         
         # course validation
@@ -256,3 +263,60 @@ class LeadReportSerializer(serializers.ModelSerializer):
         if obj.salesperson:
             return f"{obj.salesperson.first_name} {obj.salesperson.last_name}"
         return None
+
+
+class AcademicLeadDashboardSerializer(serializers.ModelSerializer):
+    course_name = serializers.CharField(
+        source='course.title',
+        read_only=True,
+        default=None
+    )
+
+    course_enquiry = serializers.CharField(
+        source='enquiry',
+        read_only=True
+    )
+
+    call_count = serializers.IntegerField(
+        read_only=True
+    )
+
+    next_call_followup_date = serializers.DateField(
+        read_only=True,
+        allow_null=True
+    )
+
+    academic_status_display = serializers.SerializerMethodField()
+    lead_status_display = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Lead
+        fields = [
+            'id',
+            'lead_number',
+            'name',
+            'phone',
+            'email',
+            'qualification',
+            'add_on_course_attended',
+            'expected_starting_date',
+            'course',
+            'course_name',
+            'course_enquiry',
+            'call_count',
+            'next_call_followup_date',
+            'academic_status',
+            'academic_status_display',
+            'lead_status',
+            'lead_status_display',
+            'lead_date',
+            'salesperson',
+        ]
+
+    def get_academic_status_display(self, obj):
+        if not obj.academic_status:
+            return "New"
+        return obj.get_academic_status_display()
+
+    def get_lead_status_display(self, obj):
+        return obj.get_lead_status_display()

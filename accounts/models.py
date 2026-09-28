@@ -765,6 +765,12 @@ class ReceiptModel(models.Model):
         ('client', 'Client'),
         ('intern', 'Intern'),
     )
+    RECEIPT_FOR_CHOICES = (
+        ("slot", "Slot"),
+        ("advance", "Advance"),
+        ("installment", "Installment"),
+        ("other", "Other"),
+    )
     receipt_type = models.CharField(
         max_length=20,
         choices=RECEIPT_TYPES,
@@ -790,6 +796,12 @@ class ReceiptModel(models.Model):
     prepared_by = models.CharField(max_length=255, blank=True, null=True)
     recived_by = models.CharField(max_length=255, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True,null=True,blank=True)
+    receipt_for = models.CharField(
+        max_length=20,
+        choices=RECEIPT_FOR_CHOICES,
+        null=True,
+        blank=True,
+    )
 
     def __str__(self):
         if self.receipt_type == 'intern':
@@ -1241,11 +1253,13 @@ class ModulePermission(models.Model):
         ("purchase_reports", "Purchase Reports"),
 
         # MARKETING
+        ("staff_lead_dashboard", "Staff Lead Dashboard"),
         ("marketing_data", "Marketing Data"),
         ("marketing_leads", "Marketing Leads"),
         ("marketing_report", "Marketing Report"),
 
         # CRM
+        ("admin_lead_dashboard", "Admin Lead Dashboard"),
         ("leads_management", "Leads Management"),
         ("crm_reports", "CRM Reports"),
 
@@ -1258,6 +1272,7 @@ class ModulePermission(models.Model):
         ("hr_payroll", "HR Payroll"),
         ("hr_faculty", "HR Faculty"),
         ("hr_salary_statements", "HR Salary Statements"),
+        ("hr_admissions", "HR Admissions"),
 
         # TASK
         ("task_all", "All Tasks"),
@@ -1283,6 +1298,7 @@ class ModulePermission(models.Model):
         ("balance_sheet", "Balance Sheet"),
         ("profit_loss", "Profit & Loss"),
         ("financial_year", "Financial Year"),
+        ("accounts_admissions", "Accounts Admissions"),
 
         # PROJECT
         ("project", "Project"),
@@ -1320,6 +1336,7 @@ class ModulePermission(models.Model):
         ('classes', "Classes"),
         ('form_submissions', "Form Submissions"),
         ('internship_reports', "Internship Reports"),
+        ('admissions', "Admissions"),
 
         # FACULTY MANAGEMENT
         ('all_tasks', "All Tasks"),

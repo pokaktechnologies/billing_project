@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 from accounts.models import Department, SalesPerson, StaffProfile
 from project_management.models import STATUS_CHOICES
@@ -41,7 +42,7 @@ class Student(models.Model):
         return f"{user.first_name} {user.last_name}"
     
     def __str__(self):
-        return self.profile.user.first_name
+        return f"{self.profile.user.first_name} {self.profile.user.last_name} {self.profile.user.email} - {self.student_id}"
 
 class Faculty(models.Model):
     user = models.OneToOneField(StaffProfile, on_delete=models.CASCADE, related_name="faculty_profile")
@@ -227,6 +228,15 @@ class StudentCourseEnrollment(models.Model):
     installment_plan = models.ForeignKey(InstallmentPlan, on_delete=models.SET_NULL, null=True, blank=True, related_name="enrollments")
     enrollment_date = models.DateField(auto_now_add=True)
 
+    # Snapshot of course fee agreed upon at enrollment
+    course_fee = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Snapshot of the course fee agreed upon at enrollment"
+    )
+
     # advance payment fields
     advance_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     payment_method = models.CharField(max_length=20, choices=PAYMENT_METHODS, null=True, blank=True)
@@ -255,6 +265,7 @@ class StudentCourseEnrollment(models.Model):
         old_custom_installments = None
         old_discount_amount = None
         old_advance_amount = None
+        old_course_fee = None
 
         # -------------------------------------------------
         # Only fetch old values while updating
@@ -269,6 +280,7 @@ class StudentCourseEnrollment(models.Model):
                     "custom_installments",
                     "discount_amount",
                     "advance_amount",
+                    "course_fee",
                 ).first()
 
                 if old_data:
@@ -277,6 +289,7 @@ class StudentCourseEnrollment(models.Model):
                     old_custom_installments = old_data["custom_installments"]
                     old_discount_amount = old_data["discount_amount"]
                     old_advance_amount = old_data["advance_amount"]
+                    old_course_fee = old_data["course_fee"]
 
             except Exception:
                 pass
@@ -296,25 +309,9 @@ class StudentCourseEnrollment(models.Model):
                 != Decimal(str(self.discount_amount or 0))
                 or Decimal(str(old_advance_amount or 0))
                 != Decimal(str(self.advance_amount or 0))
+                or Decimal(str(old_course_fee or 0))
+                != Decimal(str(self.course_fee or 0))
             )
-
-        # -------------------------------------------------
-        # Prevent changing structure AFTER an
-        # INSTALLMENT payment has been made
-        #
-        # Advance payment alone does NOT block editing.
-        # -------------------------------------------------
-        # if payment_structure_changed:
-
-        #     has_installment_payment = CoursePayment.objects.filter(
-        #         enrollment=self,
-        #         installments__isnull=False
-        #     ).exists()
-
-        #     if has_installment_payment:
-        #         raise ValidationError(
-        #             "Cannot edit enrollment details because an installment payment has already been made."
-        #         )
 
         # -------------------------------------------------
         # Assign Course
@@ -325,6 +322,12 @@ class StudentCourseEnrollment(models.Model):
             raise ValueError(
                 "Course must be set either directly or via batch."
             )
+
+        # -------------------------------------------------
+        # Snapshot Course Fee if not already set
+        # -------------------------------------------------
+        if self.course_fee is None and self.course:
+            self.course_fee = self.course.total_fee
 
         super().save(*args, **kwargs)
 
@@ -339,7 +342,7 @@ class StudentCourseEnrollment(models.Model):
         # -------------------------------------------------
         if not self.student_installment_items.exists():
 
-            course_fee = Decimal(str(self.course.total_fee))
+            course_fee = Decimal(str(self.course_fee or (self.course.total_fee if self.course else 0)))
 
             slot_amount = Decimal(
                 str(self.student.slot_amount or 0)
@@ -494,6 +497,52 @@ class StudentCourseEnrollment(models.Model):
                     payment_date=self.payment_date,
                 )
 
+
+    @property
+    def effective_course_fee(self):
+        from decimal import Decimal
+        if self.course_fee is not None:
+            return Decimal(str(self.course_fee))
+        if self.course and getattr(self.course, "total_fee", None) is not None:
+            return Decimal(str(self.course.total_fee))
+        return Decimal("0.00")
+
+    @property
+    def effective_slot_amount(self):
+        from decimal import Decimal
+        if self.student and self.student.slot_amount is not None:
+            return Decimal(str(self.student.slot_amount))
+        if self.application and self.application.slot_amount is not None:
+            return Decimal(str(self.application.slot_amount))
+        return Decimal("0.00")
+
+    @property
+    def effective_discounted_fee(self):
+        from decimal import Decimal
+        discount = Decimal(str(self.discount_amount or 0))
+        net = self.effective_course_fee - self.effective_slot_amount - discount
+        return max(Decimal("0.00"), net)
+
+    @property
+    def effective_balance_fee(self):
+        from decimal import Decimal
+        advance = Decimal(str(self.advance_amount or 0))
+        balance = self.effective_discounted_fee - advance
+        return max(Decimal("0.00"), balance)
+
+    @property
+    def total_paid_amount(self):
+        from decimal import Decimal
+        payments = [
+            p for p in self.student.course_payments.all()
+            if p.enrollment_id == self.id
+        ]
+        return sum((p.amount_paid for p in payments), Decimal("0.00"))
+
+    @property
+    def pending_balance(self):
+        from decimal import Decimal
+        return max(Decimal("0.00"), self.effective_discounted_fee - self.total_paid_amount)
 
     def __str__(self):
         return f"{self.student.profile.user.email} - {self.course.title}"
@@ -1131,3 +1180,54 @@ class ReportFieldValue(models.Model):
 
     def __str__(self):
         return f"{self.report} - {self.field.label}"
+
+
+class CounsellorHRSubmission(models.Model):
+    STATUS_CHOICES = [
+        ('submitted', 'Submitted to HR'),
+        ('approved', 'Approved by HR'),
+        ('rejected', 'Rejected by HR'),
+    ]
+
+    counsellor = models.ForeignKey(
+        SalesPerson,
+        on_delete=models.CASCADE,
+        related_name="hr_submissions"
+    )
+    start_date = models.DateField(help_text="Start date of conversion period")
+    end_date = models.DateField(help_text="End date of conversion period")
+    period_label = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="e.g. 'April 2026' or 'Q1 2026'"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='submitted'
+    )
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="submitted_counsellor_hr_batches"
+    )
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_counsellor_hr_batches"
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    remarks = models.TextField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['-submitted_at']
+        unique_together = ['counsellor', 'start_date', 'end_date']
+
+    def __str__(self):
+        return f"{self.counsellor} ({self.start_date} to {self.end_date}) - {self.status}"

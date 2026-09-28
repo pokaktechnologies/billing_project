@@ -197,8 +197,9 @@ class OfferLetter(models.Model):
 
     responsibilities = models.JSONField(default=list, blank=True)
 
-    monthly_salary = models.DecimalField(max_digits=10, decimal_places=2)
+    # monthly_salary = models.DecimalField(max_digits=10, decimal_places=2)
     basic_salary   = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    allowances = models.JSONField(default=list, blank=True)
 
     is_target_based = models.BooleanField(default=False)
     target_details  = models.TextField(blank=True, null=True)

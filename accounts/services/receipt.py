@@ -233,6 +233,7 @@ class InternReceiptService:
             receipt = ReceiptModel.objects.create(
                 receipt_type="intern",
                 intern=intern,
+                receipt_for=data.get("receipt_for"),
                 course=course,
                 invoice=invoice,
                 receipt_number=data["receipt_number"],

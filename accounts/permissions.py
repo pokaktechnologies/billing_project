@@ -47,6 +47,7 @@ PARENT_MODULE_MAP = [
     {
         "name": "marketing",
         "submodules": [
+            "staff_lead_dashboard",
             "marketing_data",
             "marketing_leads",
             "marketing_report"
@@ -56,6 +57,7 @@ PARENT_MODULE_MAP = [
     {
         "name": "leads_management",
         "submodules": [
+            "admin_lead_dashboard",
             "leads_management",
             "crm_reports"
         ]
@@ -72,7 +74,8 @@ PARENT_MODULE_MAP = [
             "hr_leaves",
             "hr_payroll",
             "hr_salary_statements",
-            "hr_reports"
+            "hr_reports",
+            "hr_admissions"
         ]
     },
 
@@ -87,7 +90,8 @@ PARENT_MODULE_MAP = [
             "centers",
             "classes",
             "form_submissions",
-            "internship_reports"
+            "internship_reports",
+            "admissions"
         ]
     },
 
@@ -123,7 +127,8 @@ PARENT_MODULE_MAP = [
             "trial_balance",
             "balance_sheet",
             "profit_loss",
-            "financial_year"
+            "financial_year",
+            "accounts_admissions"
         ]
     },
 

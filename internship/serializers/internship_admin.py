@@ -7,7 +7,7 @@ from django.db.models import Sum,Q
 from rest_framework import serializers
 from twisted.test import obj
 
-from accounts.models import CustomUser, Department, ModulePermission, StaffProfile
+from accounts.models import CustomUser, Department, ModulePermission, ReceiptModel, StaffProfile
 from ..models import (
     PAYMENT_METHODS,
     Batch,
@@ -596,6 +596,7 @@ class StudentSerializer(serializers.ModelSerializer):
     profile = StaffProfileSerializer(required=False, allow_null=True)
     batch = serializers.SerializerMethodField()
     batch_number = serializers.SerializerMethodField()
+    enrollment_id = serializers.SerializerMethodField()
     courses = serializers.SerializerMethodField()
     faculty = serializers.SerializerMethodField()
     center_name = serializers.CharField(source="center.name", read_only=True)
@@ -603,6 +604,8 @@ class StudentSerializer(serializers.ModelSerializer):
     payment_type = serializers.SerializerMethodField()
     payment_installment_count = serializers.SerializerMethodField()
     student_id = serializers.CharField(read_only=True)
+    advance_created = serializers.SerializerMethodField()
+    slot_created = serializers.SerializerMethodField()
     modules = serializers.ListField(
         child=serializers.ChoiceField(choices=ModulePermission.MODULE_CHOICES),
         write_only=True,
@@ -703,6 +706,7 @@ class StudentSerializer(serializers.ModelSerializer):
             "student_id",
             "profile",
             "full_name",
+            "enrollment_id",
             "center",
             "center_name",
             "courses",
@@ -731,8 +735,9 @@ class StudentSerializer(serializers.ModelSerializer):
             "enrollment_payment_date",
             "enrollment_discount_amount",
             "enrollment_discount_reason",
-            "enrollment_receipt"
-            
+            "enrollment_receipt",
+            "slot_created",
+            "advance_created"
         ]
         extra_kwargs = {
             "profile": {"required": False}
@@ -778,6 +783,21 @@ class StudentSerializer(serializers.ModelSerializer):
 
         return None
     
+    def get_slot_created(self, obj):
+        return ReceiptModel.objects.filter(
+            receipt_type="intern",
+            receipt_for="slot",
+            intern=obj.profile,
+        ).exists()
+
+
+    def get_advance_created(self, obj):
+        return ReceiptModel.objects.filter(
+            receipt_type="intern",
+            receipt_for="advance",
+            intern=obj.profile,
+        ).exists()
+    
     def get_full_name(self, obj):
         return obj.get_full_name()
 
@@ -814,7 +834,16 @@ class StudentSerializer(serializers.ModelSerializer):
                 }
 
         return list(faculties.values())
+    
+    def get_enrollment_id(self, obj):
+        enrollment = (
+            StudentCourseEnrollment.objects
+            .filter(student=obj)
+            .order_by("-id")
+            .first()
+        )
 
+        return enrollment.id if enrollment else None
     def get_payment_type(self, obj):
         enrollment = obj.enrollments.first()
         return enrollment.installment_plan.id if enrollment and enrollment.installment_plan else None
@@ -1699,6 +1728,7 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
             "student_name",
             "course",
             "course_title",
+            "course_fee",
             "batch",
             "batch_number",
             "installment_plan",
@@ -1841,7 +1871,10 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
                     "student": "Student is already enrolled in this course."
                 })
         # vaaalidation of advance pyment 
-        course_fee = course.total_fee
+        course_fee = attrs.get(
+            "course_fee",
+            getattr(self.instance, "course_fee", None)
+        ) or (course.total_fee if course else Decimal("0.00"))
 
         if discount_amount < 0:
             raise serializers.ValidationError({
@@ -2112,12 +2145,7 @@ class StudentPaymentDetailSerializer(serializers.ModelSerializer):
 
     course_title = serializers.CharField(source="course.title")
     course_id = serializers.CharField(source="course.id")
-    course_total_fee = serializers.DecimalField(
-        source="course.total_fee",
-        max_digits=10,
-        decimal_places=2,
-        coerce_to_string=True,
-    )
+    course_total_fee = serializers.SerializerMethodField()
 
     total_paid = serializers.SerializerMethodField()
     pending_fee = serializers.SerializerMethodField()
@@ -2156,6 +2184,15 @@ class StudentPaymentDetailSerializer(serializers.ModelSerializer):
     def format_decimal(self, value):
         return str(Decimal(str(value)).quantize(Decimal("0.00")))
 
+    def _course_fee_decimal(self, obj):
+        if obj.course_fee is not None:
+            return Decimal(str(obj.course_fee))
+        if obj.course and getattr(obj.course, "total_fee", None) is not None:
+            return Decimal(str(obj.course.total_fee))
+        return Decimal("0.00")
+
+    def get_course_total_fee(self, obj):
+        return self.format_decimal(self._course_fee_decimal(obj))
 
     def _slot_amount_decimal(self, obj):
         # New students: use Student.slot_amount
@@ -2183,7 +2220,7 @@ class StudentPaymentDetailSerializer(serializers.ModelSerializer):
         slot_amount = self._slot_amount_decimal(obj)
 
         discounted_fee = (
-            Decimal(str(obj.course.total_fee))
+            self._course_fee_decimal(obj)
             - slot_amount
             - Decimal(str(obj.discount_amount or 0))
         )
@@ -2201,7 +2238,7 @@ class StudentPaymentDetailSerializer(serializers.ModelSerializer):
         slot_amount = self._slot_amount_decimal(obj)
 
         balance = (
-            Decimal(str(obj.course.total_fee))
+            self._course_fee_decimal(obj)
             - slot_amount
             - Decimal(str(obj.discount_amount or 0))
             - Decimal(str(obj.advance_amount or 0))
@@ -2236,7 +2273,7 @@ class StudentPaymentDetailSerializer(serializers.ModelSerializer):
         slot_amount = self._slot_amount_decimal(obj)
 
         total_fee = (
-            Decimal(str(obj.course.total_fee))
+            self._course_fee_decimal(obj)
             - slot_amount
             - Decimal(str(obj.discount_amount or 0))
         )
@@ -2541,6 +2578,13 @@ class StudentPaymentSerializer(serializers.ModelSerializer):
             )
         )
 
+    def _course_fee_decimal(self, obj):
+        if obj.course_fee is not None:
+            return Decimal(str(obj.course_fee))
+        if obj.course and getattr(obj.course, "total_fee", None) is not None:
+            return Decimal(str(obj.course.total_fee))
+        return Decimal("0.00")
+
     def _slot_amount_decimal(self, obj):
         if obj.student.slot_amount is not None:
             return Decimal(str(obj.student.slot_amount))
@@ -2565,7 +2609,7 @@ class StudentPaymentSerializer(serializers.ModelSerializer):
     def get_discounted_fee(self, obj):
 
         discounted_fee = (
-            Decimal(str(obj.course.total_fee))
+            self._course_fee_decimal(obj)
             - self._slot_amount_decimal(obj)
             - Decimal(str(obj.discount_amount or 0))
         )
@@ -2606,7 +2650,7 @@ class StudentPaymentSerializer(serializers.ModelSerializer):
     def get_balance_fee(self, obj):
 
         balance_fee = (
-            Decimal(str(obj.course.total_fee))
+            self._course_fee_decimal(obj)
             - self._slot_amount_decimal(obj)
             - Decimal(str(obj.discount_amount or 0))
             - Decimal(str(obj.advance_amount or 0))
@@ -2639,7 +2683,7 @@ class StudentPaymentSerializer(serializers.ModelSerializer):
     #     return self.format_decimal(Decimal("0.00"))
     def get_total_fee(self, obj):
         return self.format_decimal(
-            obj.course.total_fee
+            self._course_fee_decimal(obj)
         )
 
     # Paid amount
@@ -2668,7 +2712,7 @@ class StudentPaymentSerializer(serializers.ModelSerializer):
     def get_pending_amount(self, obj):
 
         total_fee = (
-            Decimal(str(obj.course.total_fee))
+            self._course_fee_decimal(obj)
             - self._slot_amount_decimal(obj)
             - Decimal(str(obj.discount_amount or 0))
         )
@@ -2938,7 +2982,7 @@ class StudentCourseSummarySerializer(serializers.ModelSerializer):
         return "Active"
 
     def get_total_fee(self, obj):
-        return self.format_decimal(obj.course.total_fee)
+        return self.format_decimal(obj.effective_course_fee)
     
     def get_discount_amount(self, obj):
         return self.format_decimal(
@@ -2947,31 +2991,13 @@ class StudentCourseSummarySerializer(serializers.ModelSerializer):
 
 
     def get_discounted_fee(self, obj):
-        return self.format_decimal(
-            Decimal(str(obj.course.total_fee))
-            - Decimal(str(obj.discount_amount or 0))
-        )
+        return self.format_decimal(obj.effective_discounted_fee)
 
     def get_paid_amount(self, obj):
-
-        total = obj.payments.aggregate(
-            total=Sum("amount_paid")
-        )["total"] or Decimal("0.00")
-
-        return self.format_decimal(total)
+        return self.format_decimal(obj.total_paid_amount)
 
     def get_pending_amount(self, obj):
-
-        discounted_fee = (
-            Decimal(str(obj.course.total_fee))
-            - Decimal(str(obj.discount_amount or 0))
-        )
-
-        paid = Decimal(self.get_paid_amount(obj))
-
-        return self.format_decimal(
-            discounted_fee - paid
-        )
+        return self.format_decimal(obj.pending_balance)
 
     def get_student_full_name(self, obj):
         return obj.student.get_full_name()
@@ -3308,9 +3334,7 @@ class PaymentReportSerializer(serializers.ModelSerializer):
     # ---------------------------------------------------------
 
     def get_course_fee(self, obj):
-        return self.format_decimal(
-            obj.course.total_fee
-        )
+        return self.format_decimal(obj.effective_course_fee)
 
     def get_advance_amount(self, obj):
         return self.format_decimal(
@@ -3318,49 +3342,21 @@ class PaymentReportSerializer(serializers.ModelSerializer):
         )
 
     def get_balance_fee(self, obj):
+        return self.format_decimal(obj.effective_balance_fee)
 
-        return self.format_decimal(
-            Decimal(str(obj.course.total_fee))
-            - Decimal(str(obj.discount_amount or 0))
-            - Decimal(str(obj.advance_amount or 0))
-        )
     def get_paid_amount(self, obj):
-
-        total = obj.payments.aggregate(
-            total=Sum("amount_paid")
-        )["total"] or Decimal("0.00")
-
-        return self.format_decimal(total)
+        return self.format_decimal(obj.total_paid_amount)
 
     def get_pending_fee(self, obj):
-
-        discounted_fee = (
-            Decimal(str(obj.course.total_fee))
-            - Decimal(str(obj.discount_amount or 0))
-        )
-
-        paid = Decimal(
-            self.get_paid_amount(obj)
-        )
-
-        return self.format_decimal(
-            discounted_fee - paid
-        )
+        return self.format_decimal(obj.pending_balance)
 
     # ---------------------------------------------------------
     # Status
     # ---------------------------------------------------------
 
     def get_payment_status(self, obj):
-
-        paid = Decimal(
-            self.get_paid_amount(obj)
-        )
-
-        discounted_fee = (
-            Decimal(str(obj.course.total_fee))
-            - Decimal(str(obj.discount_amount or 0))
-        )
+        paid = obj.total_paid_amount
+        discounted_fee = obj.effective_discounted_fee
 
         if paid <= Decimal("0.00"):
             return "Pending"
@@ -3413,3 +3409,49 @@ class PaymentReportSerializer(serializers.ModelSerializer):
             return payment.payment_method
 
         return None
+
+
+class StudentAdmissionReceiptSerializer(serializers.Serializer):
+
+    debit_id = serializers.IntegerField()
+    credit_id = serializers.IntegerField()
+
+    prepared_by = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+
+    recived_by = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+
+    bank_name = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
+
+    cheque_number = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
+
+    tax_rate = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        required=False,
+        default=0,
+    )
+
+    remark = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+
+    description = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )

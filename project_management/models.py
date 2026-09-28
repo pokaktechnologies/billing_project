@@ -177,6 +177,7 @@ class Report(models.Model):
 
     executive_summary = models.TextField()
     next_period_plan = models.TextField(null=True, blank=True)
+    remark = models.TextField(null=True, blank=True)
 
     #daily report fields
     report_date = models.DateField(null=True, blank=True)

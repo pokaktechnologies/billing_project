@@ -6,7 +6,7 @@ from django.utils.timezone import now
 from rest_framework import serializers
 
 from accounts.models import StaffProfile, SalesPerson
-from internship.models import Batch, Center, Course, Student, TaskSubmission, AssignedStaffCourse, CoursePayment, TaskAssignment, Faculty, InstallmentItem, StudentInstallmentItem
+from internship.models import Batch, Center, Course, Student, TaskSubmission, AssignedStaffCourse, CoursePayment, TaskAssignment, Faculty, InstallmentItem, StudentInstallmentItem, CounsellorHRSubmission, InternshipApplication
 from internship.serializers.internship_admin import InstallmentPlanSerializer
 from internship.utils import (
     get_installment_due_date_for_staff,
@@ -871,6 +871,7 @@ class RegistrationReportSerializer(serializers.ModelSerializer):
     phone_number = serializers.CharField(source="profile.phone_number", default=None)
     discount_amount = serializers.SerializerMethodField()
     discounted_fee = serializers.SerializerMethodField()
+    registration_date = serializers.SerializerMethodField()
 
     class Meta:
         model = Student
@@ -895,6 +896,7 @@ class RegistrationReportSerializer(serializers.ModelSerializer):
             "phone_number",
             "discount_amount",
             "discounted_fee",
+            "registration_date",
         ]
 
     def _get_enrollment(self, obj):
@@ -902,6 +904,14 @@ class RegistrationReportSerializer(serializers.ModelSerializer):
             enrollments = list(obj.enrollments.all())
             obj._cached_enrollment = enrollments[0] if enrollments else None
         return obj._cached_enrollment
+    
+    def get_registration_date(self, obj):
+        enrollment = self._get_enrollment(obj)
+
+        if not enrollment or not enrollment.enrollment_date:
+            return None
+
+        return enrollment.enrollment_date.strftime("%Y-%m-%d")
 
     def get_student_name(self, obj):
         return obj.get_full_name()
@@ -914,17 +924,32 @@ class RegistrationReportSerializer(serializers.ModelSerializer):
         return f"{Decimal(str(enrollment.discount_amount or 0)):.2f}"
 
 
+    def _course_fee_decimal(self, enrollment):
+        if not enrollment:
+            return Decimal("0.00")
+        if enrollment.course_fee is not None:
+            return Decimal(str(enrollment.course_fee))
+        if enrollment.course and getattr(enrollment.course, "total_fee", None) is not None:
+            return Decimal(str(enrollment.course.total_fee))
+        return Decimal("0.00")
+
+    def _slot_amount_decimal(self, obj, enrollment):
+        if obj.slot_amount is not None:
+            return Decimal(str(obj.slot_amount))
+        if enrollment and enrollment.application and enrollment.application.slot_amount is not None:
+            return Decimal(str(enrollment.application.slot_amount))
+        return Decimal("0.00")
+
     def get_discounted_fee(self, obj):
         enrollment = self._get_enrollment(obj)
-
         if not enrollment:
             return None
 
-        discounted_fee = (
-            Decimal(str(enrollment.course.total_fee))
-            - Decimal(str(enrollment.discount_amount or 0))
-        )
+        course_fee = self._course_fee_decimal(enrollment)
+        slot_amount = self._slot_amount_decimal(obj, enrollment)
+        discount_amount = Decimal(str(enrollment.discount_amount or 0))
 
+        discounted_fee = max(Decimal("0.00"), course_fee - slot_amount - discount_amount)
         return f"{discounted_fee:.2f}"
     
     def get_place(self, obj):
@@ -951,28 +976,26 @@ class RegistrationReportSerializer(serializers.ModelSerializer):
 
     def get_course_fee(self, obj):
         enrollment = self._get_enrollment(obj)
-        return enrollment.course.total_fee if enrollment and enrollment.course else None
+        if not enrollment:
+            return None
+        return float(self._course_fee_decimal(enrollment))
 
     def get_paid_amount(self, obj):
-        payments = obj.course_payments.all()
-        total = sum(p.amount_paid for p in payments)
+        enrollment = self._get_enrollment(obj)
+        if not enrollment:
+            return "0.00"
+        payments = [p for p in obj.course_payments.all() if p.enrollment_id == enrollment.id]
+        total = sum((p.amount_paid for p in payments), Decimal("0.00"))
         return f"{total:.2f}"
 
     def get_balance(self, obj):
         enrollment = self._get_enrollment(obj)
-
         if not enrollment:
             return None
 
-        discounted_fee = (
-            Decimal(str(enrollment.course.total_fee))
-            - Decimal(str(enrollment.discount_amount or 0))
-        )
-
+        discounted_fee = Decimal(self.get_discounted_fee(obj))
         paid = Decimal(self.get_paid_amount(obj))
-
-        balance = discounted_fee - paid
-
+        balance = max(Decimal("0.00"), discounted_fee - paid)
         return f"{balance:.2f}"
 
     def get_batch_end_date(self, obj):
@@ -1041,23 +1064,41 @@ class RegistrationReportSerializer(serializers.ModelSerializer):
 # ── Counsellor Conversion Report ─────────────────────────────
 
 class CounsellorConversionStudentSerializer(serializers.ModelSerializer):
+    record_type = serializers.CharField(default="admission", read_only=True)
     name = serializers.SerializerMethodField()
+    email = serializers.SerializerMethodField()
+    phone = serializers.SerializerMethodField()
     course = serializers.SerializerMethodField()
-    first_payment = serializers.SerializerMethodField()
+    payment = serializers.SerializerMethodField()
+    first_payment = serializers.SerializerMethodField()  # Kept for backward compatibility
 
     class Meta:
         model = Student
         fields = [
             "id",
+            "record_type",
             "student_id",
             "name",
+            "email",
+            "phone",
             "course",
             "created_at",
+            "payment",
             "first_payment",
         ]
 
     def get_name(self, obj):
         return obj.get_full_name()
+
+    def get_email(self, obj):
+        if obj.profile and obj.profile.user:
+            return obj.profile.user.email
+        return None
+
+    def get_phone(self, obj):
+        if obj.profile:
+            return obj.profile.phone_number
+        return None
 
     def _get_enrollment(self, obj):
         if not hasattr(obj, "_cached_enrollment"):
@@ -1069,15 +1110,354 @@ class CounsellorConversionStudentSerializer(serializers.ModelSerializer):
         enrollment = self._get_enrollment(obj)
         return enrollment.course.title if enrollment and enrollment.course else None
 
-    def get_first_payment(self, obj):
+    def _get_first_payment_obj(self, obj):
         payments = list(obj.course_payments.all())
         if not payments:
             return None
+        return min(payments, key=lambda p: p.payment_date)
 
-        first = min(payments, key=lambda p: p.payment_date)
+    def get_first_payment(self, obj):
+        first = self._get_first_payment_obj(obj)
+        if not first:
+            return None
         return {
             "amount": f"{first.amount_paid:.2f}",
             "payment_method": first.payment_method,
             "payment_date": str(first.payment_date),
             "payment_type": first.payment_type,
         }
+
+    def get_payment(self, obj):
+        first = self._get_first_payment_obj(obj)
+        if not first:
+            return None
+        return {
+            "payment_label": "First Payment",
+            "amount": f"{first.amount_paid:.2f}",
+            "payment_method": first.payment_method,
+            "payment_date": str(first.payment_date),
+            "payment_type": first.payment_type,
+        }
+
+
+class CounsellorRegistrationApplicationSerializer(serializers.ModelSerializer):
+    record_type = serializers.CharField(default="registration", read_only=True)
+    student_id = serializers.SerializerMethodField()
+    name = serializers.SerializerMethodField()
+    phone = serializers.CharField(source="primary_phone", read_only=True)
+    course = serializers.SerializerMethodField()
+    payment = serializers.SerializerMethodField()
+    first_payment = serializers.SerializerMethodField()  # Kept for compatibility
+
+    class Meta:
+        model = InternshipApplication
+        fields = [
+            "id",
+            "record_type",
+            "student_id",
+            "name",
+            "email",
+            "phone",
+            "course",
+            "created_at",
+            "payment",
+            "first_payment",
+        ]
+
+    def get_student_id(self, obj):
+        return None
+
+    def get_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}".strip()
+
+    def get_course(self, obj):
+        return obj.course.title if obj.course else (obj.course_name or None)
+
+    def get_payment(self, obj):
+        if obj.slot_amount is None:
+            return None
+        return {
+            "payment_label": "Slot Booking Amount",
+            "amount": f"{obj.slot_amount:.2f}",
+            "payment_method": obj.slot_payment_method,
+            "payment_date": str(obj.slot_payment_date) if obj.slot_payment_date else None,
+            "payment_type": "slot_amount",
+            "transaction_id": obj.slot_transaction_id,
+        }
+
+    def get_first_payment(self, obj):
+        return self.get_payment(obj)
+
+
+
+class CounsellorHRSubmissionSerializer(serializers.ModelSerializer):
+    counsellor_name = serializers.CharField(source="counsellor.get_full_name", read_only=True)
+    submitted_by_name = serializers.SerializerMethodField()
+    reviewed_by_name = serializers.SerializerMethodField()
+    summary = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CounsellorHRSubmission
+        fields = [
+            "id",
+            "counsellor",
+            "counsellor_name",
+            "start_date",
+            "end_date",
+            "period_label",
+            "status",
+            "submitted_by",
+            "submitted_by_name",
+            "submitted_at",
+            "reviewed_by",
+            "reviewed_by_name",
+            "reviewed_at",
+            "remarks",
+            "summary",
+        ]
+        read_only_fields = [
+            "id",
+            "status",
+            "submitted_by",
+            "submitted_at",
+            "reviewed_by",
+            "reviewed_at",
+        ]
+
+    def get_submitted_by_name(self, obj):
+        if obj.submitted_by:
+            return f"{obj.submitted_by.first_name} {obj.submitted_by.last_name}".strip() or obj.submitted_by.username
+        return None
+
+    def get_reviewed_by_name(self, obj):
+        if obj.reviewed_by:
+            return f"{obj.reviewed_by.first_name} {obj.reviewed_by.last_name}".strip() or obj.reviewed_by.username
+        return None
+
+    def get_summary(self, obj):
+        from datetime import datetime, time
+        from django.utils.timezone import make_aware
+
+        dt_start = make_aware(datetime.combine(obj.start_date, time.min))
+        dt_end = make_aware(datetime.combine(obj.end_date, time.max))
+
+        admissions_qs = Student.objects.filter(
+            councellor=obj.counsellor,
+            created_at__gte=dt_start,
+            created_at__lte=dt_end,
+        ).prefetch_related("course_payments")
+        admissions_count = admissions_qs.count()
+
+        registrations_qs = InternshipApplication.objects.filter(
+            councellor=obj.counsellor,
+            is_converted=False,
+            created_at__gte=dt_start,
+            created_at__lte=dt_end,
+        )
+        registrations_count = registrations_qs.count()
+
+        total_payment = Decimal("0.00")
+        for st in admissions_qs:
+            payments = list(st.course_payments.all())
+            if payments:
+                sorted_payments = sorted(
+                    payments,
+                    key=lambda p: (p.payment_date or (p.created_at.date() if p.created_at else date.min))
+                )
+                first_pay = sorted_payments[0]
+                pay_amt = getattr(first_pay, "amount_paid", None) or getattr(first_pay, "amount", None)
+                if pay_amt:
+                    total_payment += Decimal(str(pay_amt))
+
+        for app in registrations_qs:
+            if app.slot_amount:
+                total_payment += Decimal(str(app.slot_amount))
+
+        return {
+            "total_records": admissions_count + registrations_count,
+            "new_admissions_count": admissions_count,
+            "new_registrations_count": registrations_count,
+            "total_students": admissions_count,
+            "total_payment_collected": f"{total_payment:.2f}",
+        }
+
+
+class CounsellorProceedToHRSerializer(serializers.Serializer):
+    start_date = serializers.DateField(required=True)
+    end_date = serializers.DateField(required=True)
+    period_label = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    remarks = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        start_date = attrs.get("start_date")
+        end_date = attrs.get("end_date")
+        if start_date and end_date and start_date > end_date:
+            raise serializers.ValidationError({"end_date": "end_date must be greater than or equal to start_date."})
+        return attrs
+
+
+# ── Breakdown Standalone Report Serializers (Pure Lists) ────────
+
+class AdmissionsBreakdownSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+    email = serializers.SerializerMethodField()
+    phone = serializers.SerializerMethodField()
+    course = serializers.SerializerMethodField()
+    counsellor = serializers.SerializerMethodField()
+    admission_date = serializers.DateTimeField(source="created_at", read_only=True)
+    payment = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Student
+        fields = [
+            "id",
+            "student_id",
+            "name",
+            "email",
+            "phone",
+            "course",
+            "counsellor",
+            "admission_date",
+            "payment",
+        ]
+
+    def get_name(self, obj):
+        return obj.get_full_name()
+
+    def get_email(self, obj):
+        if obj.profile and obj.profile.user:
+            return obj.profile.user.email
+        return None
+
+    def get_phone(self, obj):
+        if obj.profile:
+            return obj.profile.phone_number
+        return None
+
+    def _get_enrollment(self, obj):
+        if not hasattr(obj, "_cached_enrollment"):
+            enrollments = list(obj.enrollments.all())
+            obj._cached_enrollment = enrollments[0] if enrollments else None
+        return obj._cached_enrollment
+
+    def get_course(self, obj):
+        enrollment = self._get_enrollment(obj)
+        if enrollment and enrollment.course:
+            return {
+                "id": enrollment.course.id,
+                "title": enrollment.course.title,
+            }
+        return None
+
+    def get_counsellor(self, obj):
+        if obj.councellor:
+            return {
+                "id": obj.councellor.id,
+                "name": obj.councellor.get_full_name(),
+            }
+        return None
+
+    def _get_first_payment(self, obj):
+        payments = list(obj.course_payments.all())
+        if not payments:
+            return None
+        return min(
+            payments,
+            key=lambda p: (p.payment_date or (p.created_at.date() if hasattr(p, "created_at") and p.created_at else date.min))
+        )
+
+    def get_payment(self, obj):
+        first = self._get_first_payment(obj)
+        if not first:
+            return None
+        amt = getattr(first, "amount_paid", None)
+        if amt is None:
+            amt = getattr(first, "amount", None)
+        return {
+            "amount": f"{amt:.2f}" if amt is not None else None,
+            "payment_method": first.payment_method,
+            "transaction_id": getattr(first, "transaction_id", None),
+            "payment_date": str(first.payment_date) if first.payment_date else None,
+            "payment_type": getattr(first, "payment_type", "installment"),
+        }
+
+
+class RegistrationsBreakdownSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+    phone = serializers.CharField(source="primary_phone", read_only=True)
+    course = serializers.SerializerMethodField()
+    counsellor = serializers.SerializerMethodField()
+    registration_date = serializers.DateTimeField(source="created_at", read_only=True)
+    slot_payment = serializers.SerializerMethodField()
+
+    class Meta:
+        model = InternshipApplication
+        fields = [
+            "id",
+            "name",
+            "email",
+            "phone",
+            "course",
+            "counsellor",
+            "registration_date",
+            "slot_payment",
+        ]
+
+    def get_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}".strip()
+
+    def get_course(self, obj):
+        if obj.course:
+            return {
+                "id": obj.course.id,
+                "title": obj.course.title,
+            }
+        elif obj.course_name:
+            return {
+                "id": None,
+                "title": obj.course_name,
+            }
+        return None
+
+    def get_counsellor(self, obj):
+        if obj.councellor:
+            return {
+                "id": obj.councellor.id,
+                "name": obj.councellor.get_full_name(),
+            }
+        return None
+
+    def get_slot_payment(self, obj):
+        if obj.slot_amount is None:
+            return None
+        return {
+            "amount": f"{obj.slot_amount:.2f}",
+            "payment_method": obj.slot_payment_method,
+            "transaction_id": obj.slot_transaction_id,
+            "payment_date": str(obj.slot_payment_date) if obj.slot_payment_date else None,
+            "payment_type": "slot_amount",
+        }
+
+
+class PaymentsBreakdownSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    payment_category = serializers.CharField()
+    student_id = serializers.CharField(allow_null=True)
+    payer_name = serializers.CharField()
+    email = serializers.CharField(allow_null=True)
+    phone = serializers.CharField(allow_null=True)
+    course = serializers.SerializerMethodField()
+    counsellor = serializers.SerializerMethodField()
+    amount = serializers.CharField()
+    payment_method = serializers.CharField(allow_null=True)
+    transaction_id = serializers.CharField(allow_null=True)
+    payment_date = serializers.CharField(allow_null=True)
+    payment_type = serializers.CharField(allow_null=True)
+
+    def get_course(self, obj):
+        return obj.get("course")
+
+    def get_counsellor(self, obj):
+        return obj.get("counsellor")
+
+

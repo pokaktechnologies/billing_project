@@ -82,7 +82,8 @@ urlpatterns = [
 
     #Dashboard
     path('dashboard/', BDEDashboardView.as_view(), name='leads_by_source_chart'),
-
+    path('academic-dashboard/admin/', AdminAcademicDashboardView.as_view(), name='academic-dashboard-admin'),
+    path('academic-dashboard/staff/', StaffAcademicDashboardView.as_view(), name='academic-dashboard-staff'),
 
     
 ]

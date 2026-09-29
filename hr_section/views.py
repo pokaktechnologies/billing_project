@@ -885,6 +885,10 @@ class OfferLetterShareAPIView(APIView):
                 fail_silently=False
             )
 
+            # Change status only after successful email sending
+            offer.status = StatusChoices.SENT
+            offer.save(update_fields=["status", "updated_at"])
+            
             return api_response(
                 message="Offer letter sent successfully.",
                 data={

@@ -925,6 +925,7 @@ class TaskListCreateView(BaseAPIView):
                 {"status": "0", "message": "Project member not found"},
                 status=status.HTTP_404_NOT_FOUND
             )
+        print("VALIDATED DATA:", serializer.validated_data)
 
         with transaction.atomic():
             task = serializer.save()
@@ -1006,41 +1007,110 @@ class MyProjectTaskListView(BaseAPIView):
 
         if not task:
             return Response(
-                {"status": "0", "message": "Task not found"},
+                {
+                    "status": "0",
+                    "message": "Task not found"
+                },
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # restrict allowed status updates
-        allowed_status = ['not_started', 'in_progress', 'completed']
+        allowed_status = [
+            'not_started',
+            'in_progress',
+            'completed'
+        ]
+
         new_status = request.data.get("status")
 
         if new_status and new_status not in allowed_status:
             return Response(
-                {"status": "0", "message": "Invalid status"},
+                {
+                    "status": "0",
+                    "message": "Invalid status"
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # prevent changing protected fields
-        protected_fields = ["project", "board"]
+        protected_fields = [
+            "project",
+            "board",
+            "start_time",
+            "end_time",
+            "duration",
+        ]
+
         for field in protected_fields:
             if field in request.data:
                 return Response(
-                    {"status": "0", "message": f"{field} cannot be updated"},
+                    {
+                        "status": "0",
+                        "message": f"{field} cannot be updated"
+                    },
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-        serializer = TaskSerializer(task, data=request.data, partial=True)
+        old_status = task.status
 
-        if not serializer.is_valid():
-            return Response(
-                {"status": "0", "errors": serializer.errors},
-                status=status.HTTP_400_BAD_REQUEST
+        with transaction.atomic():
+
+            # --------------------------------------
+            # START TASK
+            # not_started -> in_progress
+            # --------------------------------------
+            if (
+                old_status == 'not_started'
+                and new_status == 'in_progress'
+            ):
+                if task.start_time is None:
+                    task.start_time = timezone.now()
+
+            # --------------------------------------
+            # COMPLETE TASK
+            # in_progress -> completed
+            # --------------------------------------
+            elif (
+                old_status == 'in_progress'
+                and new_status == 'completed'
+            ):
+                if task.start_time is None:
+                    task.start_time = timezone.now()
+
+                task.end_time = timezone.now()
+
+            # --------------------------------------
+            # UPDATE NORMAL TASK FIELDS
+            # --------------------------------------
+            serializer = TaskSerializer(
+                task,
+                data=request.data,
+                partial=True
             )
 
-        serializer.save()
+            if not serializer.is_valid():
+                return Response(
+                    {
+                        "status": "0",
+                        "errors": serializer.errors
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            serializer.save()
+
+            # Save automatic time fields
+            task.save(
+                update_fields=[
+                    'start_time',
+                    'end_time',
+                    'updated_at'
+                ]
+            )
 
         return Response(
-            {"status": "1", "message": "Task updated successfully"},
+            {
+                "status": "1",
+                "message": "Task updated successfully"
+            },
             status=status.HTTP_200_OK
         )
 
@@ -3162,4 +3232,4 @@ class ProjectNoteDetailView(APIView):
         return Response({
             "status": "1",
             "message": "Note deleted successfully"
-        }, status=status.HTTP_200_OK)
+        }, status=status.HTTP_200_OK)

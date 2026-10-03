@@ -199,7 +199,7 @@ class TaskBoardSerializer(serializers.ModelSerializer):
 
 class TaskMiniSerializer(serializers.ModelSerializer):
     board_name = serializers.CharField(source='board.name', read_only=True)
-
+    duration = serializers.SerializerMethodField()
 
     class Meta:
         model = Task
@@ -208,9 +208,27 @@ class TaskMiniSerializer(serializers.ModelSerializer):
             'task_name',
             'difficulty',
             'status',
+            'start_time',
+            'end_time',
+            'duration',
             'end_date',
             'board_name',
         ]
+    def get_duration(self, obj):
+
+        seconds = obj.get_duration_seconds()
+
+        if seconds is None:
+            return None
+
+        hours = seconds // 3600
+        minutes = (seconds % 3600) // 60
+        remaining_seconds = seconds % 60
+
+        return {
+            "seconds": seconds,
+            "formatted": f"{hours}h {minutes}m {remaining_seconds}s"
+        }
 class StatusColumnWithTasksSerializer(serializers.ModelSerializer):
     tasks = TaskMiniSerializer(
         source='task_set',
@@ -249,6 +267,7 @@ class TaskSerializer(serializers.ModelSerializer):
         ('in_progress', 'In Progress'),
         ('completed', 'Completed'),
     ])
+    duration = serializers.SerializerMethodField()
     class Meta:
         model = Task
         fields =[
@@ -262,11 +281,33 @@ class TaskSerializer(serializers.ModelSerializer):
             'description',
             'difficulty',
             'end_date',
+            'duration',
+            'start_time',
+            'end_time',
             'created_at',
             'updated_at',
             'assignments'
         ]
-        read_only_fields = ['created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at', 'duration', 'start_time', 'end_time']
+
+    def get_duration(self, obj):
+
+        seconds = obj.get_duration_seconds()
+
+        if seconds is None:
+            return None
+
+        hours = seconds // 3600
+        minutes = (seconds % 3600) // 60
+        remaining_seconds = seconds % 60
+
+        return {
+            "seconds": seconds,
+            "hours": hours,
+            "minutes": minutes,
+            "seconds_remaining": remaining_seconds,
+            "formatted": f"{hours}h {minutes}m"
+        }
 
 
 ## DASHBOARD VIEW------#

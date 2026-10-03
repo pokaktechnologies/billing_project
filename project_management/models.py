@@ -1,5 +1,6 @@
 from django.db import models
 from django.db.models import Sum
+from django.utils import timezone
 from accounts.models import CustomUser,Customer
 from django.core.validators import MinValueValidator, MaxValueValidator
 
@@ -136,6 +137,8 @@ class Task(models.Model):
     difficulty = models.CharField(max_length=100,choices=difficulty_choice, null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='not_started', null=True, blank=True)
     end_date = models.DateField()
+    start_time = models.DateTimeField(null=True, blank=True)
+    end_time = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -143,7 +146,16 @@ class Task(models.Model):
     # status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='not_started')
     #     project_member = models.ForeignKey(ProjectMember, on_delete=models.CASCADE)
 
+    def get_duration_seconds(self):
+        if not self.start_time:
+            return None
 
+        end_time = self.end_time or timezone.now()
+
+        duration = end_time - self.start_time
+
+        return int(duration.total_seconds())
+    
     def __str__(self):
         return f"{self.task_name} ({self.project})"
     

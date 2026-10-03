@@ -254,3 +254,34 @@ class ReportLink(models.Model):
 
     def __str__(self):
         return f"Link for Report {self.report.id}"
+
+
+# -------------------------------
+# Project Notes (Document / Notepad)
+# -------------------------------
+class ProjectNote(models.Model):
+    project = models.ForeignKey(
+        ProjectManagement,
+        on_delete=models.CASCADE,
+        related_name='notes'
+    )
+    title = models.CharField(max_length=255)
+    content = models.TextField(help_text="Document/notepad-style long-form content")
+    created_by = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='project_notes'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+        verbose_name = 'Project Note'
+        verbose_name_plural = 'Project Notes'
+
+    def __str__(self):
+        project_name = self.project.project_name if self.project_id and self.project else "No Project"
+        return f"{self.title} - {project_name}"

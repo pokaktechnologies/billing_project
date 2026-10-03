@@ -2566,6 +2566,189 @@ class ManagerDailyReportSummaryView(APIView):
             status=status.HTTP_200_OK
         )
 
+
+class ManagerStaffReportsConsolidatedView(APIView):
+    """
+    Consolidated view returning all staff reports in a single endpoint.
+    Aggregates performance metrics, task breakdown counts, total hours,
+    and roadblock indicators without requiring task-by-task drilldown.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        project_id = request.query_params.get("project")
+        report_type = request.query_params.get("type") or request.query_params.get("report_type")  # daily, weekly, monthly, or all
+        staff_id = request.query_params.get("staff_id") or request.query_params.get("member_id")
+        search = request.query_params.get("search")
+
+        # Period filters
+        date_str = request.query_params.get("date")               # YYYY-MM-DD
+        week_start_str = request.query_params.get("week_start")   # YYYY-MM-DD
+        week_end_str = request.query_params.get("week_end")       # YYYY-MM-DD
+        month_param = request.query_params.get("month")           # 1-12 or YYYY-MM
+        year_param = request.query_params.get("year")             # YYYY
+        start_date_str = request.query_params.get("start_date")   # general date range
+        end_date_str = request.query_params.get("end_date")
+
+        reports = Report.objects.all().select_related(
+            'project',
+            'submitted_by',
+            'submitted_by__staff_profile',
+            'submitted_by__staff_profile__job_detail'
+        ).prefetch_related(
+            'tasks'
+        ).order_by('-submitted_at')
+
+        if project_id:
+            reports = reports.filter(project_id=project_id)
+
+        if report_type and report_type.lower() != 'all':
+            reports = reports.filter(report_type=report_type.lower())
+
+        if staff_id:
+            reports = reports.filter(submitted_by_id=staff_id)
+
+        # Handle month format "YYYY-MM" or separate month & year
+        if month_param:
+            if "-" in str(month_param):
+                try:
+                    m_year, m_month = map(int, month_param.split("-"))
+                    reports = reports.filter(
+                        Q(month=m_month, year=m_year) |
+                        Q(report_date__year=m_year, report_date__month=m_month) |
+                        Q(week_start__year=m_year, week_start__month=m_month)
+                    )
+                except ValueError:
+                    pass
+            else:
+                try:
+                    m_val = int(month_param)
+                    reports = reports.filter(month=m_val)
+                except ValueError:
+                    pass
+
+        if year_param:
+            try:
+                y_val = int(year_param)
+                reports = reports.filter(
+                    Q(year=y_val) |
+                    Q(report_date__year=y_val) |
+                    Q(week_start__year=y_val)
+                )
+            except ValueError:
+                pass
+
+        # Handle daily date filter
+        if date_str:
+            try:
+                d_val = datetime.strptime(date_str, "%Y-%m-%d").date()
+                reports = reports.filter(
+                    Q(report_date=d_val) |
+                    Q(submitted_at__date=d_val)
+                )
+            except ValueError:
+                return Response(
+                    {"status": "0", "message": "Invalid date format YYYY-MM-DD"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        # Handle weekly date range
+        if week_start_str and week_end_str:
+            try:
+                ws_val = datetime.strptime(week_start_str, "%Y-%m-%d").date()
+                we_val = datetime.strptime(week_end_str, "%Y-%m-%d").date()
+                reports = reports.filter(
+                    week_start__lte=we_val,
+                    week_end__gte=ws_val
+                )
+            except ValueError:
+                return Response(
+                    {"status": "0", "message": "Invalid week_start or week_end format YYYY-MM-DD"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        # General date range
+        if start_date_str:
+            try:
+                sd_val = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+                reports = reports.filter(
+                    Q(report_date__gte=sd_val) |
+                    Q(week_start__gte=sd_val) |
+                    Q(submitted_at__date__gte=sd_val)
+                )
+            except ValueError:
+                pass
+
+        if end_date_str:
+            try:
+                ed_val = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+                reports = reports.filter(
+                    Q(report_date__lte=ed_val) |
+                    Q(week_end__lte=ed_val) |
+                    Q(submitted_at__date__lte=ed_val)
+                )
+            except ValueError:
+                pass
+
+        # Search filter
+        if search:
+            search = search.strip()
+            reports = reports.filter(
+                Q(submitted_by__first_name__icontains=search) |
+                Q(submitted_by__last_name__icontains=search) |
+                Q(submitted_by__email__icontains=search) |
+                Q(executive_summary__icontains=search) |
+                Q(project__project_name__icontains=search)
+            )
+
+        # Compute high-level summary overview
+        all_reports_list = list(reports)
+        total_reports_count = len(all_reports_list)
+        unique_staff_ids = set(r.submitted_by_id for r in all_reports_list if r.submitted_by_id)
+
+        total_tasks = 0
+        completed_tasks = 0
+        in_progress_tasks = 0
+
+        for r in all_reports_list:
+            r_tasks = list(r.tasks.all())
+            total_tasks += len(r_tasks)
+            completed_tasks += sum(1 for t in r_tasks if t.status == 'completed')
+            in_progress_tasks += sum(1 for t in r_tasks if t.status == 'in_progress')
+
+        summary = {
+            "total_reports": total_reports_count,
+            "total_staff_count": len(unique_staff_ids),
+            "total_tasks": total_tasks,
+            "completed_tasks": completed_tasks,
+            "in_progress_tasks": in_progress_tasks,
+        }
+
+        # Check pagination
+        page_param = request.query_params.get("page")
+        page_size_param = request.query_params.get("page_size")
+
+        if page_param or (page_size_param and page_size_param.lower() != 'all'):
+            paginator = Pagination()
+            page = paginator.paginate_queryset(reports, request)
+            serializer = StaffReportConsolidatedSerializer(page, many=True)
+            return paginator.get_paginated_response({
+                "status": "1",
+                "message": "success",
+                "summary": summary,
+                "data": serializer.data
+            })
+
+        serializer = StaffReportConsolidatedSerializer(all_reports_list, many=True)
+        return Response({
+            "status": "1",
+            "message": "success",
+            "summary": summary,
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+
 class ProjectProgressionView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -2816,3 +2999,167 @@ class NumberGeneratorView(APIView):
             'message': 'Success',
             'number': generated_number
         }, status=status.HTTP_200_OK)
+
+
+# --------------------------------------------------
+# Project Notes Views (Manager / Admin Only)
+# --------------------------------------------------
+def is_project_manager_or_admin(user, project=None):
+    """
+    Check if the user is a superuser, staff admin, project owner (PM),
+    or has project management permissions.
+    Regular staff/developers return False.
+    """
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser or user.is_staff:
+        return True
+    if project and getattr(project, 'user_id', None) == user.id:
+        return True
+
+    staff_profile = getattr(user, 'staff_profile', None)
+    if staff_profile:
+        job_detail = getattr(staff_profile, 'job_detail', None)
+        if job_detail and job_detail.role:
+            role_lower = job_detail.role.lower()
+            role_words = set(role_lower.replace('_', ' ').replace('-', ' ').split())
+            if any(mgr in role_lower for mgr in ['manager', 'admin', 'lead', 'director', 'head']) or {'pm', 'p.m.'}.intersection(role_words):
+                return True
+
+    from accounts.models import ModulePermission
+    has_mgr_permission = ModulePermission.objects.filter(
+        user=user,
+        module_name__in=['project_management', 'project_manager_dashboard', 'project']
+    ).exists()
+    return has_mgr_permission
+
+
+class ProjectNoteListCreateView(APIView):
+    """
+    API endpoint for listing and creating project notes.
+    Only authorized Project Managers and Admins can access.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, project_id):
+        project = get_object_or_404(ProjectManagement, id=project_id)
+        if not is_project_manager_or_admin(request.user, project):
+            return Response(
+                {"status": "0", "message": "Access denied: Only project managers and admins can access notes."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        notes = ProjectNote.objects.filter(project=project).select_related('created_by', 'project').order_by('-updated_at')
+
+        search = request.query_params.get('search')
+        if search:
+            search = search.strip()
+            notes = notes.filter(Q(title__icontains=search) | Q(content__icontains=search))
+
+        serializer = ProjectNoteSerializer(notes, many=True)
+        return Response({
+            "status": "1",
+            "message": "success",
+            "project_id": project.id,
+            "project_name": project.project_name,
+            "total_notes": len(serializer.data),
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    def post(self, request, project_id):
+        project = get_object_or_404(ProjectManagement, id=project_id)
+        if not is_project_manager_or_admin(request.user, project):
+            return Response(
+                {"status": "0", "message": "Access denied: Only project managers and admins can create notes."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        serializer = ProjectNoteCreateUpdateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {"status": "0", "message": "Validation failed", "errors": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        note = serializer.save(
+            project=project,
+            created_by=request.user
+        )
+
+        response_serializer = ProjectNoteSerializer(note)
+        return Response({
+            "status": "1",
+            "message": "Note created successfully",
+            "data": response_serializer.data
+        }, status=status.HTTP_201_CREATED)
+
+
+class ProjectNoteDetailView(APIView):
+    """
+    API endpoint for retrieving, updating, and deleting a single project note.
+    Only authorized Project Managers and Admins can access.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, project_id, note_id):
+        project = get_object_or_404(ProjectManagement, id=project_id)
+        if not is_project_manager_or_admin(request.user, project):
+            return Response(
+                {"status": "0", "message": "Access denied: Only project managers and admins can access notes."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        note = get_object_or_404(ProjectNote.objects.select_related('created_by', 'project'), id=note_id, project=project)
+        serializer = ProjectNoteSerializer(note)
+        return Response({
+            "status": "1",
+            "message": "success",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    def put(self, request, project_id, note_id):
+        return self._update(request, project_id, note_id, partial=False)
+
+    def patch(self, request, project_id, note_id):
+        return self._update(request, project_id, note_id, partial=True)
+
+    def _update(self, request, project_id, note_id, partial=False):
+        project = get_object_or_404(ProjectManagement, id=project_id)
+        if not is_project_manager_or_admin(request.user, project):
+            return Response(
+                {"status": "0", "message": "Access denied: Only project managers and admins can update notes."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        note = get_object_or_404(ProjectNote.objects.select_related('created_by', 'project'), id=note_id, project=project)
+        serializer = ProjectNoteCreateUpdateSerializer(note, data=request.data, partial=partial)
+        if not serializer.is_valid():
+            return Response(
+                {"status": "0", "message": "Validation failed", "errors": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer.save()
+        response_serializer = ProjectNoteSerializer(note)
+        return Response({
+            "status": "1",
+            "message": "Note updated successfully",
+            "data": response_serializer.data
+        }, status=status.HTTP_200_OK)
+
+    def delete(self, request, project_id, note_id):
+        project = get_object_or_404(ProjectManagement, id=project_id)
+        if not is_project_manager_or_admin(request.user, project):
+            return Response(
+                {"status": "0", "message": "Access denied: Only project managers and admins can delete notes."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        note = get_object_or_404(ProjectNote, id=note_id, project=project)
+        note.delete()
+        return Response({
+            "status": "1",
+            "message": "Note deleted successfully"
+        }, status=status.HTTP_200_OK)

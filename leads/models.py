@@ -72,6 +72,10 @@ class Lead(models.Model):
             ('created', 'Created'),
             ('in_progress', 'In Progress'),
             ('converted', 'Converted'),
+            ('rnr', 'Rnr'),
+            ('prospects', 'Prospects'),
+            ('details_shared', 'Details shared'),
+            ('registration', 'Registration'),
         ],
         default='new'
     )

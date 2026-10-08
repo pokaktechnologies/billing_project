@@ -18,6 +18,7 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from project_management.views import ProjectNoteListCreateView, ProjectNoteDetailView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -33,6 +34,10 @@ urlpatterns = [
 
     path('internship/', include('internship.urls')),
     path('payroll/', include('payroll.urls')),
+
+    # Direct project notes routes
+    path('projects/<int:project_id>/notes/', ProjectNoteListCreateView.as_view(), name='direct_project_notes_list_create'),
+    path('projects/<int:project_id>/notes/<int:note_id>/', ProjectNoteDetailView.as_view(), name='direct_project_notes_detail'),
 ]
 
 if settings.DEBUG:

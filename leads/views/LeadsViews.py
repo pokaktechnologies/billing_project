@@ -1062,6 +1062,10 @@ class BDEDashboardView(SalesPersonBaseView, APIView):
             'in_progress': 0,
             'converted': 0,
             'lost': 0,
+            'rnr': 0,
+            'prospects': 0,
+            'details_shared': 0,
+            'registration': 0,
         }
 
         status_counts = all_leads.values('lead_status').annotate(count=Count('id'))

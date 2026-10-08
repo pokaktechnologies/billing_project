@@ -31,6 +31,13 @@ urlpatterns = [
     path('my_projects/', MyProjectsView.as_view(), name='my_projects'),
     path('my_projects/<int:project_id>/', MyProjectDetailView.as_view(), name='my_project_detail'),
 
+    # Project Notes
+    path('<int:project_id>/notes/', ProjectNoteListCreateView.as_view(), name='project_notes_list_create'),
+    path('<int:project_id>/notes/<int:note_id>/', ProjectNoteDetailView.as_view(), name='project_notes_detail'),
+    path('projects/<int:project_id>/notes/', ProjectNoteListCreateView.as_view(), name='project_notes_list_create_alt'),
+    path('projects/<int:project_id>/notes/<int:note_id>/', ProjectNoteDetailView.as_view(), name='project_notes_detail_alt'),
+
+
 
 
     # Tasks
@@ -67,6 +74,7 @@ urlpatterns = [
     path('manager/daily_report_summary/', ManagerDailyReportSummaryView.as_view(), name='manager_daily_report_summary'),
     path('manager/weekly_report_summary/', ManagerWeeklyReportSummaryView.as_view(), name='manager_weekly_report_summary'),
     path('manager/monthly_report_summary/', ManagerMonthlyReportSummaryView.as_view(), name='manager_monthly_report_summary'),
+    path('manager/staff_reports/', ManagerStaffReportsConsolidatedView.as_view(), name='manager_staff_reports_consolidated'),
 
 
     #Dashaboard

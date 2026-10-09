@@ -73,20 +73,19 @@ class Lead(models.Model):
             ('in_progress', 'In Progress'),
             ('converted', 'Converted'),
             ('rnr', 'Rnr'),
+            ('number_not_valid', 'Number Not Valid'),
             ('prospects', 'Prospects'),
             ('details_shared', 'Details shared'),
             ('registration', 'Registration'),
         ],
         default='new'
     )
-    academic_status = models.CharField(
+    priority_status = models.CharField(
         max_length=50,
         choices=[
-            ('hot', 'Hot Lead'),
-            ('not_respond', 'Not Respond'),
-            ('number_not_valid', 'Number Not Valid'),
-            ('not_connected', 'Not Connected'),
-            ('invalid', 'Invalid Lead'),
+            ('hot', 'Hot'),
+            ('warm', 'Warm'),
+            ('cool', 'Cool'),
         ],
         blank=True,
         null=True

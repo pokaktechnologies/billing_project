@@ -83,9 +83,9 @@ class Lead(models.Model):
     priority_status = models.CharField(
         max_length=50,
         choices=[
-            ('hot', 'Hot'),
+            ('hot', 'prospects'),
             ('warm', 'Warm'),
-            ('cool', 'Cool'),
+            ('cold', 'Cold'),
         ],
         blank=True,
         null=True

@@ -614,7 +614,7 @@ def get_academic_dashboard_data(request, leads):
             priority_status__isnull=True
         ).count(),
 
-        "hot": leads.filter(
+        "prospects": leads.filter(
             priority_status="hot"
         ).count(),
 
@@ -622,8 +622,8 @@ def get_academic_dashboard_data(request, leads):
             priority_status="warm"
         ).count(),
 
-        "cool": leads.filter(
-            priority_status="cool"
+        "cold": leads.filter(
+            priority_status="cold"
         ).count(),
 
         "rnr": leads.filter(
@@ -656,7 +656,7 @@ def get_academic_dashboard_data(request, leads):
             "value": None,
         },
 
-        "hot": {
+        "prospects": {
             "type": "priority",
             "value": "hot",
         },
@@ -666,9 +666,9 @@ def get_academic_dashboard_data(request, leads):
             "value": "warm",
         },
 
-        "cool": {
+        "cold": {
             "type": "priority",
-            "value": "cool",
+            "value": "cold",
         },
 
         # Lead status based tabs
@@ -695,7 +695,7 @@ def get_academic_dashboard_data(request, leads):
                 "status": "0",
                 "message": (
                     "Invalid tab. Allowed values: "
-                    "priority_pending, hot, warm, cool, "
+                    "priority_pending, hot, warm, cold, "
                     "rnr, number_not_valid, prospects"
                 )
             },
@@ -718,7 +718,7 @@ def get_academic_dashboard_data(request, leads):
                 priority_status__isnull=True
             )
 
-        # Hot / Warm / Cool
+        # Hot / Warm / cold
         else:
 
             leads = leads.filter(

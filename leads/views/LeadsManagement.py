@@ -656,7 +656,7 @@ def get_academic_dashboard_data(request, leads):
             "value": None,
         },
 
-        "prospects": {
+        "hot": {
             "type": "priority",
             "value": "hot",
         },
@@ -682,10 +682,10 @@ def get_academic_dashboard_data(request, leads):
             "value": "number_not_valid",
         },
 
-        "prospects": {
-            "type": "lead_status",
-            "value": "prospects",
-        },
+        # "prospects": {
+        #     "type": "lead_status",
+        #     "value": "prospects",
+        # },
     }
 
     if tab not in allowed_tabs:

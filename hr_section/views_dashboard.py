@@ -40,7 +40,10 @@ class HrDashboardMetricsAPIView(BaseHrDashboardAPIView):
         ).count()
 
         # 2. Today's Attendance stats
-        today_attendance_qs = DailyAttendance.objects.filter(date=today)
+        today_attendance_qs = DailyAttendance.objects.filter(
+            date=today,
+            staff__job_detail__status="active"
+        )
         present_count = today_attendance_qs.filter(status="full_day").count()
         half_day_count = today_attendance_qs.filter(status="half_day").count()
         on_leave_count = today_attendance_qs.filter(status="leave").count()

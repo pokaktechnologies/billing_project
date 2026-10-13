@@ -40,7 +40,10 @@ class HrDashboardMetricsAPIView(BaseHrDashboardAPIView):
         ).count()
 
         # 2. Today's Attendance stats
-        today_attendance_qs = DailyAttendance.objects.filter(date=today)
+        today_attendance_qs = DailyAttendance.objects.filter(
+            date=today,
+            staff__job_detail__status="active"
+        )
         present_count = today_attendance_qs.filter(status="full_day").count()
         half_day_count = today_attendance_qs.filter(status="half_day").count()
         on_leave_count = today_attendance_qs.filter(status="leave").count()
@@ -147,11 +150,12 @@ class HrDashboardActionItemsAPIView(BaseHrDashboardAPIView):
             })
 
         for reg in pending_registrations[:5]:
+            role_applied = getattr(reg, "qualification", None) or "Not specified"
             action_items.append({
                 "type": "employee_registration",
                 "reference_id": reg.id,
                 "title": f"Onboarding Registration: {reg.first_name} {reg.last_name or ''}".strip(),
-                "description": f"Applied for role: {reg.designation or 'Not specified'}. Ready for staff conversion.",
+                "description": f"Qualification: {role_applied}. Ready for staff conversion.",
                 "created_at": reg.created_at,
                 "urgency": "medium"
             })

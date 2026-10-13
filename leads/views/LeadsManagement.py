@@ -610,30 +610,33 @@ def get_academic_dashboard_data(request, leads):
     # ------------------------------------------------
 
     counts = {
-
-        "new": leads.filter(
-            academic_status__isnull=True
+        "priority_pending": leads.filter(
+            priority_status__isnull=True
         ).count(),
 
-        "hot": leads.filter(
-            academic_status="hot"
+        "prospects": leads.filter(
+            priority_status="hot"
         ).count(),
 
-        "not_respond": leads.filter(
-            academic_status="not_respond"
+        "warm": leads.filter(
+            priority_status="warm"
+        ).count(),
+
+        "cold": leads.filter(
+            priority_status="cold"
+        ).count(),
+
+        "rnr": leads.filter(
+            lead_status="rnr"
         ).count(),
 
         "number_not_valid": leads.filter(
-            academic_status="number_not_valid"
+            lead_status="number_not_valid"
         ).count(),
 
-        "not_connected": leads.filter(
-            academic_status="not_connected"
-        ).count(),
-
-        "invalid": leads.filter(
-            academic_status="invalid"
-        ).count(),
+        # "prospects": leads.filter(
+        #     lead_status="prospects"
+        # ).count(),
     }
 
     # ------------------------------------------------
@@ -642,16 +645,34 @@ def get_academic_dashboard_data(request, leads):
 
     tab = request.query_params.get(
         "tab",
-        "new"
+        "priority_pending"
     )
 
     allowed_tabs = {
-        "new": None,
-        "hot": "hot",
-        "not_respond": "not_respond",
-        "number_not_valid": "number_not_valid",
-        "not_connected": "not_connected",
-        "invalid": "invalid",
+        "priority_pending": {
+            "type": "priority",
+            "value": None,
+        },
+        "prospects": {
+            "type": "priority",
+            "value": "hot",
+        },
+        "warm": {
+            "type": "priority",
+            "value": "warm",
+        },
+        "cold": {
+            "type": "priority",
+            "value": "cold",
+        },
+        "rnr": {
+            "type": "lead_status",
+            "value": "rnr",
+        },
+        "number_not_valid": {
+            "type": "lead_status",
+            "value": "number_not_valid",
+        },
     }
 
     if tab not in allowed_tabs:
@@ -661,28 +682,47 @@ def get_academic_dashboard_data(request, leads):
                 "status": "0",
                 "message": (
                     "Invalid tab. Allowed values: "
-                    "new, hot, not_respond, "
-                    "number_not_valid, "
-                    "not_connected, invalid"
+                    "priority_pending, prospects, warm, cold, "
+                    "rnr, number_not_valid"
                 )
             },
             status=400
         )
 
-    selected_status = allowed_tabs[tab]
 
-    # NEW means academic_status is NULL
-    if selected_status is None:
+    selected_tab = allowed_tabs[tab]
+
+    # ------------------------------------------------
+    # PRIORITY BASED TAB
+    # ------------------------------------------------
+
+    if selected_tab["type"] == "priority":
+
+        # Priority Pending
+        if selected_tab["value"] is None:
+
+            leads = leads.filter(
+                priority_status__isnull=True
+            )
+
+        # Hot / Warm / cold
+        else:
+
+            leads = leads.filter(
+                priority_status=selected_tab["value"]
+            )
+
+
+    # ------------------------------------------------
+    # LEAD STATUS BASED TAB
+    # ------------------------------------------------
+
+    elif selected_tab["type"] == "lead_status":
 
         leads = leads.filter(
-            academic_status__isnull=True
+            lead_status=selected_tab["value"]
         )
 
-    else:
-
-        leads = leads.filter(
-            academic_status=selected_status
-        )
 
     # ------------------------------------------------
     # FOLLOW-UP DATA

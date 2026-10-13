@@ -10,19 +10,31 @@ from accounts.models import SalesPerson, StaffProfile
 class LeadSerializer(serializers.ModelSerializer):
     lead_status_display = serializers.SerializerMethodField()
     lead_category_display = serializers.SerializerMethodField()
-    course_name = serializers.CharField(source='course.title', read_only=True, default=None)
+    priority_status_display = serializers.SerializerMethodField()
+
+    course_name = serializers.CharField(
+        source='course.title',
+        read_only=True,
+        default=None
+    )
 
     class Meta:
         model = Lead
         fields = '__all__'
         read_only_fields = [
-            'CustomUser', 
-            'lead_type', 
+            'CustomUser',
+            'lead_type',
         ]
-        
+
     def get_field_names(self, declared_fields, info):
-        fields = super().get_field_names(declared_fields, info)
-        fields.append("course_name")
+        fields = super().get_field_names(
+            declared_fields,
+            info
+        )
+
+        if "course_name" not in fields:
+            fields.append("course_name")
+
         return fields
 
     def get_lead_status_display(self, obj):
@@ -30,34 +42,81 @@ class LeadSerializer(serializers.ModelSerializer):
 
     def get_lead_category_display(self, obj):
         return obj.get_lead_category_display()
-    
+
+    def get_priority_status_display(self, obj):
+        if not obj.priority_status:
+            return "Priority Pending"
+
+        return obj.get_priority_status_display()
+
     def validate(self, data):
-        category = data.get('lead_category', getattr(self.instance, 'lead_category', None))
-        detail = data.get('other_category_detail', getattr(self.instance, 'other_category_detail', None))
-        course = data.get('course', getattr(self.instance, 'course', None))
-        academic_status = data.get('academic_status', getattr(self.instance, 'academic_status', None))
+
+        category = data.get(
+            'lead_category',
+            getattr(
+                self.instance,
+                'lead_category',
+                None
+            )
+        )
+
+        detail = data.get(
+            'other_category_detail',
+            getattr(
+                self.instance,
+                'other_category_detail',
+                None
+            )
+        )
+
+        course = data.get(
+            'course',
+            getattr(
+                self.instance,
+                'course',
+                None
+            )
+        )
+
+        priority_status = data.get(
+            'priority_status',
+            getattr(
+                self.instance,
+                'priority_status',
+                None
+            )
+        )
+
+        # ----------------------------------------
+        # OTHER CATEGORY VALIDATION
+        # ----------------------------------------
 
         if category == 'other' and not detail:
             raise serializers.ValidationError({
-                'other_category_detail': "This field is required when category is 'Other'."
+                'other_category_detail':
+                    "This field is required when category is 'Other'."
             })
 
-        if category != 'intern' and academic_status:
-            raise serializers.ValidationError({
-                'academic_status':
-                    'Academic status can only be used for Intern leads.'
-            })
-        
-        # course validation
-        # if category == "intern" and not course:
-        #     raise serializers.ValidationError({
-        #         "course": "Course is required for intern leads."
-        #     })
+        # ----------------------------------------
+        # PRIORITY STATUS VALIDATION
+        # ----------------------------------------
 
-        if category != "intern" and course:
+        if category != 'intern' and priority_status:
             raise serializers.ValidationError({
-                "course": "Course can only be selected for intern leads."
-        })
+                'priority_status':
+                    'Priority status can only be used for Intern leads.'
+            })
+
+        # ----------------------------------------
+        # COURSE VALIDATION
+        # ----------------------------------------
+
+        if category != 'intern' and course:
+            raise serializers.ValidationError({
+                'course':
+                    'Course can only be selected for intern leads.'
+            })
+
         return data
 
 
@@ -286,7 +345,7 @@ class AcademicLeadDashboardSerializer(serializers.ModelSerializer):
         allow_null=True
     )
 
-    academic_status_display = serializers.SerializerMethodField()
+    priority_status_display = serializers.SerializerMethodField()
     lead_status_display = serializers.SerializerMethodField()
 
     class Meta:
@@ -305,18 +364,19 @@ class AcademicLeadDashboardSerializer(serializers.ModelSerializer):
             'course_enquiry',
             'call_count',
             'next_call_followup_date',
-            'academic_status',
-            'academic_status_display',
+            'priority_status',
+            'priority_status_display',
             'lead_status',
             'lead_status_display',
             'lead_date',
             'salesperson',
         ]
 
-    def get_academic_status_display(self, obj):
-        if not obj.academic_status:
-            return "New"
-        return obj.get_academic_status_display()
+    def get_priority_status_display(self, obj):
+        if not obj.priority_status:
+            return "Priority Pending"
+
+        return obj.get_priority_status_display()
 
     def get_lead_status_display(self, obj):
         return obj.get_lead_status_display()

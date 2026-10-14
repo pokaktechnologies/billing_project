@@ -386,6 +386,7 @@ class OfferLetterListSerializer(serializers.ModelSerializer):
     Lightweight serializer for list endpoint.
     """
     created_by = serializers.StringRelatedField()
+    monthly_salary = serializers.SerializerMethodField()
 
     class Meta:
         model = OfferLetter
@@ -397,12 +398,28 @@ class OfferLetterListSerializer(serializers.ModelSerializer):
             "status",
             "duty_type",
             "basic_salary",
-            # "monthly_salary",
+            "monthly_salary",
             "joining_date",
             "company_name",
             "created_by",
             "created_at",
         ]
+
+    def get_total_allowance(self, obj):
+        total = 0
+        for allowance in obj.allowances or []:
+            if not isinstance(allowance, dict):
+                continue
+            try:
+                total += float(allowance.get("amount", 0))
+            except (TypeError, ValueError):
+                continue
+        return total
+
+    def get_monthly_salary(self, obj):
+        total = self.get_total_allowance(obj) + float(obj.basic_salary or 0)
+        return total
+
 
 
 class OfferLetterDetailSerializer(serializers.ModelSerializer):
@@ -412,10 +429,30 @@ class OfferLetterDetailSerializer(serializers.ModelSerializer):
     created_by      = serializers.StringRelatedField()
     status_display   = serializers.CharField(source="get_status_display", read_only=True)
     duty_type_display = serializers.CharField(source="get_duty_type_display", read_only=True)
+    total_allowance = serializers.SerializerMethodField()
+    monthly_salary = serializers.SerializerMethodField()
 
     class Meta:
         model = OfferLetter
         fields = "__all__"
+
+    def get_total_allowance(self, obj):
+        total = 0
+        for allowance in obj.allowances or []:
+            if not isinstance(allowance, dict):
+                continue
+            try:
+                total += float(allowance.get("amount", 0))
+            except (TypeError, ValueError):
+                continue
+        return total
+
+    def get_monthly_salary(self, obj):
+        total = self.get_total_allowance(obj) + float(obj.basic_salary or 0)
+        return total
+
+        
+
 
 class OfferLetterShareSerializer(serializers.Serializer):
 

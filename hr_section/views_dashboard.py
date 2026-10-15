@@ -34,6 +34,22 @@ class HrDashboardMetricsAPIView(BaseHrDashboardAPIView):
         total_staff = StaffProfile.objects.filter(job_detail__isnull=False).count()
         active_staff = StaffProfile.objects.filter(job_detail__status="active").count()
         probation_staff = StaffProfile.objects.filter(job_detail__status="probation").count()
+        internship_active_staff = StaffProfile.objects.filter(
+            job_detail__job_type="internship",
+            job_detail__status="active"
+        ).count()
+        full_day_active_staff = StaffProfile.objects.filter(
+            job_detail__job_type="full_day",
+            job_detail__status="active"
+        ).count()
+        part_time_active_staff = StaffProfile.objects.filter(
+            job_detail__job_type="part_time",
+            job_detail__status="active"
+        ).count()
+        contract_active_staff = StaffProfile.objects.filter(
+            job_detail__job_type="contract",
+            job_detail__status="active"
+        ).count()
         new_joiners_this_month = StaffProfile.objects.filter(
             job_detail__start_date__gte=first_day_of_month,
             job_detail__start_date__lte=today
@@ -78,10 +94,14 @@ class HrDashboardMetricsAPIView(BaseHrDashboardAPIView):
                 "total_employees": total_staff,
                 "active_employees": active_staff,
                 "on_probation": probation_staff,
+                "active_interns": internship_active_staff,
+                "active_full_day": full_day_active_staff,
+                "active_part_time": part_time_active_staff,
+                "active_contract": contract_active_staff,
                 "new_joiners_this_month": new_joiners_this_month,
             },
             "today_attendance": {
-                "total_expected": total_staff,
+                "total_expected": active_staff,
                 "present_count": present_count,
                 "late_count": late_count,
                 "half_day_count": half_day_count,

@@ -401,6 +401,7 @@ class OfferLetterListSerializer(serializers.ModelSerializer):
             "monthly_salary",
             "joining_date",
             "company_name",
+            "phone_number",
             "created_by",
             "created_at",
         ]

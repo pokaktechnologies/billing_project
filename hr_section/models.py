@@ -216,6 +216,7 @@ class OfferLetter(models.Model):
     joining_date       = models.DateField()
 
     note = models.TextField(blank=True, null=True)
+    phone_number = models.CharField(max_length=15, blank=True, null=True)
 
     company_name     = models.CharField(max_length=255)
     hr_name          = models.CharField(max_length=255, blank=True, null=True)

@@ -16,6 +16,7 @@ class InternshipDocumentSerializer(serializers.ModelSerializer):
 
 class InternshipApplicationSerializer(serializers.ModelSerializer):
     documents = InternshipDocumentSerializer(many=True, required=False)
+    profile_image = serializers.ImageField(required=True)
     # academic_counselor_name = serializers.CharField(source="academic_counselor.get_full_name", read_only=True)
     councellor_name = serializers.CharField(source="councellor.get_full_name", read_only=True)
     courses_name = serializers.CharField(source="course.title", read_only=True)

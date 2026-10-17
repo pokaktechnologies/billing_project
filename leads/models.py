@@ -77,6 +77,7 @@ class Lead(models.Model):
             ('prospects', 'Prospects'),
             ('details_shared', 'Details shared'),
             ('registration', 'Registration'),
+            ('other', 'Other'),
         ],
         default='new'
     )
@@ -92,6 +93,8 @@ class Lead(models.Model):
     )
     notes = models.TextField(blank=True, null=True)
     lead_date = models.DateField(null=True, blank=True)
+    other_note = models.TextField(blank=True, null=True)
+    reason_note = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(default=timezone.now)  # Date
 
     def __str__(self):

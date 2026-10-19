@@ -517,10 +517,15 @@ class EmployeeRegistrationSerializer(serializers.ModelSerializer):
             'gender',
             'emergency_contact',
             'country',
+            'district',
+            'state',
+            'pincode',
             'date_of_birth',
             'address',
             'profile_photo',
             'status',
+            'experience_years',
+            'applied_position',
             'is_converted',
             'converted_staff_id',
             'documents',
@@ -594,4 +599,4 @@ class ConvertEmployeeRegistrationToStaffSerializer(serializers.Serializer):
             raise serializers.ValidationError({
                 "confirm_password": "Passwords do not match."
             })
-        return attrs
+        return attrs

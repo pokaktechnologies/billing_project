@@ -98,6 +98,37 @@ class LeadSerializer(serializers.ModelSerializer):
             })
 
         # ----------------------------------------
+        # LEAD STATUS NOTE VALIDATION
+        # ----------------------------------------
+
+        lead_status = data.get(
+            'lead_status',
+            getattr(self.instance, 'lead_status', None)
+        )
+
+        note = data.get(
+            'other_note',
+            getattr(self.instance, 'note', None)
+        )
+
+        reason_note = data.get(
+            'reason_note',
+            getattr(self.instance, 'reason_note', None)
+        )
+
+        if lead_status == 'other' and not note:
+            raise serializers.ValidationError({
+                'note': 'Note is required when lead status is Other.'
+            })
+
+        if lead_status == 'lost' and not reason_note:
+            raise serializers.ValidationError({
+                'reason_note': 'Reason note is required when lead status is Lost.'
+            })
+
+        return data
+
+        # ----------------------------------------
         # PRIORITY STATUS VALIDATION
         # ----------------------------------------
 

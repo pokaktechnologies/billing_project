@@ -1,7 +1,7 @@
 from django.db import models
 from django.utils import timezone
 from accounts.models import StaffProfile
-
+from datetime import datetime, timedelta
 class DailyAttendance(models.Model):
     staff = models.ForeignKey(StaffProfile, on_delete=models.CASCADE, related_name="daily_attendance")
     date = models.DateField(default=timezone.localdate)
@@ -72,6 +72,12 @@ class LeaveRequest(models.Model):
     staff = models.ForeignKey(StaffProfile, on_delete=models.CASCADE, related_name='leave_requests_staff')
     start_date = models.DateField()
     end_date = models.DateField()
+
+    # half day fields
+    is_half_day = models.BooleanField(default=False)
+    start_time = models.TimeField(null=True, blank=True)
+    end_time = models.TimeField(null=True, blank=True)
+
     reason = models.TextField()
 
     status = models.CharField(
@@ -83,9 +89,27 @@ class LeaveRequest(models.Model):
     requested_at = models.DateTimeField(auto_now_add=True)
     actioned_at = models.DateTimeField(null=True, blank=True)
     action_by = models.ForeignKey(StaffProfile, on_delete=models.SET_NULL, null=True, blank=True, related_name='leave_requests_actioned')
+    @property
+    def duration_hours(self):
+        """Return the requested duration in hours for half-day leave."""
+        if (
+            not self.is_half_day
+            or not self.start_time
+            or not self.end_time
+        ):
+            return None
+
+        start = datetime.combine(self.start_date, self.start_time)
+        end = datetime.combine(self.end_date, self.end_time)
+
+        return round((end - start).total_seconds() / 3600, 2)
 
     @property
     def leave_days(self):
+        """Return 0.5 day for half-day leave or the full date range."""
+        if self.is_half_day:
+            return 0.5
+
         return (self.end_date - self.start_date).days + 1
 
 

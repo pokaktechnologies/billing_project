@@ -1019,11 +1019,13 @@ class StudentCountAPIView(APIView):
         total_students = Student.objects.count()
         active_students = Student.objects.filter(status='active').count()
         inactive_students = Student.objects.filter(status='inactive').count()
+        completed_students = Student.objects.filter(status='completed').count()
 
         return Response({
             'total_students': total_students,
             'active_students': active_students,
-            'inactive_students': inactive_students
+            'inactive_students': inactive_students,
+            'completed_students': completed_students,
         })
 
 

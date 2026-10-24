@@ -890,11 +890,21 @@ class HrDashboardStaffBirthdaysAPIView(BaseHrDashboardAPIView):
         job_type_param = request.query_params.get("job_type")
         limit_param = request.query_params.get("limit")
 
-        # Fetch active staff with date_of_birth recorded
+        # # Fetch active staff with date_of_birth recorded
+        # profiles_qs = StaffProfile.objects.filter(
+        #     date_of_birth__isnull=False,
+        #     user__is_active=True
+        # ).select_related("user", "job_detail__department")
+
+        # Fetch active staff only with date_of_birth recorded
         profiles_qs = StaffProfile.objects.filter(
             date_of_birth__isnull=False,
-            user__is_active=True
-        ).select_related("user", "job_detail__department")
+            user__is_active=True,
+            job_detail__isnull=False,
+        ).select_related(
+            "user",
+            "job_detail__department",
+        )
 
         if department_param and department_param.isdigit():
             profiles_qs = profiles_qs.filter(job_detail__department_id=int(department_param))

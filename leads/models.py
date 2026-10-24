@@ -77,6 +77,9 @@ class Lead(models.Model):
             ('prospects', 'Prospects'),
             ('details_shared', 'Details shared'),
             ('registration', 'Registration'),
+            ('age_over', 'Age Over'),
+            ('busy', 'Busy'),
+            ('other_language', 'Other Language'),
             ('other', 'Other'),
         ],
         default='new'

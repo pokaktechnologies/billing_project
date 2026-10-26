@@ -3072,7 +3072,7 @@ class NumberGeneratorView(APIView):
 
 
 # --------------------------------------------------
-# Project Notes Views (Manager / Admin Only)
+# Meeting Minutes Views (Manager / Admin Only)
 # --------------------------------------------------
 def is_project_manager_or_admin(user, project=None):
     """
@@ -3105,64 +3105,101 @@ def is_project_manager_or_admin(user, project=None):
 
 
 class ProjectNoteListCreateView(APIView):
-    """
-    API endpoint for listing and creating project notes.
-    Only authorized Project Managers and Admins can access.
-    """
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
 
     def get(self, request, project_id):
-        project = get_object_or_404(ProjectManagement, id=project_id)
+        project = get_object_or_404(
+            ProjectManagement,
+            id=project_id
+        )
+
         if not is_project_manager_or_admin(request.user, project):
             return Response(
-                {"status": "0", "message": "Access denied: Only project managers and admins can access notes."},
+                {
+                    "status": "0",
+                    "message": "Access denied."
+                },
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        notes = ProjectNote.objects.filter(project=project).select_related('created_by', 'project').order_by('-updated_at')
+        meetings = ProjectNote.objects.filter(
+            project=project
+        ).select_related(
+            'project',
+            'created_by'
+        ).order_by('-updated_at')
 
         search = request.query_params.get('search')
+
         if search:
             search = search.strip()
-            notes = notes.filter(Q(title__icontains=search) | Q(content__icontains=search))
 
-        serializer = ProjectNoteSerializer(notes, many=True)
-        return Response({
-            "status": "1",
-            "message": "success",
-            "project_id": project.id,
-            "project_name": project.project_name,
-            "total_notes": len(serializer.data),
-            "data": serializer.data
-        }, status=status.HTTP_200_OK)
+            meetings = meetings.filter(
+                Q(title__icontains=search)
+                | Q(content__icontains=search)
+            )
+
+        serializer = ProjectNoteSerializer(
+            meetings,
+            many=True
+        )
+
+        return Response(
+            {
+                "status": "1",
+                "message": "success",
+                "project_id": project.id,
+                "project_name": project.project_name,
+                "total_meetings": len(serializer.data),
+                "data": serializer.data
+            },
+            status=status.HTTP_200_OK
+        )
 
     def post(self, request, project_id):
-        project = get_object_or_404(ProjectManagement, id=project_id)
+        project = get_object_or_404(
+            ProjectManagement,
+            id=project_id
+        )
+
         if not is_project_manager_or_admin(request.user, project):
             return Response(
-                {"status": "0", "message": "Access denied: Only project managers and admins can create notes."},
+                {
+                    "status": "0",
+                    "message": "Access denied."
+                },
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        serializer = ProjectNoteCreateUpdateSerializer(data=request.data)
+        serializer = ProjectNoteCreateUpdateSerializer(
+            data=request.data
+        )
+
         if not serializer.is_valid():
             return Response(
-                {"status": "0", "message": "Validation failed", "errors": serializer.errors},
+                {
+                    "status": "0",
+                    "message": "Validation failed",
+                    "errors": serializer.errors
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        note = serializer.save(
+        meeting = serializer.save(
             project=project,
             created_by=request.user
         )
 
-        response_serializer = ProjectNoteSerializer(note)
-        return Response({
-            "status": "1",
-            "message": "Note created successfully",
-            "data": response_serializer.data
-        }, status=status.HTTP_201_CREATED)
+        return Response(
+            {
+                "status": "1",
+                "message": "Meeting created successfully",
+                "data": ProjectNoteSerializer(meeting).data
+            },
+            status=status.HTTP_201_CREATED
+        )
+
 
 
 class ProjectNoteDetailView(APIView):
@@ -3232,4 +3269,246 @@ class ProjectNoteDetailView(APIView):
         return Response({
             "status": "1",
             "message": "Note deleted successfully"
+        }, status=status.HTTP_200_OK)
+
+
+class MeetingTaskListCreateView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, meeting_id):
+        meeting = ProjectNote.objects.filter(id=meeting_id).first()
+
+        if not meeting:
+            return Response({
+                "status": "0",
+                "message": "Meeting not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        if not is_project_manager_or_admin(request.user, meeting.project):
+            return Response({
+                "status": "0",
+                "message": "Permission denied"
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        tasks = Task.objects.filter(
+            meeting=meeting
+        ).select_related("project", "board", "meeting")
+
+        serializer = MeetingTaskSerializer(tasks, many=True)
+
+        return Response({
+            "status": "1",
+            "message": "Meeting tasks retrieved successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    def post(self, request, meeting_id):
+        meeting = ProjectNote.objects.filter(id=meeting_id).first()
+
+        if not meeting:
+            return Response({
+                "status": "0",
+                "message": "Meeting not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        if not is_project_manager_or_admin(request.user, meeting.project):
+            return Response({
+                "status": "0",
+                "message": "Permission denied"
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        board_id = request.data.get("board")
+
+        if board_id:
+            board = TaskBoard.objects.filter(
+                id=board_id,
+                project=meeting.project
+            ).first()
+
+            if not board:
+                return Response({
+                    "status": "0",
+                    "message": "Invalid board for this project"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = MeetingTaskSerializer(data=request.data)
+
+        if serializer.is_valid():
+            task = serializer.save(
+                project=meeting.project,
+                meeting=meeting
+            )
+
+            return Response({
+                "status": "1",
+                "message": "Meeting task created successfully",
+                "data": MeetingTaskSerializer(task).data
+            }, status=status.HTTP_201_CREATED)
+
+        return Response({
+            "status": "0",
+            "message": "Validation failed",
+            "errors": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+class MeetingAttendanceView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, meeting_id):
+        meeting = ProjectNote.objects.filter(
+            id=meeting_id
+        ).first()
+
+        if not meeting:
+            return Response({
+                "status": "0",
+                "message": "Meeting not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        if not is_project_manager_or_admin(request.user, meeting.project):
+            return Response({
+                "status": "0",
+                "message": "Permission denied"
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        project_members = ProjectMember.objects.filter(
+            project=meeting.project
+        ).select_related("member__user", "stack")
+
+        attendance_records = MeetingAttendance.objects.filter(
+            meeting=meeting
+        ).select_related("project_member")
+
+        attendance_map = {
+            record.project_member_id: record.is_present
+            for record in attendance_records
+        }
+
+        data = []
+
+        for project_member in project_members:
+            user = project_member.member.user
+
+            data.append({
+                "project_member_id": project_member.id,
+                "member_id": project_member.member_id,
+                "member_name": user.get_full_name(),
+                "email": user.email,
+                "is_present": attendance_map.get(
+                    project_member.id, False
+                ),
+                "attendance_marked": (
+                    project_member.id in attendance_map
+                )
+            })
+
+        return Response({
+            "status": "1",
+            "message": "Meeting attendance retrieved successfully",
+            "data": data
+        }, status=status.HTTP_200_OK)
+
+    def post(self, request, meeting_id):
+        meeting = ProjectNote.objects.filter(
+            id=meeting_id
+        ).first()
+
+        if not meeting:
+            return Response({
+                "status": "0",
+                "message": "Meeting not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        if not is_project_manager_or_admin(request.user, meeting.project):
+            return Response({
+                "status": "0",
+                "message": "Permission denied"
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        attendees = request.data.get("attendees")
+
+        if not isinstance(attendees, list) or not attendees:
+            return Response({
+                "status": "0",
+                "message": "Provide a non-empty attendees list"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate the full request before saving any attendance.
+        validated_attendees = []
+        seen_ids = set()
+
+        for item in attendees:
+            if not isinstance(item, dict):
+                return Response({
+                    "status": "0",
+                    "message": "Each attendee must be an object"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            member_id = item.get("project_member_id")
+            is_present = item.get("is_present")
+
+            if (
+                isinstance(member_id, bool)
+                or not isinstance(member_id, int)
+                or member_id <= 0
+            ):
+                return Response({
+                    "status": "0",
+                    "message": "Each attendee needs a valid project_member_id"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if member_id in seen_ids:
+                return Response({
+                    "status": "0",
+                    "message": f"Duplicate project_member_id: {member_id}"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if not isinstance(is_present, bool):
+                return Response({
+                    "status": "0",
+                    "message": "is_present must be true or false"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            project_member = ProjectMember.objects.filter(
+                id=member_id,
+                project=meeting.project
+            ).first()
+
+            if not project_member:
+                return Response({
+                    "status": "0",
+                    "message": (
+                        f"Project member {member_id} does not belong "
+                        "to this meeting's project"
+                    )
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            seen_ids.add(member_id)
+            validated_attendees.append(
+                (project_member, is_present)
+            )
+
+        saved_attendance = []
+
+        for project_member, is_present in validated_attendees:
+            record, created = MeetingAttendance.objects.update_or_create(
+                meeting=meeting,
+                project_member=project_member,
+                defaults={"is_present": is_present}
+            )
+
+            saved_attendance.append({
+                "project_member_id": project_member.id,
+                "member_name": project_member.member.user.get_full_name(),
+                "is_present": record.is_present
+            })
+
+        return Response({
+            "status": "1",
+            "message": "Meeting attendance saved successfully",
+            "data": saved_attendance
         }, status=status.HTTP_200_OK)

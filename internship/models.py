@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.core.validators import FileExtensionValidator
 from accounts.models import Department, SalesPerson, StaffProfile
 from project_management.models import STATUS_CHOICES
 
@@ -1231,3 +1232,99 @@ class CounsellorHRSubmission(models.Model):
 
     def __str__(self):
         return f"{self.counsellor} ({self.start_date} to {self.end_date}) - {self.status}"
+
+
+# -----------------------------
+# Recorded Class & Live Session Recording Model
+# -----------------------------
+def recorded_class_upload_path(instance, filename):
+    course_id = instance.batch.course_id if instance.batch else instance.course_id
+    batch_id = instance.batch_id if instance.batch_id else "general"
+    return f"recorded_classes/course_{course_id}/batch_{batch_id}/{filename}"
+
+
+class RecordedClass(models.Model):
+    SOURCE_CHOICES = [
+        ('upload', 'Direct VPS Upload'),
+        ('livekit_recording', 'LiveKit Recorded Session'),
+        ('external_url', 'External URL / Embed'),
+    ]
+
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+
+    # Association with Course & Batch
+    course = models.ForeignKey(
+        Course,
+        on_delete=models.CASCADE,
+        related_name="recorded_classes"
+    )
+    batch = models.ForeignKey(
+        Batch,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="recorded_classes",
+        help_text="Optional: Leave blank if the recording is common to all batches in this course"
+    )
+    faculty = models.ForeignKey(
+        Faculty,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="recorded_classes"
+    )
+
+    # Video storage & source
+    source_type = models.CharField(
+        max_length=25,
+        choices=SOURCE_CHOICES,
+        default='upload'
+    )
+    video_file = models.FileField(
+        upload_to=recorded_class_upload_path,
+        validators=[FileExtensionValidator(allowed_extensions=['mp4', 'mkv', 'webm', 'mov'])],
+        null=True,
+        blank=True,
+        help_text="Uploaded directly to VPS media storage"
+    )
+    external_url = models.URLField(
+        blank=True,
+        null=True,
+        help_text="External video link, stream URL, or future LiveKit recording link"
+    )
+
+    # Metadata
+    thumbnail = models.ImageField(
+        upload_to="recorded_classes/thumbnails/",
+        null=True,
+        blank=True
+    )
+    duration_seconds = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Video duration in seconds"
+    )
+    order = models.PositiveIntegerField(
+        default=0,
+        help_text="Display order or lesson index"
+    )
+
+    # Status
+    is_published = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['order', '-created_at']
+
+    def __str__(self):
+        return f"{self.course.title} - {self.title}"
+
+    @property
+    def video_stream_url(self):
+        """Returns direct VPS media file URL or external URL"""
+        if self.video_file:
+            return self.video_file.url
+        return self.external_url
+

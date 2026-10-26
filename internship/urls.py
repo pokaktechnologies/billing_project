@@ -1,5 +1,5 @@
 from django.urls import path, include
-from .views import application, instructor, intern, report_view, internship_admin
+from .views import application, instructor, intern, report_view, internship_admin, recorded_class
 from .views.registration import StudentRegistrationReportView
 
 instructor_patterns = [
@@ -78,10 +78,16 @@ instructor_patterns = [
     path('reports/',instructor.StudentReportListCreateAPIView.as_view()),
     path('reports/<int:pk>/',instructor.StudentReportDetailAPIView.as_view()),
 
+    # Recorded Classes (Faculty upload & list)
+    path('recorded-classes/', recorded_class.RecordedClassListCreateAPIView.as_view(), name='instructor-recorded-classes-list-create'),
+    path('recorded-classes/<int:pk>/', recorded_class.RecordedClassDetailAPIView.as_view(), name='instructor-recorded-classes-detail'),
+
 ]
 
 
 intern_patterns = [
+    # Recorded Classes for enrolled students
+    path('recorded-classes/', recorded_class.StudentRecordedClassListAPIView.as_view(), name='intern-recorded-classes-list'),
     path('course/', intern.MyCourseView.as_view(), name='intern-course-list'),
     path('course/<int:pk>/', intern.MyCourseDetailView.as_view(), name='intern-course-detail'),
     path('course/<int:course_id>/study-materials/', intern.MyCourseStudyMaterialListAPIView.as_view(), name='intern-course-study-material-list'),
@@ -228,9 +234,11 @@ urlpatterns = [
     path('', include((internship_admin_patterns))),
     path('applications/', application.InternshipApplicationAPIView.as_view(), name='internship-application-list-create'),
     path('applications/<int:pk>/', application.InternshipApplicationAPIView.as_view(), name='internship-application-detail'),
-    path("applications/<int:pk>/convert/", application.ConvertApplicationToStudentAPIView.as_view(), name="convert_application_to_student"),
+    path('applications/<int:pk>/convert/', application.ConvertApplicationToStudentAPIView.as_view(), name="convert_application_to_student"),
     path('public/courses/', application.PublicCourseListAPIView.as_view(), name='public-course-list'),
     path('public/counsellors/', application.PublicCounsellorListAPIView.as_view(), name='public-counsellor-list'),
     path('report/', include(report_patterns)),
+    path('recorded-classes/', recorded_class.RecordedClassListCreateAPIView.as_view(), name='admin-recorded-classes-list-create'),
+    path('recorded-classes/<int:pk>/', recorded_class.RecordedClassDetailAPIView.as_view(), name='admin-recorded-classes-detail'),
 ]
 

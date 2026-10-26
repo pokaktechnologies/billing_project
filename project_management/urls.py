@@ -36,7 +36,8 @@ urlpatterns = [
     path('<int:project_id>/notes/<int:note_id>/', ProjectNoteDetailView.as_view(), name='project_notes_detail'),
     path('projects/<int:project_id>/notes/', ProjectNoteListCreateView.as_view(), name='project_notes_list_create_alt'),
     path('projects/<int:project_id>/notes/<int:note_id>/', ProjectNoteDetailView.as_view(), name='project_notes_detail_alt'),
-
+    path("meetings/<int:meeting_id>/tasks/", MeetingTaskListCreateView.as_view(), name="meeting_tasks"),
+    path("meetings/<int:meeting_id>/attendance/", MeetingAttendanceView.as_view(), name="meeting_attendance"),
 
 
 

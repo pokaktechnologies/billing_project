@@ -85,8 +85,22 @@ class AdminLeadsView(APIView):
             leads = leads.filter(course_id=course)
             
 
-        # Order
-        leads = leads.order_by('-lead_date')
+        # --- Sorting ---
+        sort_by = request.query_params.get("sort_by", "date").lower()
+        sort_order = request.query_params.get("sort_order", "desc").lower()
+
+        if sort_order not in ["asc", "desc"]:
+            sort_order = "desc"
+
+        if sort_by == "lead_number":
+            order_field = "lead_number"  # Replace with your actual model field
+        else:
+            order_field = "lead_date"
+
+        if sort_order == "desc":
+            order_field = f"-{order_field}"
+
+        leads = leads.order_by(order_field)
 
         # Serialize
         serializer = LeadSerializerListDisplay(leads, many=True)

@@ -3572,7 +3572,14 @@ class MeetingTaskListCreateView(APIView):
 
         tasks = Task.objects.filter(
             meeting=meeting
-        ).select_related("project", "board", "meeting")
+        ).select_related(
+            "project",
+            "board",
+            "meeting"
+        ).prefetch_related(
+            "assignments__assigned_to__member__user",
+            "assignments__assigned_by"
+        )
 
         serializer = MeetingTaskSerializer(tasks, many=True)
 

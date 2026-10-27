@@ -1328,3 +1328,98 @@ class RecordedClass(models.Model):
             return self.video_file.url
         return self.external_url
 
+
+class LiveClass(models.Model):
+    STATUS_CHOICES = [
+        ('scheduled', 'Scheduled'),
+        ('live', 'Live'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+
+    course = models.ForeignKey(
+        Course,
+        on_delete=models.CASCADE,
+        related_name="live_classes"
+    )
+    batch = models.ForeignKey(
+        Batch,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="live_classes",
+        help_text="Optional: specific batch, or null if open to the entire course"
+    )
+    faculty = models.ForeignKey(
+        Faculty,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="live_classes"
+    )
+
+    room_name = models.CharField(
+        max_length=150,
+        unique=True,
+        help_text="Unique room name identifier for LiveKit"
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='scheduled'
+    )
+
+    scheduled_start_time = models.DateTimeField()
+    scheduled_end_time = models.DateTimeField(null=True, blank=True)
+
+    actual_start_time = models.DateTimeField(null=True, blank=True)
+    actual_end_time = models.DateTimeField(null=True, blank=True)
+
+    is_recording_enabled = models.BooleanField(
+        default=False,
+        help_text="Indicates whether LiveKit session should be recorded"
+    )
+    recorded_class = models.OneToOneField(
+        RecordedClass,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="source_live_class",
+        help_text="Link to RecordedClass once recording is processed"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-scheduled_start_time', '-created_at']
+
+    def __str__(self):
+        return f"{self.title} ({self.get_status_display()}) - {self.course.title}"
+
+
+class LiveClassAttendance(models.Model):
+    live_class = models.ForeignKey(
+        LiveClass,
+        on_delete=models.CASCADE,
+        related_name="attendances"
+    )
+    student = models.ForeignKey(
+        Student,
+        on_delete=models.CASCADE,
+        related_name="live_class_attendances"
+    )
+    joined_at = models.DateTimeField(auto_now_add=True)
+    left_at = models.DateTimeField(null=True, blank=True)
+    duration_seconds = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['-joined_at']
+
+    def __str__(self):
+        return f"{self.student} in {self.live_class.title}"
+

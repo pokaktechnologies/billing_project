@@ -1,5 +1,5 @@
 from django.urls import path, include
-from .views import application, instructor, intern, report_view, internship_admin, recorded_class
+from .views import application, instructor, intern, report_view, internship_admin, recorded_class, live_class
 from .views.registration import StudentRegistrationReportView
 
 instructor_patterns = [
@@ -59,6 +59,12 @@ instructor_patterns = [
 
     path('templates/',            instructor.ReportTemplateListCreateView.as_view()),
     path('templates/<int:pk>/',   instructor.ReportTemplateDetailView.as_view()),
+
+    # Instructor Live Classes
+    path('live-classes/', live_class.LiveClassListCreateAPIView.as_view(), name='instructor-live-classes-list-create'),
+    path('live-classes/<int:pk>/', live_class.LiveClassDetailAPIView.as_view(), name='instructor-live-classes-detail'),
+    path('live-classes/<int:pk>/start/', live_class.LiveClassStartAPIView.as_view(), name='instructor-live-classes-start'),
+    path('live-classes/<int:pk>/end/', live_class.LiveClassEndAPIView.as_view(), name='instructor-live-classes-end'),
     
     # # Template
     # path('templates/',         instructor.ReportTemplateListCreateView.as_view()),
@@ -119,6 +125,10 @@ intern_patterns = [
 
     #Dashboard
     path('dashaboard/',intern.InternDashboardAPIView.as_view()),
+
+    # Intern Live Classes
+    path('live-classes/', live_class.StudentLiveClassListAPIView.as_view(), name='intern-live-classes-list'),
+    path('live-classes/<int:pk>/join/', live_class.StudentLiveClassJoinAPIView.as_view(), name='intern-live-classes-join'),
 ]
 
 internship_admin_patterns = [
@@ -240,5 +250,12 @@ urlpatterns = [
     path('report/', include(report_patterns)),
     path('recorded-classes/', recorded_class.RecordedClassListCreateAPIView.as_view(), name='admin-recorded-classes-list-create'),
     path('recorded-classes/<int:pk>/', recorded_class.RecordedClassDetailAPIView.as_view(), name='admin-recorded-classes-detail'),
+
+    # Admin Live Classes & Webhook
+    path('live-classes/', live_class.LiveClassListCreateAPIView.as_view(), name='admin-live-classes-list-create'),
+    path('live-classes/<int:pk>/', live_class.LiveClassDetailAPIView.as_view(), name='admin-live-classes-detail'),
+    path('live-classes/<int:pk>/start/', live_class.LiveClassStartAPIView.as_view(), name='admin-live-classes-start'),
+    path('live-classes/<int:pk>/end/', live_class.LiveClassEndAPIView.as_view(), name='admin-live-classes-end'),
+    path('live-classes/webhook/', live_class.LiveClassWebhookAPIView.as_view(), name='livekit-webhook'),
 ]
 

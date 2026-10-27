@@ -34,8 +34,21 @@ class ClientContract(models.Model):
 
 
 class ProjectManagement(models.Model):
+    PROJECT_TYPE_CHOICES = [
+        ('dev', 'Developer'),
+        ('dm', 'Digital Marketing'),
+        ('testing', 'Testing'),
+    ]
     project_number = models.CharField(max_length=255, unique=True, null=True, blank=True)
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+
+    # NEW FIELD
+    project_type = models.CharField(
+        max_length=20,
+        choices=PROJECT_TYPE_CHOICES,
+        default='dev',
+        db_index=True
+    )
     contract = models.ForeignKey(ClientContract, on_delete=models.CASCADE, null=True, blank=True)
     project_name = models.CharField(max_length=255)
     project_description = models.TextField()

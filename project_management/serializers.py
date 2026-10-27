@@ -40,6 +40,7 @@ class ProjectManagementSerializer(serializers.ModelSerializer):
             'contract',  # ForeignKey to ClientContract
             'client_first_name', # shows client name from ClientContract
             'client_last_name',
+            'project_type',
             'project_name',
             'project_description',
             'start_date',
@@ -83,6 +84,7 @@ class ProjectManagementDetailsSerializer(serializers.ModelSerializer):
             'client_first_name', # shows client name from ClientContract
             'client_last_name',
             'project_name',
+            'project_type',
             'project_description',
             'start_date',
             'end_date',
@@ -969,7 +971,10 @@ class MeetingTaskSerializer(serializers.ModelSerializer):
         source="project.project_name",
         read_only=True
     )
-
+    assignments = TaskAssignSerializer(
+        many=True,
+        read_only=True
+    )
     board_name = serializers.CharField(
         source="board.name",
         read_only=True
@@ -986,6 +991,7 @@ class MeetingTaskSerializer(serializers.ModelSerializer):
             "board",
             "board_name",
             "assigned_to",
+            "assignments",
             "meeting",
             "difficulty",
             "status",

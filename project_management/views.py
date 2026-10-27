@@ -131,210 +131,489 @@ class ClientContractDetailView(BaseAPIView):
 class project_management(BaseAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
-    
 
     def get(self, request, format=None):
-        projects = ProjectManagement.objects.all().order_by('-created_at')
-        serializer = ProjectManagementSerializer(projects, many=True)
+        projects = ProjectManagement.objects.all()
+
+        project_type = request.query_params.get('project_type')
+
+        if project_type:
+            valid_types = ['dev', 'dm', 'testing']
+
+            if project_type not in valid_types:
+                return Response(
+                    {
+                        "status": "0",
+                        "message": "Invalid project type"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            projects = projects.filter(project_type=project_type)
+
+        projects = projects.order_by('-created_at')
+
+        serializer = ProjectManagementSerializer(
+            projects,
+            many=True
+        )
+
         return Response(
-            {"status": "1", "message": "success", "data": serializer.data},
+            {
+                "status": "1",
+                "message": "success",
+                "data": serializer.data
+            },
             status=status.HTTP_200_OK
         )
 
     def post(self, request, format=None):
         serializer = ProjectManagementSerializer(data=request.data)
-        members = request.data.get('members')  # Optional
-        boards = request.data.get('boards')  # Optional
 
-        # Validate members only if provided
-        if members:
-            member_ids = [item['member'] for item in members]
-            if len(member_ids) != len(set(member_ids)):
+        members = request.data.get('members', [])
+        boards = request.data.get('boards', [])
+
+        project_type = request.data.get('project_type', 'dev')
+
+        # Validate project type
+        valid_types = ['dev', 'dm', 'testing']
+
+        if project_type not in valid_types:
+            return Response(
+                {
+                    "status": "0",
+                    "message": "Invalid project type"
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate members
+        if not isinstance(members, list):
+            return Response(
+                {
+                    "status": "0",
+                    "message": "Members should be provided as a list"
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        member_ids = []
+
+        for item in members:
+            if not isinstance(item, dict):
                 return Response(
-                    {"status": "0", "message": "Members list contains duplicate members"},
+                    {
+                        "status": "0",
+                        "message": "Each member must be an object"
+                    },
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-        if serializer.is_valid():
-            # Check if the contract belongs to the user
-            contract = ClientContract.objects.filter(pk=request.data.get('contract')).first()
+            if not item.get('member') or not item.get('stack'):
+                return Response(
+                    {
+                        "status": "0",
+                        "message": "Member and stack are required"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            member_ids.append(item['member'])
+
+        if len(member_ids) != len(set(member_ids)):
+            return Response(
+                {
+                    "status": "0",
+                    "message": "Members list contains duplicate members"
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate boards
+        if not isinstance(boards, list):
+            return Response(
+                {
+                    "status": "0",
+                    "message": "Boards should be provided as a list"
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate project data
+        if not serializer.is_valid():
+            return Response(
+                {
+                    "status": "0",
+                    "message": "Project creation failed",
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Contract is mandatory only for developer projects
+        contract = None
+        contract_id = request.data.get('contract')
+
+        if contract_id:
+            contract = ClientContract.objects.filter(
+                pk=contract_id
+            ).first()
+
             if not contract:
                 return Response(
-                    {"status": "0", "message": "Contract not found"},
+                    {
+                        "status": "0",
+                        "message": "Contract not found"
+                    },
                     status=status.HTTP_404_NOT_FOUND
                 )
 
-            try:
-                with transaction.atomic():
-                    serializer.save(user=request.user)
+        if project_type == 'dev' and not contract:
+            return Response(
+                {
+                    "status": "0",
+                    "message": "Contract is required for developer projects"
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-                    # Allocate members if any
-                    if members:
-                        for member in members:
-                            try:
-                                member_instance = Member.objects.get(pk=member['member'])
-                                stack_instance = Stack.objects.get(pk=member['stack'])
-                                ProjectMember.objects.create(
-                                    project=serializer.instance,
-                                    member=member_instance,
-                                    stack=stack_instance
-                                )
-                            except Member.DoesNotExist:
-                                raise ValueError(f"Member with ID {member['member']} not found")
-                            except Stack.DoesNotExist:
-                                raise ValueError(f"Stack with ID {member['stack']} not found")
-                    
-                    # Create task boards if any
-                    if boards:
-                        if not isinstance(boards, list):
-                            raise ValueError("Boards should be provided as a list")
-                        for board in boards:
-                            name = board.get('name')
-                            if not name:
-                                raise ValueError("TaskBoard name is required")
-                            start_date = board.get('start_date') or None
-                            end_date = board.get('end_date') or None
-                            try:
-                                TaskBoard.objects.create(
-                                    project=serializer.instance,
-                                    name=name,
-                                    start_date=start_date,
-                                    end_date=end_date
-                                )
-                            except Exception as ex:
-                                raise ValueError(f"Invalid TaskBoard data: {str(ex)}")
-            except ValueError as e:
-                return Response(
-                    {"status": "0", "message": str(e)},
-                    status=status.HTTP_400_BAD_REQUEST
+        try:
+            with transaction.atomic():
+
+                # Create project
+                project = serializer.save(
+                    user=request.user,
+                    project_type=project_type
                 )
 
+                # Allocate members
+                for member in members:
+                    try:
+                        member_instance = Member.objects.get(
+                            pk=member['member']
+                        )
+
+                        stack_instance = Stack.objects.get(
+                            pk=member['stack']
+                        )
+
+                    except Member.DoesNotExist:
+                        raise ValueError(
+                            f"Member with ID {member['member']} not found"
+                        )
+
+                    except Stack.DoesNotExist:
+                        raise ValueError(
+                            f"Stack with ID {member['stack']} not found"
+                        )
+
+                    ProjectMember.objects.create(
+                        project=project,
+                        member=member_instance,
+                        stack=stack_instance
+                    )
+
+                # Create task boards
+                for board in boards:
+                    if not isinstance(board, dict):
+                        raise ValueError(
+                            "Each board must be an object"
+                        )
+
+                    name = board.get('name')
+
+                    if not name:
+                        raise ValueError(
+                            "TaskBoard name is required"
+                        )
+
+                    TaskBoard.objects.create(
+                        project=project,
+                        name=name,
+                        start_date=board.get('start_date') or None,
+                        end_date=board.get('end_date') or None
+                    )
+
+        except ValueError as e:
             return Response(
-                {"status": "1", "message": "Project created successfully", "project_id": serializer.data['id']},
-                status=status.HTTP_201_CREATED
+                {
+                    "status": "0",
+                    "message": str(e)
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "0",
+                    "message": "Project creation failed",
+                    "errors": str(e)
+                },
+                status=status.HTTP_400_BAD_REQUEST
             )
 
         return Response(
-            {"status": "0", "message": "Project creation failed", "errors": serializer.errors},
-            status=status.HTTP_400_BAD_REQUEST
+            {
+                "status": "1",
+                "message": "Project created successfully",
+                "project_id": project.id,
+                "project_type": project.project_type
+            },
+            status=status.HTTP_201_CREATED
         )
-
-
 
 
 class project_management_detail(BaseAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
-    
 
     def get_project(self, pk, user):
         try:
-            project = ProjectManagement.objects.get(pk=pk)
-            if not project:
-                return None, Response(
-                    {"status": "0", "message": "Project not found"},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            return project, None
+            return ProjectManagement.objects.get(pk=pk), None
+
         except ProjectManagement.DoesNotExist:
             return None, Response(
-                {"status": "0", "message": "Project not found"},
+                {
+                    "status": "0",
+                    "message": "Project not found"
+                },
                 status=status.HTTP_404_NOT_FOUND
             )
 
     def get(self, request, pk, format=None):
-        project, error_response = self.get_project(pk, request.user)
+        project, error_response = self.get_project(
+            pk,
+            request.user
+        )
+
         if error_response:
             return error_response
 
         serializer = ProjectManagementDetailsSerializer(project)
+
         return Response(
-            {"status": "1", "message": "success", "data": [serializer.data]},
+            {
+                "status": "1",
+                "message": "success",
+                "data": [serializer.data]
+            },
             status=status.HTTP_200_OK
         )
 
     def patch(self, request, pk, format=None):
-        project, error_response = self.get_project(pk, request.user)
+        project, error_response = self.get_project(
+            pk,
+            request.user
+        )
+
         if error_response:
             return error_response
 
-        members = request.data.get('members', [])
-        if not isinstance(members, list):
+        # Only update member allocations when members is provided
+        members = request.data.get('members', None)
+
+        if members is not None and not isinstance(members, list):
             return Response(
-                {"status": "0", "message": "Members should be provided as a list"},
+                {
+                    "status": "0",
+                    "message": "Members should be provided as a list"
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Collect all member and stack IDs
-        member_ids = [m.get('member') for m in members]
-        stack_ids = [m.get('stack') for m in members]
+        # Validate member and stack IDs before updating anything
+        member_instances = {}
+        stack_instances = {}
 
-        member_instances = {m.id: m for m in Member.objects.filter(id__in=member_ids)}
-        stack_instances = {s.id: s for s in Stack.objects.filter(id__in=stack_ids)}
+        if members is not None:
+            member_ids = []
+            stack_ids = []
 
-        for member in members:
-            member_id = member.get('member')
-            stack_id = member.get('stack')
+            for item in members:
+                if not isinstance(item, dict):
+                    return Response(
+                        {
+                            "status": "0",
+                            "message": "Each member must be an object"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
-            member_instance = member_instances.get(member_id)
-            stack_instance = stack_instances.get(stack_id)
+                if not item.get('member') or not item.get('stack'):
+                    return Response(
+                        {
+                            "status": "0",
+                            "message": "Member and stack are required"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
-            if not member_instance or not stack_instance:
+                member_ids.append(item['member'])
+                stack_ids.append(item['stack'])
+
+            if len(member_ids) != len(set(member_ids)):
                 return Response(
-                    {"status": "0", "message": f"Invalid member {member_id} or stack {stack_id}"},
+                    {
+                        "status": "0",
+                        "message": "Members list contains duplicate members"
+                    },
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Check if the ProjectMember already exists in the project
-            project_member = ProjectMember.objects.filter(project=project, member=member_instance).first()
+            member_instances = {
+                obj.id: obj
+                for obj in Member.objects.filter(id__in=member_ids)
+            }
 
-            if project_member:
-                # ✅ Member exists in the project: Update the stack
-                project_member.stack = stack_instance
-                project_member.save()
-            else:
-                # ✅ Member does not exist: Create a new ProjectMember
-                ProjectMember.objects.create(
-                    project=project,
-                    member=member_instance,
-                    stack=stack_instance
-                )
+            stack_instances = {
+                obj.id: obj
+                for obj in Stack.objects.filter(id__in=stack_ids)
+            }
 
-        # Serialize the updated project data
-        serializer = ProjectManagementSerializer(project, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
+            for item in members:
+                member_id = item['member']
+                stack_id = item['stack']
+
+                if (
+                    member_id not in member_instances
+                    or stack_id not in stack_instances
+                ):
+                    return Response(
+                        {
+                            "status": "0",
+                            "message": (
+                                f"Invalid member {member_id} "
+                                f"or stack {stack_id}"
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+        # Validate project fields
+        serializer = ProjectManagementSerializer(
+            project,
+            data=request.data,
+            partial=True
+        )
+
+        if not serializer.is_valid():
             return Response(
-                {"status": "1", "message": "Project updated successfully"},
-                status=status.HTTP_200_OK
+                {
+                    "status": "0",
+                    "message": "Project update failed",
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Determine the final project type
+        project_type = serializer.validated_data.get(
+            'project_type',
+            project.project_type
+        )
+
+        valid_types = ['dev', 'dm', 'testing']
+
+        if project_type not in valid_types:
+            return Response(
+                {
+                    "status": "0",
+                    "message": "Invalid project type"
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Preserve the existing contract unless a new value is supplied
+        contract = serializer.validated_data.get(
+            'contract',
+            project.contract
+        )
+
+        if project_type == 'dev' and not contract:
+            return Response(
+                {
+                    "status": "0",
+                    "message": "Contract is required for developer projects"
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            with transaction.atomic():
+
+                serializer.save()
+
+                # Update or add members only if provided
+                if members is not None:
+                    for item in members:
+                        member_instance = member_instances[item['member']]
+                        stack_instance = stack_instances[item['stack']]
+
+                        project_member = ProjectMember.objects.filter(
+                            project=project,
+                            member=member_instance
+                        ).first()
+
+                        if project_member:
+                            project_member.stack = stack_instance
+                            project_member.save(
+                                update_fields=['stack']
+                            )
+                        else:
+                            ProjectMember.objects.create(
+                                project=project,
+                                member=member_instance,
+                                stack=stack_instance
+                            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "0",
+                    "message": "Project update failed",
+                    "errors": str(e)
+                },
+                status=status.HTTP_400_BAD_REQUEST
             )
 
         return Response(
-            {"status": "0", "message": "Project update failed", "errors": serializer.errors},
-            status=status.HTTP_400_BAD_REQUEST
+            {
+                "status": "1",
+                "message": "Project updated successfully"
+            },
+            status=status.HTTP_200_OK
         )
 
-
-
-
-
     def delete(self, request, pk, format=None):
-        project, error_response = self.get_project(pk, request.user)
+        project, error_response = self.get_project(
+            pk,
+            request.user
+        )
+
         if error_response:
             return error_response
 
         try:
             project.delete()
+
             return Response(
-                {"status": "1", "message": "Project deleted successfully"},
+                {
+                    "status": "1",
+                    "message": "Project deleted successfully"
+                },
                 status=status.HTTP_200_OK
             )
+
         except Exception as e:
             return Response(
-                {"status": "0", "message": "Project deletion failed", "errors": str(e)},
+                {
+                    "status": "0",
+                    "message": "Project deletion failed",
+                    "errors": str(e)
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
-
 # Members views
 
 class MembersView(BaseAPIView):

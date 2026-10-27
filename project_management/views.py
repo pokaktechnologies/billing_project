@@ -3318,39 +3318,68 @@ class MeetingTaskListCreateView(APIView):
                 "message": "Permission denied"
             }, status=status.HTTP_403_FORBIDDEN)
 
-        board_id = request.data.get("board")
-
-        if board_id:
-            board = TaskBoard.objects.filter(
-                id=board_id,
-                project=meeting.project
-            ).first()
-
-            if not board:
-                return Response({
-                    "status": "0",
-                    "message": "Invalid board for this project"
-                }, status=status.HTTP_400_BAD_REQUEST)
-
         serializer = MeetingTaskSerializer(data=request.data)
 
-        if serializer.is_valid():
-            task = serializer.save(
-                project=meeting.project,
-                meeting=meeting
-            )
-
+        if not serializer.is_valid():
             return Response({
-                "status": "1",
-                "message": "Meeting task created successfully",
-                "data": MeetingTaskSerializer(task).data
-            }, status=status.HTTP_201_CREATED)
+                "status": "0",
+                "message": "Validation failed",
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        validated_data = serializer.validated_data.copy()
+
+        # Get the selected project member
+        assigned_to_id = validated_data.pop("assigned_to")
+
+        project_member = ProjectMember.objects.filter(
+            id=assigned_to_id,
+            project=meeting.project
+        ).first()
+
+        if not project_member:
+            return Response({
+                "status": "0",
+                "message": "Assigned member does not belong to this project"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate the board belongs to the meeting's project
+        board = validated_data.get("board")
+
+        if board and board.project_id != meeting.project_id:
+            return Response({
+                "status": "0",
+                "message": "Board does not belong to this project"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            with transaction.atomic():
+                # Create the task
+                task = Task.objects.create(
+                    **validated_data,
+                    project=meeting.project,
+                    meeting=meeting
+                )
+
+                # Assign the task to the project member
+                TaskAssign.objects.create(
+                    task=task,
+                    assigned_by=request.user,
+                    assigned_to=project_member
+                )
+
+        except Exception:
+            raise
 
         return Response({
-            "status": "0",
-            "message": "Validation failed",
-            "errors": serializer.errors
-        }, status=status.HTTP_400_BAD_REQUEST)
+            "status": "1",
+            "message": "Meeting task created and assigned successfully",
+            "data": {
+                **MeetingTaskSerializer(task).data,
+                "assigned_to": project_member.id,
+                "assigned_to_name": project_member.member.user.get_full_name()
+            }
+        }, status=status.HTTP_201_CREATED)
 
 
 

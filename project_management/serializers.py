@@ -964,6 +964,7 @@ class ProjectNoteCreateUpdateSerializer(serializers.ModelSerializer):
 
 
 class MeetingTaskSerializer(serializers.ModelSerializer):
+    assigned_to = serializers.IntegerField(write_only=True, required=True)
     project_name = serializers.CharField(
         source="project.project_name",
         read_only=True
@@ -984,6 +985,7 @@ class MeetingTaskSerializer(serializers.ModelSerializer):
             "project_name",
             "board",
             "board_name",
+            "assigned_to",
             "meeting",
             "difficulty",
             "status",

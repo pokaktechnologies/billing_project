@@ -1302,8 +1302,10 @@ class ModulePermission(models.Model):
 
         # PROJECT
         ("project", "Project"),
-        ("project_timeline", "Project Timeline"),
+        ("project_timeline", "Developer Timeline"),
         ("project_reports", "Project Reports"),
+        ("dm", "Digital Marketing Timeline"),
+        ("testing", "Testing Timeline"),
 
         # CERTIFICATE
         ("certificate", "Certificate"),

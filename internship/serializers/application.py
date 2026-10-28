@@ -530,7 +530,8 @@ class InternshipApplicationListSerializer(InternshipApplicationSerializer):
 
 from rest_framework import serializers
 
-from ..models import Center, SalesPerson
+from ..models import Center
+from accounts.models import SalesPerson
 
 
 class ConvertToStudentSerializer(serializers.Serializer):

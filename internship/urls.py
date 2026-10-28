@@ -1,5 +1,5 @@
 from django.urls import path, include
-from .views import application, instructor, intern, report_view, internship_admin, recorded_class, live_class
+from .views import application, instructor, intern, report_view, internship_admin, recorded_class, live_class, attendance
 from .views.registration import StudentRegistrationReportView
 
 instructor_patterns = [
@@ -48,6 +48,8 @@ instructor_patterns = [
     # path("payments/<int:pk>/detail/", instructor.CoursePaymentDetailAPIView.as_view()),
 
     path('classes/', instructor.MyFacultyClassSectionListAPIView.as_view(), name='faculty-class-section-list'),
+    path('sections/<int:section_id>/attendance/', attendance.SectionAttendanceAPIView.as_view(), name='faculty-section-attendance'),
+    path('sections/<int:section_id>/attendance-history/', attendance.SectionAttendanceHistoryAPIView.as_view(), name='faculty-section-attendance-history'),
 
     path('tests/', instructor.TestListCreateAPIView.as_view(), name='test-list-create'),
     path('tests/<int:pk>/', instructor.TestDetailAPIView.as_view(), name='test-detail'),
@@ -110,6 +112,7 @@ intern_patterns = [
 
     path('payments/', intern.MyCoursePaymentListAPIView.as_view()),
     path('classes/', intern.MyClassSectionListAPIView.as_view(), name='intern-class-section-list'),
+    path('my-attendance/', attendance.StudentMyAttendanceAPIView.as_view(), name='intern-my-attendance'),
 
 
     path('tests/', intern.StudentTestListAPIView.as_view(), name='student-test-list'),

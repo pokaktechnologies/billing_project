@@ -55,6 +55,10 @@ from .classes import (
     LiveClass,
     LiveClassAttendance,
 )
+from .attendance import (
+    ClassAttendanceSession,
+    StudentAttendanceRecord,
+)
 
 __all__ = [
     # Academic
@@ -106,4 +110,7 @@ __all__ = [
     'RecordedClass',
     'LiveClass',
     'LiveClassAttendance',
+    # Attendance
+    'ClassAttendanceSession',
+    'StudentAttendanceRecord',
 ]

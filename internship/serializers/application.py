@@ -636,12 +636,12 @@ class ConvertToStudentSerializer(serializers.Serializer):
         allow_null=True,
     )
 
-    slot_amount = serializers.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        required=False,
-        allow_null=True,
-    )
+    # slot_amount = serializers.DecimalField(
+    #     max_digits=10,
+    #     decimal_places=2,
+    #     required=False,
+    #     allow_null=True,
+    # )
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -754,3 +754,44 @@ class InternshipApplicationReportSerializer(serializers.ModelSerializer):
 
     def get_documents_count(self, obj):
         return obj.documents.count()
+
+
+class SlotConfirmationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InternshipApplication
+        fields = [
+            "slot_amount",
+            "slot_payment_method",
+            "slot_transaction_id",
+            "slot_payment_date",
+        ]
+
+    def validate_slot_amount(self, value):
+        if value is None or value <= 0:
+            raise serializers.ValidationError(
+                "Slot amount must be greater than zero."
+            )
+        return value
+
+    def validate(self, attrs):
+        payment_method = attrs.get(
+            "slot_payment_method",
+            getattr(self.instance, "slot_payment_method", None)
+        )
+
+        payment_date = attrs.get(
+            "slot_payment_date",
+            getattr(self.instance, "slot_payment_date", None)
+        )
+
+        if not payment_method:
+            raise serializers.ValidationError({
+                "slot_payment_method": "Payment method is required."
+            })
+
+        if not payment_date:
+            raise serializers.ValidationError({
+                "slot_payment_date": "Payment date is required."
+            })
+
+        return attrs

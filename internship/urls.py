@@ -247,6 +247,8 @@ urlpatterns = [
     path('', include((internship_admin_patterns))),
     path('applications/', application.InternshipApplicationAPIView.as_view(), name='internship-application-list-create'),
     path('applications/<int:pk>/', application.InternshipApplicationAPIView.as_view(), name='internship-application-detail'),
+    # path('applications/<int:pk>/confirm-slot/', application.InternshipSlotConfirmationAPIView.as_view(), name="confirm_internship_slot"),
+    path('applications/<int:pk>/slot-confirmation/', application.InternshipSlotConfirmationAPIView.as_view(), name="internship_slot_confirmation"),
     path('applications/<int:pk>/convert/', application.ConvertApplicationToStudentAPIView.as_view(), name="convert_application_to_student"),
     path('public/courses/', application.PublicCourseListAPIView.as_view(), name='public-course-list'),
     path('public/counsellors/', application.PublicCounsellorListAPIView.as_view(), name='public-counsellor-list'),

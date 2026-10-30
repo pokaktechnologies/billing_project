@@ -856,3 +856,112 @@ def parse_flexible_date(date_str):
         except ValueError:
             continue
     raise ValueError(f"Invalid date format '{date_str}'. Expected DD-MM-YYYY or YYYY-MM-DD.")
+
+
+def get_filtered_students(params, center=None):
+    from internship.models import Student, StudentCourseEnrollment
+
+    queryset = Student.objects.select_related(
+        "profile__user",
+        "center",
+    )
+
+    center_val = center if center is not None else params.get("center")
+    if center_val:
+        if isinstance(center_val, (int, str)):
+            queryset = queryset.filter(center_id=center_val)
+        else:
+            queryset = queryset.filter(center=center_val)
+
+    student_status = params.get("status")
+    if student_status:
+        queryset = queryset.filter(status=student_status)
+
+    course_id = params.get("course")
+    if course_id:
+        queryset = queryset.filter(
+            enrollments__course_id=course_id
+        )
+
+    faculty_id = params.get("faculty")
+    if faculty_id:
+        queryset = queryset.filter(
+            enrollments__batch__faculties__id=faculty_id
+        )
+
+    date_from = params.get("date_from")
+    date_to = params.get("date_to")
+
+    d_from = None
+    if date_from:
+        try:
+            d_from = parse_flexible_date(date_from)
+        except ValueError:
+            pass
+
+    d_to = None
+    if date_to:
+        try:
+            d_to = parse_flexible_date(date_to)
+        except ValueError:
+            pass
+
+    if d_from and d_to:
+        queryset = queryset.filter(
+            enrollments__enrollment_date__gte=d_from,
+            enrollments__enrollment_date__lte=d_to,
+        )
+    elif d_from:
+        queryset = queryset.filter(
+            enrollments__enrollment_date__gte=d_from
+        )
+    elif d_to:
+        queryset = queryset.filter(
+            enrollments__enrollment_date__lte=d_to
+        )
+
+    # Avoid duplicate students when multiple enrollments match.
+    queryset = queryset.distinct()
+
+    # Prefetch only enrollments matching the selected filters.
+    enrollment_queryset = StudentCourseEnrollment.objects.select_related(
+        "course",
+        "batch",
+    )
+
+    if course_id:
+        enrollment_queryset = enrollment_queryset.filter(
+            course_id=course_id
+        )
+
+    if faculty_id:
+        enrollment_queryset = enrollment_queryset.filter(
+            batch__faculties__id=faculty_id
+        )
+
+    if d_from and d_to:
+        enrollment_queryset = enrollment_queryset.filter(
+            enrollment_date__gte=d_from,
+            enrollment_date__lte=d_to,
+        )
+    elif d_from:
+        enrollment_queryset = enrollment_queryset.filter(
+            enrollment_date__gte=d_from
+        )
+    elif d_to:
+        enrollment_queryset = enrollment_queryset.filter(
+            enrollment_date__lte=d_to
+        )
+
+    enrollment_queryset = enrollment_queryset.distinct()
+
+    queryset = queryset.prefetch_related(
+        Prefetch(
+            "enrollments",
+            queryset=enrollment_queryset,
+            to_attr="report_enrollments",
+        )
+    )
+
+    return queryset.order_by("-created_at")
+

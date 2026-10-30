@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.db.models import Sum
@@ -6,11 +6,13 @@ from django.utils.timezone import now
 from rest_framework import serializers
 
 from accounts.models import StaffProfile, SalesPerson
+from internship.models.payments import StudentCourseEnrollment
 from internship.models import Batch, Center, Course, Student, TaskSubmission, AssignedStaffCourse, CoursePayment, TaskAssignment, Faculty, InstallmentItem, StudentInstallmentItem, CounsellorHRSubmission, InternshipApplication
 from internship.serializers.internship_admin import InstallmentPlanSerializer
 from internship.utils import (
     get_installment_due_date_for_staff,
     get_next_unpaid_installment_item,
+    get_filtered_students,
 )
 
 
@@ -563,6 +565,7 @@ class CenterReportsSerializer(serializers.ModelSerializer):
 
 
 class CenterDetailReportSerializer(serializers.ModelSerializer):
+
     active_students = serializers.SerializerMethodField()
     inactive_students = serializers.SerializerMethodField()
     completed_students = serializers.SerializerMethodField()
@@ -572,33 +575,91 @@ class CenterDetailReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = Center
         fields = [
-            "id", "name", "country_name", "state_name", "address",
-            "active_students", "inactive_students", "completed_students", "courses", "faculties",
+            "id",
+            "name",
+            "country_name",
+            "state_name",
+            "address",
+            "active_students",
+            "inactive_students",
+            "completed_students",
+            "courses",
+            "faculties",
         ]
 
+    def get_students(self, obj, student_status):
+
+        params = self.context.get("request").query_params if self.context.get("request") else {}
+
+        students = get_filtered_students(
+            params,
+            center=obj
+        )
+
+        if student_status:
+            students = students.filter(status=student_status)
+
+        return CenterReportStudentSerializer(
+            students,
+            many=True
+        ).data
+
     def get_active_students(self, obj):
-        qs = obj.students.filter(status='active').select_related("profile__user")
-        return StudentInSerializer(qs, many=True).data
+        return self.get_students(obj, "active")
 
     def get_inactive_students(self, obj):
-        qs = obj.students.filter(status='inactive').select_related("profile__user")
-        return StudentInSerializer(qs, many=True).data
-    
+        return self.get_students(obj, "inactive")
+
     def get_completed_students(self, obj):
-        qs = obj.students.filter(status='completed').select_related("profile__user")
-        return StudentInSerializer(qs, many=True).data
+        return self.get_students(obj, "completed")
 
     def get_courses(self, obj):
+
+        students = get_filtered_students(
+            self.context.get("request").query_params if self.context.get("request") else {},
+            center=obj
+        )
+
+        course_ids = StudentCourseEnrollment.objects.filter(
+            student__in=students
+        ).values_list("course_id", flat=True).distinct()
+
         courses = Course.objects.filter(
-            enrollments__student__center=obj
-        ).distinct()
-        return CourseInSerializer(courses, many=True).data
+            id__in=course_ids
+        )
+
+        return CourseInSerializer(
+            courses,
+            many=True
+        ).data
 
     def get_faculties(self, obj):
+
+        students = get_filtered_students(
+            self.context.get("request").query_params if self.context.get("request") else {},
+            center=obj
+        )
+
+        faculty_ids = StudentCourseEnrollment.objects.filter(
+            student__in=students,
+            batch__isnull=False
+        ).values_list(
+            "batch__faculties__id",
+            flat=True
+        ).distinct()
+
         faculties = Faculty.objects.filter(
-            batches__enrollments__student__center=obj
-        ).distinct().select_related("user__user").prefetch_related("departments")
-        return FacultyInSerializer(faculties, many=True).data
+            id__in=faculty_ids
+        ).distinct().select_related(
+            "user__user"
+        ).prefetch_related(
+            "departments"
+        )
+
+        return FacultyInSerializer(
+            faculties,
+            many=True
+        ).data
 
 
 # ── Batch Serializers ─────────────────────────────────────────
@@ -850,6 +911,7 @@ class InstallmentItemReportSerializer(serializers.ModelSerializer):
 from ..utils import (
     get_student_enrollments,
     get_next_unpaid_installment_item,
+    get_filtered_students,
     get_installment_due_date_for_staff,
 )
 
@@ -1461,3 +1523,40 @@ class PaymentsBreakdownSerializer(serializers.Serializer):
         return obj.get("counsellor")
 
 
+class CenterReportStudentSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+    email = serializers.SerializerMethodField()
+    center = serializers.CharField(source="center.name", read_only=True)
+    course = serializers.SerializerMethodField()
+    batch = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Student
+        fields = [
+            "id",
+            "student_id",
+            "name",
+            "email",
+            "center",
+            "course",
+            "batch",
+            "status",
+        ]
+
+    def get_name(self, obj):
+        return obj.get_full_name()
+
+    def get_email(self, obj):
+        return obj.profile.user.email
+
+    def get_enrollment(self, obj):
+        enrollments = getattr(obj, "report_enrollments", [])
+        return enrollments[0] if enrollments else None
+
+    def get_course(self, obj):
+        enrollment = self.get_enrollment(obj)
+        return enrollment.course.title if enrollment else None
+
+    def get_batch(self, obj):
+        enrollment = self.get_enrollment(obj)
+        return enrollment.batch.batch_number if enrollment and enrollment.batch else None

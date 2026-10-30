@@ -381,6 +381,15 @@ class UpdateJobDetailView(BaseGenericAPIView, generics.UpdateAPIView):
     serializer_class = JobDetailUpdateSerializer
     lookup_field = "id"
 
+
+class StaffSalaryHistoryListView(BaseGenericAPIView, generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = StaffSalaryHistorySerializer
+
+    def get_queryset(self):
+        staff_id = self.kwargs.get("staff_id")
+        return StaffSalaryHistory.objects.filter(staff_id=staff_id).order_by("-effective_date", "-created_at")
+
 # Add a new document
 
 

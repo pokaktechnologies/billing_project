@@ -162,7 +162,34 @@ class StaffDeduction(models.Model):
 
     def __str__(self):
         return f"{self.job_detail.staff.get_full_name()} - {self.deduction_type}"
-    
+
+
+class StaffSalaryHistory(models.Model):
+    staff = models.ForeignKey(StaffProfile, on_delete=models.CASCADE, related_name="salary_history")
+    job_detail = models.ForeignKey(JobDetail, on_delete=models.SET_NULL, null=True, blank=True, related_name="salary_history")
+
+    previous_salary = models.DecimalField(max_digits=10, decimal_places=2)
+    new_salary = models.DecimalField(max_digits=10, decimal_places=2)
+    increment_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+
+    previous_earnings = models.JSONField(default=list, blank=True)
+    new_earnings = models.JSONField(default=list, blank=True)
+
+    previous_deductions = models.JSONField(default=list, blank=True)
+    new_deductions = models.JSONField(default=list, blank=True)
+
+    effective_date = models.DateField(default=timezone.now)
+    remarks = models.TextField(blank=True, null=True)
+    changed_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-effective_date', '-created_at']
+
+    def __str__(self):
+        return f"{self.staff.get_full_name()} ({self.previous_salary} -> {self.new_salary}) on {self.effective_date}"
+
+
 class Quotation(models.Model):
     customer_name = models.CharField(max_length=255)
     invoice_number = models.CharField(max_length=50, unique=True)
@@ -1302,8 +1329,10 @@ class ModulePermission(models.Model):
 
         # PROJECT
         ("project", "Project"),
-        ("project_timeline", "Project Timeline"),
+        ("project_timeline", "Developer Timeline"),
         ("project_reports", "Project Reports"),
+        ("dm", "Digital Marketing Timeline"),
+        ("testing", "Testing Timeline"),
 
         # CERTIFICATE
         ("certificate", "Certificate"),
@@ -1343,6 +1372,7 @@ class ModulePermission(models.Model):
         ('my_courses', "My Courses"),
         ('faculty_interns', "Faculty Interns"),
         ('submissions', "Submissions"),
+        
 
         # INTERNSHIP PRO
         ('my_tasks', "My Tasks"),

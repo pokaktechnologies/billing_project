@@ -31,6 +31,7 @@ urlpatterns = [
     # path('admin/staffs/<int:staff_id>/', ListStaffView.as_view()),
     path("staff/<int:id>/update/", UpdateStaffUserView.as_view(), name="update_staff_user"),
     path("job-detail/<int:id>/update/", UpdateJobDetailView.as_view(), name="update_job_detail"),
+    path("staff/<int:staff_id>/salary-history/", StaffSalaryHistoryListView.as_view(), name="staff-salary-history"),
     path('employee-registration/', EmployeeRegistrationCreateView.as_view(), name='employee-registration'),
     path('employee-registration/<int:pk>/', EmployeeRegistrationDetailView.as_view(), name='employee-registration-detail'),
     path('employee-registration/<int:pk>/convert/', ConvertEmployeeRegistrationToStaffAPIView.as_view(), name='convert_employee_registration_to_staff'),

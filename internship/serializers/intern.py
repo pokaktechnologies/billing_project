@@ -587,7 +587,7 @@ class SectionResultSerializer(serializers.ModelSerializer):
                 count += 1
         return count
 
-from internship.views.instructor import is_attempt_fully_evaluated
+from internship.utils import is_attempt_fully_evaluated
 class TestResultSerializer(serializers.ModelSerializer):
     test_name = serializers.CharField(source='test.name')
     total_marks = serializers.IntegerField(source='test.total_marks')

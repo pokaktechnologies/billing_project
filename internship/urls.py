@@ -1,5 +1,5 @@
 from django.urls import path, include
-from .views import application, instructor, intern, report_view, internship_admin, recorded_class, live_class
+from .views import application, instructor, intern, report_view, internship_admin, recorded_class, live_class, attendance
 from .views.registration import StudentRegistrationReportView
 
 instructor_patterns = [
@@ -48,6 +48,8 @@ instructor_patterns = [
     # path("payments/<int:pk>/detail/", instructor.CoursePaymentDetailAPIView.as_view()),
 
     path('classes/', instructor.MyFacultyClassSectionListAPIView.as_view(), name='faculty-class-section-list'),
+    path('sections/<int:section_id>/attendance/', attendance.SectionAttendanceAPIView.as_view(), name='faculty-section-attendance'),
+    path('sections/<int:section_id>/attendance-history/', attendance.SectionAttendanceHistoryAPIView.as_view(), name='faculty-section-attendance-history'),
 
     path('tests/', instructor.TestListCreateAPIView.as_view(), name='test-list-create'),
     path('tests/<int:pk>/', instructor.TestDetailAPIView.as_view(), name='test-detail'),
@@ -110,6 +112,7 @@ intern_patterns = [
 
     path('payments/', intern.MyCoursePaymentListAPIView.as_view()),
     path('classes/', intern.MyClassSectionListAPIView.as_view(), name='intern-class-section-list'),
+    path('my-attendance/', attendance.StudentMyAttendanceAPIView.as_view(), name='intern-my-attendance'),
 
 
     path('tests/', intern.StudentTestListAPIView.as_view(), name='student-test-list'),
@@ -244,6 +247,8 @@ urlpatterns = [
     path('', include((internship_admin_patterns))),
     path('applications/', application.InternshipApplicationAPIView.as_view(), name='internship-application-list-create'),
     path('applications/<int:pk>/', application.InternshipApplicationAPIView.as_view(), name='internship-application-detail'),
+    # path('applications/<int:pk>/confirm-slot/', application.InternshipSlotConfirmationAPIView.as_view(), name="confirm_internship_slot"),
+    path('applications/<int:pk>/slot-confirmation/', application.InternshipSlotConfirmationAPIView.as_view(), name="internship_slot_confirmation"),
     path('applications/<int:pk>/convert/', application.ConvertApplicationToStudentAPIView.as_view(), name="convert_application_to_student"),
     path('public/courses/', application.PublicCourseListAPIView.as_view(), name='public-course-list'),
     path('public/counsellors/', application.PublicCounsellorListAPIView.as_view(), name='public-counsellor-list'),

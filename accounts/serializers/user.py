@@ -249,6 +249,9 @@ class JobDetailUpdateSerializer(serializers.ModelSerializer):
         required=False
     )
 
+    effective_date = serializers.DateField(required=False, write_only=True)
+    remarks = serializers.CharField(required=False, allow_blank=True, write_only=True)
+
     class Meta:
         model = JobDetail
         fields = [
@@ -262,12 +265,30 @@ class JobDetailUpdateSerializer(serializers.ModelSerializer):
             "status",
             "earnings",
             "deductions",
+            "effective_date",
+            "remarks",
         ]
 
     def update(self, instance, validated_data):
+        from decimal import Decimal
+        from django.utils import timezone
+
+        effective_date = validated_data.pop("effective_date", timezone.now().date())
+        remarks = validated_data.pop("remarks", None)
 
         earnings_data = validated_data.pop("earnings", None)
         deductions_data = validated_data.pop("deductions", None)
+
+        # 1. Capture previous snapshot
+        old_salary = instance.salary
+        old_earnings_snapshot = [
+            {"earning_type": e.earning_type, "amount": str(e.amount)}
+            for e in instance.earnings.filter(is_active=True).order_by("id")
+        ]
+        old_deductions_snapshot = [
+            {"deduction_type": d.deduction_type, "amount": str(d.amount)}
+            for d in instance.deductions.filter(is_active=True).order_by("id")
+        ]
 
         # --------------------------------
         # Update normal JobDetail fields
@@ -358,7 +379,75 @@ class JobDetailUpdateSerializer(serializers.ModelSerializer):
                 id__in=existing_deduction_ids
             ).delete()
 
+        # 2. Capture new snapshot
+        new_salary = instance.salary
+        new_earnings_snapshot = [
+            {"earning_type": e.earning_type, "amount": str(e.amount)}
+            for e in instance.earnings.filter(is_active=True).order_by("id")
+        ]
+        new_deductions_snapshot = [
+            {"deduction_type": d.deduction_type, "amount": str(d.amount)}
+            for d in instance.deductions.filter(is_active=True).order_by("id")
+        ]
+
+        # 3. Detect if salary, earnings, or deductions changed
+        salary_changed = (old_salary != new_salary)
+        earnings_changed = (old_earnings_snapshot != new_earnings_snapshot)
+        deductions_changed = (old_deductions_snapshot != new_deductions_snapshot)
+
+        if salary_changed or earnings_changed or deductions_changed:
+            request = self.context.get("request") if hasattr(self, "context") else None
+            changed_by = request.user if request and request.user and request.user.is_authenticated else None
+            increment_amount = (Decimal(str(new_salary)) - Decimal(str(old_salary)))
+
+            StaffSalaryHistory.objects.create(
+                staff=instance.staff,
+                job_detail=instance,
+                previous_salary=old_salary,
+                new_salary=new_salary,
+                increment_amount=increment_amount,
+                previous_earnings=old_earnings_snapshot,
+                new_earnings=new_earnings_snapshot,
+                previous_deductions=old_deductions_snapshot,
+                new_deductions=new_deductions_snapshot,
+                effective_date=effective_date,
+                remarks=remarks,
+                changed_by=changed_by,
+            )
+
         return instance
+
+
+class StaffSalaryHistorySerializer(serializers.ModelSerializer):
+    changed_by_email = serializers.SerializerMethodField()
+    changed_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StaffSalaryHistory
+        fields = [
+            "id",
+            "staff",
+            "job_detail",
+            "previous_salary",
+            "new_salary",
+            "increment_amount",
+            "previous_earnings",
+            "new_earnings",
+            "previous_deductions",
+            "new_deductions",
+            "effective_date",
+            "remarks",
+            "changed_by",
+            "changed_by_email",
+            "changed_by_name",
+            "created_at",
+        ]
+
+    def get_changed_by_email(self, obj):
+        return obj.changed_by.email if obj.changed_by else None
+
+    def get_changed_by_name(self, obj):
+        return obj.changed_by.get_full_name() if obj.changed_by else None
 
 class StaffDocumentSerializer(serializers.ModelSerializer):
     class Meta:

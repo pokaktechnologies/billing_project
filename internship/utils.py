@@ -418,7 +418,7 @@ class StudentConversionService:
         start_date,
         councellor,
         status,
-        slot_amount=None,
+        # slot_amount=None,
 
         # ==========================================
         # Enrollment
@@ -515,7 +515,7 @@ class StudentConversionService:
             start_date=start_date,
             status=status,
             councellor=application.councellor,
-            slot_amount=slot_amount
+            slot_amount=application.slot_amount
         )
 
         # ==========================================
@@ -621,13 +621,13 @@ class StudentConversionService:
         # ==========================================
         # Update Application
         # ==========================================
-        application.slot_amount = slot_amount
+        # application.slot_amount = slot_amount
         application.converted_students = student
         application.is_converted = True
 
         application.save(
             update_fields=[
-                "slot_amount",
+                # "slot_amount",
                 "converted_students",
                 "is_converted",
             ]
@@ -637,201 +637,201 @@ class StudentConversionService:
         # Send Mail
         # ==========================================
 
-        try:
-            subject = "Welcome to Pokak Technologies – Student Account & Slot Confirmation"
+#         try:
+#             subject = "Welcome to Pokak Technologies – Student Account & Slot Confirmation"
 
-            student_name = (
-                f"{application.first_name} {application.last_name or ''}"
-            ).strip()
+#             student_name = (
+#                 f"{application.first_name} {application.last_name or ''}"
+#             ).strip()
 
-            # Format slot amount
-            amount = student.slot_amount
+#             # Format slot amount
+#             amount = student.slot_amount
 
-            if amount is not None and amount > 0:
-                slot_amount_text = f"₹{amount:,.2f}"
-                slot_confirmation_text = (
-                    f"Your slot booking payment of "
-                    f"{slot_amount_text} has been successfully recorded."
-                )
+#             if amount is not None and amount > 0:
+#                 slot_amount_text = f"₹{amount:,.2f}"
+#                 slot_confirmation_text = (
+#                     f"Your slot booking payment of "
+#                     f"{slot_amount_text} has been successfully recorded."
+#                 )
 
-                slot_html = f"""
-                    <tr>
-                        <td style="padding: 12px; color: #555;">
-                            Slot Booking Amount
-                        </td>
-                        <td style="padding: 12px; font-weight: bold; color: #198754;">
-                            {slot_amount_text}
-                        </td>
-                    </tr>
-                """
-            else:
-                slot_confirmation_text = (
-                    "Your student account has been created successfully."
-                )
-                slot_html = ""
+#                 slot_html = f"""
+#                     <tr>
+#                         <td style="padding: 12px; color: #555;">
+#                             Slot Booking Amount
+#                         </td>
+#                         <td style="padding: 12px; font-weight: bold; color: #198754;">
+#                             {slot_amount_text}
+#                         </td>
+#                     </tr>
+#                 """
+#             else:
+#                 slot_confirmation_text = (
+#                     "Your student account has been created successfully."
+#                 )
+#                 slot_html = ""
 
-            # --------------------------------------
-            # Plain Text Email
-            # --------------------------------------
+#             # --------------------------------------
+#             # Plain Text Email
+#             # --------------------------------------
 
-            message = f"""
-Dear {student_name},
+#             message = f"""
+# Dear {student_name},
 
-Welcome to Pokak Technologies!
+# Welcome to Pokak Technologies!
 
-We are pleased to inform you that your student account has been
-created successfully.
+# We are pleased to inform you that your student account has been
+# created successfully.
 
-Student Details:
-Name: {student_name}
-Student ID: {student.student_id}
-Login Email: {email}
+# Student Details:
+# Name: {student_name}
+# Student ID: {student.student_id}
+# Login Email: {email}
 
-{slot_confirmation_text}
+# {slot_confirmation_text}
 
-Your login credentials are provided below:
+# Your login credentials are provided below:
 
-Email: {email}
-Password: {password}
+# Email: {email}
+# Password: {password}
 
-Please keep your login credentials secure.
+# Please keep your login credentials secure.
 
-We look forward to supporting your learning journey.
+# We look forward to supporting your learning journey.
 
-Best regards,
-Admissions Team
-Pokak Technologies
-"""
+# Best regards,
+# Admissions Team
+# Pokak Technologies
+# """
 
-            # --------------------------------------
-            # HTML Email
-            # --------------------------------------
+#             # --------------------------------------
+#             # HTML Email
+#             # --------------------------------------
 
-            html_message = f"""
-            <!DOCTYPE html>
-            <html>
-            <body style="margin:0; padding:0; background:#f4f6f9;
-                         font-family:Arial, sans-serif;">
+#             html_message = f"""
+#             <!DOCTYPE html>
+#             <html>
+#             <body style="margin:0; padding:0; background:#f4f6f9;
+#                          font-family:Arial, sans-serif;">
 
-                <div style="max-width:650px; margin:30px auto;
-                            background:#ffffff; border-radius:10px;
-                            overflow:hidden;">
+#                 <div style="max-width:650px; margin:30px auto;
+#                             background:#ffffff; border-radius:10px;
+#                             overflow:hidden;">
 
-                    <div style="background:#17365d; color:#ffffff;
-                                padding:25px; text-align:center;">
-                        <h1 style="margin:0; font-size:24px;">
-                            Pokak Technologies
-                        </h1>
-                        <p style="margin:8px 0 0;">
-                            Student Account Confirmation
-                        </p>
-                    </div>
+#                     <div style="background:#17365d; color:#ffffff;
+#                                 padding:25px; text-align:center;">
+#                         <h1 style="margin:0; font-size:24px;">
+#                             Pokak Technologies
+#                         </h1>
+#                         <p style="margin:8px 0 0;">
+#                             Student Account Confirmation
+#                         </p>
+#                     </div>
 
-                    <div style="padding:30px; color:#333333;
-                                line-height:1.6;">
+#                     <div style="padding:30px; color:#333333;
+#                                 line-height:1.6;">
 
-                        <h2 style="color:#17365d;">
-                            Welcome, {student_name}!
-                        </h2>
+#                         <h2 style="color:#17365d;">
+#                             Welcome, {student_name}!
+#                         </h2>
 
-                        <p>
-                            We are pleased to confirm that your student
-                            account has been created successfully.
-                        </p>
+#                         <p>
+#                             We are pleased to confirm that your student
+#                             account has been created successfully.
+#                         </p>
 
-                        <p>
-                            {slot_confirmation_text}
-                        </p>
+#                         <p>
+#                             {slot_confirmation_text}
+#                         </p>
 
-                        <h3 style="color:#17365d;">
-                            Student Details
-                        </h3>
+#                         <h3 style="color:#17365d;">
+#                             Student Details
+#                         </h3>
 
-                        <table style="width:100%; border-collapse:collapse;
-                                      background:#f8f9fa;">
-                            <tr>
-                                <td style="padding:12px; color:#555;">
-                                    Student Name
-                                </td>
-                                <td style="padding:12px; font-weight:bold;">
-                                    {student_name}
-                                </td>
-                            </tr>
+#                         <table style="width:100%; border-collapse:collapse;
+#                                       background:#f8f9fa;">
+#                             <tr>
+#                                 <td style="padding:12px; color:#555;">
+#                                     Student Name
+#                                 </td>
+#                                 <td style="padding:12px; font-weight:bold;">
+#                                     {student_name}
+#                                 </td>
+#                             </tr>
 
-                            <tr>
-                                <td style="padding:12px; color:#555;">
-                                    Student ID
-                                </td>
-                                <td style="padding:12px; font-weight:bold;">
-                                    {student.student_id}
-                                </td>
-                            </tr>
+#                             <tr>
+#                                 <td style="padding:12px; color:#555;">
+#                                     Student ID
+#                                 </td>
+#                                 <td style="padding:12px; font-weight:bold;">
+#                                     {student.student_id}
+#                                 </td>
+#                             </tr>
 
-                            <tr>
-                                <td style="padding:12px; color:#555;">
-                                    Login Email
-                                </td>
-                                <td style="padding:12px; font-weight:bold;">
-                                    {email}
-                                </td>
-                            </tr>
+#                             <tr>
+#                                 <td style="padding:12px; color:#555;">
+#                                     Login Email
+#                                 </td>
+#                                 <td style="padding:12px; font-weight:bold;">
+#                                     {email}
+#                                 </td>
+#                             </tr>
 
-                            {slot_html}
-                        </table>
+#                             {slot_html}
+#                         </table>
 
-                        <h3 style="color:#17365d; margin-top:25px;">
-                            Your Login Credentials
-                        </h3>
+#                         <h3 style="color:#17365d; margin-top:25px;">
+#                             Your Login Credentials
+#                         </h3>
 
-                        <p>
-                            <strong>Email:</strong> {email}<br>
-                            <strong>Password:</strong> {password}
-                        </p>
+#                         <p>
+#                             <strong>Email:</strong> {email}<br>
+#                             <strong>Password:</strong> {password}
+#                         </p>
 
-                        <p>
-                            Please keep your login credentials secure.
-                        </p>
+#                         <p>
+#                             Please keep your login credentials secure.
+#                         </p>
 
-                        <p style="margin-top:25px;">
-                            We look forward to supporting your learning
-                            journey.
-                        </p>
+#                         <p style="margin-top:25px;">
+#                             We look forward to supporting your learning
+#                             journey.
+#                         </p>
 
-                        <p>
-                            Best regards,<br>
-                            <strong>Admissions Team</strong><br>
-                            Pokak Technologies
-                        </p>
-                    </div>
+#                         <p>
+#                             Best regards,<br>
+#                             <strong>Admissions Team</strong><br>
+#                             Pokak Technologies
+#                         </p>
+#                     </div>
 
-                    <div style="background:#f1f3f5; padding:15px;
-                                text-align:center; color:#777;
-                                font-size:12px;">
-                        This is an automated email from Pokak Technologies.
-                        Please do not reply directly to this message.
-                    </div>
+#                     <div style="background:#f1f3f5; padding:15px;
+#                                 text-align:center; color:#777;
+#                                 font-size:12px;">
+#                         This is an automated email from Pokak Technologies.
+#                         Please do not reply directly to this message.
+#                     </div>
 
-                </div>
-            </body>
-            </html>
-            """
+#                 </div>
+#             </body>
+#             </html>
+#             """
 
-            email_message = EmailMultiAlternatives(
-                subject=subject,
-                body=message,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                to=[email],
-            )
+#             email_message = EmailMultiAlternatives(
+#                 subject=subject,
+#                 body=message,
+#                 from_email=settings.DEFAULT_FROM_EMAIL,
+#                 to=[email],
+#             )
 
-            email_message.attach_alternative(
-                html_message,
-                "text/html",
-            )
+#             email_message.attach_alternative(
+#                 html_message,
+#                 "text/html",
+#             )
 
-            email_message.send(fail_silently=False)
+#             email_message.send(fail_silently=False)
 
-        except Exception as exc:
-            print("Email sending failed:", exc)
+#         except Exception as exc:
+#             print("Email sending failed:", exc)
 
         return student
 
@@ -856,3 +856,112 @@ def parse_flexible_date(date_str):
         except ValueError:
             continue
     raise ValueError(f"Invalid date format '{date_str}'. Expected DD-MM-YYYY or YYYY-MM-DD.")
+
+
+def get_filtered_students(params, center=None):
+    from internship.models import Student, StudentCourseEnrollment
+
+    queryset = Student.objects.select_related(
+        "profile__user",
+        "center",
+    )
+
+    center_val = center if center is not None else params.get("center")
+    if center_val:
+        if isinstance(center_val, (int, str)):
+            queryset = queryset.filter(center_id=center_val)
+        else:
+            queryset = queryset.filter(center=center_val)
+
+    student_status = params.get("status")
+    if student_status:
+        queryset = queryset.filter(status=student_status)
+
+    course_id = params.get("course")
+    if course_id:
+        queryset = queryset.filter(
+            enrollments__course_id=course_id
+        )
+
+    faculty_id = params.get("faculty")
+    if faculty_id:
+        queryset = queryset.filter(
+            enrollments__batch__faculties__id=faculty_id
+        )
+
+    date_from = params.get("date_from")
+    date_to = params.get("date_to")
+
+    d_from = None
+    if date_from:
+        try:
+            d_from = parse_flexible_date(date_from)
+        except ValueError:
+            pass
+
+    d_to = None
+    if date_to:
+        try:
+            d_to = parse_flexible_date(date_to)
+        except ValueError:
+            pass
+
+    if d_from and d_to:
+        queryset = queryset.filter(
+            enrollments__enrollment_date__gte=d_from,
+            enrollments__enrollment_date__lte=d_to,
+        )
+    elif d_from:
+        queryset = queryset.filter(
+            enrollments__enrollment_date__gte=d_from
+        )
+    elif d_to:
+        queryset = queryset.filter(
+            enrollments__enrollment_date__lte=d_to
+        )
+
+    # Avoid duplicate students when multiple enrollments match.
+    queryset = queryset.distinct()
+
+    # Prefetch only enrollments matching the selected filters.
+    enrollment_queryset = StudentCourseEnrollment.objects.select_related(
+        "course",
+        "batch",
+    )
+
+    if course_id:
+        enrollment_queryset = enrollment_queryset.filter(
+            course_id=course_id
+        )
+
+    if faculty_id:
+        enrollment_queryset = enrollment_queryset.filter(
+            batch__faculties__id=faculty_id
+        )
+
+    if d_from and d_to:
+        enrollment_queryset = enrollment_queryset.filter(
+            enrollment_date__gte=d_from,
+            enrollment_date__lte=d_to,
+        )
+    elif d_from:
+        enrollment_queryset = enrollment_queryset.filter(
+            enrollment_date__gte=d_from
+        )
+    elif d_to:
+        enrollment_queryset = enrollment_queryset.filter(
+            enrollment_date__lte=d_to
+        )
+
+    enrollment_queryset = enrollment_queryset.distinct()
+
+    queryset = queryset.prefetch_related(
+        Prefetch(
+            "enrollments",
+            queryset=enrollment_queryset,
+            to_attr="report_enrollments",
+        )
+    )
+
+    return queryset.order_by("-created_at")
+

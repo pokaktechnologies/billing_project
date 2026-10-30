@@ -15,7 +15,8 @@ from ..models import InternshipApplication, Course
 from ..serializers.application import (
     InternshipApplicationListSerializer,
     InternshipApplicationSerializer,
-    ConvertToStudentSerializer
+    ConvertToStudentSerializer,
+    SlotConfirmationSerializer
 )
 from ..serializers.internship_admin import CourseSerializer
 from ..serializers.report_serializers import SalesPersonSerializer
@@ -317,7 +318,7 @@ class ConvertApplicationToStudentAPIView(APIView):
                 councellor=application.councellor,
 
                 status=serializer.validated_data["status"],
-                slot_amount=serializer.validated_data.get("slot_amount"),
+                # slot_amount=serializer.validated_data.get("slot_amount"),
 
                 # ---------------------------------
                 # Enrollment
@@ -524,3 +525,27 @@ class PublicCounsellorListAPIView(APIView):
         return Response(serializer.data)
 
 
+class InternshipSlotConfirmationAPIView(APIView):
+
+    def post(self, request, pk):
+        application = get_object_or_404(
+            InternshipApplication,
+            pk=pk
+        )
+
+        serializer = SlotConfirmationSerializer(
+            application,
+            data=request.data
+        )
+
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(
+            {
+                "status": "1",
+                "message": "Slot confirmed successfully.",
+                "application": serializer.data
+            },
+            status=status.HTTP_200_OK
+        )

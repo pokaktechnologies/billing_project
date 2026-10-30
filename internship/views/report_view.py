@@ -6,10 +6,10 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 
-from django.db.models import Count, Q, F, Sum
+from django.db.models import Count, Q, F, Sum, Prefetch
 from django.shortcuts import get_object_or_404
 from accounts.models import StaffProfile, SalesPerson
-from internship.models import Center, Task, TaskSubmission, AssignedStaffCourse, TaskAssignment, CoursePayment, Student, CounsellorHRSubmission, InternshipApplication
+from internship.models import Center, Task, TaskSubmission, AssignedStaffCourse, TaskAssignment, CoursePayment, Student, CounsellorHRSubmission, InternshipApplication, StudentCourseEnrollment
 from internship.serializers.report_serializers import (
     SalesPersonSerializer,
     RegistrationReportSerializer,
@@ -24,7 +24,9 @@ from internship.serializers.report_serializers import (
 from internship.serializers.report_serializers import CenterDetailReportSerializer, CenterReportsSerializer, TaskReportSerializer, InternTaskPerformanceReportSerializer, \
     TaskSubmissionReportSerializer, InternPaymentSummaryReportSerializer, InternSummaryReportSerializer, \
     EnrollmentReportSerializer, StudentInSerializer
-from internship.utils import get_installment_due_date_for_staff, get_next_unpaid_installment_item, parse_flexible_date
+from internship.utils import get_installment_due_date_for_staff, get_next_unpaid_installment_item, parse_flexible_date, get_filtered_students
+
+from ..serializers.report_serializers import CenterReportStudentSerializer
 
 
 # report based on tasks
@@ -364,22 +366,107 @@ class EnrollmentReportAPIView(generics.ListAPIView):
             )
         return queryset.order_by("-assigned_date")
 
-
-
-
 class CenterReportsView(generics.ListAPIView):
+
     permission_classes = [IsAuthenticated]
+
     serializer_class = CenterReportsSerializer
 
     def get_queryset(self):
+
         return Center.objects.annotate(
-            total_students=Count("students"),
-            active_students=Count("students", filter=Q(students__status='active')),
-            completed_students=Count("students", filter=Q(students__status='completed')),
-            inactive_students=Count("students", filter=Q(students__status='inactive')),
-            total_courses=Count("students__enrollments__course", distinct=True),
-            faculties=Count("students__enrollments__batch__faculties", distinct=True),
+            total_students=Count(
+                "students",
+                distinct=True
+            ),
+
+            active_students=Count(
+                "students",
+                filter=Q(students__status="active"),
+                distinct=True
+            ),
+
+            completed_students=Count(
+                "students",
+                filter=Q(students__status="completed"),
+                distinct=True
+            ),
+
+            inactive_students=Count(
+                "students",
+                filter=Q(students__status="inactive"),
+                distinct=True
+            ),
+
+            total_courses=Count(
+                "students__enrollments__course",
+                distinct=True
+            ),
+
+            faculties=Count(
+                "students__enrollments__batch__faculties",
+                distinct=True
+            ),
         )
+
+    def list(self, request, *args, **kwargs):
+
+        params = request.query_params
+
+        view_type = params.get("view")
+
+        # ----------------------------------
+        # ALL CENTER STUDENT REPORT
+        # ----------------------------------
+
+        if view_type == "students":
+
+            date_from = params.get("date_from")
+            date_to = params.get("date_to")
+
+            if date_from:
+                try:
+                    parse_flexible_date(date_from)
+                except ValueError:
+                    return Response(
+                        {"detail": f"Invalid date_from format '{date_from}'. Use YYYY-MM-DD or DD-MM-YYYY."},
+                        status=400
+                    )
+
+            if date_to:
+                try:
+                    parse_flexible_date(date_to)
+                except ValueError:
+                    return Response(
+                        {"detail": f"Invalid date_to format '{date_to}'. Use YYYY-MM-DD or DD-MM-YYYY."},
+                        status=400
+                    )
+
+            students = get_filtered_students(params)
+
+            serializer = CenterReportStudentSerializer(
+                students,
+                many=True
+            )
+
+            return Response({
+                "view": "students",
+                "count": students.count(),
+                "results": serializer.data
+            })
+
+        # ----------------------------------
+        # CENTER SUMMARY
+        # ----------------------------------
+
+        queryset = self.get_queryset()
+
+        serializer = self.get_serializer(
+            queryset,
+            many=True
+        )
+
+        return Response(serializer.data)
     
 
 
@@ -387,6 +474,31 @@ class CenterDetailReportView(generics.RetrieveAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = CenterDetailReportSerializer
     queryset = Center.objects.all()
+
+    def retrieve(self, request, *args, **kwargs):
+        params = request.query_params
+        date_from = params.get("date_from")
+        date_to = params.get("date_to")
+
+        if date_from:
+            try:
+                parse_flexible_date(date_from)
+            except ValueError:
+                return Response(
+                    {"detail": f"Invalid date_from format '{date_from}'. Use YYYY-MM-DD or DD-MM-YYYY."},
+                    status=400
+                )
+
+        if date_to:
+            try:
+                parse_flexible_date(date_to)
+            except ValueError:
+                return Response(
+                    {"detail": f"Invalid date_to format '{date_to}'. Use YYYY-MM-DD or DD-MM-YYYY."},
+                    status=400
+                )
+
+        return super().retrieve(request, *args, **kwargs)
 
 
 from ..models import Batch, Course, Faculty

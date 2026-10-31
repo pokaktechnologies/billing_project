@@ -1334,7 +1334,7 @@ class ModulePermission(models.Model):
         ("testing", "Testing Timeline"),
 
         #DIGITAL MARKETING'
-        ("dm_projects", "DM Proojects")
+        ("dm_projects", "DM Proojects"),
         ("dm", "Digital Marketing Timeline"),
 
         # CERTIFICATE

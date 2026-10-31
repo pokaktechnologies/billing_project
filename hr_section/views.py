@@ -783,10 +783,16 @@ class OfferLetterListCreateAPIView(generics.ListCreateAPIView):
 # ── Retrieve + Patch + Delete ─────────────────────────────────────────────────
 
 class OfferLetterDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
+
     permission_classes = [IsAuthenticated]
-    queryset           = OfferLetter.objects.select_related("created_by").all()
-    # Disable PUT — PATCH only
-    http_method_names  = ["get", "patch", "delete", "head", "options"]
+
+    queryset = OfferLetter.objects.select_related(
+        "created_by"
+    ).prefetch_related(
+        "sections__subtitles__points"
+    ).all()
+
+    http_method_names = ["get", "patch", "delete", "head", "options"]
 
     def get_serializer_class(self):
         if self.request.method == "PATCH":

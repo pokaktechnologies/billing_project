@@ -3,7 +3,7 @@ from django.db import transaction
 
 from .models import (
     Enquiry, Designation, JobResponsibility, JobRequirement,
-    JobWhyJoinUs, JobPosting, JobApplication, JobPostingSkill
+    JobWhyJoinUs, JobPosting, JobApplication, JobPostingSkill, OfferLetterPoint, OfferLetterSection, OfferLetterSubtitle
 )
 
 # Enquiry Serializers
@@ -234,32 +234,64 @@ class ErpEnquiryStatusUpdateSerializer(ModelSerializer):
 from rest_framework import serializers
 from .models import OfferLetter, StatusChoices, DutyTypeChoices
 
+class OfferLetterPointSerializer(serializers.ModelSerializer):
 
+    class Meta:
+        model = OfferLetterPoint
+        fields = ["id", "content", "order"]
+
+
+class OfferLetterSubtitleSerializer(serializers.ModelSerializer):
+
+    points = OfferLetterPointSerializer(many=True, required=False)
+
+    class Meta:
+        model = OfferLetterSubtitle
+        fields = ["id", "title", "order", "points"]
+
+
+class OfferLetterSectionSerializer(serializers.ModelSerializer):
+
+    subtitles = OfferLetterSubtitleSerializer(
+        many=True,
+        required=False
+    )
+
+    class Meta:
+        model = OfferLetterSection
+        fields = ["id", "title", "content", "order", "subtitles"]
 class OfferLetterCreateSerializer(serializers.ModelSerializer):
-    """
-    Used for POST (create) — all writable fields.
-    """
+
+    sections = OfferLetterSectionSerializer(
+        many=True,
+        required=False
+    )
 
     class Meta:
         model = OfferLetter
         exclude = ["created_by", "created_at", "updated_at"]
 
-    # ── Validations ──────────────────────────────────────────────────────────
-
     def validate_responsibilities(self, value):
-        if not isinstance(value, list):
-            raise serializers.ValidationError("responsibilities must be a list of strings.")
-        if any(not isinstance(item, str) for item in value):
-            raise serializers.ValidationError("Each responsibility must be a string.")
-        return value
-    
-    def validate_allowances(self, value):
+
         if not isinstance(value, list):
             raise serializers.ValidationError(
-                "allowances must be a list."
+                "responsibilities must be a list of strings."
             )
 
+        if any(not isinstance(item, str) for item in value):
+            raise serializers.ValidationError(
+                "Each responsibility must be a string."
+            )
+
+        return value
+
+    def validate_allowances(self, value):
+
+        if not isinstance(value, list):
+            raise serializers.ValidationError("allowances must be a list.")
+
         for allowance in value:
+
             if not isinstance(allowance, dict):
                 raise serializers.ValidationError(
                     "Each allowance must be an object."
@@ -288,52 +320,70 @@ class OfferLetterCreateSerializer(serializers.ModelSerializer):
                 )
 
         return value
+
     def validate(self, attrs):
-        # If target-based, target_details should be provided
+
         if attrs.get("is_target_based") and not attrs.get("target_details"):
-            raise serializers.ValidationError(
-                {"target_details": "target_details is required when is_target_based is True."}
-            )
-        # basic_salary should not exceed monthly_salary
-        # basic = attrs.get("basic_salary")
-        # monthly = attrs.get("monthly_salary")
-        # if basic and monthly and basic > monthly:
-        #     raise serializers.ValidationError(
-        #         {"basic_salary": "basic_salary cannot be greater than monthly_salary."}
-        #     )
+            raise serializers.ValidationError({
+                "target_details": (
+                    "target_details is required when is_target_based is True."
+                )
+            })
+
         return attrs
 
+    @transaction.atomic
     def create(self, validated_data):
+
+        sections_data = validated_data.pop("sections", [])
+
         request = self.context.get("request")
-        validated_data["created_by"] = request.user if request else None
-        return super().create(validated_data)
+
+        validated_data["created_by"] = (
+            request.user if request else None
+        )
+
+        offer = OfferLetter.objects.create(**validated_data)
+
+        create_offer_sections(offer, sections_data)
+
+        return offer
+
+
 
 
 class OfferLetterPatchSerializer(serializers.ModelSerializer):
-    """
-    Used for PATCH (partial update) — same fields, all optional.
-    """
+
+    sections = OfferLetterSectionSerializer(
+        many=True,
+        required=False
+    )
 
     class Meta:
         model = OfferLetter
         exclude = ["created_by", "created_at", "updated_at"]
-        extra_kwargs = {field: {"required": False} for field in [
-            "candidate_name", "job_title", "monthly_salary", "joining_date", "company_name"
-        ]}
 
     def validate_responsibilities(self, value):
-        if not isinstance(value, list):
-            raise serializers.ValidationError("responsibilities must be a list of strings.")
-        if any(not isinstance(item, str) for item in value):
-            raise serializers.ValidationError("Each responsibility must be a string.")
-        return value
-    def validate_allowances(self, value):
+
         if not isinstance(value, list):
             raise serializers.ValidationError(
-                "allowances must be a list."
+                "responsibilities must be a list of strings."
             )
 
+        if any(not isinstance(item, str) for item in value):
+            raise serializers.ValidationError(
+                "Each responsibility must be a string."
+            )
+
+        return value
+
+    def validate_allowances(self, value):
+
+        if not isinstance(value, list):
+            raise serializers.ValidationError("allowances must be a list.")
+
         for allowance in value:
+
             if not isinstance(allowance, dict):
                 raise serializers.ValidationError(
                     "Each allowance must be an object."
@@ -362,23 +412,46 @@ class OfferLetterPatchSerializer(serializers.ModelSerializer):
                 )
 
         return value
+
     def validate(self, attrs):
+
         instance = self.instance
 
-        is_target_based = attrs.get("is_target_based", instance.is_target_based)
-        target_details  = attrs.get("target_details", instance.target_details)
-        if is_target_based and not target_details:
-            raise serializers.ValidationError(
-                {"target_details": "target_details is required when is_target_based is True."}
-            )
+        is_target_based = attrs.get(
+            "is_target_based",
+            instance.is_target_based
+        )
 
-        # basic   = attrs.get("basic_salary", instance.basic_salary)
-        # monthly = attrs.get("monthly_salary", instance.monthly_salary)
-        # if basic and monthly and basic > monthly:
-        #     raise serializers.ValidationError(
-        #         {"basic_salary": "basic_salary cannot be greater than monthly_salary."}
-        #     )
+        target_details = attrs.get(
+            "target_details",
+            instance.target_details
+        )
+
+        if is_target_based and not target_details:
+            raise serializers.ValidationError({
+                "target_details": (
+                    "target_details is required when is_target_based is True."
+                )
+            })
+
         return attrs
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+
+        sections_data = validated_data.pop("sections", None)
+
+        # Update normal OfferLetter fields
+        instance = super().update(instance, validated_data)
+
+        # Replace sections only when sections is provided
+        if sections_data is not None:
+
+            instance.sections.all().delete()
+
+            create_offer_sections(instance, sections_data)
+
+        return instance
 
 
 class OfferLetterListSerializer(serializers.ModelSerializer):
@@ -424,33 +497,54 @@ class OfferLetterListSerializer(serializers.ModelSerializer):
 
 
 class OfferLetterDetailSerializer(serializers.ModelSerializer):
-    """
-    Full serializer for retrieve endpoint.
-    """
-    created_by      = serializers.StringRelatedField()
-    status_display   = serializers.CharField(source="get_status_display", read_only=True)
-    duty_type_display = serializers.CharField(source="get_duty_type_display", read_only=True)
+
+    created_by = serializers.StringRelatedField()
+
+    status_display = serializers.CharField(
+        source="get_status_display",
+        read_only=True
+    )
+
+    duty_type_display = serializers.CharField(
+        source="get_duty_type_display",
+        read_only=True
+    )
+
     total_allowance = serializers.SerializerMethodField()
     monthly_salary = serializers.SerializerMethodField()
+
+    sections = OfferLetterSectionSerializer(
+        many=True,
+        read_only=True
+    )
 
     class Meta:
         model = OfferLetter
         fields = "__all__"
 
     def get_total_allowance(self, obj):
+
         total = 0
+
         for allowance in obj.allowances or []:
+
             if not isinstance(allowance, dict):
                 continue
+
             try:
                 total += float(allowance.get("amount", 0))
             except (TypeError, ValueError):
                 continue
+
         return total
 
     def get_monthly_salary(self, obj):
-        total = self.get_total_allowance(obj) + float(obj.basic_salary or 0)
-        return total
+
+        return (
+            self.get_total_allowance(obj)
+            + float(obj.basic_salary or 0)
+        )
+
 
         
 
@@ -478,3 +572,34 @@ class OfferLetterShareSerializer(serializers.Serializer):
             )
 
         return value
+
+
+
+
+
+def create_offer_sections(offer, sections_data):
+
+    for section_data in sections_data:
+
+        subtitles_data = section_data.pop("subtitles", [])
+
+        section = OfferLetterSection.objects.create(
+            offer_letter=offer,
+            **section_data
+        )
+
+        for subtitle_data in subtitles_data:
+
+            points_data = subtitle_data.pop("points", [])
+
+            subtitle = OfferLetterSubtitle.objects.create(
+                section=section,
+                **subtitle_data
+            )
+
+            for point_data in points_data:
+
+                OfferLetterPoint.objects.create(
+                    subtitle=subtitle,
+                    **point_data
+                )

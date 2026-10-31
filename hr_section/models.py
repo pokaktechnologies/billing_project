@@ -238,3 +238,53 @@ class OfferLetter(models.Model):
 # bond_required    = models.BooleanField(default=False)
 # pf_applicable    = models.BooleanField(default=False)
 # esi_applicable   = models.BooleanField(default=False)
+
+
+
+class OfferLetterSection(models.Model):
+    offer_letter = models.ForeignKey(
+        OfferLetter,
+        on_delete=models.CASCADE,
+        related_name="sections"
+    )
+    title = models.CharField(max_length=255)
+    content = models.TextField(blank=True, null=True)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "id"]
+
+    def __str__(self):
+        return self.title
+
+
+class OfferLetterSubtitle(models.Model):
+    section = models.ForeignKey(
+        OfferLetterSection,
+        on_delete=models.CASCADE,
+        related_name="subtitles"
+    )
+    title = models.CharField(max_length=255)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "id"]
+
+    def __str__(self):
+        return self.title
+
+
+class OfferLetterPoint(models.Model):
+    subtitle = models.ForeignKey(
+        OfferLetterSubtitle,
+        on_delete=models.CASCADE,
+        related_name="points"
+    )
+    content = models.TextField()
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "id"]
+
+    def __str__(self):
+        return self.content[:100]

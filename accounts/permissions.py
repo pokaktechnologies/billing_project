@@ -138,8 +138,14 @@ PARENT_MODULE_MAP = [
             "project",
             "project_timeline",
             "project_reports"
-            "dm",
             "testing"
+        ]
+    },
+    {
+        "name": "Digital_Marketing",
+        "submodules": [
+            "dm_projects",
+            "dm",
         ]
     },
 

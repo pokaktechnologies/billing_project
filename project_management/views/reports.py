@@ -15,6 +15,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from accounts.models import CustomUser
 from accounts.permissions import HasModulePermission
 from activity_logs.base_view import BaseAPIView
+from project_management.models.members import Member
 from ..models import (
     ChallengeResolution,
     ProjectManagement,

@@ -1331,7 +1331,10 @@ class ModulePermission(models.Model):
         ("project", "Project"),
         ("project_timeline", "Developer Timeline"),
         ("project_reports", "Project Reports"),
+
+        # Testing
         ("testing", "Testing Timeline"),
+        ("testing_projects", "Testing Projects"),
 
         #DIGITAL MARKETING'
         ("dm_projects", "DM Proojects"),

@@ -150,6 +150,14 @@ PARENT_MODULE_MAP = [
     },
 
     {
+        "name": "Testing_Management",
+        "submodules": [
+            "testing_projects",
+            "testing",
+        ]
+    },
+
+    {
         "name": "certificate",
         "submodules": [
             "certificate"

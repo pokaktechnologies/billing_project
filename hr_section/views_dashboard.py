@@ -30,29 +30,52 @@ class HrDashboardMetricsAPIView(BaseHrDashboardAPIView):
         current_month_str = today.strftime("%Y-%m")
         first_day_of_month = today.replace(day=1)
 
-        # 1. Employee stats
-        total_staff = StaffProfile.objects.filter(job_detail__isnull=False).count()
-        active_staff = StaffProfile.objects.filter(job_detail__status="active").count()
-        probation_staff = StaffProfile.objects.filter(job_detail__status="probation").count()
-        internship_active_staff = StaffProfile.objects.filter(
-            job_detail__job_type="internship",
+        employee_qs = StaffProfile.objects.filter(
+            job_detail__isnull=False
+        ).exclude(
+            job_detail__job_type="internship"
+        )
+
+        total_staff = employee_qs.count()
+
+        active_staff = employee_qs.filter(
             job_detail__status="active"
         ).count()
-        full_day_active_staff = StaffProfile.objects.filter(
+
+        probation_staff = employee_qs.filter(
+            job_detail__status="probation"
+        ).count()
+
+        full_day_active_staff = employee_qs.filter(
             job_detail__job_type="full_day",
             job_detail__status="active"
         ).count()
-        part_time_active_staff = StaffProfile.objects.filter(
+
+        part_time_active_staff = employee_qs.filter(
             job_detail__job_type="part_time",
             job_detail__status="active"
         ).count()
-        contract_active_staff = StaffProfile.objects.filter(
+
+        contract_active_staff = employee_qs.filter(
             job_detail__job_type="contract",
             job_detail__status="active"
         ).count()
-        new_joiners_this_month = StaffProfile.objects.filter(
+
+        new_joiners_this_month = employee_qs.filter(
             job_detail__start_date__gte=first_day_of_month,
             job_detail__start_date__lte=today
+        ).count()
+
+
+        # 2. Intern stats
+        intern_qs = StaffProfile.objects.filter(
+            job_detail__job_type="internship"
+        )
+
+        total_interns = intern_qs.count()
+
+        active_interns = intern_qs.filter(
+            job_detail__status="active"
         ).count()
 
         # 2. Today's Attendance stats
@@ -94,11 +117,15 @@ class HrDashboardMetricsAPIView(BaseHrDashboardAPIView):
                 "total_employees": total_staff,
                 "active_employees": active_staff,
                 "on_probation": probation_staff,
-                "active_interns": internship_active_staff,
                 "active_full_day": full_day_active_staff,
                 "active_part_time": part_time_active_staff,
                 "active_contract": contract_active_staff,
                 "new_joiners_this_month": new_joiners_this_month,
+            },
+
+            "intern_summary": {
+                "total_interns": total_interns,
+                "active_interns": active_interns,
             },
             "today_attendance": {
                 "total_expected": active_staff,

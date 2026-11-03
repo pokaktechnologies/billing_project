@@ -98,10 +98,14 @@ PARENT_MODULE_MAP = [
     {
         "name": "Faculty Management",
         "submodules": [
-            "all_tasks",
+            "faculty_dashboard",
+            # "all_tasks",
             "my_courses",
+            "schedule",
+            "faculty_attendance", 
             "faculty_interns",
-            "submissions"
+            "submissions",
+            "faculty_reports"
         ]
     },
 

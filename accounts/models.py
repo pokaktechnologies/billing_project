@@ -1331,8 +1331,14 @@ class ModulePermission(models.Model):
         ("project", "Project"),
         ("project_timeline", "Developer Timeline"),
         ("project_reports", "Project Reports"),
-        ("dm", "Digital Marketing Timeline"),
+
+        # Testing
         ("testing", "Testing Timeline"),
+        ("testing_projects", "Testing Projects"),
+
+        #DIGITAL MARKETING'
+        ("dm_projects", "DM Proojects"),
+        ("dm", "Digital Marketing Timeline"),
 
         # CERTIFICATE
         ("certificate", "Certificate"),
@@ -1368,12 +1374,13 @@ class ModulePermission(models.Model):
         ('admissions', "Admissions"),
 
         # FACULTY MANAGEMENT
-        ('all_tasks', "All Tasks"),
+        ('faculty_dashboard', "Faculty Dashboard"),
         ('my_courses', "My Courses"),
+        ('schedule', "Schedule"),
+        ('faculty_attendance', "Faculty Attendance"),
         ('faculty_interns', "Faculty Interns"),
         ('submissions', "Submissions"),
-        
-
+        ('faculty_reports', "Faculty Reports"),
         # INTERNSHIP PRO
         ('my_tasks', "My Tasks"),
         ('study_materials', "Study Materials"),

@@ -98,10 +98,14 @@ PARENT_MODULE_MAP = [
     {
         "name": "Faculty Management",
         "submodules": [
-            "all_tasks",
+            "faculty_dashboard",
+            # "all_tasks",
             "my_courses",
+            "schedule",
+            "faculty_attendance", 
             "faculty_interns",
-            "submissions"
+            "submissions",
+            "faculty_reports"
         ]
     },
 
@@ -138,8 +142,22 @@ PARENT_MODULE_MAP = [
             "project",
             "project_timeline",
             "project_reports"
-            "dm",
             "testing"
+        ]
+    },
+    {
+        "name": "Digital_Marketing",
+        "submodules": [
+            "dm_projects",
+            "dm",
+        ]
+    },
+
+    {
+        "name": "Testing_Management",
+        "submodules": [
+            "testing_projects",
+            "testing",
         ]
     },
 

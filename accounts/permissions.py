@@ -158,6 +158,7 @@ PARENT_MODULE_MAP = [
         "submodules": [
             "testing_projects",
             "testing",
+            "bug_sheet"
         ]
     },
 

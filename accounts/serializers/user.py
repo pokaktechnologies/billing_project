@@ -637,6 +637,16 @@ class EmployeeRegistrationSerializer(serializers.ModelSerializer):
 
 
 class ConvertEmployeeRegistrationToStaffSerializer(serializers.Serializer):
+    email = serializers.EmailField(
+        required=False,
+        allow_blank=True,
+        help_text="Login email for authentication (CustomUser). Defaults to registration.email if not provided."
+    )
+    staff_email = serializers.EmailField(
+        required=False,
+        allow_blank=True,
+        help_text="Personal/contact email for StaffProfile. Defaults to registration.email if not provided."
+    )
     employee_id = serializers.CharField(max_length=50)
     password = serializers.CharField(write_only=True, min_length=6)
     confirm_password = serializers.CharField(write_only=True)

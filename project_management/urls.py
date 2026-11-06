@@ -1,4 +1,6 @@
 from django.urls import path
+
+from .views.testing import *
 from .views import *
 
 urlpatterns = [
@@ -88,4 +90,10 @@ urlpatterns = [
     
     # Number Generator
     path('generate-number/', NumberGeneratorView.as_view(), name='generate_project_contract_number'),
+
+
+    # Testing
+    path('bug-sheet/', BugSheetListCreateAPIView.as_view(), name='bug-sheet'),
+    path('bug-sheet/<int:bug_id>/', BugReportDetailAPIView.as_view(), name='bug-report-detail'),
+    path('bug-sheet/<int:bug_id>/status/', BugStatusUpdateAPIView.as_view(), name='bug-status-update'),
 ]

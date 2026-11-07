@@ -5,6 +5,8 @@ from accounts.models import  CustomUser,SalesPerson
 from django.utils import timezone
 from django.db.models import JSONField
 
+from core import settings
+
 class Lead(models.Model):
     CustomUser = models.ForeignKey(CustomUser, on_delete=models.PROTECT, related_name='leads')
     lead_type = models.CharField(
@@ -348,3 +350,48 @@ class WhatsAppDetail(models.Model):
 
     def __str__(self):
         return f"WhatsApp to {self.phone_number}"
+
+
+
+class Notification(models.Model):
+
+    NOTIFICATION_TYPES = [
+        ("followup_today", "Follow-up Today"),
+        ("followup_5_min", "Follow-up Reminder"),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="notifications"
+    )
+
+    followup = models.ForeignKey(
+        "leads.FollowUp",
+        on_delete=models.CASCADE,
+        related_name="notifications"
+    )
+
+    title = models.CharField(max_length=200)
+    message = models.TextField()
+
+    notification_type = models.CharField(
+        max_length=50,
+        choices=NOTIFICATION_TYPES
+    )
+
+    is_read = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "followup", "notification_type"],
+                name="unique_user_followup_notification"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.title} - {self.user}"

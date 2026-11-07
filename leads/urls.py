@@ -85,5 +85,12 @@ urlpatterns = [
     path('academic-dashboard/admin/', AdminAcademicDashboardView.as_view(), name='academic-dashboard-admin'),
     path('academic-dashboard/staff/', StaffAcademicDashboardView.as_view(), name='academic-dashboard-staff'),
 
+
+    # lead followup notifications
+    path("notifications/", NotificationListAPIView.as_view(), name="notification-list"),
+    path("notifications/unread-count/", UnreadNotificationCountAPIView.as_view(), name="notification-unread-count"),
+    path("notifications/<int:pk>/read/", MarkNotificationReadAPIView.as_view(), name="notification-mark-read"),
+    path("notifications/mark-all-read/", MarkAllNotificationsReadAPIView.as_view(), name="notification-mark-all-read"),
+
     
 ]

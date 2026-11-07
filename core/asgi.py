@@ -22,6 +22,7 @@ from channels.auth import AuthMiddlewareStack
 from channels.db import database_sync_to_async
 from django.contrib.auth.models import AnonymousUser
 from urllib.parse import parse_qs
+from leads import routing as leads_routing
 
 # Import your routing
 from chat import routing as chat_routing
@@ -62,7 +63,8 @@ application = ProtocolTypeRouter({
             URLRouter(
                 attendance_routing.websocket_urlpatterns +
                 chat_routing.websocket_urlpatterns +
-                activity_logs_routing.websocket_urlpatterns
+                activity_logs_routing.websocket_urlpatterns +
+                leads_routing.websocket_urlpatterns
             )
         )
     ),

@@ -411,3 +411,32 @@ class AcademicLeadDashboardSerializer(serializers.ModelSerializer):
 
     def get_lead_status_display(self, obj):
         return obj.get_lead_status_display()
+
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+
+    followup_title = serializers.CharField(
+        source="followup.title",
+        read_only=True
+    )
+
+    lead_name = serializers.CharField(
+        source="followup.lead.name",
+        read_only=True
+    )
+
+    class Meta:
+        model = Notification
+        fields = [
+            "id",
+            "title",
+            "message",
+            "notification_type",
+            "followup",
+            "followup_title",
+            "lead_name",
+            "is_read",
+            "created_at",
+        ]
+        read_only_fields = fields

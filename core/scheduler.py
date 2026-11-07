@@ -1,6 +1,8 @@
 import logging
 from apscheduler.schedulers.background import BackgroundScheduler
 
+from leads.scheduler import check_followup_reminders, create_daily_followup_notifications
+
 logger = logging.getLogger('scheduler')
 
 def start():
@@ -16,7 +18,27 @@ def start():
         auto_logout_job,
         pre_session_notification
     )
-    
+    scheduler.add_job(
+        create_daily_followup_notifications,
+        "cron",
+        hour=9,
+        minute=0,
+        id="lead_daily_followup_notifications",
+        replace_existing=True,
+        misfire_grace_time=3600
+    )
+
+    # Check for 5-minute reminders every minute
+    scheduler.add_job(
+        check_followup_reminders,
+        "interval",
+        minutes=1,
+        id="lead_followup_reminders",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True
+    )
+
     # Daily attendance creation
     scheduler.add_job(create_daily_attendance_records, "cron", hour=8, minute=0)
 

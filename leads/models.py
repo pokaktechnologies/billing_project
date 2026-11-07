@@ -43,6 +43,7 @@ class Lead(models.Model):
     name = models.CharField(max_length=100)  # Customer Name
     email = models.EmailField(unique=False, blank=True, null=True)  # Customer Email
     phone = models.CharField(max_length=15, unique=False, blank=True, null=True)  # Mobile
+    secondary_contact = models.CharField(max_length=15, unique=False, blank=True, null=True)  # Secondary Contact
     enquiry = models.CharField(max_length=100, blank=True, null=True)  # Customer Enquiry
     project_requirement = models.TextField(blank=True, null=True)  # Project Requirement
     course = models.ForeignKey('internship.Course', on_delete=models.SET_NULL, blank=True, null=True, related_name='leads')

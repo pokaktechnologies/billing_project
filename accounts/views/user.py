@@ -1223,21 +1223,25 @@ class ConvertEmployeeRegistrationToStaffAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        email = registration.email
-        if CustomUser.objects.filter(email=email).exists():
-            return Response(
-                {
-                    "status": "0",
-                    "message": f"A user with email '{email}' already exists."
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
         serializer = ConvertEmployeeRegistrationToStaffSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         validated_data = serializer.validated_data
+        
+        # Determine login email (for CustomUser / auth) and staff_email (for StaffProfile)
+        login_email = validated_data.get("email") or registration.email
+        staff_contact_email = validated_data.get("staff_email") or registration.email
+
+        if CustomUser.objects.filter(email=login_email).exists():
+            return Response(
+                {
+                    "status": "0",
+                    "message": f"A user with email '{login_email}' already exists."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         password = validated_data["password"]
         modules = validated_data["modules"]
         employee_id = validated_data["employee_id"]
@@ -1258,7 +1262,7 @@ class ConvertEmployeeRegistrationToStaffAPIView(APIView):
                 country_code = matched_code if matched_code else ""
 
         user = CustomUser.objects.create_user(
-            email=email,
+            email=login_email,
             password=password,
             first_name=registration.first_name,
             last_name=registration.last_name,
@@ -1279,7 +1283,7 @@ class ConvertEmployeeRegistrationToStaffAPIView(APIView):
             user=user,
             phone_number=registration.phone_number,
             qulification=registration.qualification,
-            staff_email=email,
+            staff_email=staff_contact_email,
             profile_image=registration.profile_photo,
             date_of_birth=registration.date_of_birth,
             address=registration.address,

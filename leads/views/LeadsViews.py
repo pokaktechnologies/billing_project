@@ -2028,3 +2028,99 @@ class DailyActivityView(SalesPersonBaseView, APIView):
                 "reminders": reminder_serializer.data
             }
         })
+
+
+
+class NotificationListAPIView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        notifications = Notification.objects.filter(
+            user=request.user
+        ).select_related(
+            "followup",
+            "followup__lead"
+        )
+
+        unread_only = request.query_params.get("unread")
+
+        if unread_only == "true":
+            notifications = notifications.filter(is_read=False)
+
+        serializer = NotificationSerializer(
+            notifications,
+            many=True
+        )
+
+        return Response({
+            "status": "1",
+            "message": "Notifications fetched successfully",
+            "unread_count": Notification.objects.filter(
+                user=request.user,
+                is_read=False
+            ).count(),
+            "data": serializer.data
+        })
+
+
+class UnreadNotificationCountAPIView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        count = Notification.objects.filter(
+            user=request.user,
+            is_read=False
+        ).count()
+
+        return Response({
+            "status": "1",
+            "unread_count": count
+        })
+
+
+class MarkNotificationReadAPIView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+
+        notification = Notification.objects.filter(
+            id=pk,
+            user=request.user
+        ).first()
+
+        if not notification:
+            return Response({
+                "status": "0",
+                "message": "Notification not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        notification.is_read = True
+        notification.save(update_fields=["is_read"])
+
+        return Response({
+            "status": "1",
+            "message": "Notification marked as read"
+        })
+
+
+class MarkAllNotificationsReadAPIView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request):
+
+        updated_count = Notification.objects.filter(
+            user=request.user,
+            is_read=False
+        ).update(is_read=True)
+
+        return Response({
+            "status": "1",
+            "message": "All notifications marked as read",
+            "updated_count": updated_count
+        })

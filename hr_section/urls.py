@@ -1,20 +1,70 @@
-from django.urls import path
-from .views import *
-from .views_dashboard import *
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+
+from .views import (
+    EnquiryCreateView,
+    EnquiryDetailView,
+    EnquiryStatusUpdateView,
+    EnquiryStatisticsView,
+    SearchEnquiryView,
+    ErpEnquiryListCreateView,
+    ErpEnquiryDetailView,
+    ErpEnquiryStatusUpdateView,
+    ErpEnquiryStatisticsView,
+    DesignationView,
+    DesignationDetailView,
+    JobPostingView,
+    JobPostingDetailView,
+    JobPostingDisplayForUserView,
+    JobPostingStats,
+    JobApplicationView,
+    JobApplicationWithoutJob,
+    JobApplicationListView,
+    JobApplicationDetailView,
+    JobApplicationStatusUpdateView,
+    JobApplicationSearchView,
+    JobApplicationStatsAPIView,
+    OfferLetterListCreateAPIView,
+    OfferLetterDetailAPIView,
+    OfferLetterShareAPIView,
+    HrDashaboardView,
+    HrDashboardMetricsAPIView,
+    HrDashboardActionItemsAPIView,
+    HrDashboardLiveAttendanceAPIView,
+    HrDashboardLeavesActiveUpcomingAPIView,
+    HrDashboardUpcomingHolidaysAPIView,
+    HrDashboardDepartmentsSummaryAPIView,
+    HrDashboardMilestonesAPIView,
+    HrDashboardRecruitmentJobsSummaryAPIView,
+    HrDashboardRecentApplicationsAPIView,
+    HrDashboardPayrollStatusAPIView,
+    HrDashboardStaffInternsAPIView,
+    HrDashboardStaffMilestonesAPIView,
+    HrDashboardStaffBirthdaysAPIView,
+    HRPolicyViewSet,
+)
+
+router = DefaultRouter()
+router.register(r'policies', HRPolicyViewSet, basename='hr-policy')
 
 urlpatterns = [
+    # HR Policies (CRUD)
+    path('', include(router.urls)),
+
+    # Enquiry
     path('enquiry/', EnquiryCreateView.as_view(), name='enquiry'),
     path('enquiry/<int:pk>/', EnquiryDetailView.as_view(), name='enquiry_detail'),
     path('enquiry/<int:pk>/status/', EnquiryStatusUpdateView.as_view(), name='enquiry_status_update'),
     path('enquiry/statistics/', EnquiryStatisticsView.as_view(), name='enquiry_statistics'),
     path('enquiry/search/', SearchEnquiryView.as_view(), name='enquiry_search'),
 
+    # ERP Enquiry
     path('erp/enquiry/', ErpEnquiryListCreateView.as_view(), name='erp-enquiry'),
     path('erp/enquiry/<int:pk>/', ErpEnquiryDetailView.as_view(), name='erp-enquiry-detail'),
     path('erp/enquiry/<int:pk>/status/', ErpEnquiryStatusUpdateView.as_view(), name='erp-enquiry-status-update'),
     path('erp/enquiry/statistics/', ErpEnquiryStatisticsView.as_view(), name='erp-enquiry-statistics'),
 
-
+    # Designation & Recruitment
     path('designation/', DesignationView.as_view(), name='designation_list'),
     path('designation/<int:pk>/', DesignationDetailView.as_view(), name='designation_detail'),
     path('job_posting/', JobPostingView.as_view(), name='job_posting'),

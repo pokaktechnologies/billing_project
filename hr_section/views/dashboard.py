@@ -8,14 +8,69 @@ from rest_framework.permissions import IsAuthenticated
 
 from accounts.permissions import HasModulePermission
 from accounts.models import StaffProfile, JobDetail, Department, EmployeeRegistration
+from accounts.serializers.user import StaffProfileSerializer
 from attendance.models import DailyAttendance, AttendanceSession, LeaveRequest, Holiday
 from payroll.models import PayrollPeriod, Payroll
-from .models import JobPosting, JobApplication, OfferLetter
+from ..models import JobPosting, JobApplication, OfferLetter, Enquiry
+from ..serializers import EnquirySerializer
 
 
 class BaseHrDashboardAPIView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
     required_module = "hr_dashboard"
+
+
+class HrDashaboardView(APIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+
+    def get(self, request):
+        enquiries = Enquiry.objects.all()
+        total_enquiries = enquiries.count()
+        total_new_enquiries = enquiries.filter(status='new').count()
+        total_reviewed_enquiries = enquiries.filter(status='reviewed').count()
+        total_responded_enquiries = enquiries.filter(status='responded').count()
+
+        enquiries_list = EnquirySerializer(enquiries[:3], many=True).data
+
+        staff = StaffProfile.objects.filter(job_detail__isnull=False)
+        total_staff = staff.count()
+        active_staff = staff.filter(job_detail__status='active').count()
+        staff_on_leave = StaffProfile.objects.filter(
+            daily_attendance__status="leave",
+            daily_attendance__date=timezone.localdate()).distinct()
+        on_leave = staff_on_leave.count()
+        staff_list = StaffProfileSerializer(staff_on_leave[:3], many=True).data
+
+        enquiries_data = {
+            'total_enquiries': total_enquiries,
+            'total_new_enquiries': total_new_enquiries,
+            'total_reviewed_enquiries': total_reviewed_enquiries,
+            'total_responded_enquiries': total_responded_enquiries,
+            'enquiries_list': enquiries_list,
+        }
+        staff_data = {
+            'total_staff': total_staff,
+            'active_staff': active_staff,
+            'on_leave': on_leave,
+            'staff_list': staff_list,
+        }
+        attendance_data = {
+            'absent_staff': on_leave,
+            'present_staff': total_staff - on_leave,
+            'late_staff': DailyAttendance.objects.filter(
+                sessions__status='late',
+                date=timezone.localdate()
+            ).distinct().count(),
+        }
+
+        return Response(
+            {
+                'enquiries': enquiries_data, 
+                'staff': staff_data,
+                'attendance': attendance_data
+            },
+            status=status.HTTP_200_OK)
+
 
 
 # ---------------------------------------------------------------------------

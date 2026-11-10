@@ -48,7 +48,16 @@ from .dashboard import (
     HrDashboardStaffMilestonesAPIView,
     HrDashboardStaffBirthdaysAPIView,
 )
-from .hr_policy import HRPolicyViewSet
+from .hr_policy import (
+    HRPolicyViewSet,
+    HRPolicySectionCreateView,
+    HRPolicySectionDetailView,
+    HRPolicySubtitleCreateView,
+    HRPolicySubtitleDetailView,
+    HRPolicySectionPointCreateView,
+    HRPolicySubtitlePointCreateView,
+    HRPolicyPointDetailView,
+)
 
 __all__ = [
     'Pagination',
@@ -94,5 +103,12 @@ __all__ = [
     'HrDashboardStaffMilestonesAPIView',
     'HrDashboardStaffBirthdaysAPIView',
     'HRPolicyViewSet',
+    'HRPolicySectionCreateView',
+    'HRPolicySectionDetailView',
+    'HRPolicySubtitleCreateView',
+    'HRPolicySubtitleDetailView',
+    'HRPolicySectionPointCreateView',
+    'HRPolicySubtitlePointCreateView',
+    'HRPolicyPointDetailView',
 ]
 

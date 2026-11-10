@@ -16,7 +16,7 @@ from .offer_letter import (
     OfferLetterSubtitle,
     OfferLetterPoint,
 )
-from .hr_policy import HRPolicy
+from .hr_policy import HRPolicy, HRPolicySection, HRPolicySubtitle, HRPolicyPoint
 
 __all__ = [
     'Enquiry',
@@ -35,5 +35,8 @@ __all__ = [
     'OfferLetterSubtitle',
     'OfferLetterPoint',
     'HRPolicy',
+    'HRPolicySection',
+    'HRPolicySubtitle',
+    'HRPolicyPoint',
 ]
 

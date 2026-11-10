@@ -42,12 +42,28 @@ from .views import (
     HrDashboardStaffMilestonesAPIView,
     HrDashboardStaffBirthdaysAPIView,
     HRPolicyViewSet,
+    HRPolicySectionCreateView,
+    HRPolicySectionDetailView,
+    HRPolicySubtitleCreateView,
+    HRPolicySubtitleDetailView,
+    HRPolicySectionPointCreateView,
+    HRPolicySubtitlePointCreateView,
+    HRPolicyPointDetailView,
 )
 
 router = DefaultRouter()
 router.register(r'policies', HRPolicyViewSet, basename='hr-policy')
 
 urlpatterns = [
+    # HR Policies - granular section / subtitle / point endpoints
+    path('policies/<int:policy_id>/sections/', HRPolicySectionCreateView.as_view(), name='hr-policy-section-create'),
+    path('policies/sections/<int:pk>/', HRPolicySectionDetailView.as_view(), name='hr-policy-section-detail'),
+    path('policies/sections/<int:section_id>/subtitles/', HRPolicySubtitleCreateView.as_view(), name='hr-policy-subtitle-create'),
+    path('policies/sections/<int:section_id>/points/', HRPolicySectionPointCreateView.as_view(), name='hr-policy-section-point-create'),
+    path('policies/subtitles/<int:pk>/', HRPolicySubtitleDetailView.as_view(), name='hr-policy-subtitle-detail'),
+    path('policies/subtitles/<int:subtitle_id>/points/', HRPolicySubtitlePointCreateView.as_view(), name='hr-policy-subtitle-point-create'),
+    path('policies/points/<int:pk>/', HRPolicyPointDetailView.as_view(), name='hr-policy-point-detail'),
+
     # HR Policies (CRUD)
     path('', include(router.urls)),
 

@@ -1300,6 +1300,7 @@ class ModulePermission(models.Model):
         ("hr_faculty", "HR Faculty"),
         ("hr_salary_statements", "HR Salary Statements"),
         ("hr_admissions", "HR Admissions"),
+        ("hr_policy", "HR Policy"),
 
         # TASK
         ("task_all", "All Tasks"),

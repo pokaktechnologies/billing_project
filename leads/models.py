@@ -64,6 +64,7 @@ class Lead(models.Model):
     # -------------------
     lead_number = models.CharField(max_length=50, unique=True,null=True, blank=True)  # Lead Number
     lead_source = models.ForeignKey('Source', on_delete=models.PROTECT, blank=True, null=True)  # Lead Source
+    source_text = models.CharField(max_length=255, blank=True, null=True)  # Additional remark / meta category id
     salesperson = models.ForeignKey(SalesPerson, on_delete=models.PROTECT, blank=True, null=True)
     lead_status = models.CharField(
         max_length=50,

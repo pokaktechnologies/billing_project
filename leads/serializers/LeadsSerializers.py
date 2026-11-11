@@ -126,6 +126,21 @@ class LeadSerializer(serializers.ModelSerializer):
                 'reason_note': 'Reason note is required when lead status is Lost.'
             })
 
+        # ----------------------------------------
+        # SOURCE TEXT VALIDATION
+        # ----------------------------------------
+        lead_source = data.get(
+            'lead_source',
+            getattr(self.instance, 'lead_source', None)
+        )
+        source_text = data.get(
+            'source_text',
+            getattr(self.instance, 'source_text', None)
+        )
+
+        if not lead_source and source_text:
+            data['source_text'] = None
+
         return data
 
         # ----------------------------------------
@@ -158,6 +173,7 @@ class LeadSerializerListDisplay(serializers.ModelSerializer):
     quotation_number = serializers.CharField(source='quotation.quotation_number', read_only=True, default=None)
     qoutation_grand_total = serializers.DecimalField(source='quotation.grand_total', read_only=True, default=None, max_digits=10, decimal_places=2)
     course_name = serializers.CharField(source='course.title', read_only=True, default=None)
+    lead_source_name = serializers.CharField(source='lead_source.name', read_only=True, default=None)
 
     class Meta:
         model = Lead
@@ -342,6 +358,7 @@ class LeadReportSerializer(serializers.ModelSerializer):
             "phone",
             "company",
             "source",
+            "source_text",
             "salesperson_name",
             "location_name",
             "lead_status",

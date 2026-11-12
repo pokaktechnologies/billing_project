@@ -8,13 +8,14 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 
 from core import settings
 from accounts.services.pagination import api_response, paginate_response
-from ..models import OfferLetter, StatusChoices
+from ..models import OfferLetter, StatusChoices, OfferLetterAnnexure
 from ..serializers import (
     OfferLetterCreateSerializer,
     OfferLetterPatchSerializer,
     OfferLetterListSerializer,
     OfferLetterDetailSerializer,
     OfferLetterShareSerializer,
+    OfferLetterAnnexureSerializer,
 )
 from ..filters import OfferLetterFilter
 
@@ -171,4 +172,73 @@ class OfferLetterShareAPIView(APIView):
                     "error": str(e)
                 }
             )
+
+
+class OfferLetterAnnexureAPIView(APIView):
+    """
+    Dedicated endpoint for managing the standalone Annexure for an Offer Letter.
+    GET  /hr/offer-letters/<pk>/annexure/ -> Fetch saved annexure data or Status=0 if none
+    POST /hr/offer-letters/<pk>/annexure/ -> Create or update the annexure data
+    DELETE /hr/offer-letters/<pk>/annexure/ -> Delete the annexure data
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        offer = get_object_or_404(OfferLetter, pk=pk)
+        try:
+            annexure = offer.annexure
+            serializer = OfferLetterAnnexureSerializer(annexure)
+            return api_response(
+                message="Annexure fetched successfully.",
+                data=serializer.data
+            )
+        except OfferLetterAnnexure.DoesNotExist:
+            return api_response(
+                status="0",
+                message="No annexure found for this offer letter.",
+                data=None
+            )
+
+    def post(self, request, pk):
+        offer = get_object_or_404(OfferLetter, pk=pk)
+        annexure, _ = OfferLetterAnnexure.objects.get_or_create(
+            offer_letter=offer,
+            defaults={
+                "title": request.data.get("title", "Offer Letter Annexures"),
+                "pages": request.data.get("pages", []),
+                "created_by": request.user,
+            }
+        )
+
+        serializer = OfferLetterAnnexureSerializer(
+            annexure,
+            data=request.data,
+            partial=True
+        )
+        if serializer.is_valid():
+            saved_annexure = serializer.save(
+                created_by=request.user if not annexure.created_by else annexure.created_by
+            )
+            return api_response(
+                message="Annexure saved successfully.",
+                data=OfferLetterAnnexureSerializer(saved_annexure).data
+            )
+
+        return api_response(
+            status="0",
+            message="Validation failed.",
+            data=serializer.errors
+        )
+
+    def delete(self, request, pk):
+        offer = get_object_or_404(OfferLetter, pk=pk)
+        try:
+            offer.annexure.delete()
+            return api_response(message="Annexure deleted successfully.")
+        except OfferLetterAnnexure.DoesNotExist:
+            return api_response(
+                status="0",
+                message="No annexure found to delete."
+            )
+
 

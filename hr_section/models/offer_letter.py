@@ -105,3 +105,46 @@ class OfferLetterPoint(models.Model):
     def __str__(self):
         return self.content[:100]
 
+
+class OfferLetterAnnexure(models.Model):
+    """
+    Independent companion model for Offer Letter Annexures.
+    - Linked 1-to-1 with an existing OfferLetter.
+    - Existing OfferLetter data is NEVER modified by this model.
+    - Stores multi-page documents (Annexure A, Annexure B, etc.)
+      with full block-level freedom (tables, subtitles, paragraphs, points, signatures).
+    """
+    offer_letter = models.OneToOneField(
+        OfferLetter,
+        on_delete=models.CASCADE,
+        related_name="annexure",
+        help_text="Reference to the parent offer letter (read-only link)."
+    )
+    title = models.CharField(
+        max_length=255,
+        default="Offer Letter Annexures"
+    )
+    pages = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Ordered array of pages containing blocks (subtitles, tables, points, signatures)."
+    )
+    created_by = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_annexures"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Offer Letter Annexure"
+        verbose_name_plural = "Offer Letter Annexures"
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return f"Annexure for Offer #{self.offer_letter_id} ({self.offer_letter.candidate_name})"
+
+

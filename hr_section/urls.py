@@ -27,6 +27,7 @@ from .views import (
     OfferLetterListCreateAPIView,
     OfferLetterDetailAPIView,
     OfferLetterShareAPIView,
+    OfferLetterAnnexureAPIView,
     HrDashaboardView,
     HrDashboardMetricsAPIView,
     HrDashboardActionItemsAPIView,
@@ -102,6 +103,7 @@ urlpatterns = [
     path("offer-letters/", OfferLetterListCreateAPIView.as_view(), name="offer-letter-list-create"),
     path("offer-letters/<int:pk>/", OfferLetterDetailAPIView.as_view(), name="offer-letter-detail"),
     path("offer-letters/<int:pk>/share/", OfferLetterShareAPIView.as_view(), name="offer-letter-share"),
+    path("offer-letters/<int:pk>/annexure/", OfferLetterAnnexureAPIView.as_view(), name="offer-letter-annexure"),
     
     # Dashboard
     path('dashboard/', HrDashaboardView.as_view(), name='hr_dashboard_overview'),

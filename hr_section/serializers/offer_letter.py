@@ -6,6 +6,7 @@ from ..models import (
     OfferLetterSection,
     OfferLetterSubtitle,
     OfferLetterPoint,
+    OfferLetterAnnexure,
 )
 
 
@@ -333,4 +334,32 @@ class OfferLetterShareSerializer(serializers.Serializer):
                 "Only PDF files are allowed."
             )
         return value
+
+
+class OfferLetterAnnexureSerializer(serializers.ModelSerializer):
+    created_by = serializers.StringRelatedField(read_only=True)
+
+    class Meta:
+        model = OfferLetterAnnexure
+        fields = [
+            "id",
+            "offer_letter",
+            "title",
+            "pages",
+            "created_by",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "offer_letter", "created_by", "created_at", "updated_at"]
+
+    def validate_pages(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError("pages must be a list of page objects.")
+        for page in value:
+            if not isinstance(page, dict):
+                raise serializers.ValidationError("Each page must be an object.")
+            if "blocks" in page and not isinstance(page["blocks"], list):
+                raise serializers.ValidationError("blocks inside each page must be a list.")
+        return value
+
 

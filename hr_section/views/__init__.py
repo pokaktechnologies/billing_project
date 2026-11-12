@@ -30,6 +30,7 @@ from .offer_letter import (
     OfferLetterListCreateAPIView,
     OfferLetterDetailAPIView,
     OfferLetterShareAPIView,
+    OfferLetterAnnexureAPIView,
 )
 from .dashboard import (
     BaseHrDashboardAPIView,
@@ -87,6 +88,7 @@ __all__ = [
     'OfferLetterListCreateAPIView',
     'OfferLetterDetailAPIView',
     'OfferLetterShareAPIView',
+    'OfferLetterAnnexureAPIView',
     'BaseHrDashboardAPIView',
     'HrDashaboardView',
     'HrDashboardMetricsAPIView',

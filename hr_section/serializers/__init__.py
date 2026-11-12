@@ -28,6 +28,7 @@ from .offer_letter import (
     OfferLetterListSerializer,
     OfferLetterDetailSerializer,
     OfferLetterShareSerializer,
+    OfferLetterAnnexureSerializer,
     create_offer_sections,
 )
 from .hr_policy import (
@@ -71,6 +72,7 @@ __all__ = [
     'OfferLetterListSerializer',
     'OfferLetterDetailSerializer',
     'OfferLetterShareSerializer',
+    'OfferLetterAnnexureSerializer',
     'create_offer_sections',
     'HRPolicySerializer',
     'HRPolicyPointSerializer',

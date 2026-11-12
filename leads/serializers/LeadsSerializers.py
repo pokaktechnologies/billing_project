@@ -360,6 +360,8 @@ class LeadReportSerializer(serializers.ModelSerializer):
             "source",
             "source_text",
             "salesperson_name",
+            "notes",
+            "email",
             "location_name",
             "lead_status",
             "lead_type",

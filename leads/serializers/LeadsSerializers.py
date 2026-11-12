@@ -459,3 +459,54 @@ class NotificationSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
+
+
+class LeadSourceReportSerializer(serializers.ModelSerializer):
+    lead_source_name = serializers.CharField(
+        source='lead_source.name',
+        read_only=True,
+        default=None
+    )
+
+    lead_status_display = serializers.CharField(
+        source='get_lead_status_display',
+        read_only=True
+    )
+
+    lead_category_display = serializers.CharField(
+        source='get_lead_category_display',
+        read_only=True
+    )
+
+    priority_status_display = serializers.CharField(
+        source='get_priority_status_display',
+        read_only=True
+    )
+
+    salesperson_first_name = serializers.CharField(
+        source='salesperson.first_name',
+        read_only=True,
+        default=None
+    )
+
+    salesperson_last_name = serializers.CharField(
+        source='salesperson.last_name',
+        read_only=True,
+        default=None
+    )
+
+    location_name = serializers.CharField(
+        source='location.name',
+        read_only=True,
+        default=None
+    )
+
+    course_name = serializers.CharField(
+        source='course.title',
+        read_only=True,
+        default=None
+    )
+
+    class Meta:
+        model = Lead
+        fields = '__all__'

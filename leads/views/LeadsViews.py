@@ -1505,42 +1505,56 @@ class LeadPerformanceAPIView(APIView):
             "salesperson_performance": salesperson_list
         })
 
-
-
 class LeadSourceReportAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
 
-        # -------------------------
+        # --------------------------------
         # BASE QUERYSET
-        # -------------------------
+        # --------------------------------
+
         leads = Lead.objects.all()
 
         if not request.user.is_superuser:
             leads = leads.filter(CustomUser=request.user)
 
-        # -------------------------
+        # --------------------------------
         # FILTERS
-        # -------------------------
-        from_date = request.GET.get("from_date")
-        to_date = request.GET.get("to_date")
-        location = request.GET.get("location")
-        salesperson = request.GET.get("salesperson")
-        lead_status = request.GET.get("lead_status")
-        lead_source = request.GET.get("lead_source")
+        # --------------------------------
+
+        from_date = request.GET.get('from_date')
+        to_date = request.GET.get('to_date')
+        location = request.GET.get('location')
+        salesperson = request.GET.get('salesperson')
+        lead_status = request.GET.get('lead_status')
+        lead_source = request.GET.get('lead_source')
 
         if from_date:
             parsed_from = parse_date(from_date)
+
             if parsed_from:
-                start_datetime = make_aware(datetime.combine(parsed_from, datetime.min.time()))
-                leads = leads.filter(created_at__gte=start_datetime)
+                start_datetime = timezone.make_aware(
+                    datetime.combine(parsed_from, time.min),
+                    timezone.get_current_timezone()
+                )
+
+                leads = leads.filter(
+                    created_at__gte=start_datetime
+                )
 
         if to_date:
             parsed_to = parse_date(to_date)
+
             if parsed_to:
-                end_datetime = make_aware(datetime.combine(parsed_to, datetime.max.time()))
-                leads = leads.filter(created_at__lte=end_datetime)
+                end_datetime = timezone.make_aware(
+                    datetime.combine(parsed_to, time.max),
+                    timezone.get_current_timezone()
+                )
+
+                leads = leads.filter(
+                    created_at__lte=end_datetime
+                )
 
         if location:
             leads = leads.filter(location_id=location)
@@ -1554,72 +1568,240 @@ class LeadSourceReportAPIView(APIView):
         if lead_source:
             leads = leads.filter(lead_source_id=lead_source)
 
-        # -------------------------
-        # GROUP BY LEAD SOURCE
-        # -------------------------
+        # --------------------------------
+        # OPTIMIZE QUERY
+        # --------------------------------
+
+        leads = leads.select_related(
+            'lead_source',
+            'salesperson',
+            'location',
+            'course',
+        ).order_by('-created_at')
+
+        # --------------------------------
+        # OVERALL STATISTICS
+        # --------------------------------
+
+        overall_stats = leads.aggregate(
+            total_leads=Count('id'),
+            total_converted=Count(
+                'id',
+                filter=Q(lead_status='converted')
+            ),
+        )
+
+        overall_total = overall_stats['total_leads'] or 0
+        overall_converted = overall_stats['total_converted'] or 0
+
+        overall_conversion_rate = (
+            round((overall_converted / overall_total) * 100, 2)
+            if overall_total else 0
+        )
+
+        # --------------------------------
+        # SOURCE-WISE SUMMARY
+        # --------------------------------
+
         source_data = (
             leads
             .filter(lead_source__isnull=False)
             .values(
-                "lead_source_id",
-                "lead_source__name"
+                'lead_source_id',
+                'lead_source__name'
             )
             .annotate(
-                total_leads=Count("id"),
-                converted=Count("id", filter=Q(lead_status="converted")),
-                lost=Count("id", filter=Q(lead_status="lost")),
-                new=Count("id", filter=Q(lead_status="new")),
-                in_progress=Count("id", filter=Q(lead_status="in_progress")),
+                total_leads=Count('id'),
+
+                converted=Count(
+                    'id',
+                    filter=Q(lead_status='converted')
+                ),
+
+                lost=Count(
+                    'id',
+                    filter=Q(lead_status='lost')
+                ),
+
+                new=Count(
+                    'id',
+                    filter=Q(lead_status='new')
+                ),
+
+                in_progress=Count(
+                    'id',
+                    filter=Q(lead_status='in_progress')
+                ),
             )
-            .order_by("-total_leads")
+            .order_by('-total_leads')
         )
 
         source_list = []
 
         for item in source_data:
-            total = item["total_leads"]
-            converted = item["converted"]
 
-            conversion_rate = round((converted / total) * 100, 2) if total > 0 else 0
+            total = item['total_leads']
+            converted = item['converted']
+
+            conversion_rate = (
+                round((converted / total) * 100, 2)
+                if total else 0
+            )
 
             source_list.append({
-                "source_id": item["lead_source_id"],
-                "source_name": item["lead_source__name"],
-                "total_leads": total,
-                "converted": converted,
-                "lost": item["lost"],
-                "new": item["new"],
-                "in_progress": item["in_progress"],
-                "conversion_rate": conversion_rate,
+                'source_id': item['lead_source_id'],
+                'source_name': item['lead_source__name'],
+                'total_leads': total,
+                'converted': converted,
+                'lost': item['lost'],
+                'new': item['new'],
+                'in_progress': item['in_progress'],
+                'conversion_rate': conversion_rate,
             })
 
-        # -------------------------
-        # OVERALL STATS (Optimized)
-        # -------------------------
-        overall_stats = leads.aggregate(
-            total_leads=Count("id"),
-            total_converted=Count("id", filter=Q(lead_status="converted")),
+        # --------------------------------
+        # ACTUAL LEAD RECORDS
+        # --------------------------------
+
+        lead_serializer = LeadSourceReportSerializer(
+            leads,
+            many=True
         )
 
-        overall_total = overall_stats["total_leads"] or 0
-        overall_converted = overall_stats["total_converted"] or 0
-
-        overall_conversion_rate = (
-            round((overall_converted / overall_total) * 100, 2)
-            if overall_total > 0 else 0
-        )
-
-        # -------------------------
+        # --------------------------------
         # RESPONSE
-        # -------------------------
+        # --------------------------------
+
         return Response({
-            "overall": {
-                "total_leads": overall_total,
-                "converted": overall_converted,
-                "conversion_rate": overall_conversion_rate,
+
+            'overall': {
+                'total_leads': overall_total,
+                'converted': overall_converted,
+                'conversion_rate': overall_conversion_rate,
             },
-            "source_performance": source_list
+
+            'source_performance': source_list,
+
+            'total_records': overall_total,
+
+            'leads': lead_serializer.data,
+
         })
+
+
+# class LeadSourceReportAPIView(APIView):
+#     permission_classes = [IsAuthenticated]
+
+#     def get(self, request):
+
+#         # -------------------------
+#         # BASE QUERYSET
+#         # -------------------------
+#         leads = Lead.objects.all()
+
+#         if not request.user.is_superuser:
+#             leads = leads.filter(CustomUser=request.user)
+
+#         # -------------------------
+#         # FILTERS
+#         # -------------------------
+#         from_date = request.GET.get("from_date")
+#         to_date = request.GET.get("to_date")
+#         location = request.GET.get("location")
+#         salesperson = request.GET.get("salesperson")
+#         lead_status = request.GET.get("lead_status")
+#         lead_source = request.GET.get("lead_source")
+
+#         if from_date:
+#             parsed_from = parse_date(from_date)
+#             if parsed_from:
+#                 start_datetime = make_aware(datetime.combine(parsed_from, datetime.min.time()))
+#                 leads = leads.filter(created_at__gte=start_datetime)
+
+#         if to_date:
+#             parsed_to = parse_date(to_date)
+#             if parsed_to:
+#                 end_datetime = make_aware(datetime.combine(parsed_to, datetime.max.time()))
+#                 leads = leads.filter(created_at__lte=end_datetime)
+
+#         if location:
+#             leads = leads.filter(location_id=location)
+
+#         if salesperson:
+#             leads = leads.filter(salesperson_id=salesperson)
+
+#         if lead_status:
+#             leads = leads.filter(lead_status=lead_status)
+
+#         if lead_source:
+#             leads = leads.filter(lead_source_id=lead_source)
+
+#         # -------------------------
+#         # GROUP BY LEAD SOURCE
+#         # -------------------------
+#         source_data = (
+#             leads
+#             .filter(lead_source__isnull=False)
+#             .values(
+#                 "lead_source_id",
+#                 "lead_source__name"
+#             )
+#             .annotate(
+#                 total_leads=Count("id"),
+#                 converted=Count("id", filter=Q(lead_status="converted")),
+#                 lost=Count("id", filter=Q(lead_status="lost")),
+#                 new=Count("id", filter=Q(lead_status="new")),
+#                 in_progress=Count("id", filter=Q(lead_status="in_progress")),
+#             )
+#             .order_by("-total_leads")
+#         )
+
+#         source_list = []
+
+#         for item in source_data:
+#             total = item["total_leads"]
+#             converted = item["converted"]
+
+#             conversion_rate = round((converted / total) * 100, 2) if total > 0 else 0
+
+#             source_list.append({
+#                 "source_id": item["lead_source_id"],
+#                 "source_name": item["lead_source__name"],
+#                 "total_leads": total,
+#                 "converted": converted,
+#                 "lost": item["lost"],
+#                 "new": item["new"],
+#                 "in_progress": item["in_progress"],
+#                 "conversion_rate": conversion_rate,
+#             })
+
+#         # -------------------------
+#         # OVERALL STATS (Optimized)
+#         # -------------------------
+#         overall_stats = leads.aggregate(
+#             total_leads=Count("id"),
+#             total_converted=Count("id", filter=Q(lead_status="converted")),
+#         )
+
+#         overall_total = overall_stats["total_leads"] or 0
+#         overall_converted = overall_stats["total_converted"] or 0
+
+#         overall_conversion_rate = (
+#             round((overall_converted / overall_total) * 100, 2)
+#             if overall_total > 0 else 0
+#         )
+
+#         # -------------------------
+#         # RESPONSE
+#         # -------------------------
+#         return Response({
+#             "overall": {
+#                 "total_leads": overall_total,
+#                 "converted": overall_converted,
+#                 "conversion_rate": overall_conversion_rate,
+#             },
+#             "source_performance": source_list
+#         })
     
 
 

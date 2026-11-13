@@ -1474,17 +1474,69 @@ class LeadPerformanceAPIView(APIView):
             "full_name"
         ).annotate(
             total=Count("id"),
-            contacted=Count("id", filter=Q(lead_status="contacted")),
-            qualified=Count("id", filter=Q(lead_status="created")),
-            converted=Count("id", filter=Q(lead_status="converted")),
+            contacted=Count(
+                "id",
+                filter=Q(lead_status="contacted")
+            ),
+            qualified=Count(
+                "id",
+                filter=Q(lead_status="created")
+            ),
+            converted=Count(
+                "id",
+                filter=Q(lead_status="converted")
+            ),
         ).order_by("-total")
 
         salesperson_list = list(salesperson_data)
 
+        # Calculate conversion rate
         for sp in salesperson_list:
             sp["conversion_rate"] = round(
                 (sp["converted"] / sp["total"]) * 100, 2
             ) if sp["total"] else 0
+
+            sp["leads"] = []
+
+        # --------------------------------
+        # FETCH ACTUAL LEAD DETAILS
+        # --------------------------------
+
+        salesperson_leads = list(
+            leads.filter(
+                salesperson__isnull=False
+            ).select_related(
+                "salesperson",
+                "lead_source",
+                "location"
+            ).order_by("-created_at")
+        )
+
+        lead_serializer = LeadPerformanceDetailSerializer(
+            salesperson_leads,
+            many=True
+        )
+
+        # --------------------------------
+        # GROUP LEADS BY SALESPERSON
+        # --------------------------------
+
+        salesperson_map = {
+            sp["salesperson_id"]: sp
+            for sp in salesperson_list
+        }
+
+        for lead, lead_data in zip(
+            salesperson_leads,
+            lead_serializer.data
+        ):
+            salesperson_id = lead.salesperson_id
+
+            if salesperson_id in salesperson_map:
+                salesperson_map[salesperson_id]["leads"].append(
+                    lead_data
+                )
+
 
         # =========================
         # FINAL RESPONSE

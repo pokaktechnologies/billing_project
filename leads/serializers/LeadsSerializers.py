@@ -510,3 +510,33 @@ class LeadSourceReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lead
         fields = '__all__'
+
+
+class LeadPerformanceDetailSerializer(serializers.ModelSerializer):
+
+    lead_status_display = serializers.CharField(
+        source='get_lead_status_display',
+        read_only=True
+    )
+
+    lead_source_name = serializers.CharField(
+        source='lead_source.name',
+        read_only=True,
+        default=None
+    )
+
+    class Meta:
+        model = Lead
+        fields = [
+            'id',
+            'lead_number',
+            'name',
+            'phone',
+            'email',
+            'company',
+            'lead_status',
+            'lead_status_display',
+            'lead_source_name',
+            'lead_date',
+            'created_at',
+        ]

@@ -1529,6 +1529,10 @@ class CenterReportStudentSerializer(serializers.ModelSerializer):
     center = serializers.CharField(source="center.name", read_only=True)
     course = serializers.SerializerMethodField()
     batch = serializers.SerializerMethodField()
+    learning_mode = serializers.SerializerMethodField()
+    registration_date = serializers.SerializerMethodField()
+    course_start_date = serializers.SerializerMethodField()
+    course_end_date = serializers.SerializerMethodField()
 
     class Meta:
         model = Student
@@ -1540,6 +1544,10 @@ class CenterReportStudentSerializer(serializers.ModelSerializer):
             "center",
             "course",
             "batch",
+            "learning_mode",
+            "registration_date",
+            "course_start_date",
+            "course_end_date",
             "status",
         ]
 
@@ -1560,3 +1568,25 @@ class CenterReportStudentSerializer(serializers.ModelSerializer):
     def get_batch(self, obj):
         enrollment = self.get_enrollment(obj)
         return enrollment.batch.batch_number if enrollment and enrollment.batch else None
+
+    def get_learning_mode(self, obj):
+        enrollment = self.get_enrollment(obj)
+        if enrollment and enrollment.application:
+            return enrollment.application.course_type
+        return None
+
+    def get_registration_date(self, obj):
+        if obj.created_at:
+            return obj.created_at.date()
+        enrollment = self.get_enrollment(obj)
+        return enrollment.enrollment_date if enrollment else None
+
+    def get_course_start_date(self, obj):
+        enrollment = self.get_enrollment(obj)
+        if enrollment and enrollment.batch:
+            return enrollment.batch.start_date
+        return obj.start_date
+
+    def get_course_end_date(self, obj):
+        enrollment = self.get_enrollment(obj)
+        return enrollment.batch.end_date if enrollment and enrollment.batch else None

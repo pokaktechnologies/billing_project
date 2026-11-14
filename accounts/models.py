@@ -1270,6 +1270,7 @@ class ModulePermission(models.Model):
         # PRODUCTS
         ("products", "Products"),
         ("stock", "Stock"),
+        ("product_setup", "Product Setup"),
 
 
 

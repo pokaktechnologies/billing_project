@@ -175,7 +175,8 @@ PARENT_MODULE_MAP = [
         "submodules": [
             "products",
             "stock",
-            "inventory_reports"
+            "inventory_reports",
+            "product_setup"
         ]
     },
 

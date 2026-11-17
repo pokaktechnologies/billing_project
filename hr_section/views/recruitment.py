@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import timedelta, datetime
 from django.utils import timezone
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
@@ -188,11 +188,47 @@ class JobApplicationPagination(PageNumberPagination):
         return int(page_size)
 
 
+def _parse_date(date_str):
+    return timezone.make_aware(datetime.strptime(date_str, "%Y-%m-%d"))
+
+
+def _apply_application_date_filters(queryset, query_params):
+    """Filter a JobApplication queryset's applied_at field by exact date, start_date, and/or end_date (YYYY-MM-DD)."""
+    exact_date = query_params.get('date')
+    start_date = query_params.get('start_date')
+    end_date = query_params.get('end_date')
+
+    try:
+        if exact_date:
+            day_start = _parse_date(exact_date)
+            queryset = queryset.filter(
+                applied_at__gte=day_start,
+                applied_at__lt=day_start + timedelta(days=1),
+            )
+        if start_date:
+            queryset = queryset.filter(applied_at__gte=_parse_date(start_date))
+        if end_date:
+            queryset = queryset.filter(
+                applied_at__lt=_parse_date(end_date) + timedelta(days=1)
+            )
+    except ValueError:
+        return None, Response(
+            {'error': 'Invalid date format. Use YYYY-MM-DD.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return queryset, None
+
+
 class JobApplicationListView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
 
     def get(self, request):
-        applications = JobApplication.objects.all().order_by('-applied_at')
+        applications, error_response = _apply_application_date_filters(
+            JobApplication.objects.all().order_by('-applied_at'), request.query_params
+        )
+        if error_response is not None:
+            return error_response
         
         paginator = JobApplicationPagination()
         result_page = paginator.paginate_queryset(applications, request)
@@ -265,6 +301,12 @@ class JobApplicationSearchView(APIView):
                 applications = applications.filter(job__id=job_id)
             except ValueError:
                 pass
+
+        applications, error_response = _apply_application_date_filters(
+            applications, request.query_params
+        )
+        if error_response is not None:
+            return error_response
 
         applications = applications.order_by(sort)
 

@@ -30,6 +30,38 @@ class Pagination(PageNumberPagination):
         return int(page_size)
 
 
+def _parse_date(date_str):
+    return timezone.make_aware(datetime.strptime(date_str, "%Y-%m-%d"))
+
+
+def _apply_date_filters(queryset, query_params):
+    """Filter a queryset's created_at field by exact date, start_date, and/or end_date (YYYY-MM-DD)."""
+    exact_date = query_params.get('date')
+    start_date = query_params.get('start_date')
+    end_date = query_params.get('end_date')
+
+    try:
+        if exact_date:
+            day_start = _parse_date(exact_date)
+            queryset = queryset.filter(
+                created_at__gte=day_start,
+                created_at__lt=day_start + timedelta(days=1),
+            )
+        if start_date:
+            queryset = queryset.filter(created_at__gte=_parse_date(start_date))
+        if end_date:
+            queryset = queryset.filter(
+                created_at__lt=_parse_date(end_date) + timedelta(days=1)
+            )
+    except ValueError:
+        return None, Response(
+            {'error': 'Invalid date format. Use YYYY-MM-DD.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return queryset, None
+
+
 # ========== Views for Enquiry ==========
 
 class EnquiryCreateView(BaseAPIView):
@@ -39,7 +71,11 @@ class EnquiryCreateView(BaseAPIView):
         return [IsAuthenticated(), HasModulePermission()]
 
     def get(self, request):
-        enquiries = Enquiry.objects.all()
+        enquiries, error_response = _apply_date_filters(
+            Enquiry.objects.all(), request.query_params
+        )
+        if error_response is not None:
+            return error_response
         serializer = EnquirySerializer(enquiries, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -155,7 +191,11 @@ class SearchEnquiryView(APIView):
         if status_filter:
             query &= Q(status__iexact=status_filter)
 
-        enquiries = Enquiry.objects.filter(query).order_by(sort)
+        enquiries, error_response = _apply_date_filters(
+            Enquiry.objects.filter(query).order_by(sort), request.query_params
+        )
+        if error_response is not None:
+            return error_response
 
         paginator = Pagination()
         paginated_enquiries = paginator.paginate_queryset(enquiries, request)

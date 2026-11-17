@@ -1,5 +1,7 @@
 import json
+from datetime import datetime, timedelta
 
+from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_countries import countries
@@ -10,7 +12,7 @@ from accounts.models import CustomUser, ModulePermission, Department, StaffProfi
 from rest_framework.views import APIView
 from activity_logs.base_view import BaseAPIView, BaseGenericAPIView
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, status as drf_status
 from rest_framework.permissions import AllowAny
 from django.shortcuts import get_object_or_404
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
@@ -107,6 +109,40 @@ class AssignPermissionView(APIView):
 
 from django.db import transaction, IntegrityError
 import traceback
+
+
+def _parse_date(date_str):
+    return timezone.make_aware(datetime.strptime(date_str, "%Y-%m-%d"))
+
+
+def _apply_date_filters(queryset, query_params, field_name='date_joined'):
+    """Filter a queryset's date/datetime field by exact date, start_date, and/or end_date (YYYY-MM-DD)."""
+    exact_date = query_params.get('date')
+    start_date = query_params.get('start_date')
+    end_date = query_params.get('end_date')
+
+    try:
+        if exact_date:
+            day_start = _parse_date(exact_date)
+            queryset = queryset.filter(**{
+                f"{field_name}__gte": day_start,
+                f"{field_name}__lt": day_start + timedelta(days=1),
+            })
+        if start_date:
+            queryset = queryset.filter(**{
+                f"{field_name}__gte": _parse_date(start_date),
+            })
+        if end_date:
+            queryset = queryset.filter(**{
+                f"{field_name}__lt": _parse_date(end_date) + timedelta(days=1),
+            })
+    except ValueError:
+        return None, Response(
+            {'error': 'Invalid date format. Use YYYY-MM-DD.'},
+            status=drf_status.HTTP_400_BAD_REQUEST,
+        )
+
+    return queryset, None
 
 
 class CreateStaffWithPermissionsView(BaseAPIView):
@@ -345,6 +381,12 @@ class CreateStaffWithPermissionsView(BaseAPIView):
             staff_users = staff_users.filter(
                 staff_profile__job_detail__job_type__iexact=job_type
             )
+
+        staff_users, error_response = _apply_date_filters(
+            staff_users, request.query_params
+        )
+        if error_response is not None:
+            return error_response
 
         serializer = StaffUserSerializer(staff_users, many=True)
 
@@ -1165,7 +1207,13 @@ class EmployeeRegistrationCreateView(APIView):
 
     def get(self, request):
 
-        registrations = EmployeeRegistration.objects.all().order_by('-created_at')
+        registrations, error_response = _apply_date_filters(
+            EmployeeRegistration.objects.all().order_by('-created_at'),
+            request.query_params,
+            field_name='created_at',
+        )
+        if error_response is not None:
+            return error_response
 
         serializer = EmployeeRegistrationSerializer(
             registrations,

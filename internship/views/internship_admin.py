@@ -314,6 +314,9 @@ class StudentListCreateAPIView(generics.ListCreateAPIView):
                 "discount_reason": request.data.get(
                     "enrollment_discount_reason"
                 ),
+                "learning_type": request.data.get(
+                    "enrollment_learning_type"
+                ),
             }
 
             # -------------------------------------------------

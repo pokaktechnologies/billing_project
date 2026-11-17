@@ -80,7 +80,13 @@ class JobPostingView(BaseAPIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
 
     def get(self, request):
-        job_postings = JobPosting.objects.all().order_by('-created_at')
+        job_postings, error_response = _apply_date_filters(
+            JobPosting.objects.all().order_by('-created_at'),
+            request.query_params,
+            field_name='created_at',
+        )
+        if error_response is not None:
+            return error_response
         serializer = JobPostingSerializer(job_postings, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -192,8 +198,8 @@ def _parse_date(date_str):
     return timezone.make_aware(datetime.strptime(date_str, "%Y-%m-%d"))
 
 
-def _apply_application_date_filters(queryset, query_params):
-    """Filter a JobApplication queryset's applied_at field by exact date, start_date, and/or end_date (YYYY-MM-DD)."""
+def _apply_date_filters(queryset, query_params, field_name='applied_at'):
+    """Filter a queryset's datetime field by exact date, start_date, and/or end_date (YYYY-MM-DD)."""
     exact_date = query_params.get('date')
     start_date = query_params.get('start_date')
     end_date = query_params.get('end_date')
@@ -201,16 +207,18 @@ def _apply_application_date_filters(queryset, query_params):
     try:
         if exact_date:
             day_start = _parse_date(exact_date)
-            queryset = queryset.filter(
-                applied_at__gte=day_start,
-                applied_at__lt=day_start + timedelta(days=1),
-            )
+            queryset = queryset.filter(**{
+                f"{field_name}__gte": day_start,
+                f"{field_name}__lt": day_start + timedelta(days=1),
+            })
         if start_date:
-            queryset = queryset.filter(applied_at__gte=_parse_date(start_date))
+            queryset = queryset.filter(**{
+                f"{field_name}__gte": _parse_date(start_date),
+            })
         if end_date:
-            queryset = queryset.filter(
-                applied_at__lt=_parse_date(end_date) + timedelta(days=1)
-            )
+            queryset = queryset.filter(**{
+                f"{field_name}__lt": _parse_date(end_date) + timedelta(days=1),
+            })
     except ValueError:
         return None, Response(
             {'error': 'Invalid date format. Use YYYY-MM-DD.'},
@@ -224,7 +232,7 @@ class JobApplicationListView(APIView):
     permission_classes = [IsAuthenticated, HasModulePermission]
 
     def get(self, request):
-        applications, error_response = _apply_application_date_filters(
+        applications, error_response = _apply_date_filters(
             JobApplication.objects.all().order_by('-applied_at'), request.query_params
         )
         if error_response is not None:
@@ -302,7 +310,7 @@ class JobApplicationSearchView(APIView):
             except ValueError:
                 pass
 
-        applications, error_response = _apply_application_date_filters(
+        applications, error_response = _apply_date_filters(
             applications, request.query_params
         )
         if error_response is not None:

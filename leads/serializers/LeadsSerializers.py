@@ -127,21 +127,27 @@ class LeadSerializer(serializers.ModelSerializer):
             })
 
         # ----------------------------------------
-        # SOURCE TEXT VALIDATION
+        # SOURCE VALIDATION
         # ----------------------------------------
+
         lead_source = data.get(
             'lead_source',
             getattr(self.instance, 'lead_source', None)
         )
+
+        source_code = data.get(
+            'source_code',
+            getattr(self.instance, 'source_code', None)
+        )
+
         source_text = data.get(
             'source_text',
             getattr(self.instance, 'source_text', None)
         )
 
-        if not lead_source and source_text:
+        if not lead_source:
+            data['source_code'] = None
             data['source_text'] = None
-
-        return data
 
         # ----------------------------------------
         # PRIORITY STATUS VALIDATION

@@ -426,6 +426,11 @@ class FacultySerializer(serializers.ModelSerializer):
     phone_number = serializers.CharField(source="user.phone_number", read_only=True)
     course_count = serializers.SerializerMethodField()
     students_count = serializers.SerializerMethodField()
+    role = serializers.CharField(
+        source="user.job_detail.role",
+        read_only=True,
+        default=None
+    )
 
     class Meta:
         model = Faculty
@@ -438,6 +443,7 @@ class FacultySerializer(serializers.ModelSerializer):
             "departments",
             "department_names",
             "department_details",
+            "role",
             "email",
             "phone_number",
             "course_count",

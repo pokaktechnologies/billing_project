@@ -1,3 +1,4 @@
+from django.db import transaction
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -346,46 +347,123 @@ class StaffFollowUpView(SalesPersonBaseView,APIView):
 
         if not salesperson:
             return Response(
-                {"status": "0", "message": "No salesperson assigned"},
+                {
+                    "status": "0",
+                    "message": "No salesperson assigned"
+                },
                 status=400
             )
 
-        lead_id = request.data.get("lead")
-        if not lead_id:
-            return Response(
-                {"status": "0", "message": "Lead ID is required"},
-                status=400
-            )
+        # Support both single and multiple lead creation
+        lead_ids = request.data.get("leads")
 
-        # ensure lead belongs to this salesperson
-        try:
-            lead = Lead.objects.get(id=lead_id, salesperson=salesperson)
-        except Lead.DoesNotExist:
-            return Response(
-                {"status": "0", "message": "Lead not found or unauthorized"},
-                status=404
-            )
+        if lead_ids is None:
+            single_lead = request.data.get("lead")
 
-        serializer = FollowUpSerializer(data=request.data)
-        if serializer.is_valid():
-            followup = serializer.save()
-            log_activity(
-                lead,
-                "created",
-                f"Follow-up created: {followup.title}",
-                model="FollowUp",
-                obj_id=followup.id
-            )
-            return Response(
-                {"status": "1", "message": "Follow-up created successfully"},
-                status=201
-            )
+            if not single_lead:
+                return Response({
+                    "status": "0",
+                    "message": "Lead ID or leads list is required"
+                }, status=400)
 
-        return Response(
-            {"status": "0", "message": "Creation failed", "errors": serializer.errors},
-            status=400
+            lead_ids = [single_lead]
+
+        # Validate leads format
+        if not isinstance(lead_ids, list) or not lead_ids:
+            return Response({
+                "status": "0",
+                "message": "Leads must be a non-empty list"
+            }, status=400)
+
+        # Remove duplicate IDs while preserving order
+        lead_ids = list(dict.fromkeys(lead_ids))
+
+        # Fetch only leads belonging to this salesperson
+        leads = Lead.objects.filter(
+            id__in=lead_ids,
+            salesperson=salesperson
         )
 
+        leads_by_id = {
+            str(lead.id): lead for lead in leads
+        }
+
+        # Check whether all requested leads are valid
+        invalid_ids = [
+            lead_id for lead_id in lead_ids
+            if str(lead_id) not in leads_by_id
+        ]
+
+        if invalid_ids:
+            return Response({
+                "status": "0",
+                "message": "Some leads were not found or unauthorized",
+                "invalid_leads": invalid_ids
+            }, status=400)
+
+        # Remove lead selection fields from common follow-up data
+        followup_data = request.data.copy()
+        followup_data.pop("lead", None)
+        followup_data.pop("leads", None)
+
+        # Validate all follow-ups before creating any
+        serializers = []
+
+        for lead_id in lead_ids:
+            lead = leads_by_id[str(lead_id)]
+
+            serializer = FollowUpSerializer(
+                data={
+                    **followup_data,
+                    "lead": lead.id
+                }
+            )
+
+            if not serializer.is_valid():
+                return Response({
+                    "status": "0",
+                    "message": "Follow-up validation failed",
+                    "lead_id": lead.id,
+                    "errors": serializer.errors
+                }, status=400)
+
+            serializers.append((serializer, lead))
+
+        # Create all follow-ups together
+        created_followups = []
+
+        with transaction.atomic():
+
+            for serializer, lead in serializers:
+
+                followup = serializer.save()
+
+                log_activity(
+                    lead,
+                    "created",
+                    f"Follow-up created: {followup.title}",
+                    model="FollowUp",
+                    obj_id=followup.id
+                )
+
+                created_followups.append(followup)
+
+        # Preserve the existing single-create response
+        if len(created_followups) == 1:
+            return Response({
+                "status": "1",
+                "message": "Follow-up created successfully"
+            }, status=201)
+
+        return Response({
+            "status": "1",
+            "message": "Follow-ups created successfully",
+            "total_created": len(created_followups),
+            "data": FollowUpSerializer(
+                created_followups,
+                many=True
+            ).data
+        }, status=201)
 
 
 class StaffFollowUpDetailView(SalesPersonBaseView,APIView):

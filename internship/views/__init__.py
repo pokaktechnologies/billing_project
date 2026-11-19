@@ -7,6 +7,7 @@ from . import (
     recorded_class,
     live_class,
     attendance,
+    pending_dashboard,
 )
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     'recorded_class',
     'live_class',
     'attendance',
+    'pending_dashboard',
 ]

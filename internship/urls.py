@@ -1,5 +1,5 @@
 from django.urls import path, include
-from .views import application, instructor, intern, report_view, internship_admin, recorded_class, live_class, attendance
+from .views import application, instructor, intern, report_view, internship_admin, recorded_class, live_class, attendance, pending_dashboard
 from .views.registration import StudentRegistrationReportView
 
 instructor_patterns = [
@@ -187,6 +187,8 @@ internship_admin_patterns = [
 
     # dashboard
     path("dashboard/academic/", internship_admin.AcademicDashboardAPIView.as_view()),
+    path("dashboard/pending/", pending_dashboard.AcademicPendingDashboardAPIView.as_view(), name="academic-pending-dashboard"),
+    path("pending-works/", pending_dashboard.AcademicPendingDashboardAPIView.as_view(), name="academic-pending-works"),
     path("batches/<int:batch_id>/unassigned-students/", internship_admin.BatchUnassignedStudentsAPIView.as_view(), name="batch-unassigned-students",),
     path("batches/<int:batch_id>/assign-students/", internship_admin.BatchAssignStudentsAPIView.as_view(), name="batch-assign-students",),
 

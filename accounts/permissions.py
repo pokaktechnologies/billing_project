@@ -81,6 +81,13 @@ PARENT_MODULE_MAP = [
     },
 
     {
+        "name": "pending_controls",
+        "submodules": [
+            "academy_pending",
+        ]
+    },
+
+    {
         "name": "Academy",
         "submodules": [
             "dashboard",

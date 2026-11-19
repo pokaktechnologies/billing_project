@@ -1388,6 +1388,11 @@ class ModulePermission(models.Model):
         ('my_tasks', "My Tasks"),
         ('study_materials', "Study Materials"),
         ('intern_payments', "Intern Payments"),
+
+
+        #pending control
+
+        ('academy_pending', "Academy Pending"),
     ]
 
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="module_permissions")

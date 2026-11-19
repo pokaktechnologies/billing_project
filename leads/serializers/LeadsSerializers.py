@@ -426,6 +426,9 @@ class AcademicLeadDashboardSerializer(serializers.ModelSerializer):
             'lead_status_display',
             'lead_date',
             'salesperson',
+            "lead_source",
+            "notes",
+            "phone",
         ]
 
     def get_priority_status_display(self, obj):

@@ -1,4 +1,6 @@
 from django.urls import path
+
+from attendance.views.attendance import StaffWiseAttendanceDetailReportAPIView
 from .views import *
 
 urlpatterns = [
@@ -25,4 +27,7 @@ urlpatterns = [
     # HR Leave Report (Admin)
     path('hr/leave-requests/', HrLeaveRequestListCreateView.as_view(), name='hr-leave-request-list-create'),
     path('hr/leave-requests/<int:pk>/', HrLeaveRequestDetailView.as_view(), name='hr-leave-request-detail'),
+
+    # report 
+    path('staff-wise-attendance-detail-report/', StaffWiseAttendanceDetailReportAPIView.as_view(), name='staff-wise-attendance-detail-report'),
 ]

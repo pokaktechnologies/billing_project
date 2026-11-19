@@ -1203,6 +1203,9 @@ class EmployeeReportView(APIView):
         gender = request.query_params.get('gender')
         department = request.query_params.get('department')
         job_type = request.query_params.get('job_type')
+        date = request.query_params.get('date')
+        date_from = request.query_params.get('date_from')
+        date_to = request.query_params.get('date_to')
 
         employees = (
             StaffProfile.objects
@@ -1228,6 +1231,14 @@ class EmployeeReportView(APIView):
 
         if job_type:
             employees = employees.filter(job_detail__job_type=job_type)
+
+        if date:
+            employees = employees.filter(job_detail__start_date=date)
+        else:
+            if date_from:
+                employees = employees.filter(job_detail__start_date__gte=date_from)
+            if date_to:
+                employees = employees.filter(job_detail__start_date__lte=date_to)
 
         paginator = Pagination()
         paginated_employees = paginator.paginate_queryset(employees, request)

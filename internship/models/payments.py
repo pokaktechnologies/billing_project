@@ -77,12 +77,26 @@ class StudentCourseEnrollment(models.Model):
     ("custom_installment", "Custom Installment"),
     ]
 
+    LEARNING_TYPE_CHOICES = [
+        ("online", "Online"),
+        ("offline", "Offline"),
+        ("recorded", "Recorded"),
+    ]
+
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="enrollments")
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="enrollments")
     batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name="enrollments")
     installment_plan = models.ForeignKey(InstallmentPlan, on_delete=models.SET_NULL, null=True, blank=True, related_name="enrollments")
     enrollment_date = models.DateField(auto_now_add=True)
 
+    learning_type = models.CharField(
+        max_length=10,
+        choices=LEARNING_TYPE_CHOICES,
+        null=True,
+        blank=True,
+        default=None,
+    )
+    
     # Snapshot of course fee agreed upon at enrollment
     course_fee = models.DecimalField(
         max_digits=10,

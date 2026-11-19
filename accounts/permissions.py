@@ -75,7 +75,8 @@ PARENT_MODULE_MAP = [
             "hr_payroll",
             "hr_salary_statements",
             "hr_reports",
-            "hr_admissions"
+            "hr_admissions",
+            "hr_policy"
         ]
     },
 
@@ -174,7 +175,8 @@ PARENT_MODULE_MAP = [
         "submodules": [
             "products",
             "stock",
-            "inventory_reports"
+            "inventory_reports",
+            "product_setup"
         ]
     },
 

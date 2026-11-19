@@ -126,7 +126,28 @@ class LeadSerializer(serializers.ModelSerializer):
                 'reason_note': 'Reason note is required when lead status is Lost.'
             })
 
-        return data
+        # ----------------------------------------
+        # SOURCE VALIDATION
+        # ----------------------------------------
+
+        lead_source = data.get(
+            'lead_source',
+            getattr(self.instance, 'lead_source', None)
+        )
+
+        source_code = data.get(
+            'source_code',
+            getattr(self.instance, 'source_code', None)
+        )
+
+        source_text = data.get(
+            'source_text',
+            getattr(self.instance, 'source_text', None)
+        )
+
+        if not lead_source:
+            data['source_code'] = None
+            data['source_text'] = None
 
         # ----------------------------------------
         # PRIORITY STATUS VALIDATION
@@ -158,6 +179,7 @@ class LeadSerializerListDisplay(serializers.ModelSerializer):
     quotation_number = serializers.CharField(source='quotation.quotation_number', read_only=True, default=None)
     qoutation_grand_total = serializers.DecimalField(source='quotation.grand_total', read_only=True, default=None, max_digits=10, decimal_places=2)
     course_name = serializers.CharField(source='course.title', read_only=True, default=None)
+    lead_source_name = serializers.CharField(source='lead_source.name', read_only=True, default=None)
 
     class Meta:
         model = Lead
@@ -342,7 +364,10 @@ class LeadReportSerializer(serializers.ModelSerializer):
             "phone",
             "company",
             "source",
+            "source_text",
             "salesperson_name",
+            "notes",
+            "email",
             "location_name",
             "lead_status",
             "lead_type",
@@ -440,3 +465,84 @@ class NotificationSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
+
+
+class LeadSourceReportSerializer(serializers.ModelSerializer):
+    lead_source_name = serializers.CharField(
+        source='lead_source.name',
+        read_only=True,
+        default=None
+    )
+
+    lead_status_display = serializers.CharField(
+        source='get_lead_status_display',
+        read_only=True
+    )
+
+    lead_category_display = serializers.CharField(
+        source='get_lead_category_display',
+        read_only=True
+    )
+
+    priority_status_display = serializers.CharField(
+        source='get_priority_status_display',
+        read_only=True
+    )
+
+    salesperson_first_name = serializers.CharField(
+        source='salesperson.first_name',
+        read_only=True,
+        default=None
+    )
+
+    salesperson_last_name = serializers.CharField(
+        source='salesperson.last_name',
+        read_only=True,
+        default=None
+    )
+
+    location_name = serializers.CharField(
+        source='location.name',
+        read_only=True,
+        default=None
+    )
+
+    course_name = serializers.CharField(
+        source='course.title',
+        read_only=True,
+        default=None
+    )
+
+    class Meta:
+        model = Lead
+        fields = '__all__'
+
+
+class LeadPerformanceDetailSerializer(serializers.ModelSerializer):
+
+    lead_status_display = serializers.CharField(
+        source='get_lead_status_display',
+        read_only=True
+    )
+
+    lead_source_name = serializers.CharField(
+        source='lead_source.name',
+        read_only=True,
+        default=None
+    )
+
+    class Meta:
+        model = Lead
+        fields = [
+            'id',
+            'lead_number',
+            'name',
+            'phone',
+            'email',
+            'company',
+            'lead_status',
+            'lead_status_display',
+            'lead_source_name',
+            'lead_date',
+            'created_at',
+        ]

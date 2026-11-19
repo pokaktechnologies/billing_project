@@ -426,6 +426,11 @@ class FacultySerializer(serializers.ModelSerializer):
     phone_number = serializers.CharField(source="user.phone_number", read_only=True)
     course_count = serializers.SerializerMethodField()
     students_count = serializers.SerializerMethodField()
+    role = serializers.CharField(
+        source="user.job_detail.role",
+        read_only=True,
+        default=None
+    )
 
     class Meta:
         model = Faculty
@@ -438,6 +443,7 @@ class FacultySerializer(serializers.ModelSerializer):
             "departments",
             "department_names",
             "department_details",
+            "role",
             "email",
             "phone_number",
             "course_count",
@@ -687,6 +693,12 @@ class StudentSerializer(serializers.ModelSerializer):
         required=False,
         allow_blank=True,
     )
+    enrollment_learning_type = serializers.ChoiceField(
+        choices=StudentCourseEnrollment.LEARNING_TYPE_CHOICES,
+        write_only=True,
+        required=False,
+        allow_null=True,
+    )
 
     enrollment_receipt = serializers.JSONField(
         write_only=True,
@@ -737,7 +749,8 @@ class StudentSerializer(serializers.ModelSerializer):
             "enrollment_discount_reason",
             "enrollment_receipt",
             "slot_created",
-            "advance_created"
+            "advance_created",
+            "enrollment_learning_type",
         ]
         extra_kwargs = {
             "profile": {"required": False}
@@ -810,16 +823,19 @@ class StudentSerializer(serializers.ModelSerializer):
         return enrollment.batch.batch_number if enrollment and enrollment.batch else None
 
     def get_courses(self, obj):
+
         enrollments = obj.enrollments.select_related("course")
 
         return [
             {
-                # "id": enrollment.course.id,
+                "id": enrollment.course.id,
                 "title": enrollment.course.title,
+                "learning_type": enrollment.learning_type,
             }
             for enrollment in enrollments
             if enrollment.course
         ]
+    
     def get_faculty(self, obj):
         faculties = {}
 
@@ -1127,6 +1143,11 @@ class StudentSerializer(serializers.ModelSerializer):
             data["enrollment_discount_reason"] = (
                 enrollment.discount_reason
             )
+            data["enrollment_learning_type"] = (
+                enrollment.learning_type
+                if enrollment
+                else None
+            )
 
         else:
 
@@ -1134,6 +1155,7 @@ class StudentSerializer(serializers.ModelSerializer):
             data["enrollment_batch"] = None
             data["enrollment_payment_plan_type"] = None
             data["enrollment_installment_plan"] = None
+            data["enrollment_learning_type"] = None
             data["enrollment_custom_installments"] = None
             data["enrollment_advance_amount"] = None
             data["enrollment_payment_method"] = None
@@ -1158,6 +1180,7 @@ class StudentSerializer(serializers.ModelSerializer):
             validated_data.pop("enrollment_discount_amount", None)
             validated_data.pop("enrollment_discount_reason", None)
             validated_data.pop("enrollment_receipt", None)
+            validated_data.pop("enrollment_learning_type", None)
             # Extract nested data
             profile_data = validated_data.pop("profile", None)
 
@@ -1280,6 +1303,10 @@ class StudentSerializer(serializers.ModelSerializer):
             enrollment_discount_reason = validated_data.pop(
                 "enrollment_discount_reason",
                 None
+            )
+            enrollment_learning_type = validated_data.pop(
+                "enrollment_learning_type",
+                serializers.empty
             )
 
             # Receipt is NEVER editable
@@ -1406,6 +1433,7 @@ class StudentSerializer(serializers.ModelSerializer):
                 enrollment_payment_date is not None,
                 enrollment_discount_amount is not None,
                 enrollment_discount_reason is not None,
+                enrollment_learning_type is not serializers.empty,
             ])
 
             if enrollment_fields_sent:
@@ -1466,6 +1494,11 @@ class StudentSerializer(serializers.ModelSerializer):
                             else 0
                         ),
                         discount_reason=enrollment_discount_reason,
+                        learning_type=(
+                            None
+                            if enrollment_learning_type is serializers.empty
+                            else enrollment_learning_type
+                        ),
                     )
 
                     # ---------------------------------------------
@@ -1544,6 +1577,8 @@ class StudentSerializer(serializers.ModelSerializer):
                     # SAVE NEW ENROLLMENT
                     # ---------------------------------------------
 
+                    if enrollment_learning_type is not serializers.empty:
+                        enrollment.learning_type = enrollment_learning_type
                     enrollment.save()
 
                 # =================================================
@@ -1735,6 +1770,8 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
             "total_installments",
             "enrollment_date",
 
+            "learning_type",
+
             "advance_amount",
             "payment_method",
             "transaction_id",
@@ -1767,7 +1804,10 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
             "batch",
             getattr(self.instance, "batch", None)
         )
-        installment_plan = attrs.get("installment_plan")
+        installment_plan = attrs.get(
+            "installment_plan",
+            getattr(self.instance, "installment_plan", None)
+        )
         payment_plan_type = attrs.get(
             "payment_plan_type",
             getattr(self.instance, "payment_plan_type", "default_installment")

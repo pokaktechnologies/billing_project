@@ -1,20 +1,87 @@
-from django.urls import path
-from .views import *
-from .views_dashboard import *
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+
+from .views import (
+    EnquiryCreateView,
+    EnquiryDetailView,
+    EnquiryStatusUpdateView,
+    EnquiryStatisticsView,
+    SearchEnquiryView,
+    ErpEnquiryListCreateView,
+    ErpEnquiryDetailView,
+    ErpEnquiryStatusUpdateView,
+    ErpEnquiryStatisticsView,
+    DesignationView,
+    DesignationDetailView,
+    JobPostingView,
+    JobPostingDetailView,
+    JobPostingDisplayForUserView,
+    JobPostingStats,
+    JobApplicationView,
+    JobApplicationWithoutJob,
+    JobApplicationListView,
+    JobApplicationDetailView,
+    JobApplicationStatusUpdateView,
+    JobApplicationSearchView,
+    JobApplicationStatsAPIView,
+    OfferLetterListCreateAPIView,
+    OfferLetterDetailAPIView,
+    OfferLetterShareAPIView,
+    OfferLetterAnnexureAPIView,
+    HrDashaboardView,
+    HrDashboardMetricsAPIView,
+    HrDashboardActionItemsAPIView,
+    HrDashboardLiveAttendanceAPIView,
+    HrDashboardLeavesActiveUpcomingAPIView,
+    HrDashboardUpcomingHolidaysAPIView,
+    HrDashboardDepartmentsSummaryAPIView,
+    HrDashboardMilestonesAPIView,
+    HrDashboardRecruitmentJobsSummaryAPIView,
+    HrDashboardRecentApplicationsAPIView,
+    HrDashboardPayrollStatusAPIView,
+    HrDashboardStaffInternsAPIView,
+    HrDashboardStaffMilestonesAPIView,
+    HrDashboardStaffBirthdaysAPIView,
+    HRPolicyViewSet,
+    HRPolicySectionCreateView,
+    HRPolicySectionDetailView,
+    HRPolicySubtitleCreateView,
+    HRPolicySubtitleDetailView,
+    HRPolicySectionPointCreateView,
+    HRPolicySubtitlePointCreateView,
+    HRPolicyPointDetailView,
+)
+
+router = DefaultRouter()
+router.register(r'policies', HRPolicyViewSet, basename='hr-policy')
 
 urlpatterns = [
+    # HR Policies - granular section / subtitle / point endpoints
+    path('policies/<int:policy_id>/sections/', HRPolicySectionCreateView.as_view(), name='hr-policy-section-create'),
+    path('policies/sections/<int:pk>/', HRPolicySectionDetailView.as_view(), name='hr-policy-section-detail'),
+    path('policies/sections/<int:section_id>/subtitles/', HRPolicySubtitleCreateView.as_view(), name='hr-policy-subtitle-create'),
+    path('policies/sections/<int:section_id>/points/', HRPolicySectionPointCreateView.as_view(), name='hr-policy-section-point-create'),
+    path('policies/subtitles/<int:pk>/', HRPolicySubtitleDetailView.as_view(), name='hr-policy-subtitle-detail'),
+    path('policies/subtitles/<int:subtitle_id>/points/', HRPolicySubtitlePointCreateView.as_view(), name='hr-policy-subtitle-point-create'),
+    path('policies/points/<int:pk>/', HRPolicyPointDetailView.as_view(), name='hr-policy-point-detail'),
+
+    # HR Policies (CRUD)
+    path('', include(router.urls)),
+
+    # Enquiry
     path('enquiry/', EnquiryCreateView.as_view(), name='enquiry'),
     path('enquiry/<int:pk>/', EnquiryDetailView.as_view(), name='enquiry_detail'),
     path('enquiry/<int:pk>/status/', EnquiryStatusUpdateView.as_view(), name='enquiry_status_update'),
     path('enquiry/statistics/', EnquiryStatisticsView.as_view(), name='enquiry_statistics'),
     path('enquiry/search/', SearchEnquiryView.as_view(), name='enquiry_search'),
 
+    # ERP Enquiry
     path('erp/enquiry/', ErpEnquiryListCreateView.as_view(), name='erp-enquiry'),
     path('erp/enquiry/<int:pk>/', ErpEnquiryDetailView.as_view(), name='erp-enquiry-detail'),
     path('erp/enquiry/<int:pk>/status/', ErpEnquiryStatusUpdateView.as_view(), name='erp-enquiry-status-update'),
     path('erp/enquiry/statistics/', ErpEnquiryStatisticsView.as_view(), name='erp-enquiry-statistics'),
 
-
+    # Designation & Recruitment
     path('designation/', DesignationView.as_view(), name='designation_list'),
     path('designation/<int:pk>/', DesignationDetailView.as_view(), name='designation_detail'),
     path('job_posting/', JobPostingView.as_view(), name='job_posting'),
@@ -36,6 +103,7 @@ urlpatterns = [
     path("offer-letters/", OfferLetterListCreateAPIView.as_view(), name="offer-letter-list-create"),
     path("offer-letters/<int:pk>/", OfferLetterDetailAPIView.as_view(), name="offer-letter-detail"),
     path("offer-letters/<int:pk>/share/", OfferLetterShareAPIView.as_view(), name="offer-letter-share"),
+    path("offer-letters/<int:pk>/annexure/", OfferLetterAnnexureAPIView.as_view(), name="offer-letter-annexure"),
     
     # Dashboard
     path('dashboard/', HrDashaboardView.as_view(), name='hr_dashboard_overview'),

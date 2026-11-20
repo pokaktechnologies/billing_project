@@ -1099,7 +1099,7 @@ class SalesReturnSerializer(serializers.ModelSerializer):
             'id', 'sales_return_number', 'return_date',
             'client', 'client_name',
             'invoice',
-            'reason', 'grand_total',
+            'reason', 'grand_total', 'status',
             'created_at', 'items', 'termsandconditions'
         ]
         read_only_fields = ['grand_total', 'created_at']
@@ -1246,7 +1246,7 @@ class SalesReturnListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'sales_return_number', 'return_date', 'client_firstname', 
             'client_lastname', 'invoice_number',
-            'reason', 'grand_total', 'created_at', 'total_items'
+            'reason', 'grand_total', 'status', 'created_at', 'total_items'
         ]
     
     def get_total_items(self, obj):

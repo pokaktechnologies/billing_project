@@ -484,6 +484,13 @@ class SalesPerson(models.Model):
 
     
 class QuotationOrderModel(models.Model):
+    STATUS_CHOICES = [
+        ("draft", "Draft"),
+        ("sent", "Sent"),
+        ("approved", "Approved"),
+        ("rejected", "Rejected"),
+    ]
+
 # Add ForeignKey
     # customer_name = models.CharField(max_length=255)
     client = models.ForeignKey('Customer', on_delete=models.PROTECT, null=True, blank=True)
@@ -497,6 +504,7 @@ class QuotationOrderModel(models.Model):
     termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.SET_NULL, null=True, blank=True)
     contract = models.ForeignKey('Contract', on_delete=models.SET_NULL, null=True, blank=True)  
     grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="draft", db_index=True)
 
     def update_grand_total(self):
         """Recalculate grand total based on related QuotationItems."""
@@ -840,6 +848,13 @@ class ReceiptModel(models.Model):
 
 
 class SalesReturnModel(models.Model):
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("approved", "Approved"),
+        ("settled", "Settled"),
+        ("rejected", "Rejected"),
+    ]
+
     user = models.ForeignKey(CustomUser, on_delete=models.PROTECT, null=True, blank=True)
     client = models.ForeignKey('Customer', on_delete=models.PROTECT)
     sales_return_number = models.CharField(max_length=50, unique=True)
@@ -849,6 +864,7 @@ class SalesReturnModel(models.Model):
     termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.SET_NULL, null=True, blank=True)
     reason = models.TextField()
     grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending", db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def update_grand_total(self):

@@ -1192,6 +1192,7 @@ class QuotationOrderAPI(BaseAPIView):
                     "termsandcondtions_title": quotation.termsandconditions.title if quotation.termsandconditions else "",
                     "quotation_date": str(quotation.quotation_date),
                     "grand_total": quotation.grand_total,
+                    "status": quotation.status,
                     "selesperson": quotation.client.salesperson.id if quotation.client and quotation.client.salesperson else "",
                     "salesperson_name": f"{quotation.client.salesperson.first_name} {quotation.client.salesperson.last_name}" if quotation.client and quotation.client.salesperson else "",
                     "contract_id": quotation.contract.id if quotation.contract else None,
@@ -1265,6 +1266,14 @@ class QuotationOrderAPI(BaseAPIView):
             #     return Response({"error": "User is not authenticated."}, status=401)
             
                 
+                quotation_status = data.get("status", "draft")
+                valid_statuses = {choice[0] for choice in QuotationOrderModel.STATUS_CHOICES}
+                if quotation_status not in valid_statuses:
+                    return Response(
+                        {"error": f"Invalid status '{quotation_status}'. Allowed: {', '.join(sorted(valid_statuses))}"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
                 quotation = QuotationOrderModel.objects.create(
                     user=CustomUser.objects.get(id=request.user.id),
                     client=Customer.objects.get(id=data.get("client")),
@@ -1280,7 +1289,8 @@ class QuotationOrderAPI(BaseAPIView):
                     #grand_total=0  ,
                     delivery_location=data.get("delivery_location", ""),
                     # bank_account_id= bank_account_id,
-                    termsandconditions_id=terms_id  # Add terms and condition
+                    termsandconditions_id=terms_id,  # Add terms and condition
+                    status=quotation_status,
                 )
                 contract_data = data.get("contract")
 
@@ -2464,7 +2474,8 @@ class SalesReturnDetailAPI(APIView):
             user=request.user
         )
 
-        if (timezone.now() - sales_return.created_at).days > 7:
+        is_status_only = set(request.data.keys()) == {"status"}
+        if not is_status_only and (timezone.now() - sales_return.created_at).days > 7:
             return Response({
                 "status": "0",
                 "error": "Returns older than 7 days cannot be modified"

@@ -30,6 +30,7 @@ class StudentRegistrationReportSerializer(serializers.ModelSerializer):
     batch_end_date = serializers.SerializerMethodField()
     phone_number = serializers.CharField(source="student.profile.phone_number", read_only=True)
     start_date = serializers.DateField(source="batch.start_date", format="%Y-%m-%d", read_only=True)
+    enrollment_learning_type = serializers.CharField(source="learning_type", read_only=True)
 
 
 
@@ -48,6 +49,7 @@ class StudentRegistrationReportSerializer(serializers.ModelSerializer):
             "place",
             "counsellor",
             "course",
+            "enrollment_learning_type",
             "start_date",
             "center",
             "duration",

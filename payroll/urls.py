@@ -6,7 +6,7 @@ from .views import (
     PayrollPeriodListView, PayrollPeriodDetailView, 
     GenerateBulkStaffPayrollView, ResetStaffPayrollView,
     PayrollListView, PayrollDetailView, MyPayrollListView, BulkPayrollPayView,
-    EmployeePayslipView, SalaryStatementListView, 
+    EmployeePayslipView, AllSalaryStatementListView, SalaryStatementListView, 
 )
 from django.urls import path
 
@@ -21,5 +21,6 @@ urlpatterns = [
     path('<int:pk>/', PayrollDetailView.as_view(), name='payroll-detail'),
     path('bulk-pay/', BulkPayrollPayView.as_view(), name='payroll-bulk-pay'),
     path('payslip/', EmployeePayslipView.as_view(), name='employee-payslip'),
+    path('salary-statement/', AllSalaryStatementListView.as_view(), name='salary-statement-all'),
     path('salary-statement/<int:staff_id>/', SalaryStatementListView.as_view(), name='salary-statement'),
 ]

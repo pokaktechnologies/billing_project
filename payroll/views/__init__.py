@@ -2,4 +2,4 @@ from .payroll_period import PayrollPeriodListView, PayrollPeriodDetailView
 from .payroll_generation import GenerateBulkStaffPayrollView, ResetStaffPayrollView
 from .payroll import PayrollListView, PayrollDetailView, MyPayrollListView, BulkPayrollPayView
 from .payslip import EmployeePayslipView
-from .salary_statement import SalaryStatementListView
+from .salary_statement import AllSalaryStatementListView, SalaryStatementListView

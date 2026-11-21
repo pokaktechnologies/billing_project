@@ -4,6 +4,7 @@ from .views.LeadsViews import *
 from .views.MarketingViews import *
 from .views.ChartViews import *
 from .views.LeadsManagement import *
+from .views.pending_dashboard import MarketingPendingDashboardAPIView
 from django.urls import path
 
 urlpatterns = [
@@ -92,5 +93,8 @@ urlpatterns = [
     path("notifications/<int:pk>/read/", MarkNotificationReadAPIView.as_view(), name="notification-mark-read"),
     path("notifications/mark-all-read/", MarkAllNotificationsReadAPIView.as_view(), name="notification-mark-all-read"),
 
-    
+    # Marketing Pending Controls Dashboard (Staff & Admin)
+    path("marketing/pending-dashboard/", MarketingPendingDashboardAPIView.as_view(), name="marketing-pending-dashboard"),
+    path("dashboard/pending/", MarketingPendingDashboardAPIView.as_view(), name="marketing-dashboard-pending"),
+    path("pending-works/", MarketingPendingDashboardAPIView.as_view(), name="marketing-pending-works"),
 ]

@@ -4,6 +4,15 @@ from .contracts import (
     ClientContractDetailView,
     ContractReportView,
 )
+from .dm_contracts import (
+    DMContractListCreateAPIView,
+    DMContractDetailAPIView,
+    DMPlatformListCreateAPIView,
+    DMWorkTypeListCreateAPIView,
+    DMContractExtensionListCreateAPIView,
+    DMContractAttachmentUploadView,
+    DMContractAttachmentDeleteView,
+)
 from .projects import (
     get_project_progress_data,
     project_management,
@@ -70,6 +79,13 @@ __all__ = [
     'ClientContractView',
     'ClientContractDetailView',
     'ContractReportView',
+    'DMContractListCreateAPIView',
+    'DMContractDetailAPIView',
+    'DMPlatformListCreateAPIView',
+    'DMWorkTypeListCreateAPIView',
+    'DMContractExtensionListCreateAPIView',
+    'DMContractAttachmentUploadView',
+    'DMContractAttachmentDeleteView',
     'get_project_progress_data',
     'project_management',
     'project_management_detail',

@@ -1,4 +1,17 @@
 from .contracts import ClientContractSerializer
+from .dm_contracts import (
+    DMPlatformSerializer,
+    DMWorkTypeSerializer,
+    DMContractPlatformSerializer,
+    DMContractWorkSerializer,
+    DMContractLinkSerializer,
+    DMContractAttachmentSerializer,
+    DMContractExtensionSerializer,
+    DMContractCreateExtensionSerializer,
+    DMContractListSerializer,
+    DMContractDetailSerializer,
+    DMContractCreateUpdateSerializer,
+)
 from .projects import (
     ProjectManagementSerializer,
     ProjectManagementDetailsSerializer,
@@ -36,6 +49,17 @@ from .meetings import (
 
 __all__ = [
     'ClientContractSerializer',
+    'DMPlatformSerializer',
+    'DMWorkTypeSerializer',
+    'DMContractPlatformSerializer',
+    'DMContractWorkSerializer',
+    'DMContractLinkSerializer',
+    'DMContractAttachmentSerializer',
+    'DMContractExtensionSerializer',
+    'DMContractCreateExtensionSerializer',
+    'DMContractListSerializer',
+    'DMContractDetailSerializer',
+    'DMContractCreateUpdateSerializer',
     'ProjectManagementSerializer',
     'ProjectManagementDetailsSerializer',
     'ProjectManagerSerializer',

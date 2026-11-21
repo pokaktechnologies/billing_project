@@ -19,6 +19,7 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db import transaction
 from rest_framework import generics
 from django.core.mail import send_mail
+from django.core.paginator import EmptyPage, Paginator
 import random
 from django.conf import settings
 from django.db.models import Q
@@ -1206,14 +1207,62 @@ class EmployeeRegistrationCreateView(APIView):
         )
 
     def get(self, request):
+        search = (request.query_params.get('search') or '').strip()
+        gender = (request.query_params.get('gender') or '').strip()
+
+        registrations_queryset = EmployeeRegistration.objects.all()
+
+        if search:
+            registrations_queryset = registrations_queryset.filter(
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search) |
+                Q(email__icontains=search) |
+                Q(phone_number__icontains=search)
+            )
+
+        if gender and gender.lower() not in {'all', 'all genders'}:
+            registrations_queryset = registrations_queryset.filter(gender__iexact=gender)
 
         registrations, error_response = _apply_date_filters(
-            EmployeeRegistration.objects.all().order_by('-created_at'),
+            registrations_queryset.order_by('-created_at'),
             request.query_params,
             field_name='created_at',
         )
         if error_response is not None:
             return error_response
+
+        # Paginate only when the client requests it. Keep the existing
+        # response shape so unpaginated consumers remain backwards compatible.
+        pagination = None
+        page_param = request.query_params.get('page')
+        page_size_param = request.query_params.get('page_size')
+        if page_param is not None or page_size_param is not None:
+            try:
+                page_size = int(page_size_param or 10)
+                if page_size <= 0:
+                    raise ValueError
+                page_number = int(page_param or 1)
+                if page_number <= 0:
+                    raise ValueError
+            except (TypeError, ValueError):
+                return Response(
+                    {'error': 'page and page_size must be positive integers.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            paginator = Paginator(registrations, page_size)
+            try:
+                registrations = paginator.page(page_number)
+            except EmptyPage:
+                registrations = []
+            pagination = {
+                'count': paginator.count,
+                'page': page_number,
+                'page_size': page_size,
+                'total_pages': paginator.num_pages,
+                'next': page_number + 1 if page_number < paginator.num_pages else None,
+                'previous': page_number - 1 if page_number > 1 and paginator.num_pages else None,
+            }
 
         serializer = EmployeeRegistrationSerializer(
             registrations,
@@ -1221,13 +1270,14 @@ class EmployeeRegistrationCreateView(APIView):
             context={'request': request}
         )
 
-        return Response(
-            {
-                "message": "Employee registrations fetched successfully.",
-                "data": serializer.data
-            },
-            status=status.HTTP_200_OK
-        )
+        response_data = {
+            "message": "Employee registrations fetched successfully.",
+            "data": serializer.data,
+        }
+        if pagination is not None:
+            response_data["pagination"] = pagination
+
+        return Response(response_data, status=status.HTTP_200_OK)
 
 
 class EmployeeRegistrationDetailView(APIView):

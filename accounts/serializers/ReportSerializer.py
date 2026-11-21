@@ -108,6 +108,8 @@ class PurchaseOrderReportSerializer(serializers.ModelSerializer):
             "supplier",
             "purchase_order_number",
             "purchase_order_date",
+            "expected_delivery_date",
+            "status",
             "contact_person_name",
             "contact_person_number",
             "quotation_number",
@@ -119,7 +121,12 @@ class PurchaseOrderReportSerializer(serializers.ModelSerializer):
         ]
 
     def get_supplier_name(self, obj):
-        return f"{obj.supplier.first_name} {obj.supplier.last_name}"
+        if not obj.supplier:
+            return None
+        if obj.supplier.supplier_type == "Business" and (obj.supplier.company_name or "").strip():
+            return obj.supplier.company_name.strip()
+        full_name = f"{obj.supplier.first_name or ''} {obj.supplier.last_name or ''}".strip()
+        return full_name or (obj.supplier.company_name or "").strip() or obj.supplier.supplier_number
     
     def get_termsandconditions(self, obj):
         if obj.terms_and_conditions:
@@ -144,6 +151,7 @@ class MaterialReceiveReportSerializer(serializers.ModelSerializer):
             'id',
             'material_receive_number',
             'received_date',
+            'status',
             'supplier',
             'supplier_name',
             'purchase_order',
@@ -154,7 +162,12 @@ class MaterialReceiveReportSerializer(serializers.ModelSerializer):
         ]
 
     def get_supplier_name(self, obj):
-        return f"{obj.supplier.first_name} {obj.supplier.last_name}"
+        if not obj.supplier:
+            return None
+        if obj.supplier.supplier_type == "Business" and (obj.supplier.company_name or "").strip():
+            return obj.supplier.company_name.strip()
+        full_name = f"{obj.supplier.first_name or ''} {obj.supplier.last_name or ''}".strip()
+        return full_name or (obj.supplier.company_name or "").strip() or obj.supplier.supplier_number
 
 class PurchaseSummaryReportSerializer(serializers.Serializer):
     month = serializers.CharField()

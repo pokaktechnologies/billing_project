@@ -457,3 +457,506 @@ class EmployeeRegistrationConvertAPITests(APITestCase):
         response = self.client.post(url, data=self.valid_payload, format="json")
         self.assertEqual(response.status_code, 404)
 
+
+from datetime import timedelta
+from django.utils import timezone
+from activity_logs.utils import set_current_user
+from accounts.models import (
+    Category,
+    MaterialReceive,
+    MaterialReceiveItem,
+    Product,
+    PurchaseOrder,
+    PurchaseOrderItem,
+    Supplier,
+    TermsAndConditions,
+    Unit,
+)
+
+
+class PurchasePendingDashboardAPITests(APITestCase):
+    def setUp(self):
+        set_current_user(None)
+        self.user = CustomUser.objects.create_user(
+            first_name="Purchase",
+            last_name="Admin",
+            email="purchase-admin@example.com",
+            password="password123",
+        )
+        self.today = timezone.localdate()
+        self.unit = Unit.objects.create(name="Piece")
+        self.category = Category.objects.create(name="Hardware")
+        self.terms = TermsAndConditions.objects.create(title="Net 30")
+
+        self.product_a = Product.objects.create(
+            name="Monitor 24",
+            unit=self.unit,
+            unit_price=Decimal("1000.00"),
+            stock=5,
+            category=self.category,
+            code="MON-24",
+        )
+        self.product_b = Product.objects.create(
+            name="Keyboard Mech",
+            unit=self.unit,
+            unit_price=Decimal("500.00"),
+            stock=2,
+            category=self.category,
+            code="KEY-MECH",
+        )
+
+        self.business_supplier = Supplier.objects.create(
+            supplier_number="SU|100001",
+            supplier_type="Business",
+            company_name="Acme Supplies Pvt Ltd",
+            contact_person_name="Ravi Kumar",
+            contact_person_number="9876543210",
+            address="12 Industrial Estate",
+            email="acme@example.com",
+            date=self.today,
+            phone="0484123456",
+            mobile="9876543210",
+            currency="INR",
+            payment_terms=self.terms,
+        )
+        self.other_supplier = Supplier.objects.create(
+            supplier_number="SU|100002",
+            supplier_type="Business",
+            company_name="Beta Traders",
+            contact_person_name="Anu Nair",
+            contact_person_number="9876500000",
+            address="99 Market Road",
+            email="beta@example.com",
+            date=self.today,
+            phone="0484654321",
+            mobile="9876500000",
+            currency="INR",
+            payment_terms=self.terms,
+        )
+
+        self.dashboard_url = "/accounts/purchases/pending-dashboard/"
+        self.po_url = "/accounts/purchase-orders/"
+        self.mr_url = "/accounts/material-receive/"
+        self.supplier_url = "/accounts/suppliers/"
+
+    def tearDown(self):
+        set_current_user(None)
+        super().tearDown()
+
+    def _auth(self):
+        self.client.force_authenticate(user=self.user)
+
+    def _create_po_via_api(self, number="PO|100001", po_date=None, expected_delivery_date=None, status_val="draft", items=None):
+        payload = {
+            "supplier": self.business_supplier.id,
+            "purchase_order_number": number,
+            "purchase_order_date": str(po_date or self.today),
+            "contact_person_name": "Ravi Kumar",
+            "contact_person_number": "9876543210",
+            "status": status_val,
+        }
+        if expected_delivery_date is not None:
+            payload["expected_delivery_date"] = str(expected_delivery_date)
+        if items is not None:
+            payload["items"] = items
+        return self.client.post(self.po_url, data=payload, format="json")
+
+    def test_requires_authentication(self):
+        response = self.client.get(self.dashboard_url)
+        self.assertEqual(response.status_code, 401)
+
+    def test_po_full_lifecycle_and_dashboard_clearing(self):
+        self._auth()
+
+        # 1. PO created without items -> po_empty_items
+        res = self._create_po_via_api(number="PO|100001", items=None)
+        self.assertEqual(res.status_code, 201)
+        po_id = res.data["data"]["id"]
+
+        dash = self.client.get(self.dashboard_url, {"tab": "purchase_order"}).data
+        self.assertEqual(dash["items"][0]["work_type"], "po_empty_items")
+
+        # 2. Add items -> grand_total auto-computed, moves to po_draft
+        patch_res = self.client.patch(
+            f"{self.po_url}{po_id}/",
+            data={"items": [{"product": self.product_a.id, "quantity": 10, "unit_price": "1000.00"}]},
+            format="json",
+        )
+        self.assertEqual(patch_res.status_code, 200)
+        self.assertEqual(Decimal(patch_res.data["data"]["grand_total"]), Decimal("10000.00"))
+
+        dash = self.client.get(self.dashboard_url, {"tab": "purchase_order"}).data
+        self.assertEqual(dash["items"][0]["work_type"], "po_draft")
+        self.assertEqual(dash["items"][0]["urgency"], "medium")
+
+        # 3. Send PO -> po_unreceived (high urgency if >7 days old)
+        old_date = self.today - timedelta(days=10)
+        self.client.patch(
+            f"{self.po_url}{po_id}/",
+            data={"status": "sent", "purchase_order_date": str(old_date)},
+            format="json",
+        )
+        dash = self.client.get(self.dashboard_url, {"tab": "purchase_order"}).data
+        self.assertEqual(dash["items"][0]["work_type"], "po_unreceived")
+        self.assertEqual(dash["items"][0]["urgency"], "high")
+
+        # 4. Partial MR -> PO auto-moves to partially_received
+        mr1 = self.client.post(
+            self.mr_url,
+            data={
+                "supplier": self.business_supplier.id,
+                "purchase_order": po_id,
+                "material_receive_number": "MR|100001",
+                "received_date": str(self.today),
+                "items": [{"product": self.product_a.id, "quantity": 4, "unit_price": "1000.00"}],
+            },
+            format="json",
+        )
+        self.assertEqual(mr1.status_code, 201)
+        self.product_a.refresh_from_db()
+        self.assertEqual(self.product_a.stock, 9)
+
+        po_obj = PurchaseOrder.objects.get(id=po_id)
+        self.assertEqual(po_obj.status, "partially_received")
+
+        dash = self.client.get(self.dashboard_url, {"tab": "purchase_order"}).data
+        self.assertEqual(dash["items"][0]["work_type"], "po_partially_received")
+        self.assertEqual(dash["items"][0]["meta"]["pending_qty"], 6)
+
+        # 5. Final MR -> PO auto-moves to received and clears purchase_order tab
+        mr2 = self.client.post(
+            self.mr_url,
+            data={
+                "supplier": self.business_supplier.id,
+                "purchase_order": po_id,
+                "material_receive_number": "MR|100002",
+                "received_date": str(self.today),
+                "items": [{"product": self.product_a.id, "quantity": 6, "unit_price": "1000.00"}],
+            },
+            format="json",
+        )
+        self.assertEqual(mr2.status_code, 201)
+        self.product_a.refresh_from_db()
+        self.assertEqual(self.product_a.stock, 15)
+
+        po_obj.refresh_from_db()
+        self.assertEqual(po_obj.status, "received")
+
+        dash = self.client.get(self.dashboard_url, {"tab": "purchase_order"}).data
+        self.assertEqual(dash["items_count"], 0)
+
+    def test_po_overdue_closed_and_cancelled_rules(self):
+        self._auth()
+
+        overdue_date = self.today - timedelta(days=4)
+        res_overdue = self._create_po_via_api(
+            number="PO|100010",
+            po_date=self.today - timedelta(days=6),
+            expected_delivery_date=overdue_date,
+            status_val="sent",
+            items=[{"product": self.product_a.id, "quantity": 5, "unit_price": "1000.00"}],
+        )
+        self.assertEqual(res_overdue.status_code, 201)
+        po_overdue_id = res_overdue.data["data"]["id"]
+
+        res_closed = self._create_po_via_api(
+            number="PO|100011",
+            status_val="sent",
+            items=[{"product": self.product_b.id, "quantity": 3, "unit_price": "500.00"}],
+        )
+        po_closed_id = res_closed.data["data"]["id"]
+
+        res_cancelled = self._create_po_via_api(
+            number="PO|100012",
+            status_val="sent",
+            items=[{"product": self.product_b.id, "quantity": 2, "unit_price": "500.00"}],
+        )
+        po_cancelled_id = res_cancelled.data["data"]["id"]
+
+        # Close and cancel two POs -> only overdue remains
+        self.client.patch(f"{self.po_url}{po_closed_id}/", data={"status": "closed"}, format="json")
+        self.client.patch(f"{self.po_url}{po_cancelled_id}/", data={"status": "cancelled"}, format="json")
+
+        dash = self.client.get(self.dashboard_url, {"tab": "purchase_order"}).data
+        self.assertEqual(dash["items_count"], 1)
+        item = dash["items"][0]
+        self.assertEqual(item["record_id"], po_overdue_id)
+        self.assertEqual(item["work_type"], "po_overdue_delivery")
+        self.assertEqual(item["urgency"], "high")
+        self.assertEqual(item["due_date"], str(overdue_date))
+        self.assertEqual(item["meta"]["days_overdue"], 4)
+
+    def test_mr_verification_rejection_and_discrepancies(self):
+        self._auth()
+
+        po_res = self._create_po_via_api(
+            number="PO|100020",
+            status_val="sent",
+            items=[{"product": self.product_a.id, "quantity": 5, "unit_price": "1000.00"}],
+        )
+        po_id = po_res.data["data"]["id"]
+
+        # MR1: normal partial receive -> defaults to pending_verification
+        mr1_res = self.client.post(
+            self.mr_url,
+            data={
+                "supplier": self.business_supplier.id,
+                "purchase_order": po_id,
+                "material_receive_number": "MR|100020",
+                "received_date": str(self.today),
+                "items": [{"product": self.product_a.id, "quantity": 3, "unit_price": "1000.00"}],
+            },
+            format="json",
+        )
+        self.assertEqual(mr1_res.status_code, 201)
+        mr1_id = mr1_res.data["data"]["id"]
+        self.assertEqual(mr1_res.data["data"]["status"], "pending_verification")
+        self.product_a.refresh_from_db()
+        self.assertEqual(self.product_a.stock, 8)
+
+        dash_mr = self.client.get(self.dashboard_url, {"tab": "material_receive"}).data
+        self.assertEqual([i["work_type"] for i in dash_mr["items"]], ["mr_pending_verification"])
+
+        # Verify MR1 -> clears mr_pending_verification, keeps stock
+        verify_res = self.client.patch(f"{self.mr_url}{mr1_id}/", data={"status": "verified"}, format="json")
+        self.assertEqual(verify_res.status_code, 200)
+        self.product_a.refresh_from_db()
+        self.assertEqual(self.product_a.stock, 8)
+        dash_mr = self.client.get(self.dashboard_url, {"tab": "material_receive"}).data
+        self.assertEqual(dash_mr["items_count"], 0)
+
+        # Reject MR1 -> reverts stock, rolls PO back to sent, clears MR from dashboard
+        reject_res = self.client.patch(f"{self.mr_url}{mr1_id}/", data={"status": "rejected"}, format="json")
+        self.assertEqual(reject_res.status_code, 200)
+        self.product_a.refresh_from_db()
+        self.assertEqual(self.product_a.stock, 5)
+        self.assertEqual(PurchaseOrder.objects.get(id=po_id).status, "sent")
+
+        # MR2: empty items + supplier mismatch
+        self.client.post(
+            self.mr_url,
+            data={
+                "supplier": self.other_supplier.id,
+                "purchase_order": po_id,
+                "material_receive_number": "MR|100021",
+                "received_date": str(self.today),
+                "status": "verified",
+            },
+            format="json",
+        )
+        # MR3: over-received + un-ordered product + grand total mismatch
+        self.client.post(
+            self.mr_url,
+            data={
+                "supplier": self.business_supplier.id,
+                "purchase_order": po_id,
+                "material_receive_number": "MR|100022",
+                "received_date": str(self.today),
+                "status": "verified",
+                "grand_total": "999.00",
+                "items": [
+                    {"product": self.product_a.id, "quantity": 8, "unit_price": "1000.00"},
+                    {"product": self.product_b.id, "quantity": 2, "unit_price": "500.00"},
+                ],
+            },
+            format="json",
+        )
+
+        dash_mr = self.client.get(self.dashboard_url, {"tab": "material_receive"}).data
+        work_types = {it["work_type"] for it in dash_mr["items"]}
+        self.assertEqual(
+            work_types,
+            {"mr_empty_items", "mr_supplier_mismatch", "mr_over_received", "mr_total_mismatch"},
+        )
+        over_item = next(it for it in dash_mr["items"] if it["work_type"] == "mr_over_received")
+        reasons = {d["reason"] for d in over_item["meta"]["discrepancies"]}
+        self.assertEqual(reasons, {"exceeds_ordered_quantity", "not_in_purchase_order"})
+
+    def test_mr_bug_fixes_delete_date_filter_item_swap_and_insufficient_stock(self):
+        self._auth()
+
+        po_res = self._create_po_via_api(
+            number="PO|100030",
+            status_val="sent",
+            items=[
+                {"product": self.product_a.id, "quantity": 10, "unit_price": "1000.00"},
+                {"product": self.product_b.id, "quantity": 10, "unit_price": "500.00"},
+            ],
+        )
+        po_id = po_res.data["data"]["id"]
+
+        # Create MR with product_a qty 4 (stock: 5 -> 9)
+        mr_res = self.client.post(
+            self.mr_url,
+            data={
+                "supplier": self.business_supplier.id,
+                "purchase_order": po_id,
+                "material_receive_number": "MR|100030",
+                "received_date": str(self.today),
+                "items": [{"product": self.product_a.id, "quantity": 4, "unit_price": "1000.00"}],
+            },
+            format="json",
+        )
+        self.assertEqual(mr_res.status_code, 201)
+        mr_id = mr_res.data["data"]["id"]
+        mr_item_id = mr_res.data["data"]["items"][0]["id"]
+        self.product_a.refresh_from_db()
+        self.assertEqual(self.product_a.stock, 9)
+
+        # Bug fix 1: Date range + status + PO filtering on GET /accounts/material-receive/
+        list_res = self.client.get(
+            self.mr_url,
+            {
+                "start_date": str(self.today - timedelta(days=1)),
+                "end_date": str(self.today + timedelta(days=1)),
+                "status": "pending_verification",
+                "purchase_order": po_id,
+            },
+        )
+        self.assertEqual(list_res.status_code, 200)
+        self.assertEqual(len(list_res.data["data"]), 1)
+        self.assertEqual(list_res.data["data"][0]["supplier_name"], "Acme Supplies Pvt Ltd")
+
+        # Bug fix 2: Swapping existing item product updates both old and new product stock
+        swap_res = self.client.patch(
+            f"{self.mr_url}{mr_id}/",
+            data={
+                "items": [
+                    {
+                        "id": mr_item_id,
+                        "product": self.product_b.id,
+                        "quantity": 3,
+                        "unit_price": "500.00",
+                    }
+                ]
+            },
+            format="json",
+        )
+        self.assertEqual(swap_res.status_code, 200)
+        self.product_a.refresh_from_db()
+        self.product_b.refresh_from_db()
+        self.assertEqual(self.product_a.stock, 5)
+        self.assertEqual(self.product_b.stock, 5)
+
+        # Consume product_b stock below 3 -> rejecting or deleting MR must fail cleanly with 400
+        self.product_b.stock = 1
+        self.product_b.save(update_fields=["stock"])
+
+        reject_fail = self.client.patch(f"{self.mr_url}{mr_id}/", data={"status": "rejected"}, format="json")
+        self.assertEqual(reject_fail.status_code, 400)
+        self.assertEqual(MaterialReceive.objects.get(id=mr_id).status, "pending_verification")
+
+        delete_fail = self.client.delete(f"{self.mr_url}{mr_id}/")
+        self.assertEqual(delete_fail.status_code, 400)
+        self.assertTrue(MaterialReceive.objects.filter(id=mr_id).exists())
+
+        # Restore sufficient stock -> DELETE reverts stock and rolls PO back to sent
+        self.product_b.stock = 5
+        self.product_b.save(update_fields=["stock"])
+
+        delete_ok = self.client.delete(f"{self.mr_url}{mr_id}/")
+        self.assertEqual(delete_ok.status_code, 204)
+        self.product_b.refresh_from_db()
+        self.assertEqual(self.product_b.stock, 2)
+        self.assertEqual(PurchaseOrder.objects.get(id=po_id).status, "sent")
+
+    def test_supplier_controls_display_names_and_query_filters(self):
+        self._auth()
+
+        incomplete_biz = Supplier.objects.create(
+            supplier_number="SU|100010",
+            supplier_type="Business",
+            company_name="",
+            contact_person_name="",
+            contact_person_number="",
+            address="",
+            email="incbiz@example.com",
+            date=self.today,
+            phone="111",
+            mobile="111",
+            currency="INR",
+        )
+        incomplete_ind = Supplier.objects.create(
+            supplier_number="SU|100011",
+            supplier_type="Individual",
+            first_name="",
+            address="",
+            email="incind@example.com",
+            date=self.today,
+            phone="222",
+            mobile="222",
+            currency="INR",
+            payment_terms=self.terms,
+        )
+
+        # Supplier tab catches incomplete Business (profile + terms) and Individual (profile)
+        sup_dash = self.client.get(self.dashboard_url, {"tab": "supplier"}).data
+        self.assertEqual(sup_dash["items_count"], 3)
+
+        biz_profile_item = next(i for i in sup_dash["items"] if i["id"] == f"sup_profile_{incomplete_biz.id}")
+        self.assertEqual(
+            set(biz_profile_item["meta"]["missing_fields"]),
+            {"company_name", "contact_person_name", "contact_person_number", "address"},
+        )
+        ind_profile_item = next(i for i in sup_dash["items"] if i["id"] == f"sup_profile_{incomplete_ind.id}")
+        self.assertEqual(
+            set(ind_profile_item["meta"]["missing_fields"]),
+            {"first_name", "address"},
+        )
+
+        # Deactivate supplier -> clears from dashboard
+        deact_res = self.client.patch(
+            f"{self.supplier_url}{incomplete_biz.id}/",
+            data={"is_active": False},
+            format="json",
+        )
+        self.assertEqual(deact_res.status_code, 200)
+        sup_dash = self.client.get(self.dashboard_url, {"tab": "supplier"}).data
+        self.assertEqual(sup_dash["items_count"], 1)
+        self.assertEqual(sup_dash["items"][0]["record_id"], incomplete_ind.id)
+
+        # Add POs of different urgencies and verify sort, search, urgency, and limit params
+        self._create_po_via_api(
+            number="PO|100040",
+            po_date=self.today,
+            status_val="draft",
+            items=[{"product": self.product_a.id, "quantity": 1, "unit_price": "1000.00"}],
+        )
+        self._create_po_via_api(
+            number="PO|100041",
+            po_date=self.today - timedelta(days=9),
+            status_val="sent",
+            items=[{"product": self.product_a.id, "quantity": 1, "unit_price": "1000.00"}],
+        )
+
+        # Check Business supplier_name on PO list, detail, and report endpoints
+        po_list = self.client.get(self.po_url).data["Data"]
+        self.assertEqual(po_list[0]["supplier_name"], "Acme Supplies Pvt Ltd")
+        self.assertIn("status", po_list[0])
+        self.assertIn("expected_delivery_date", po_list[0])
+
+        po_detail = self.client.get(f"{self.po_url}{po_list[0]['id']}/").data["data"][0]
+        self.assertEqual(po_detail["supplier_name"], "Acme Supplies Pvt Ltd")
+
+        po_report = self.client.get("/accounts/reports/purchase-order/", {"status": "sent"}).data["Data"]
+        self.assertEqual(len(po_report), 1)
+        self.assertEqual(po_report[0]["supplier_name"], "Acme Supplies Pvt Ltd")
+        self.assertEqual(po_report[0]["status"], "sent")
+
+        sup_active = self.client.get(self.supplier_url, {"is_active": "false"}).data["Data"]
+        self.assertEqual(len(sup_active), 1)
+        self.assertEqual(sup_active[0]["id"], incomplete_biz.id)
+
+        full_dash = self.client.get(self.dashboard_url).data
+        urgencies = [it["urgency"] for it in full_dash["items"]]
+        priority_map = {"high": 1, "medium": 2, "low": 3}
+        self.assertEqual(urgencies, sorted(urgencies, key=lambda u: priority_map[u]))
+
+        search_dash = self.client.get(self.dashboard_url, {"search": "PO|100041"}).data
+        self.assertEqual(search_dash["items_count"], 1)
+        self.assertEqual(search_dash["items"][0]["urgency"], "high")
+
+        limit_dash = self.client.get(self.dashboard_url, {"limit": "2"}).data
+        self.assertEqual(limit_dash["items_count"], 2)
+
+

@@ -84,6 +84,8 @@ PARENT_MODULE_MAP = [
         "name": "pending_controls",
         "submodules": [
             "academy_pending",
+            "sales_pending",
+            "purchase_pending",
         ]
     },
 

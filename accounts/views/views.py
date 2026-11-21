@@ -804,6 +804,14 @@ class SupplierAPIView(BaseAPIView):
             elif end_date:
                 suppliers = suppliers.filter(date__lte=end_date)
 
+            is_active = request.query_params.get("is_active")
+            if is_active is not None:
+                val = is_active.strip().lower()
+                if val in ("true", "1"):
+                    suppliers = suppliers.filter(is_active=True)
+                elif val in ("false", "0"):
+                    suppliers = suppliers.filter(is_active=False)
+
             #supplier filter
             supplier = request.query_params.get("supplier")
             
@@ -3166,6 +3174,10 @@ class PurchaseOrderAPIView(BaseAPIView):
                     purchase_order_date__gte=start_date,
                     purchase_order_date__lte=end_date
                 )
+
+            po_status = request.query_params.get('status')
+            if po_status:
+                purchase_orders = purchase_orders.filter(status=po_status)
             
             # optional pagination response
             return paginate_response(purchase_orders, request, PurchaseOrderListSerializer)
@@ -3240,9 +3252,17 @@ class MaterialReceiveAPIView(BaseAPIView):
             end_date = request.query_params.get('end_date')
             if start_date and end_date:
                 material_receives = material_receives.filter(
-                    material_receive_date__gte=start_date,
-                    material_receive_date__lte=end_date
+                    received_date__gte=start_date,
+                    received_date__lte=end_date
                 )
+
+            mr_status = request.query_params.get('status')
+            if mr_status:
+                material_receives = material_receives.filter(status=mr_status)
+
+            purchase_order = request.query_params.get('purchase_order')
+            if purchase_order:
+                material_receives = material_receives.filter(purchase_order_id=purchase_order)
 
             serializer = MaterialReceiveListSerializer(material_receives, many=True)
             return Response({"status": "1", "message": "success", "data": serializer.data})
@@ -3281,8 +3301,40 @@ class MaterialReceiveAPIView(BaseAPIView):
                 {"error": "Material Receive order not found"},
                 status=status.HTTP_404_NOT_FOUND
             )
-        
-        material_receive.delete()
+
+        with transaction.atomic():
+            po = material_receive.purchase_order
+            if material_receive.status != "rejected":
+                qty_by_product = {}
+                for item in material_receive.items.all():
+                    qty_by_product[item.product_id] = qty_by_product.get(item.product_id, 0) + item.quantity
+
+                if qty_by_product:
+                    products = {
+                        p.id: p
+                        for p in Product.objects.select_for_update().filter(id__in=qty_by_product.keys())
+                    }
+                    for pid, qty in sorted(qty_by_product.items()):
+                        product = products.get(pid)
+                        if not product:
+                            continue
+                        if product.stock < qty:
+                            return Response(
+                                {
+                                    "error": f"Insufficient stock for '{product.name}' (available: {product.stock}, required reduction: {qty})."
+                                },
+                                status=status.HTTP_400_BAD_REQUEST,
+                            )
+                    for pid, qty in sorted(qty_by_product.items()):
+                        product = products.get(pid)
+                        if product:
+                            product.stock -= qty
+                            product.save(update_fields=["stock"])
+
+            material_receive.delete()
+            if po:
+                po.sync_receive_status()
+
         return Response(
             {"message": "Material Receive order deleted successfully"},
             status=status.HTTP_204_NO_CONTENT

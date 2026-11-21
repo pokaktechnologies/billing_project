@@ -967,6 +967,7 @@ class PurchaseOrderReportView(APIView):
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date')
         supplier = request.query_params.get('supplier')
+        po_status = request.query_params.get('status')
         search = request.query_params.get('search')
 
         purchases = PurchaseOrder.objects.select_related(
@@ -984,10 +985,14 @@ class PurchaseOrderReportView(APIView):
         if supplier:
             purchases = purchases.filter(supplier_id=supplier)
 
+        if po_status:
+            purchases = purchases.filter(status=po_status)
+
         if search:
             purchases = purchases.filter(
                 Q(supplier__first_name__icontains=search) |
                 Q(supplier__last_name__icontains=search) |
+                Q(supplier__company_name__icontains=search) |
                 Q(purchase_order_number__icontains=search)
             )
 
@@ -1024,6 +1029,7 @@ class MaterialReceiveReportView(APIView):
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date')
         supplier = request.query_params.get('supplier')
+        mr_status = request.query_params.get('status')
         search = request.query_params.get('search')
 
         material_receives = MaterialReceive.objects.select_related(
@@ -1041,10 +1047,14 @@ class MaterialReceiveReportView(APIView):
         if supplier:
             material_receives = material_receives.filter(supplier_id=supplier)
 
+        if mr_status:
+            material_receives = material_receives.filter(status=mr_status)
+
         if search:
             material_receives = material_receives.filter(
                 Q(supplier__first_name__icontains=search) |
                 Q(supplier__last_name__icontains=search) |
+                Q(supplier__company_name__icontains=search) |
                 Q(material_receive_number__icontains=search)
             )
 

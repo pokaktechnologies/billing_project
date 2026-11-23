@@ -1,13 +1,32 @@
 from rest_framework import serializers
-from ..models import ProjectManagement, ProjectMember
+from ..models import ProjectManagement, ProjectMember, ClientContract, DMContract
 from .members import ProjectMemberSerializer
 
 
 class ProjectManagementSerializer(serializers.ModelSerializer):
     status_display = serializers.SerializerMethodField()  # for human-readable display only
     members_count = serializers.SerializerMethodField()  # for human-readable display only
-    client_first_name = serializers.CharField(source='contract.client.first_name', read_only=True)
-    client_last_name = serializers.CharField(source='contract.client.last_name', read_only=True)
+
+    contract = serializers.PrimaryKeyRelatedField(
+        queryset=ClientContract.objects.all(),
+        required=False,
+        allow_null=True
+    )
+    dm_contract = serializers.PrimaryKeyRelatedField(
+        queryset=DMContract.objects.all(),
+        required=False,
+        allow_null=True
+    )
+
+    client_first_name = serializers.SerializerMethodField()
+    client_last_name = serializers.SerializerMethodField()
+    client_name = serializers.SerializerMethodField()
+    client_company_name = serializers.SerializerMethodField()
+
+    contract_number = serializers.SerializerMethodField()
+    contract_name = serializers.SerializerMethodField()
+    dm_contract_number = serializers.SerializerMethodField()
+    dm_contract_name = serializers.SerializerMethodField()
 
     class Meta:
         model = ProjectManagement
@@ -15,8 +34,15 @@ class ProjectManagementSerializer(serializers.ModelSerializer):
             'id',
             'project_number',
             'contract',  # ForeignKey to ClientContract
-            'client_first_name',  # shows client name from ClientContract
+            'dm_contract',  # ForeignKey to DMContract
+            'client_first_name',  # shows client name from contract/dm_contract
             'client_last_name',
+            'client_name',
+            'client_company_name',
+            'contract_number',
+            'contract_name',
+            'dm_contract_number',
+            'dm_contract_name',
             'project_type',
             'project_name',
             'project_description',
@@ -30,61 +56,128 @@ class ProjectManagementSerializer(serializers.ModelSerializer):
             'members_count',    # shows number of members in the project
         ]
 
+    def _get_client_obj(self, obj):
+        if obj.project_type == 'dm' and obj.dm_contract:
+            return getattr(obj.dm_contract, 'client', None)
+        elif obj.contract:
+            return getattr(obj.contract, 'client', None)
+        elif obj.dm_contract:
+            return getattr(obj.dm_contract, 'client', None)
+        return None
+
     def get_status_display(self, obj):
         return obj.get_status_display()
-
-    def validate(self, data):
-        if data['start_date'] > data['end_date']:
-            raise serializers.ValidationError("Start date cannot be after end date.")
-        return data
 
     def get_members_count(self, obj):
         return obj.projectmember_set.count()
 
+    def get_client_first_name(self, obj):
+        client = self._get_client_obj(obj)
+        return getattr(client, 'first_name', None) if client else None
 
-class ProjectManagementDetailsSerializer(serializers.ModelSerializer):
-    status_display = serializers.SerializerMethodField()  # for human-readable display only
-    members_count = serializers.SerializerMethodField()  # for human-readable display only
-    client_first_name = serializers.CharField(source='contract.client.first_name', read_only=True)
-    client_last_name = serializers.CharField(source='contract.client.last_name', read_only=True)
-    project_members = serializers.SerializerMethodField()  # for human-readable display only
+    def get_client_last_name(self, obj):
+        client = self._get_client_obj(obj)
+        return getattr(client, 'last_name', None) if client else None
 
-    class Meta:
-        model = ProjectManagement
-        fields = [
-            'id',
-            'project_number',
-            'contract',  # ForeignKey to ClientContract
-            'client_first_name',  # shows client name from ClientContract
-            'client_last_name',
-            'project_name',
-            'project_type',
-            'project_description',
-            'start_date',
-            'end_date',
-            'duration',         # duration in days
-            'status',           # accept "on_hold", "in_progress", etc.
-            'status_display',   # shows "On Hold", "In Progress", etc.
-            'created_at',
-            'updated_at',
-            'members_count',    # shows number of members in the project
-            'project_members',  # shows project members
-        ]
+    def get_client_name(self, obj):
+        client = self._get_client_obj(obj)
+        if not client:
+            return None
+        full = f"{getattr(client, 'first_name', '')} {getattr(client, 'last_name', '')}".strip()
+        return full or getattr(client, 'company_name', None)
 
-    def get_status_display(self, obj):
-        return obj.get_status_display()
+    def get_client_company_name(self, obj):
+        client = self._get_client_obj(obj)
+        return getattr(client, 'company_name', None) if client else None
+
+    def get_contract_number(self, obj):
+        if obj.project_type == 'dm' and obj.dm_contract:
+            return obj.dm_contract.contract_number
+        if obj.contract:
+            return getattr(obj.contract, 'contract_number', None)
+        if obj.dm_contract:
+            return obj.dm_contract.contract_number
+        return None
+
+    def get_contract_name(self, obj):
+        if obj.project_type == 'dm' and obj.dm_contract:
+            return obj.dm_contract.contract_name
+        if obj.contract:
+            return getattr(obj.contract, 'contract_name', None)
+        if obj.dm_contract:
+            return obj.dm_contract.contract_name
+        return None
+
+    def get_dm_contract_number(self, obj):
+        return obj.dm_contract.contract_number if obj.dm_contract else None
+
+    def get_dm_contract_name(self, obj):
+        return obj.dm_contract.contract_name if obj.dm_contract else None
 
     def validate(self, data):
-        if data['start_date'] > data['end_date']:
+        start_date = data.get('start_date') or (self.instance.start_date if self.instance else None)
+        end_date = data.get('end_date') or (self.instance.end_date if self.instance else None)
+        if start_date and end_date and start_date > end_date:
             raise serializers.ValidationError("Start date cannot be after end date.")
+
+        project_type = data.get('project_type')
+        if project_type is None and self.instance:
+            project_type = self.instance.project_type
+        elif project_type is None:
+            project_type = 'dev'
+
+        # Cross contract conflict in submission
+        if data.get('contract') is not None and data.get('dm_contract') is not None:
+            raise serializers.ValidationError("A project cannot have both a standard contract and a digital marketing contract.")
+
+        # If project type is changing, do not inherit incompatible contract from existing instance
+        contract = data.get('contract')
+        if 'contract' not in data and self.instance:
+            if project_type == 'dm':
+                contract = None
+            else:
+                contract = self.instance.contract
+
+        dm_contract = data.get('dm_contract')
+        if 'dm_contract' not in data and self.instance:
+            if project_type in ['dev', 'testing']:
+                dm_contract = None
+            else:
+                dm_contract = self.instance.dm_contract
+
+        if project_type == 'dev':
+            if not contract:
+                raise serializers.ValidationError({"contract": "Contract is required for developer projects."})
+            if data.get('dm_contract') is not None:
+                raise serializers.ValidationError({"dm_contract": "Digital Marketing contract must be null for developer projects."})
+            data['contract'] = contract
+            data['dm_contract'] = None
+
+        elif project_type == 'testing':
+            if data.get('dm_contract') is not None:
+                raise serializers.ValidationError({"dm_contract": "Digital Marketing contract must be null for testing projects."})
+            data['dm_contract'] = None
+
+        elif project_type == 'dm':
+            if not dm_contract:
+                raise serializers.ValidationError({"dm_contract": "dm_contract is required for digital marketing projects."})
+            if data.get('contract') is not None:
+                raise serializers.ValidationError({"contract": "Standard contract must be null for digital marketing projects."})
+            data['dm_contract'] = dm_contract
+            data['contract'] = None
+
         return data
+
+
+class ProjectManagementDetailsSerializer(ProjectManagementSerializer):
+    project_members = serializers.SerializerMethodField()  # for human-readable display only
+
+    class Meta(ProjectManagementSerializer.Meta):
+        fields = ProjectManagementSerializer.Meta.fields + ['project_members']
 
     def get_project_members(self, obj):
         project_members = ProjectMember.objects.filter(project=obj)
         return ProjectMemberSerializer(project_members, many=True).data
-
-    def get_members_count(self, obj):
-        return obj.projectmember_set.count()
 
 
 class ProjectManagerSerializer(serializers.ModelSerializer):

@@ -1,6 +1,7 @@
 from django.db import models
 from accounts.models import CustomUser
 from .contracts import ClientContract
+from .dm_contracts import DMContract
 
 STATUS_CHOICES = [
     ('not_started', 'Not Started'),
@@ -28,6 +29,13 @@ class ProjectManagement(models.Model):
         db_index=True
     )
     contract = models.ForeignKey(ClientContract, on_delete=models.CASCADE, null=True, blank=True)
+    dm_contract = models.ForeignKey(
+        DMContract,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='projects'
+    )
     project_name = models.CharField(max_length=255)
     project_description = models.TextField()
     start_date = models.DateField()

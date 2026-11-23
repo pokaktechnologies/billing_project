@@ -68,7 +68,7 @@ class project_management(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, format=None):
-        projects = ProjectManagement.objects.all()
+        projects = ProjectManagement.objects.select_related('contract', 'dm_contract')
 
         project_type = request.query_params.get('project_type')
 
@@ -185,23 +185,9 @@ class project_management(BaseAPIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Contract is mandatory only for developer projects
-        contract = None
-        contract_id = request.data.get('contract')
-
-        if contract_id:
-            contract = ClientContract.objects.filter(
-                pk=contract_id
-            ).first()
-
-            if not contract:
-                return Response(
-                    {
-                        "status": "0",
-                        "message": "Contract not found"
-                    },
-                    status=status.HTTP_404_NOT_FOUND
-                )
+        # Contract / DM Contract validations
+        contract = serializer.validated_data.get('contract')
+        dm_contract = serializer.validated_data.get('dm_contract')
 
         if project_type == 'dev' and not contract:
             return Response(
@@ -212,13 +198,24 @@ class project_management(BaseAPIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        if project_type == 'dm' and not dm_contract:
+            return Response(
+                {
+                    "status": "0",
+                    "message": "Digital Marketing Contract is required for digital marketing projects"
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         try:
             with transaction.atomic():
 
                 # Create project
                 project = serializer.save(
                     user=request.user,
-                    project_type=project_type
+                    project_type=project_type,
+                    contract=contract if project_type in ['dev', 'testing'] else None,
+                    dm_contract=dm_contract if project_type == 'dm' else None
                 )
 
                 # Allocate members
@@ -459,11 +456,9 @@ class project_management_detail(BaseAPIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Preserve the existing contract unless a new value is supplied
-        contract = serializer.validated_data.get(
-            'contract',
-            project.contract
-        )
+        # Contract / DM Contract validations
+        contract = serializer.validated_data.get('contract')
+        dm_contract = serializer.validated_data.get('dm_contract')
 
         if project_type == 'dev' and not contract:
             return Response(
@@ -474,10 +469,22 @@ class project_management_detail(BaseAPIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        if project_type == 'dm' and not dm_contract:
+            return Response(
+                {
+                    "status": "0",
+                    "message": "Digital Marketing Contract is required for digital marketing projects"
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         try:
             with transaction.atomic():
 
-                serializer.save()
+                serializer.save(
+                    contract=contract if project_type in ['dev', 'testing'] else None,
+                    dm_contract=dm_contract if project_type == 'dm' else None
+                )
 
                 # Update or add members only if provided
                 if members is not None:
@@ -577,7 +584,7 @@ class MyProjectsView(APIView):
 
         projects = ProjectManagement.objects.filter(
             projectmember__member__user=user
-        ).select_related('contract').prefetch_related('projectmember_set').distinct()
+        ).select_related('contract', 'dm_contract').prefetch_related('projectmember_set').distinct()
 
         serializer = ProjectManagementSerializer(projects, many=True)
         project_data = serializer.data
@@ -605,7 +612,7 @@ class MyProjectDetailView(APIView):
         project = ProjectManagement.objects.filter(
             id=project_id,
             projectmember__member__user=user
-        ).select_related('contract').first()
+        ).select_related('contract', 'dm_contract').first()
 
         if not project:
             return Response(
@@ -626,7 +633,7 @@ class ProjectReportView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        projects = ProjectManagement.objects.select_related('contract').prefetch_related('task_set').order_by('-created_at')
+        projects = ProjectManagement.objects.select_related('contract', 'dm_contract').prefetch_related('task_set').order_by('-created_at')
 
         # FILTER PARAMETERS
         from_date = request.query_params.get('from_date')

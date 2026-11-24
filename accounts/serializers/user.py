@@ -146,10 +146,11 @@ class JobDetailSerializer(serializers.ModelSerializer):
 class StaffProfileSerializer(serializers.ModelSerializer):
     job_detail = JobDetailSerializer(read_only=True)
     documents = StaffDocumentSerializer(many=True, read_only=True)
+    qualification = serializers.CharField(source="qulification", read_only=True)
 
     class Meta:
         model = StaffProfile
-        fields = ['id','phone_number', 'qulification', 'staff_email', 'profile_image', 'date_of_birth', 'address', 'job_detail', 'documents']
+        fields = ['id','phone_number', 'qulification', 'qualification', 'staff_email', 'profile_image', 'date_of_birth', 'address', 'job_detail', 'documents']
 
 class StaffUserSerializer(serializers.ModelSerializer):
     profile = StaffProfileSerializer(source='staff_profile', read_only=True)
@@ -234,6 +235,11 @@ class StaffUserUpdateSerializer(serializers.ModelSerializer):
         for field in ("email", "gender"):
             if field in profile_data and field not in data:
                 data[field] = profile_data.pop(field)
+
+        # The staff form uses staff_profile.staff_email for the displayed
+        # login email. Keep CustomUser.email and StaffProfile.staff_email in sync.
+        if "staff_email" in profile_data and "email" not in data:
+            data["email"] = profile_data["staff_email"]
 
         for field in ("phone_number", "qualification", "staff_email", "date_of_birth", "address"):
             if field in data:

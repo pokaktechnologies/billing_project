@@ -156,6 +156,8 @@ PARENT_MODULE_MAP = [
             "project_timeline",
             "project_reports"
             "testing"
+            "client_contract",
+            "team_member",
         ]
     },
     {

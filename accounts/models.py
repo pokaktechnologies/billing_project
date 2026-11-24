@@ -1410,6 +1410,8 @@ class ModulePermission(models.Model):
 
         # PROJECT
         ("project", "Project"),
+        ("client_contract", "Client Contract"),
+        ("team_member", "Team Member"),
         ("project_timeline", "Developer Timeline"),
         ("project_reports", "Project Reports"),
 

@@ -211,7 +211,10 @@ class StaffUserUpdateSerializer(serializers.ModelSerializer):
 
     def to_internal_value(self, data):
         """Accept profile fields either nested or at the top level."""
-        data = data.copy()
+        # Convert multipart QueryDict data to a normal dictionary before
+        # constructing the nested staff_profile object. QueryDict assignment
+        # can otherwise turn nested values into string/list values.
+        data = {key: data.get(key) for key in data.keys()}
         profile_data = data.get("staff_profile")
         if not isinstance(profile_data, dict):
             profile_data = {}

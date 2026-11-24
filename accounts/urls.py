@@ -5,6 +5,7 @@ from accounts.views.user import  *
 from .views.SearchViews import *
 from .views.ReportView import *
 from .views.pending_dashboard import (
+    ProductsPendingDashboardAPIView,
     PurchasePendingDashboardAPIView,
     SalesPendingDashboardAPIView,
 )
@@ -98,6 +99,7 @@ urlpatterns = [
     path('sales-returns/client/<int:client_id>/', SalesOrderByClient.as_view(), name='sales_order_by_client'),
     path('sales/pending-dashboard/', SalesPendingDashboardAPIView.as_view(), name='sales_pending_dashboard'),
     path('purchases/pending-dashboard/', PurchasePendingDashboardAPIView.as_view(), name='purchase_pending_dashboard'),
+    path('products/pending-dashboard/', ProductsPendingDashboardAPIView.as_view(), name='products_pending_dashboard'),
     path('delivery-orders/sales-order/<int:sales_order_id>/', DelivaryOrderBySalesOrder.as_view(), name='delivery_order_by_sales_order'),
 
     path('orders/generate-number/', OrderNumberGeneratorView.as_view(), name='order_number_generator'),

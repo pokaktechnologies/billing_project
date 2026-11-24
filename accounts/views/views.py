@@ -922,6 +922,8 @@ class ProductListCreateAPIView(BaseAPIView):
         search = request.query_params.get('search')
         category = request.query_params.get('category')
         unit = request.query_params.get('unit')
+        is_active = request.query_params.get('is_active')
+        stock_status = request.query_params.get('stock_status')
 
         products = Product.objects.select_related(
             'unit', 'category', 'tax_setting'
@@ -938,6 +940,24 @@ class ProductListCreateAPIView(BaseAPIView):
 
         if unit:
             products = products.filter(unit_id=unit)
+
+        if is_active is not None and is_active.strip() != "":
+            is_active_clean = is_active.strip().lower()
+            if is_active_clean in ("true", "1"):
+                products = products.filter(is_active=True)
+            elif is_active_clean in ("false", "0"):
+                products = products.filter(is_active=False)
+
+        if stock_status:
+            stock_status_clean = stock_status.strip().lower()
+            if stock_status_clean == "negative":
+                products = products.filter(stock__lt=0)
+            elif stock_status_clean == "out_of_stock":
+                products = products.filter(stock=0)
+            elif stock_status_clean == "low_stock":
+                products = products.filter(stock__gt=0, stock__lte=F('reorder_level'))
+            elif stock_status_clean == "in_stock":
+                products = products.filter(stock__gt=F('reorder_level'))
 
 
         # optional pagination with response

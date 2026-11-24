@@ -249,6 +249,7 @@ class ProductReportSerializer(serializers.ModelSerializer):
     unit = serializers.CharField(source="unit.name")
     unit_price = serializers.DecimalField(max_digits=10, decimal_places=2)
     stock = serializers.IntegerField()
+    reorder_level = serializers.IntegerField()
     status = serializers.SerializerMethodField()
 
     class Meta:
@@ -260,13 +261,14 @@ class ProductReportSerializer(serializers.ModelSerializer):
             "unit",
             "unit_price",
             "stock",
+            "reorder_level",
             "status",
         ]
 
     def get_status(self, obj):
-        if obj.stock == 0:
+        if obj.stock <= 0:
             return "Out of Stock"
-        elif obj.stock <= 200:
+        elif obj.stock <= obj.reorder_level:
             return "Low Stock"
         else:
             return "In Stock"

@@ -299,6 +299,7 @@ class Product(models.Model):
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     # stock = models.DecimalField(max_digits=10, decimal_places=2, default=0,blank=True, null=True)
     stock = models.IntegerField(default=0)  # Stock quantity
+    reorder_level = models.PositiveIntegerField(default=10)
     category = models.ForeignKey('Category', on_delete=models.CASCADE, related_name='products')
 
     # NEW: tax setting
@@ -1474,6 +1475,8 @@ class ModulePermission(models.Model):
         ('sales_pending', "Sales Pending"),
         ('purchase_pending', "Purchase Pending"),
         ('marketing_pending', "Marketing Pending"),
+        ('products_pending', "Products Pending"),
+        ('certificate_pending', "Certificate Pending"),
     ]
 
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="module_permissions")

@@ -960,3 +960,226 @@ class PurchasePendingDashboardAPITests(APITestCase):
         self.assertEqual(limit_dash["items_count"], 2)
 
 
+class ProductsPendingDashboardTests(TestCase):
+    def setUp(self):
+        from rest_framework.test import APIClient
+        from accounts.models import (
+            Category,
+            Product,
+            PurchaseOrder,
+            PurchaseOrderItem,
+            QuotationItem,
+            QuotationOrderModel,
+            Supplier,
+            Unit,
+        )
+        from finance.models import TaxSettings
+
+        self.Product = Product
+        self.client = APIClient()
+        self.user = CustomUser.objects.create_user(
+            first_name="Prod",
+            last_name="Tester",
+            email="prodtester@example.com",
+            password="password123",
+            is_superuser=True,
+        )
+        self.client.force_authenticate(user=self.user)
+
+        self.unit = Unit.objects.create(name="Piece")
+        self.category = Category.objects.create(name="Hardware")
+        self.active_tax = TaxSettings.objects.create(name="GST 18%", rate=Decimal("18.00"), is_active=True)
+        self.inactive_tax = TaxSettings.objects.create(name="Old Tax 12%", rate=Decimal("12.00"), is_active=False)
+
+        self.salesperson = SalesPerson.objects.create(
+            first_name="Rep",
+            last_name="One",
+            email="repprod@example.com",
+            phone="9999900001",
+            mobile="9999900002",
+            incentive=Decimal("0.00"),
+        )
+        self.customer = Customer.objects.create(
+            company_name="Beta Client",
+            customer_type="business",
+            salesperson=self.salesperson,
+            mobile="9999900003",
+        )
+        self.supplier = Supplier.objects.create(
+            supplier_number="SU|200001",
+            supplier_type="Business",
+            company_name="Supplier One",
+            contact_person_name="John",
+            contact_person_number="9876500001",
+            address="Industrial Area",
+            date=date(2026, 11, 20),
+        )
+
+        self.dashboard_url = "/accounts/products/pending-dashboard/"
+        self.products_url = "/accounts/products/"
+
+        self.PurchaseOrder = PurchaseOrder
+        self.PurchaseOrderItem = PurchaseOrderItem
+        self.QuotationOrderModel = QuotationOrderModel
+        self.QuotationItem = QuotationItem
+
+    def test_products_pending_dashboard_and_product_endpoints(self):
+        # 1. Healthy product -> should NOT appear anywhere on dashboard
+        healthy = self.Product.objects.create(
+            name="Healthy Monitor",
+            code="SKU-OK",
+            unit=self.unit,
+            category=self.category,
+            unit_price=Decimal("5000.00"),
+            stock=50,
+            reorder_level=10,
+            tax_setting=self.active_tax,
+            is_active=True,
+        )
+
+        # 2. Negative stock + zero price + missing tax + missing code
+        neg_prod = self.Product.objects.create(
+            name="Negative Cable",
+            code=None,
+            unit=self.unit,
+            category=self.category,
+            unit_price=Decimal("0.00"),
+            stock=-3,
+            reorder_level=10,
+            tax_setting=None,
+            is_active=True,
+        )
+
+        # 3. Out of stock WITH incoming open PO -> urgency medium
+        oos_with_po = self.Product.objects.create(
+            name="OOS Keyboard",
+            code="SKU-OOS-PO",
+            unit=self.unit,
+            category=self.category,
+            unit_price=Decimal("1200.00"),
+            stock=0,
+            reorder_level=10,
+            tax_setting=self.active_tax,
+            is_active=True,
+        )
+        po = self.PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            purchase_order_number="PO|200001",
+            purchase_order_date=date(2026, 11, 20),
+            status="sent",
+            grand_total=Decimal("6000.00"),
+        )
+        self.PurchaseOrderItem.objects.create(
+            purchase_order=po,
+            product=oos_with_po,
+            quantity=5,
+            unit_price=Decimal("1200.00"),
+            total=Decimal("6000.00"),
+            sub_total=Decimal("6000.00"),
+        )
+
+        # 4. Low stock WITHOUT open PO + inactive tax
+        low_no_po = self.Product.objects.create(
+            name="Low Mouse",
+            code="SKU-LOW",
+            unit=self.unit,
+            category=self.category,
+            unit_price=Decimal("500.00"),
+            stock=4,
+            reorder_level=10,
+            tax_setting=self.inactive_tax,
+            is_active=True,
+        )
+
+        # 5. Inactive product referenced in open quotation -> flagged in products tab
+        inactive_in_quote = self.Product.objects.create(
+            name="Legacy Printer",
+            code="SKU-LEG",
+            unit=self.unit,
+            category=self.category,
+            unit_price=Decimal("9000.00"),
+            stock=0,
+            reorder_level=5,
+            tax_setting=self.active_tax,
+            is_active=False,
+        )
+        quot = self.QuotationOrderModel.objects.create(
+            client=self.customer,
+            quotation_number="QT-2026-900",
+            quotation_date=date(2026, 11, 20),
+            status="sent",
+            grand_total=Decimal("9000.00"),
+        )
+        self.QuotationItem.objects.create(
+            quotation=quot,
+            product=inactive_in_quote,
+            quantity=1,
+            unit_price=Decimal("9000.00"),
+            total=Decimal("9000.00"),
+            sub_total=Decimal("9000.00"),
+        )
+
+        res = self.client.get(self.dashboard_url)
+        self.assertEqual(res.status_code, 200)
+        data = res.data
+        self.assertEqual(data["module"], "products")
+        self.assertEqual(data["module_label"], "Products")
+        self.assertEqual([t["key"] for t in data["tabs"]], ["stock", "products"])
+
+        # Stock tab: neg_prod, oos_with_po, low_no_po (3 items; healthy & inactive excluded)
+        self.assertEqual(data["tab_counts"]["stock"], 3)
+        # Products tab: neg_prod (zero_price, missing_tax, missing_code), low_no_po (inactive_tax), inactive_in_quote (inactive_in_open_orders) -> 5 items
+        self.assertEqual(data["tab_counts"]["products"], 5)
+        self.assertEqual(data["total_pending_count"], 8)
+
+        items_by_id = {it["id"]: it for it in data["items"]}
+        self.assertNotIn(f"prod_low_stock_{healthy.id}", items_by_id)
+        self.assertEqual(items_by_id[f"prod_neg_stock_{neg_prod.id}"]["urgency"], "high")
+        self.assertEqual(items_by_id[f"prod_oos_{oos_with_po.id}"]["urgency"], "medium")
+        self.assertEqual(items_by_id[f"prod_oos_{oos_with_po.id}"]["meta"]["incoming_po_qty"], 5)
+        self.assertEqual(items_by_id[f"prod_low_stock_{low_no_po.id}"]["urgency"], "high")
+        self.assertEqual(items_by_id[f"prod_zero_price_{neg_prod.id}"]["urgency"], "high")
+        self.assertEqual(items_by_id[f"prod_missing_tax_{neg_prod.id}"]["urgency"], "medium")
+        self.assertEqual(items_by_id[f"prod_missing_code_{neg_prod.id}"]["urgency"], "medium")
+        self.assertEqual(items_by_id[f"prod_inactive_tax_{low_no_po.id}"]["urgency"], "high")
+        self.assertEqual(items_by_id[f"prod_inactive_open_{inactive_in_quote.id}"]["meta"]["open_quotation_count"], 1)
+
+        # Query filters: tab, urgency, search, limit
+        stock_only = self.client.get(self.dashboard_url, {"tab": "stock"}).data
+        self.assertEqual(stock_only["active_tab"], "stock")
+        self.assertEqual(stock_only["items_count"], 3)
+
+        high_only = self.client.get(self.dashboard_url, {"urgency": "high"}).data
+        self.assertTrue(all(it["urgency"] == "high" for it in high_only["items"]))
+
+        search_res = self.client.get(self.dashboard_url, {"search": "SKU-LOW"}).data
+        self.assertEqual(search_res["items_count"], 2)
+
+        limit_res = self.client.get(self.dashboard_url, {"limit": "2"}).data
+        self.assertEqual(limit_res["items_count"], 2)
+
+        # PATCH product with its own existing code should succeed
+        patch_res = self.client.patch(
+            f"{self.products_url}{low_no_po.id}/",
+            data={"code": "SKU-LOW", "tax_setting": self.active_tax.id, "stock": 25},
+            format="json",
+        )
+        self.assertEqual(patch_res.status_code, 200)
+
+        # Product list filters: is_active & stock_status
+        inactive_list = self.client.get(self.products_url, {"is_active": "false"}).data["Data"]
+        self.assertEqual([p["id"] for p in inactive_list], [inactive_in_quote.id])
+
+        oos_list = self.client.get(self.products_url, {"stock_status": "out_of_stock"}).data["Data"]
+        self.assertEqual(len(oos_list), 2)
+
+        neg_list = self.client.get(self.products_url, {"stock_status": "negative"}).data["Data"]
+        self.assertEqual([p["id"] for p in neg_list], [neg_prod.id])
+
+        # Permission module list includes products_pending and certificate_pending under pending_controls
+        mods_res = self.client.get("/accounts/user/modules/all/").data["modules"]
+        pending_group = next(m for m in mods_res if m["name"] == "pending_controls")
+        self.assertIn("products_pending", pending_group["submodules"])
+        self.assertIn("certificate_pending", pending_group["submodules"])
+
+

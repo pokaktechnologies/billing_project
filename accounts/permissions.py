@@ -86,7 +86,9 @@ PARENT_MODULE_MAP = [
             "academy_pending",
             "sales_pending",
             "purchase_pending",
-            "marketing_pending"
+            "marketing_pending",
+            "products_pending",
+            "certificate_pending"
         ]
     },
 

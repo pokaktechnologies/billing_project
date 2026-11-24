@@ -1,6 +1,6 @@
 from datetime import datetime, time
 from decimal import Decimal
-from django.db.models import DecimalField, F, OuterRef, Q, Subquery, Sum, Value
+from django.db.models import Count, DecimalField, F, OuterRef, Q, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from rest_framework import status
@@ -12,14 +12,17 @@ from accounts.models import (
     InvoiceModel,
     MaterialReceive,
     MaterialReceiveItem,
+    Product,
     PurchaseOrder,
     PurchaseOrderItem,
+    QuotationItem,
     QuotationOrderModel,
     ReceiptModel,
     SalesReturnModel,
     Supplier,
 )
 from accounts.serializers.pending_dashboard import (
+    ProductsPendingDashboardSerializer,
     PurchasePendingDashboardSerializer,
     SalesPendingDashboardSerializer,
 )
@@ -884,6 +887,252 @@ class PurchasePendingDashboardAPIView(_BasePendingDashboardAPIView):
                     created_at=created_dt,
                     action_url=f"/accounts/suppliers/{sup.id}/",
                     meta=sup_meta,
+                )
+
+        return self._build_response(request, tab_items, tab_categories)
+
+
+class ProductsPendingDashboardAPIView(_BasePendingDashboardAPIView):
+    """
+    Products Module Pending Controls Dashboard API.
+
+    Returns all actionable pending tasks across Products submodules:
+      - stock: Negative stock, out-of-stock, and low-stock active products (with incoming PO context)
+      - products: Active products with zero/invalid price, inactive/missing tax settings, missing SKU code,
+                  and inactive products still referenced in open quotations or purchase orders
+
+    Query Parameters:
+      - tab: 'all' (default), 'stock', 'products'
+      - urgency: 'high', 'medium', 'low'
+      - search: Search text across item titles, descriptions, and meta
+      - limit: Maximum items to return (default: 100)
+    """
+    module_key = "products"
+    module_label = "Products"
+    serializer_class = ProductsPendingDashboardSerializer
+
+    TAB_DEFINITIONS = [
+        {"key": "stock", "label": "Stock"},
+        {"key": "products", "label": "Products"},
+    ]
+
+    def get(self, request):
+        tab_items, tab_categories, add_item = self._init_buckets()
+
+        # Precompute incoming PO quantities per product from open PurchaseOrders
+        open_po_statuses = ["draft", "sent", "partially_received"]
+        po_ordered = {}
+        for row in (
+            PurchaseOrderItem.objects.filter(purchase_order__status__in=open_po_statuses)
+            .values("purchase_order_id", "product_id")
+            .annotate(qty=Sum("quantity"))
+        ):
+            po_ordered[(row["purchase_order_id"], row["product_id"])] = row["qty"] or 0
+
+        po_received = {}
+        for row in (
+            MaterialReceiveItem.objects.filter(material_receive__purchase_order__status__in=open_po_statuses)
+            .exclude(material_receive__status="rejected")
+            .values("material_receive__purchase_order_id", "product_id")
+            .annotate(qty=Sum("quantity"))
+        ):
+            po_received[(row["material_receive__purchase_order_id"], row["product_id"])] = row["qty"] or 0
+
+        incoming_po_by_product = {}
+        for (po_id, pid), ord_qty in po_ordered.items():
+            rec_qty = po_received.get((po_id, pid), 0)
+            pending = max(0, ord_qty - rec_qty)
+            if pending > 0:
+                incoming_po_by_product[pid] = incoming_po_by_product.get(pid, 0) + pending
+
+        # =========================================================================
+        # 1. ACTIVE PRODUCTS -> TAB: STOCK & TAB: PRODUCTS
+        # =========================================================================
+        active_products = (
+            Product.objects.filter(is_active=True)
+            .select_related("category", "unit", "tax_setting")
+            .order_by("stock", "id")
+        )
+
+        for p in active_products:
+            code_display = (p.code or "").strip() or "No Code"
+            incoming_qty = incoming_po_by_product.get(p.id, 0)
+            prod_meta = {
+                "product_id": p.id,
+                "product_code": p.code or "",
+                "product_name": p.name,
+                "category_id": p.category_id,
+                "category_name": p.category.name if p.category else "",
+                "unit_id": p.unit_id,
+                "unit_name": p.unit.name if p.unit else "",
+                "unit_price": str(p.unit_price or Decimal("0.00")),
+                "stock": p.stock,
+                "reorder_level": p.reorder_level,
+                "incoming_po_qty": incoming_qty,
+                "is_active": p.is_active,
+            }
+            action_url = f"/accounts/products/{p.id}/"
+
+            # --- TAB 1: STOCK ---
+            if p.stock < 0:
+                add_item(
+                    tab_key="stock",
+                    work_type="product_negative_stock",
+                    work_type_label="Negative Stock",
+                    title=f"{p.name} ({code_display}) - Negative Stock ({p.stock})",
+                    description=f"Product stock is negative ({p.stock} {prod_meta['unit_name']}). Audit and reconcile stock movements immediately.",
+                    urgency="high",
+                    record_id=p.id,
+                    item_id=f"prod_neg_stock_{p.id}",
+                    action_url=action_url,
+                    meta=prod_meta,
+                )
+            elif p.stock == 0:
+                urgency = "medium" if incoming_qty > 0 else "high"
+                po_note = f" ({incoming_qty} incoming on open PO)" if incoming_qty > 0 else " with no open PO raised"
+                add_item(
+                    tab_key="stock",
+                    work_type="product_out_of_stock",
+                    work_type_label="Out of Stock",
+                    title=f"{p.name} ({code_display}) - Out of Stock",
+                    description=f"Current stock is 0 {prod_meta['unit_name']}{po_note}.",
+                    urgency=urgency,
+                    record_id=p.id,
+                    item_id=f"prod_oos_{p.id}",
+                    action_url=action_url,
+                    meta=prod_meta,
+                )
+            elif p.stock <= p.reorder_level:
+                urgency = "medium" if incoming_qty > 0 else "high"
+                po_note = f" ({incoming_qty} incoming on open PO)" if incoming_qty > 0 else ""
+                add_item(
+                    tab_key="stock",
+                    work_type="product_low_stock",
+                    work_type_label="Low Stock",
+                    title=f"{p.name} ({code_display}) - Low Stock ({p.stock} left)",
+                    description=f"Stock ({p.stock}) is at or below reorder level ({p.reorder_level}){po_note}.",
+                    urgency=urgency,
+                    record_id=p.id,
+                    item_id=f"prod_low_stock_{p.id}",
+                    action_url=action_url,
+                    meta=prod_meta,
+                )
+
+            # --- TAB 2: PRODUCTS (Catalog, Pricing & Tax Readiness) ---
+            if p.unit_price is None or p.unit_price <= 0:
+                add_item(
+                    tab_key="products",
+                    work_type="product_zero_price",
+                    work_type_label="Zero / Invalid Unit Price",
+                    title=f"{p.name} ({code_display}) - Zero Unit Price",
+                    description="Active product has a unit price of ₹0.00 or less.",
+                    urgency="high",
+                    record_id=p.id,
+                    item_id=f"prod_zero_price_{p.id}",
+                    action_url=action_url,
+                    meta=prod_meta,
+                )
+
+            if p.tax_setting_id is not None and not p.tax_setting.is_active:
+                add_item(
+                    tab_key="products",
+                    work_type="product_inactive_tax",
+                    work_type_label="Inactive Tax Setting",
+                    title=f"{p.name} ({code_display}) - Inactive Tax Slab",
+                    description=f"Assigned tax setting '{p.tax_setting.name}' is inactive.",
+                    urgency="high",
+                    record_id=p.id,
+                    item_id=f"prod_inactive_tax_{p.id}",
+                    action_url=action_url,
+                    meta={**prod_meta, "tax_setting_id": p.tax_setting_id, "tax_setting_name": p.tax_setting.name},
+                )
+            elif p.tax_setting_id is None:
+                add_item(
+                    tab_key="products",
+                    work_type="product_missing_tax",
+                    work_type_label="Missing Tax Setting",
+                    title=f"{p.name} ({code_display}) - No Tax Setting",
+                    description="Active product has no tax setting assigned (SGST/CGST defaults to 0%).",
+                    urgency="medium",
+                    record_id=p.id,
+                    item_id=f"prod_missing_tax_{p.id}",
+                    action_url=action_url,
+                    meta=prod_meta,
+                )
+
+            if not (p.code or "").strip():
+                add_item(
+                    tab_key="products",
+                    work_type="product_missing_code",
+                    work_type_label="Missing Product Code",
+                    title=f"{p.name} - Missing SKU Code",
+                    description="Active product does not have a SKU/product code assigned.",
+                    urgency="medium",
+                    record_id=p.id,
+                    item_id=f"prod_missing_code_{p.id}",
+                    action_url=action_url,
+                    meta=prod_meta,
+                )
+
+        # =========================================================================
+        # 2. INACTIVE PRODUCTS REFERENCED IN OPEN QUOTATIONS / PURCHASE ORDERS
+        # =========================================================================
+        open_quot_counts = {
+            row["product_id"]: row["cnt"]
+            for row in (
+                QuotationItem.objects.filter(
+                    product__is_active=False,
+                    quotation__status__in=["draft", "sent"],
+                )
+                .values("product_id")
+                .annotate(cnt=Count("quotation_id", distinct=True))
+            )
+        }
+        open_po_counts = {
+            row["product_id"]: row["cnt"]
+            for row in (
+                PurchaseOrderItem.objects.filter(
+                    product__is_active=False,
+                    purchase_order__status__in=open_po_statuses,
+                )
+                .values("product_id")
+                .annotate(cnt=Count("purchase_order_id", distinct=True))
+            )
+        }
+        inactive_open_pids = set(open_quot_counts.keys()) | set(open_po_counts.keys())
+        if inactive_open_pids:
+            inactive_products = (
+                Product.objects.filter(id__in=inactive_open_pids)
+                .select_related("category", "unit")
+                .order_by("id")
+            )
+            for p in inactive_products:
+                q_cnt = open_quot_counts.get(p.id, 0)
+                po_cnt = open_po_counts.get(p.id, 0)
+                code_display = (p.code or "").strip() or "No Code"
+                add_item(
+                    tab_key="products",
+                    work_type="product_inactive_in_open_orders",
+                    work_type_label="Inactive Product in Open Orders",
+                    title=f"{p.name} ({code_display}) - Inactive in Open Orders",
+                    description=f"Inactive product is referenced in {q_cnt} open quotation(s) and {po_cnt} open purchase order(s).",
+                    urgency="high",
+                    record_id=p.id,
+                    item_id=f"prod_inactive_open_{p.id}",
+                    action_url=f"/accounts/products/{p.id}/",
+                    meta={
+                        "product_id": p.id,
+                        "product_code": p.code or "",
+                        "product_name": p.name,
+                        "category_id": p.category_id,
+                        "category_name": p.category.name if p.category else "",
+                        "unit_id": p.unit_id,
+                        "unit_name": p.unit.name if p.unit else "",
+                        "stock": p.stock,
+                        "is_active": p.is_active,
+                        "open_quotation_count": q_cnt,
+                        "open_po_count": po_cnt,
+                    },
                 )
 
         return self._build_response(request, tab_items, tab_categories)

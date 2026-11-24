@@ -1384,14 +1384,14 @@ class ProductReportAPIView(generics.ListAPIView):
         if status and status.strip().lower() != "all":
             status_clean = status.strip().lower()
             if status_clean == "in stock":
-                queryset = queryset.filter(stock__gt=200)
+                queryset = queryset.filter(stock__gt=F("reorder_level"))
             elif status_clean == "low stock":
                 queryset = queryset.filter(
                     stock__gt=0,
-                    stock__lte=200
+                    stock__lte=F("reorder_level")
                 )
             elif status_clean == "out of stock":
-                queryset = queryset.filter(stock=0)
+                queryset = queryset.filter(stock__lte=0)
         return queryset.order_by("name")
 
 

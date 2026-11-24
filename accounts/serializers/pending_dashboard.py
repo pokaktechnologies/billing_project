@@ -84,3 +84,29 @@ class PurchasePendingDashboardSerializer(serializers.Serializer):
     active_tab = serializers.CharField(default="all")
     items_count = serializers.IntegerField()
     items = PurchasePendingWorkItemSerializer(many=True)
+
+
+class ProductsPendingWorkItemSerializer(PendingWorkItemSerializer):
+    pass
+
+
+class ProductsPendingTabCategorySerializer(PendingTabCategorySerializer):
+    pass
+
+
+class ProductsPendingTabSerializer(PendingTabSerializer):
+    pass
+
+
+class ProductsPendingDashboardSerializer(serializers.Serializer):
+    """
+    Top-level response serializer for Products Pending Works Dashboard.
+    """
+    module = serializers.CharField(default="products")
+    module_label = serializers.CharField(default="Products")
+    total_pending_count = serializers.IntegerField()
+    tab_counts = serializers.DictField(child=serializers.IntegerField())
+    tabs = ProductsPendingTabSerializer(many=True)
+    active_tab = serializers.CharField(default="all")
+    items_count = serializers.IntegerField()
+    items = ProductsPendingWorkItemSerializer(many=True)

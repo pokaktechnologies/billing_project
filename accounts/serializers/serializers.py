@@ -1472,7 +1472,10 @@ class ProductSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(f"Unit '{value}' does not exist.")
 
     def validate_code(self, value):
-        if Product.objects.filter(code=value).exists():
+        qs = Product.objects.filter(code=value)
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
             raise serializers.ValidationError(f"Product code '{value}' already exists.")
         return value
     def validate_category(self, value):

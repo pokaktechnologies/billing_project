@@ -86,6 +86,16 @@ class project_management(BaseAPIView):
 
             projects = projects.filter(project_type=project_type)
 
+        status_counts = {
+            value: 0
+            for value, _ in ProjectManagement._meta.get_field('status').choices
+        }
+
+        for row in projects.order_by().values('status').annotate(count=Count('id')):
+            status_counts[row['status']] = row['count']
+
+        total_projects = projects.count()
+
         projects = projects.order_by('-created_at')
 
         serializer = ProjectManagementSerializer(
@@ -97,6 +107,10 @@ class project_management(BaseAPIView):
             {
                 "status": "1",
                 "message": "success",
+                "summary": {
+                    "total_projects": total_projects,
+                    "status_counts": status_counts,
+                },
                 "data": serializer.data
             },
             status=status.HTTP_200_OK

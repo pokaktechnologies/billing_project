@@ -1282,6 +1282,8 @@ class EmployeeRegistrationCreateView(APIView):
 
 class EmployeeRegistrationDetailView(APIView):
 
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
     def get(self, request, pk):
         try:
             registration = EmployeeRegistration.objects.get(pk=pk)
@@ -1303,6 +1305,29 @@ class EmployeeRegistrationDetailView(APIView):
             },
             status=status.HTTP_200_OK
         )
+
+    def patch(self, request, pk):
+        registration = get_object_or_404(EmployeeRegistration, pk=pk)
+        serializer = EmployeeRegistrationSerializer(
+            registration,
+            data=request.data,
+            partial=True,
+            context={'request': request},
+        )
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer.save()
+        return Response(
+            {
+                "message": "Employee registration updated successfully.",
+                "data": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def put(self, request, pk):
+        return self.patch(request, pk)
 
 
 class ConvertEmployeeRegistrationToStaffAPIView(APIView):

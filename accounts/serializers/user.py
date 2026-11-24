@@ -191,11 +191,15 @@ class StaffUserSerializer(serializers.ModelSerializer):
 #  update  
 
 class StaffProfileUpdateSerializer(serializers.ModelSerializer):
+    # Keep the API spelling correct while mapping to the legacy model field.
+    qualification = serializers.CharField(
+        source="qulification", required=False, allow_blank=True, allow_null=True
+    )
     profile_image = serializers.ImageField(required=False, allow_null=True)
 
     class Meta:
         model = StaffProfile
-        fields = ["phone_number", "staff_email", "profile_image", "date_of_birth", "address"]
+        fields = ["phone_number", "qualification", "staff_email", "profile_image", "date_of_birth", "address"]
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -209,15 +213,32 @@ class StaffProfileUpdateSerializer(serializers.ModelSerializer):
 class StaffUserUpdateSerializer(serializers.ModelSerializer):
     staff_profile = StaffProfileUpdateSerializer()
 
+    def to_internal_value(self, data):
+        """Accept profile fields either nested or at the top level."""
+        data = data.copy()
+        profile_data = data.get("staff_profile")
+        if not isinstance(profile_data, dict):
+            profile_data = {}
+        else:
+            profile_data = profile_data.copy()
+
+        for field in ("phone_number", "qualification", "staff_email", "date_of_birth", "address"):
+            if field in data:
+                profile_data[field] = data.pop(field)
+        if profile_data:
+            data["staff_profile"] = profile_data
+        return super().to_internal_value(data)
+
     class Meta:
         model = CustomUser
-        fields = ["email", "first_name", "last_name", "staff_profile"]
+        fields = ["email", "first_name", "last_name", "gender", "staff_profile"]
 
     def update(self, instance, validated_data):
         # Update CustomUser fields
         instance.email = validated_data.get("email", instance.email)
         instance.first_name = validated_data.get("first_name", instance.first_name)
         instance.last_name = validated_data.get("last_name", instance.last_name)
+        instance.gender = validated_data.get("gender", instance.gender)
         instance.save()
 
         # Update StaffProfile

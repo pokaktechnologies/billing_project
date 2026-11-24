@@ -50,9 +50,14 @@ class MemberSerializer(serializers.ModelSerializer):
 
 
 class StackSerializer(serializers.ModelSerializer):
+    members_count = serializers.SerializerMethodField()
+
     class Meta:
         model = Stack
-        fields = ['id', 'name']
+        fields = ['id', 'name', 'members_count']
+
+    def get_members_count(self, obj):
+        return obj.projectmember_set.count()
 
 
 class ProjectMemberSerializer(serializers.ModelSerializer):

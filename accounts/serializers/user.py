@@ -222,6 +222,18 @@ class StaffUserUpdateSerializer(serializers.ModelSerializer):
         else:
             profile_data = profile_data.copy()
 
+        # Multipart FormData commonly arrives as keys such as
+        # ``staff_profile.email`` rather than a nested object.
+        for key in list(data.keys()):
+            if key.startswith("staff_profile."):
+                profile_data[key.split(".", 1)[1]] = data.pop(key)
+
+        # Some frontend forms submit account fields inside staff_profile.
+        # Normalize them to the CustomUser payload expected by this serializer.
+        for field in ("email", "gender"):
+            if field in profile_data and field not in data:
+                data[field] = profile_data.pop(field)
+
         for field in ("phone_number", "qualification", "staff_email", "date_of_birth", "address"):
             if field in data:
                 profile_data[field] = data.pop(field)

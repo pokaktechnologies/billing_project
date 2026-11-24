@@ -416,6 +416,10 @@ class UpdateStaffUserView(BaseGenericAPIView, generics.UpdateAPIView):
     lookup_field = "id"
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
+    def post(self, request, *args, **kwargs):
+        """Support frontend edit forms that submit updates with POST."""
+        return self.partial_update(request, *args, **kwargs)
+
 
 class UpdateJobDetailView(BaseGenericAPIView, generics.UpdateAPIView):
     permission_classes = [IsAuthenticated]

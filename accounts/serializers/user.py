@@ -226,7 +226,8 @@ class StaffUserUpdateSerializer(serializers.ModelSerializer):
         # ``staff_profile.email`` rather than a nested object.
         for key in list(data.keys()):
             if key.startswith("staff_profile."):
-                profile_data[key.split(".", 1)[1]] = data.pop(key)
+                profile_data[key.split(".", 1)[1]] = data.get(key)
+                data.pop(key)
 
         # Some frontend forms submit account fields inside staff_profile.
         # Normalize them to the CustomUser payload expected by this serializer.

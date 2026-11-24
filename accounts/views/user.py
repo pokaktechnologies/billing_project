@@ -1329,6 +1329,10 @@ class EmployeeRegistrationDetailView(APIView):
     def put(self, request, pk):
         return self.patch(request, pk)
 
+    def post(self, request, pk):
+        """Support edit forms that submit multipart data with POST."""
+        return self.patch(request, pk)
+
 
 class ConvertEmployeeRegistrationToStaffAPIView(APIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]

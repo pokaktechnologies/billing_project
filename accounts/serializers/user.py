@@ -146,10 +146,12 @@ class JobDetailSerializer(serializers.ModelSerializer):
 class StaffProfileSerializer(serializers.ModelSerializer):
     job_detail = JobDetailSerializer(read_only=True)
     documents = StaffDocumentSerializer(many=True, read_only=True)
+    # Backwards-compatible response alias for the existing frontend.
+    qulification = serializers.CharField(source="qualification", read_only=True)
 
     class Meta:
         model = StaffProfile
-        fields = ['id','phone_number', 'qualification', 'staff_email', 'profile_image', 'date_of_birth', 'address', 'job_detail', 'documents']
+        fields = ['id','phone_number', 'qualification', 'qulification', 'staff_email', 'profile_image', 'date_of_birth', 'address', 'job_detail', 'documents']
 
 class StaffUserSerializer(serializers.ModelSerializer):
     profile = StaffProfileSerializer(source='staff_profile', read_only=True)

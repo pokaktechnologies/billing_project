@@ -189,7 +189,7 @@ class CreateStaffWithPermissionsView(BaseAPIView):
                 staff_profile = StaffProfile.objects.create(
                     user=user,
                     phone_number=request.data.get("phone_number"),
-                    qulification=request.data.get("qulification"),
+                    qualification=request.data.get("qualification"),
                     staff_email=request.data.get("staff_email"),
                     profile_image=request.FILES.get("profile_image"),
                     date_of_birth=request.data.get("date_of_birth"),
@@ -1413,7 +1413,7 @@ class ConvertEmployeeRegistrationToStaffAPIView(APIView):
         staff_profile = StaffProfile.objects.create(
             user=user,
             phone_number=registration.phone_number,
-            qulification=registration.qualification,
+            qualification=registration.qualification,
             staff_email=staff_contact_email,
             profile_image=registration.profile_photo,
             date_of_birth=registration.date_of_birth,

@@ -372,7 +372,7 @@ class EmployeeRegistrationConvertAPITests(APITestCase):
         # Verify StaffProfile
         staff_profile = StaffProfile.objects.get(user=user)
         self.assertEqual(staff_profile.phone_number, "9876543210")
-        self.assertEqual(staff_profile.qulification, "B.Tech Computer Science")
+        self.assertEqual(staff_profile.qualification, "B.Tech Computer Science")
         self.assertEqual(staff_profile.date_of_birth, date(1999, 4, 12))
 
         # Verify JobDetail

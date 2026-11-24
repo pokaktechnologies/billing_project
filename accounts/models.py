@@ -83,7 +83,7 @@ class Department(models.Model):
 class StaffProfile(models.Model):
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name="staff_profile")
     phone_number = models.CharField(max_length=15, blank=True, null=True)
-    qulification = models.CharField(max_length=255, blank=True, null=True)
+    qualification = models.CharField(max_length=255, blank=True, null=True)
     staff_email = models.EmailField(blank=True, null=True)
     profile_image = models.ImageField(upload_to="staff/profile_images/", blank=True, null=True)
     date_of_birth = models.DateField(blank=True, null=True)

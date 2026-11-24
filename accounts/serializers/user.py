@@ -146,11 +146,10 @@ class JobDetailSerializer(serializers.ModelSerializer):
 class StaffProfileSerializer(serializers.ModelSerializer):
     job_detail = JobDetailSerializer(read_only=True)
     documents = StaffDocumentSerializer(many=True, read_only=True)
-    qualification = serializers.CharField(source="qulification", read_only=True)
 
     class Meta:
         model = StaffProfile
-        fields = ['id','phone_number', 'qulification', 'qualification', 'staff_email', 'profile_image', 'date_of_birth', 'address', 'job_detail', 'documents']
+        fields = ['id','phone_number', 'qualification', 'staff_email', 'profile_image', 'date_of_birth', 'address', 'job_detail', 'documents']
 
 class StaffUserSerializer(serializers.ModelSerializer):
     profile = StaffProfileSerializer(source='staff_profile', read_only=True)
@@ -192,10 +191,6 @@ class StaffUserSerializer(serializers.ModelSerializer):
 #  update  
 
 class StaffProfileUpdateSerializer(serializers.ModelSerializer):
-    # Keep the API spelling correct while mapping to the legacy model field.
-    qualification = serializers.CharField(
-        source="qulification", required=False, allow_blank=True, allow_null=True
-    )
     profile_image = serializers.ImageField(required=False, allow_null=True)
 
     class Meta:
@@ -264,10 +259,6 @@ class StaffUserUpdateSerializer(serializers.ModelSerializer):
         staff_profile_data = validated_data.pop("staff_profile", None)
         if staff_profile_data:
             staff_profile = instance.staff_profile
-            # ``qualification`` is the public API name; ``qulification`` is
-            # the legacy database field name on StaffProfile.
-            if "qualification" in staff_profile_data:
-                staff_profile_data["qulification"] = staff_profile_data.pop("qualification")
             for attr, value in staff_profile_data.items():
                 setattr(staff_profile, attr, value)
             staff_profile.save()
@@ -608,7 +599,7 @@ class AdminStaffProfileSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "phone_number",
-            "qulification",
+            "qualification",
             "staff_email",
             "profile_image",
             "date_of_birth",

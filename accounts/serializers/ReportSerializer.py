@@ -205,7 +205,7 @@ class EmployeeReportSerializer(serializers.ModelSerializer):
             'id',
             'name',
             'phone_number',
-            'qulification',
+            'qualification',
             'staff_email',
             'profile_image',
             'gender',

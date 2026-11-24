@@ -264,6 +264,10 @@ class StaffUserUpdateSerializer(serializers.ModelSerializer):
         staff_profile_data = validated_data.pop("staff_profile", None)
         if staff_profile_data:
             staff_profile = instance.staff_profile
+            # ``qualification`` is the public API name; ``qulification`` is
+            # the legacy database field name on StaffProfile.
+            if "qualification" in staff_profile_data:
+                staff_profile_data["qulification"] = staff_profile_data.pop("qualification")
             for attr, value in staff_profile_data.items():
                 setattr(staff_profile, attr, value)
             staff_profile.save()

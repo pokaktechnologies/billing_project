@@ -154,8 +154,8 @@ PARENT_MODULE_MAP = [
         "submodules": [
             "project",
             "project_timeline",
-            "project_reports"
-            "testing"
+            "project_reports",
+            "testing",
             "client_contract",
             "team_member",
         ]

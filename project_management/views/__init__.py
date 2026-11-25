@@ -35,6 +35,7 @@ from .members import (
     ProjectMembersViewListByProjectView,
     ProjectMembersSearchView,
     MembersSearchView,
+    DepartmentStaffListView,
 )
 from .tasks import (
     TaskBoardListByProjectView,
@@ -105,6 +106,7 @@ __all__ = [
     'ProjectMembersViewListByProjectView',
     'ProjectMembersSearchView',
     'MembersSearchView',
+    'DepartmentStaffListView',
     'TaskBoardListByProjectView',
     'CreateListBoard',
     'ListBoardMember',

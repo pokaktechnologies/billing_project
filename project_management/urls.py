@@ -30,6 +30,7 @@ urlpatterns = [
     # Members
     path('members/', MembersView.as_view(), name='members_list'),
     path('members/<int:pk>/', MembersViewDetail.as_view(), name='members_detail'),
+    path('department-staff/', DepartmentStaffListView.as_view(), name='department_staff_list'),
 
     # Stack
     path('stack/', StackView.as_view(), name='stack_list'),

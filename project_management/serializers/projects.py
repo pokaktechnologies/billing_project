@@ -176,7 +176,11 @@ class ProjectManagementDetailsSerializer(ProjectManagementSerializer):
         fields = ProjectManagementSerializer.Meta.fields + ['project_members']
 
     def get_project_members(self, obj):
-        project_members = ProjectMember.objects.filter(project=obj)
+        project_members = ProjectMember.objects.filter(project=obj).select_related(
+            'member__user',
+            'department',
+            'stack'
+        )
         return ProjectMemberSerializer(project_members, many=True).data
 
 

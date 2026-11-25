@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
+from accounts.models import CustomUser, Department, StaffProfile
 from activity_logs.base_view import BaseAPIView
 from ..models import Member, Stack, ProjectMember, ProjectManagement
 from ..serializers import MemberSerializer, StackSerializer, ProjectMemberSerializer
@@ -19,7 +20,10 @@ class MembersView(BaseAPIView):
     
 
     def get(self, request):
+        status_filter = request.query_params.get('status')
         members = Member.objects.all().order_by('-created_at')
+        if status_filter:
+            members = members.filter(status=status_filter)
         serializer = MemberSerializer(members, many=True)
         return Response(
             {"status": "1", "message": "success", "data": serializer.data},
@@ -90,14 +94,23 @@ class MembersViewDetail(BaseAPIView):
             return error_response
 
         try:
-            member.delete()
+            # Soft-deactivate to prevent cascading deletion of tasks, project memberships, and reports
+            member.status = 'inactive'
+            member.is_active = False
+            member.save(update_fields=['status', 'is_active'])
+
+            ProjectMember.objects.filter(member=member, is_active=True).update(
+                status='inactive',
+                is_active=False
+            )
+
             return Response(
-                {"status": "1", "message": "Member deleted successfully"},
+                {"status": "1", "message": "Member deactivated successfully"},
                 status=status.HTTP_200_OK
             )
         except Exception as e:
             return Response(
-                {"status": "0", "message": "Member deletion failed", "errors": str(e)},
+                {"status": "0", "message": "Member deactivation failed", "errors": str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -218,53 +231,131 @@ class ProjectMembersView(BaseAPIView):
 
 
     def post(self, request, format=None):
-        serializer = ProjectMemberSerializer(data=request.data)
-
         project_id = request.data.get('project')
-        stack_id = request.data.get('stack')
         member_id = request.data.get('member')
+        user_id = request.data.get('user') or request.data.get('user_id')
+        staff_id = request.data.get('staff') or request.data.get('staff_id')
+        dept_id = request.data.get('department') or request.data.get('department_id')
+        stack_id = request.data.get('stack') or request.data.get('stack_id')
 
-        if not project_id or not stack_id or not member_id:
+        if not project_id:
             return Response(
-                {"status": "0", "message": "Project, Stack, and Member fields are required"},
+                data={"status": "0", "message": "Project field is required"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         project = ProjectManagement.objects.filter(pk=project_id).first()
-        stack = Stack.objects.filter(pk=stack_id).first()
-        member = Member.objects.filter(pk=member_id).first()
-
-        missing_entities = []
         if not project:
-            missing_entities.append("Project")
-        if not stack:
-            missing_entities.append("Stack")
-        if not member:
-            missing_entities.append("Member")
-
-        if missing_entities:
             return Response(
-                {"status": "0", "message": f"The following items were not found: {', '.join(missing_entities)}"},
+                data={"status": "0", "message": "Project not found"},
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        if ProjectMember.objects.filter(project=project, member=member).exists():
+        # Resolve member
+        member = None
+        if member_id:
+            member = Member.objects.filter(pk=member_id).first()
+            if not member:
+                return Response(
+                    data={"status": "0", "message": f"Member with ID {member_id} not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        elif user_id:
+            user = CustomUser.objects.filter(pk=user_id).first()
+            if not user:
+                return Response(
+                    data={"status": "0", "message": f"User with ID {user_id} not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            member, _ = Member.objects.get_or_create(
+                user=user,
+                defaults={'status': 'active', 'is_active': True}
+            )
+        elif staff_id:
+            staff = StaffProfile.objects.select_related('user').filter(pk=staff_id).first()
+            if not staff:
+                return Response(
+                    data={"status": "0", "message": f"Staff with ID {staff_id} not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            member, _ = Member.objects.get_or_create(
+                user=staff.user,
+                defaults={'status': 'active', 'is_active': True}
+            )
+        else:
             return Response(
-                {"status": "0", "message": "Member already exists in this project"},
+                data={"status": "0", "message": "Member, user, or staff is required"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        with transaction.atomic():
-            if serializer.is_valid():
-                serializer.save()
+        # If member was inactive, reactivate
+        if not member.is_active or member.status != 'active':
+            member.status = 'active'
+            member.is_active = True
+            member.save(update_fields=['status', 'is_active'])
+
+        # Resolve department & stack
+        department = None
+        if dept_id:
+            department = Department.objects.filter(pk=dept_id).first()
+            if not department:
                 return Response(
-                    {"status": "1", "message": "Project member created successfully"},
-                    status=status.HTTP_201_CREATED
+                    data={"status": "0", "message": f"Department with ID {dept_id} not found"},
+                    status=status.HTTP_404_NOT_FOUND
                 )
 
+        stack = None
+        if stack_id:
+            stack = Stack.objects.filter(pk=stack_id).first()
+            if not stack:
+                return Response(
+                    data={"status": "0", "message": f"Stack with ID {stack_id} not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+        # Auto-resolve department from staff profile if neither department nor stack is provided
+        if not department and not stack:
+            staff_prof = getattr(member.user, 'staff_profile', None)
+            if staff_prof and getattr(staff_prof, 'job_detail', None) and staff_prof.job_detail.department:
+                department = staff_prof.job_detail.department
+
+        # Auto-match or create stack by department name for legacy compatibility
+        if not stack and department:
+            stack, _ = Stack.objects.get_or_create(
+                name=department.name,
+                defaults={'user': member.user}
+            )
+
+        with transaction.atomic():
+            project_member = ProjectMember.objects.filter(project=project, member=member).first()
+            if project_member:
+                if project_member.is_active and project_member.status == 'active':
+                    return Response(
+                        data={"status": "0", "message": "Member already exists in this project"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                # Reactivate if it was soft-deleted/inactive
+                project_member.status = 'active'
+                project_member.is_active = True
+                if department:
+                    project_member.department = department
+                if stack:
+                    project_member.stack = stack
+                project_member.save(update_fields=['status', 'is_active', 'department', 'stack'])
+            else:
+                project_member = ProjectMember.objects.create(
+                    project=project,
+                    member=member,
+                    department=department,
+                    stack=stack,
+                    status='active',
+                    is_active=True
+                )
+
+            serializer = ProjectMemberSerializer(project_member)
             return Response(
-                {"status": "0", "message": "Project member creation failed", "errors": serializer.errors},
-                status=status.HTTP_400_BAD_REQUEST
+                data={"status": "1", "message": "Project member created successfully", "data": serializer.data},
+                status=status.HTTP_201_CREATED
             )
 
 
@@ -304,7 +395,9 @@ class ProjectMembersDetail(BaseAPIView):
             )
 
         #check member is already in project or not
-        if ProjectMember.objects.filter(project=request.data['project'], member=request.data['member']).exists():
+        target_project = request.data.get('project', project_member.project_id)
+        target_member = request.data.get('member', project_member.member_id)
+        if ProjectMember.objects.filter(project=target_project, member=target_member).exclude(pk=pk).exists():
             return Response(
                 {"status": "0", "message": "Member already exists in this project"},
                 status=status.HTTP_400_BAD_REQUEST
@@ -332,14 +425,17 @@ class ProjectMembersDetail(BaseAPIView):
             )
 
         try:
-            project_member.delete()
+            # Soft-deactivate to prevent cascading deletion of task assignments
+            project_member.status = 'inactive'
+            project_member.is_active = False
+            project_member.save(update_fields=['status', 'is_active'])
             return Response(
-                {"status": "1", "message": "Project member deleted successfully"},
+                {"status": "1", "message": "Project member deactivated successfully"},
                 status=status.HTTP_200_OK
             )
         except Exception as e:
             return Response(
-                {"status": "0", "message": "Project member deletion failed", "errors": str(e)},
+                {"status": "0", "message": "Project member deactivation failed", "errors": str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -437,6 +533,65 @@ class MembersSearchView(APIView):
             {"status": "1", "message": "success", "data": serializer.data},
             status=status.HTTP_200_OK
         )
+
+
+class DepartmentStaffListView(BaseAPIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        department_filter = request.query_params.get('department')
+        search_query = request.query_params.get('search', '').strip()
+
+        departments = Department.objects.all().order_by('name')
+        departments_data = [
+            {'id': d.id, 'name': d.name}
+            for d in departments
+        ]
+
+        staff_qs = StaffProfile.objects.select_related(
+            'user', 'job_detail', 'job_detail__department'
+        ).filter(user__is_active=True)
+
+        if department_filter:
+            staff_qs = staff_qs.filter(job_detail__department_id=department_filter)
+
+        if search_query:
+            staff_qs = staff_qs.filter(
+                Q(user__first_name__icontains=search_query) |
+                Q(user__last_name__icontains=search_query) |
+                Q(user__email__icontains=search_query) |
+                Q(job_detail__role__icontains=search_query)
+            )
+
+        existing_members = {
+            m.user_id: m.id
+            for m in Member.objects.all()
+        }
+
+        staff_data = []
+        for staff in staff_qs:
+            user = staff.user
+            job_detail = getattr(staff, 'job_detail', None)
+            dept = getattr(job_detail, 'department', None) if job_detail else None
+            staff_data.append({
+                'user_id': user.id,
+                'staff_id': staff.id,
+                'name': f"{user.first_name} {user.last_name}".strip(),
+                'email': user.email,
+                'role': getattr(job_detail, 'role', '') if job_detail else '',
+                'department_id': dept.id if dept else None,
+                'department_name': dept.name if dept else None,
+                'member_id': existing_members.get(user.id),
+            })
+
+        return Response({
+            "status": "1",
+            "message": "success",
+            "departments": departments_data,
+            "staff": staff_data,
+        }, status=status.HTTP_200_OK)
+
 
 
 

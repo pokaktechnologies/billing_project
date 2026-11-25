@@ -59,6 +59,7 @@ from .hr_policy import (
     HRPolicySubtitlePointCreateView,
     HRPolicyPointDetailView,
 )
+from .pending_dashboard import HrPendingDashboardAPIView
 
 __all__ = [
     'Pagination',

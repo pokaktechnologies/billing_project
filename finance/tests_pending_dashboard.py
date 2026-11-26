@@ -6,7 +6,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from accounts.models import StaffProfile
+from accounts.models import ModulePermission, StaffProfile
+from accounts.permissions import PARENT_MODULE_MAP
 from finance.models import Account, FinancialYear, PaymentVoucher, TaxSettings
 from payroll.models import Payroll
 
@@ -24,10 +25,30 @@ class FinancePendingDashboardAPITests(TestCase):
             last_name="User",
         )
         self.staff = StaffProfile.objects.create(user=self.user)
+        ModulePermission.objects.create(user=self.user, module_name="finance_pending")
 
     def test_requires_authentication(self):
         res = self.client.get(self.url)
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_requires_finance_pending_permission(self):
+        no_perm_user = User.objects.create_user(
+            email="noperm_fin@example.com",
+            password="pass1234",
+            first_name="No",
+            last_name="Perm",
+        )
+        self.client.force_authenticate(user=no_perm_user)
+        res = self.client.get(self.url)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+        pending_group = next(
+            (g for g in PARENT_MODULE_MAP if g["name"] == "pending_controls"),
+            None,
+        )
+        self.assertIsNotNone(pending_group)
+        for key in ("lead_management_pending", "finance_pending", "faculty_pending"):
+            self.assertIn(key, pending_group["submodules"])
 
     def test_finance_pending_dashboard_items_and_filters(self):
         root_asset = Account.objects.create(

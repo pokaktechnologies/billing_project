@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 
+from accounts.permissions import HasModulePermission
 from internship.models import (
     InternshipApplication,
     Student,
@@ -694,7 +695,8 @@ class FacultyPendingDashboardAPIView(APIView):
       - limit: Maximum items to return (default: 100)
       - faculty_id: Optional (admin/superuser only) to scope to a specific Faculty
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = "faculty_pending"
 
     TAB_DEFINITIONS = [
         {"key": "submissions", "label": "Submissions"},

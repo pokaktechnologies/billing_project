@@ -6,7 +6,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from accounts.models import Department, StaffProfile
+from accounts.models import Department, ModulePermission, StaffProfile
 from internship.models import (
     Batch,
     Center,
@@ -39,6 +39,7 @@ class FacultyPendingDashboardAPITests(TestCase):
         )
         self.staff_profile = StaffProfile.objects.create(user=self.faculty_user)
         self.faculty = Faculty.objects.create(user=self.staff_profile)
+        ModulePermission.objects.create(user=self.faculty_user, module_name="faculty_pending")
 
         self.other_user = User.objects.create_user(
             email="fac2@example.com",
@@ -48,6 +49,7 @@ class FacultyPendingDashboardAPITests(TestCase):
         )
         self.other_staff = StaffProfile.objects.create(user=self.other_user)
         self.other_faculty = Faculty.objects.create(user=self.other_staff)
+        ModulePermission.objects.create(user=self.other_user, module_name="faculty_pending")
 
         self.admin_user = User.objects.create_superuser(
             email="admin@example.com",
@@ -88,6 +90,17 @@ class FacultyPendingDashboardAPITests(TestCase):
     def test_requires_authentication(self):
         res = self.client.get(self.url)
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_requires_faculty_pending_permission(self):
+        no_perm_user = User.objects.create_user(
+            email="noperm_fac@example.com",
+            password="pass1234",
+            first_name="No",
+            last_name="Perm",
+        )
+        self.client.force_authenticate(user=no_perm_user)
+        res = self.client.get(self.url)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_faculty_scoped_pending_items_and_filters(self):
         # 1. Submitted task assignment

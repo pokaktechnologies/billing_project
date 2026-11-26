@@ -1480,6 +1480,9 @@ class ModulePermission(models.Model):
         ('products_pending', "Products Pending"),
         ('certificate_pending', "Certificate Pending"),
         ('hr_pending', "HR Pending"),
+        ('lead_management_pending', "Lead Management Pending"),
+        ('finance_pending', "Finance Pending"),
+        ('faculty_pending', "Faculty Pending"),
     ]
 
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="module_permissions")

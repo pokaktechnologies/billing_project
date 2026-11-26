@@ -8,6 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.permissions import HasModulePermission
 from accounts.models import (
     InvoiceModel,
     ReceiptModel,
@@ -58,7 +59,8 @@ class FinancePendingDashboardAPIView(APIView):
       - search: Case-insensitive search across title, description, and meta
       - limit: Maximum items to return (default: 100)
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    required_module = "finance_pending"
 
     TAB_DEFINITIONS = [
         {"key": "payment_voucher", "label": "Payment Vouchers"},

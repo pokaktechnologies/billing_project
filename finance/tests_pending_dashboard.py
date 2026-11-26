@@ -6,7 +6,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from accounts.models import ModulePermission, StaffProfile
+from accounts.models import Customer, ModulePermission, SalesPerson, SalesReturnModel, StaffProfile
 from accounts.permissions import PARENT_MODULE_MAP
 from finance.models import Account, FinancialYear, PaymentVoucher, TaxSettings
 from payroll.models import Payroll
@@ -123,3 +123,39 @@ class FinancePendingDashboardAPITests(TestCase):
 
         res_search = self.client.get(self.url, {"search": "PV-001"})
         self.assertEqual(res_search.data["items_count"], 1)
+
+    def test_approved_sales_return_pending_settlement(self):
+        salesperson = SalesPerson.objects.create(
+            first_name="Sales",
+            last_name="Person",
+            email="sp@example.com",
+            phone="9999999991",
+            mobile="9999999991",
+            incentive=Decimal("0.00"),
+        )
+        customer = Customer.objects.create(
+            first_name="John",
+            last_name="Doe",
+            salesperson=salesperson,
+            mobile="9999999992",
+        )
+        SalesReturnModel.objects.create(
+            client=customer,
+            sales_return_number="SR|100001",
+            return_date=date.today(),
+            reason="Damaged",
+            status="approved",
+        )
+
+        self.client.force_authenticate(user=self.user)
+        for tab in ("all", "invoices_receipts"):
+            res = self.client.get(self.url, {"tab": tab})
+            self.assertEqual(res.status_code, status.HTTP_200_OK)
+            sr_items = [
+                item
+                for item in res.data["items"]
+                if item["work_type"] == "sales_return_pending_settlement"
+            ]
+            self.assertEqual(len(sr_items), 1)
+            self.assertIn("SR|100001", sr_items[0]["title"])
+            self.assertEqual(sr_items[0]["meta"]["sales_return_number"], "SR|100001")

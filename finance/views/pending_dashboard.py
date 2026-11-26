@@ -384,14 +384,14 @@ class FinancePendingDashboardAPIView(APIView):
                 tab_key="invoices_receipts",
                 work_type="sales_return_pending_settlement",
                 work_type_label="Sales Return Pending Settlement",
-                title=f"{sr.return_number} - Approved Return Awaiting Settlement",
+                title=f"{sr.sales_return_number} - Approved Return Awaiting Settlement",
                 description=f"Approved sales return for ₹{sr.grand_total} is awaiting financial settlement.",
                 urgency="high",
                 record_id=sr.id,
                 item_id=f"fin_sr_settle_{sr.id}",
                 created_at=sr.created_at,
                 action_url=f"/accounts/sales-returns/{sr.id}/",
-                meta={"return_number": sr.return_number, "grand_total": str(sr.grand_total)},
+                meta={"sales_return_number": sr.sales_return_number, "grand_total": str(sr.grand_total)},
             )
 
         # =====================================================================
@@ -505,6 +505,7 @@ class FinancePendingDashboardAPIView(APIView):
         mapped_account_ids = set(
             CashflowCategoryMapping.objects.values_list("accounts__id", flat=True)
         )
+        mapped_account_ids.discard(None)
         unmapped_accounts = Account.objects.filter(is_posting=True, status="active").exclude(id__in=mapped_account_ids)
         for acc in unmapped_accounts:
             add_item(

@@ -1344,7 +1344,11 @@ class AttendanceReportView(APIView):
         if staff_id:
             staff_filter = Q(staff__job_detail__employee_id__iexact=staff_id)
             if staff_id.isdigit():
-                staff_filter |= Q(staff_id=int(staff_id))
+                numeric_staff_id = int(staff_id)
+                # Some staff-list responses expose CustomUser.id rather than
+                # StaffProfile.id. Support both while the UI is migrated.
+                staff_filter |= Q(staff_id=numeric_staff_id)
+                staff_filter |= Q(staff__user_id=numeric_staff_id)
             attendances = attendances.filter(staff_filter)
 
         # Apply the date independently of the staff filter. Previously the

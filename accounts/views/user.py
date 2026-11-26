@@ -22,7 +22,7 @@ from django.core.mail import send_mail
 from django.core.paginator import EmptyPage, Paginator
 import random
 from django.conf import settings
-from django.db.models import Q
+from django.db.models import Count, Q
 from hr_section.models import Enquiry
 from hr_section.serializers import EnquirySerializer
 from internship.models import Student
@@ -1216,6 +1216,15 @@ class EmployeeRegistrationCreateView(APIView):
 
         registrations_queryset = EmployeeRegistration.objects.all()
 
+        # Summary counts for the Staff Registration page. These counts are
+        # intentionally global so the cards show the overall registration
+        # state, independent of the table's current filters.
+        registration_counts = EmployeeRegistration.objects.aggregate(
+            total_registrations=Count('id'),
+            converted_registrations=Count('id', filter=Q(is_converted=True)),
+            pending_registrations=Count('id', filter=Q(is_converted=False)),
+        )
+
         if search:
             registrations_queryset = registrations_queryset.filter(
                 Q(first_name__icontains=search) |
@@ -1276,6 +1285,9 @@ class EmployeeRegistrationCreateView(APIView):
 
         response_data = {
             "message": "Employee registrations fetched successfully.",
+            "total_registrations": registration_counts["total_registrations"],
+            "pending_registrations": registration_counts["pending_registrations"],
+            "converted_registrations": registration_counts["converted_registrations"],
             "data": serializer.data,
         }
         if pagination is not None:

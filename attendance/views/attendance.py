@@ -35,10 +35,7 @@ class DailyAttendanceListView(generics.ListAPIView):
     def get_queryset(self):
         queryset = DailyAttendance.objects.all()
         selected_status = self.request.query_params.get('status', '').strip().lower()
-
-        # Special dashboard filter: return only staff who logged in today.
-        # This is intentionally separate from attendance status values such
-        # as full_day, half_day, and leave.
+        
         if selected_status == 'today':
             queryset = queryset.filter(
                 date=timezone.localdate(),

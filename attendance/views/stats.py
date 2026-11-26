@@ -51,6 +51,35 @@ class StaffAttendanceTodayView(APIView):
             .count()
         )
 
+        # Keep the count above, but also expose the people represented by it
+        # so the frontend can show a staff list when the card is clicked.
+        logged_in_records = (
+            queryset.filter(sessions__login_time__isnull=False)
+            .select_related("staff__user", "staff__job_detail__department")
+            .prefetch_related("sessions")
+            .distinct()
+        )
+        logged_in_staff = []
+        for attendance in logged_in_records:
+            staff = attendance.staff
+            job_detail = getattr(staff, "job_detail", None)
+            department = getattr(job_detail, "department", None) if job_detail else None
+            login_times = [
+                session.login_time
+                for session in attendance.sessions.all()
+                if session.login_time is not None
+            ]
+            first_login = min(login_times) if login_times else None
+            logged_in_staff.append({
+                "staff_id": staff.id,
+                "employee_id": job_detail.employee_id if job_detail else None,
+                "name": f"{staff.user.first_name} {staff.user.last_name}".strip(),
+                "email": staff.user.email,
+                "department": department.name if department else None,
+                "login_time": first_login.isoformat() if first_login else None,
+                "status": attendance.status,
+            })
+
         present_count = queryset.filter(status='full_day').count()
         half_day_count = queryset.filter(status='half_day').count()
         leave_count = queryset.filter(status='leave').count()
@@ -74,6 +103,7 @@ class StaffAttendanceTodayView(APIView):
             "end_date": str(parsed_end) if parsed_end else None,
 
             "total_staff_logged": total_logged_in,
+            "logged_in_staff": logged_in_staff,
             "present_count": present_count,
             "half_day_count": half_day_count,
             "leave_count": leave_count,

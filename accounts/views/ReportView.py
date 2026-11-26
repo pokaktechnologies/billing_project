@@ -1338,8 +1338,11 @@ class AttendanceReportView(APIView):
                 Q(staff__user__email__icontains=search)
             )
 
-        if department:
-            attendances = attendances.filter(staff__job_detail__department_id=department)
+        if department and department.lower() != 'all':
+            department_filter = Q(staff__job_detail__department__name__iexact=department)
+            if department.isdigit():
+                department_filter |= Q(staff__job_detail__department_id=int(department))
+            attendances = attendances.filter(department_filter)
 
         if staff_id:
             staff_filter = Q(staff__job_detail__employee_id__iexact=staff_id)
@@ -1360,8 +1363,11 @@ class AttendanceReportView(APIView):
             today = timezone.localdate()
             attendances = attendances.filter(date=today)
 
-        if status:
-            attendances = attendances.filter(status=status)
+        if status and status.lower() != 'all':
+            # Accept UI labels such as "Half Day" as well as stored values
+            # such as "half_day".
+            normalized_status = status.strip().lower().replace(' ', '_')
+            attendances = attendances.filter(status=normalized_status)
 
         paginator = Pagination()
         paginated_attendances = paginator.paginate_queryset(attendances, request)

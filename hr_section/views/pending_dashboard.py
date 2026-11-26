@@ -300,7 +300,7 @@ class HrPendingDashboardAPIView(_BasePendingDashboardAPIView):
                 action_url=f"/hr/enquiry/{enq.id}/status/",
                 meta={
                     "enquiry_id": enq.id,
-                    "enquiry_source": "client enquiry",
+                    "enquiry_source": "client_enquiry",
                     "full_name": full_name,
                     "email": enq.email,
                     "phone": enq.phone,
@@ -344,7 +344,7 @@ class HrPendingDashboardAPIView(_BasePendingDashboardAPIView):
                 action_url=f"/hr/erp/enquiry/{erp.id}/status/",
                 meta={
                     "enquiry_id": erp.id,
-                    "enquiry_source": "product enquiry",
+                    "enquiry_source": "product_enquiry",
                     "full_name": erp.full_name,
                     "company_name": erp.company_name,
                     "work_email": erp.work_email,

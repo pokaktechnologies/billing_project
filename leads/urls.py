@@ -4,7 +4,10 @@ from .views.LeadsViews import *
 from .views.MarketingViews import *
 from .views.ChartViews import *
 from .views.LeadsManagement import *
-from .views.pending_dashboard import MarketingPendingDashboardAPIView
+from .views.pending_dashboard import (
+    MarketingPendingDashboardAPIView,
+    LeadManagementPendingDashboardAPIView,
+)
 from django.urls import path
 
 urlpatterns = [
@@ -97,4 +100,9 @@ urlpatterns = [
     path("marketing/pending-dashboard/", MarketingPendingDashboardAPIView.as_view(), name="marketing-pending-dashboard"),
     path("dashboard/pending/", MarketingPendingDashboardAPIView.as_view(), name="marketing-dashboard-pending"),
     path("pending-works/", MarketingPendingDashboardAPIView.as_view(), name="marketing-pending-works"),
+
+    # Lead Management Pending Works Dashboard (Admin & Management)
+    path("management/pending-dashboard/", LeadManagementPendingDashboardAPIView.as_view(), name="lead-management-pending-dashboard"),
+    path("admin/pending-dashboard/", LeadManagementPendingDashboardAPIView.as_view(), name="lead-admin-pending-dashboard"),
+    path("admin/pending-works/", LeadManagementPendingDashboardAPIView.as_view(), name="lead-admin-pending-works"),
 ]

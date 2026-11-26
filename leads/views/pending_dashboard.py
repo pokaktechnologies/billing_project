@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, time
 from django.utils import timezone
 from django.db.models import Count, Q
 from rest_framework.views import APIView
@@ -19,7 +19,10 @@ from leads.models import (
     Source,
     Category,
 )
-from leads.serializers.pending_dashboard import MarketingPendingDashboardSerializer
+from leads.serializers.pending_dashboard import (
+    MarketingPendingDashboardSerializer,
+    LeadManagementPendingDashboardSerializer,
+)
 
 
 def get_user_salesperson(user):
@@ -655,6 +658,550 @@ class MarketingPendingDashboardAPIView(APIView):
         }
 
         serializer = MarketingPendingDashboardSerializer(response_data)
+        return Response(
+            {"status": "1", "message": "success", "data": serializer.data},
+            status=status.HTTP_200_OK
+        )
+
+
+class LeadManagementPendingDashboardAPIView(APIView):
+    """
+    Lead Management (Admin & Manager) Pending Works Dashboard API.
+
+    Returns all actionable pending tasks across Lead Management submodules:
+      - unassigned: Missing salesperson, missing lead source, missing location
+      - uncontacted: New leads uncontacted >24h, idle assigned leads (7+ days stalled)
+      - follow_ups: Follow-up status without active schedule, overdue follow-ups
+      - priority: Contacted leads missing priority status (hot/warm/cold), hot prospects neglected (3+ days)
+      - data_quality: Missing phone numbers, intern leads without target course, client leads without requirements, duplicate phones
+      - conversion: Converted leads pending Academy registration, RNR/busy leads due for re-engagement (5+ days)
+
+    Query Parameters:
+      - tab: Filter by specific tab ('unassigned', 'uncontacted', 'follow_ups', 'priority', 'data_quality', 'conversion', or 'all'). Default: 'all'.
+      - urgency: Filter by urgency level ('high', 'medium', 'low').
+      - search: Search text across item titles, descriptions, lead names, phone, email, and metadata.
+      - limit: Maximum items to return in the items array (default: 100).
+      - salesperson: Filter pending items by a specific SalesPerson ID.
+      - lead_category: Filter by lead category ('client', 'intern', 'other').
+    """
+    permission_classes = [IsAuthenticated]
+
+    TAB_DEFINITIONS = [
+        {"key": "unassigned", "label": "Unassigned Leads"},
+        {"key": "uncontacted", "label": "Uncontacted Leads"},
+        {"key": "follow_ups", "label": "Follow-ups"},
+        {"key": "priority", "label": "Priority & Status"},
+        {"key": "data_quality", "label": "Data Quality"},
+        {"key": "conversion", "label": "Conversions & RNR"},
+    ]
+
+    def get(self, request):
+        now = timezone.now()
+        today = timezone.localdate()
+
+        active_tab = request.query_params.get("tab", "all").strip().lower()
+        urgency_filter = request.query_params.get("urgency", "").strip().lower()
+        search_query = request.query_params.get("search", "").strip().lower()
+        limit_param = request.query_params.get("limit", "100").strip()
+        salesperson_filter_id = request.query_params.get("salesperson")
+        category_filter = request.query_params.get("lead_category")
+
+        # ---------------------------------------------------------------------
+        # 1. Scoping QuerySet
+        # ---------------------------------------------------------------------
+        leads_qs = Lead.objects.all().select_related(
+            "salesperson", "lead_source", "location", "course", "CustomUser"
+        )
+
+        salesperson_info = None
+        if salesperson_filter_id:
+            try:
+                sp = SalesPerson.objects.filter(pk=int(salesperson_filter_id)).first()
+                if sp:
+                    leads_qs = leads_qs.filter(salesperson=sp)
+                    full_name = f"{sp.first_name} {sp.last_name or ''}".strip()
+                    salesperson_info = {
+                        "id": sp.id,
+                        "name": full_name or sp.email,
+                        "email": sp.email,
+                        "phone": sp.phone or sp.mobile,
+                    }
+            except (ValueError, TypeError):
+                pass
+
+        if category_filter:
+            leads_qs = leads_qs.filter(lead_category=category_filter)
+
+        tab_items = {tab["key"]: [] for tab in self.TAB_DEFINITIONS}
+        tab_categories = {tab["key"]: {} for tab in self.TAB_DEFINITIONS}
+
+        def add_item(tab_key, work_type, work_type_label, title, description, urgency, record_id=None, item_id=None, created_at=None, due_date=None, action_url=None, meta=None):
+            if not item_id:
+                item_id = f"leadmgmt_{tab_key}_{work_type}_{record_id or len(tab_items[tab_key]) + 1}"
+
+            if work_type not in tab_categories[tab_key]:
+                tab_categories[tab_key][work_type] = {
+                    "key": work_type,
+                    "label": work_type_label,
+                    "count": 0
+                }
+            tab_categories[tab_key][work_type]["count"] += 1
+
+            tab_items[tab_key].append({
+                "id": item_id,
+                "record_id": record_id,
+                "tab": tab_key,
+                "tab_label": next(t["label"] for t in self.TAB_DEFINITIONS if t["key"] == tab_key),
+                "work_type": work_type,
+                "work_type_label": work_type_label,
+                "title": title,
+                "description": description,
+                "urgency": urgency,
+                "created_at": created_at,
+                "due_date": due_date,
+                "action_url": action_url,
+                "meta": meta or {},
+            })
+
+        # ---------------------------------------------------------------------
+        # TAB 1: UNASSIGNED LEADS
+        # ---------------------------------------------------------------------
+        # A. Missing Salesperson (HIGH)
+        unassigned_salesperson_leads = leads_qs.filter(salesperson__isnull=True).order_by("-created_at")[:50]
+        for lead in unassigned_salesperson_leads:
+            add_item(
+                tab_key="unassigned",
+                work_type="missing_salesperson",
+                work_type_label="Missing Salesperson",
+                title=f"Unassigned Lead: {lead.name} ({lead.lead_number or 'No Number'})",
+                description=f"Lead was received on {lead.created_at.strftime('%Y-%m-%d') if lead.created_at else 'N/A'} but has no assigned salesperson.",
+                urgency="high",
+                record_id=lead.id,
+                created_at=lead.created_at,
+                action_url="/leads/admin/assign/",
+                meta={
+                    "lead_id": lead.id,
+                    "lead_name": lead.name,
+                    "lead_number": lead.lead_number,
+                    "phone": lead.phone,
+                    "email": lead.email,
+                    "lead_category": lead.lead_category,
+                    "source": lead.lead_source.name if lead.lead_source else None,
+                    "course": lead.course.title if lead.course else None,
+                }
+            )
+
+        # B. Missing Source (MEDIUM)
+        missing_source_leads = leads_qs.filter(lead_source__isnull=True).order_by("-created_at")[:25]
+        for lead in missing_source_leads:
+            add_item(
+                tab_key="unassigned",
+                work_type="unassigned_source",
+                work_type_label="Missing Lead Source",
+                title=f"Missing Source: {lead.name}",
+                description=f"Lead # {lead.lead_number or lead.id} is missing an acquisition source attribution.",
+                urgency="medium",
+                record_id=lead.id,
+                created_at=lead.created_at,
+                action_url=f"/leads/admin/{lead.id}/",
+                meta={"lead_id": lead.id, "lead_name": lead.name, "phone": lead.phone}
+            )
+
+        # C. Missing Location (LOW)
+        missing_location_leads = leads_qs.filter(location__isnull=True).order_by("-created_at")[:25]
+        for lead in missing_location_leads:
+            add_item(
+                tab_key="unassigned",
+                work_type="unassigned_location",
+                work_type_label="Missing Location",
+                title=f"Missing Location: {lead.name}",
+                description=f"Lead # {lead.lead_number or lead.id} has no branch or marketing location assigned.",
+                urgency="low",
+                record_id=lead.id,
+                created_at=lead.created_at,
+                action_url=f"/leads/admin/{lead.id}/",
+                meta={"lead_id": lead.id, "lead_name": lead.name, "phone": lead.phone}
+            )
+
+        # ---------------------------------------------------------------------
+        # TAB 2: UNCONTACTED & STALLED LEADS
+        # ---------------------------------------------------------------------
+        # A. New leads uncontacted >24h (HIGH)
+        uncontacted_cutoff = now - timedelta(hours=24)
+        new_uncontacted = leads_qs.filter(
+            lead_status__in=["new", "created"],
+            created_at__lte=uncontacted_cutoff
+        ).annotate(
+            fu_count=Count("follow_ups", distinct=True),
+            mt_count=Count("meetings", distinct=True),
+            comm_count=Count("communications", distinct=True)
+        ).filter(
+            fu_count=0,
+            mt_count=0,
+            comm_count=0
+        ).order_by("created_at")[:30]
+
+        for lead in new_uncontacted:
+            hours_elapsed = int((now - lead.created_at).total_seconds() // 3600) if lead.created_at else 24
+            add_item(
+                tab_key="uncontacted",
+                work_type="new_lead_uncontacted",
+                work_type_label="New Lead Uncontacted >24h",
+                title=f"Uncontacted Lead ({hours_elapsed}h ago): {lead.name}",
+                description=f"Lead was received {hours_elapsed} hours ago and no calls, meetings, or follow-ups have been logged.",
+                urgency="high",
+                record_id=lead.id,
+                created_at=lead.created_at,
+                action_url=f"/leads/admin/{lead.id}/",
+                meta={
+                    "lead_id": lead.id,
+                    "lead_name": lead.name,
+                    "phone": lead.phone,
+                    "salesperson": lead.salesperson.first_name if lead.salesperson else "Unassigned",
+                    "hours_elapsed": hours_elapsed
+                }
+            )
+
+        # B. Idle Stalled Leads (7+ days no touchpoint) (MEDIUM)
+        idle_cutoff_dt = now - timedelta(days=7)
+        stalled_leads = leads_qs.filter(
+            salesperson__isnull=False
+        ).exclude(
+            lead_status__in=["converted", "lost"]
+        ).annotate(
+            active_fu=Count("follow_ups", filter=Q(follow_ups__date__gte=today)),
+            active_mt=Count("meetings", filter=Q(meetings__date__gte=today))
+        ).filter(
+            active_fu=0,
+            active_mt=0,
+            created_at__lte=idle_cutoff_dt
+        ).order_by("-created_at")[:25]
+
+        for lead in stalled_leads:
+            add_item(
+                tab_key="uncontacted",
+                work_type="idle_lead_stalled",
+                work_type_label="Stalled Lead (7+ Days Idle)",
+                title=f"Stalled Assigned Lead: {lead.name}",
+                description=f"Assigned to {lead.salesperson.first_name if lead.salesperson else 'staff'}, but has had zero scheduled activity for over 7 days.",
+                urgency="medium",
+                record_id=lead.id,
+                created_at=lead.created_at,
+                action_url=f"/leads/admin/{lead.id}/",
+                meta={
+                    "lead_id": lead.id,
+                    "lead_name": lead.name,
+                    "salesperson": lead.salesperson.first_name if lead.salesperson else None
+                }
+            )
+
+        # ---------------------------------------------------------------------
+        # TAB 3: FOLLOW-UPS
+        # ---------------------------------------------------------------------
+        # A. Lead marked 'follow_up' with no active schedule (HIGH)
+        followup_status_leads = leads_qs.filter(
+            lead_status="follow_up"
+        ).annotate(
+            active_future_fu=Count("follow_ups", filter=Q(follow_ups__status="new", follow_ups__date__gte=today))
+        ).filter(
+            active_future_fu=0
+        )[:30]
+
+        for lead in followup_status_leads:
+            add_item(
+                tab_key="follow_ups",
+                work_type="followup_status_without_schedule",
+                work_type_label="Follow-up Status Without Schedule",
+                title=f"Follow-up Status Without Future Schedule: {lead.name}",
+                description="Lead status is marked 'Follow Up', but there is no upcoming pending follow-up scheduled.",
+                urgency="high",
+                record_id=lead.id,
+                action_url=f"/leads/admin/{lead.id}/",
+                meta={
+                    "lead_id": lead.id,
+                    "lead_name": lead.name,
+                    "phone": lead.phone,
+                    "salesperson": lead.salesperson.first_name if lead.salesperson else "Unassigned"
+                }
+            )
+
+        # B. Overdue Follow-ups (HIGH)
+        overdue_fu = FollowUp.objects.filter(
+            status="new",
+            date__lt=today
+        ).select_related("lead", "lead__salesperson").order_by("date")[:30]
+
+        if salesperson_filter_id:
+            overdue_fu = overdue_fu.filter(lead__salesperson_id=salesperson_filter_id)
+
+        for fu in overdue_fu:
+            lead = fu.lead
+            days_overdue = (today - fu.date).days
+            add_item(
+                tab_key="follow_ups",
+                work_type="overdue_followup",
+                work_type_label="Overdue Follow-up",
+                title=f"Overdue Follow-up ({days_overdue}d late): {fu.title} ({lead.name})",
+                description=f"Follow-up was scheduled for {fu.date} at {fu.time} ({days_overdue} days ago) and is still pending completion.",
+                urgency="high",
+                record_id=fu.id,
+                due_date=fu.date,
+                action_url=f"/leads/staff/followups/{fu.id}/",
+                meta={
+                    "followup_id": fu.id,
+                    "lead_id": lead.id,
+                    "lead_name": lead.name,
+                    "phone": lead.phone,
+                    "salesperson": lead.salesperson.first_name if lead.salesperson else None,
+                    "days_overdue": days_overdue
+                }
+            )
+
+        # ---------------------------------------------------------------------
+        # TAB 4: PRIORITY & STATUS
+        # ---------------------------------------------------------------------
+        # A. Contacted Leads Missing Priority (MEDIUM)
+        missing_priority_leads = leads_qs.filter(
+            priority_status__isnull=True
+        ).filter(
+            Q(lead_contact=True) | ~Q(lead_status__in=["new", "created", "lost", "converted"])
+        ).order_by("-created_at")[:25]
+
+        for lead in missing_priority_leads:
+            add_item(
+                tab_key="priority",
+                work_type="missing_priority",
+                work_type_label="Missing Priority",
+                title=f"Priority Not Set: {lead.name}",
+                description=f"Lead has been contacted (Status: {lead.get_lead_status_display()}), but priority (Hot/Warm/Cold) has not been categorized.",
+                urgency="medium",
+                record_id=lead.id,
+                action_url=f"/leads/admin/{lead.id}/",
+                meta={"lead_id": lead.id, "lead_name": lead.name, "phone": lead.phone, "status": lead.lead_status}
+            )
+
+        # B. Hot Prospects Neglected (HIGH)
+        neglected_cutoff = today - timedelta(days=3)
+        hot_neglected = leads_qs.filter(
+            priority_status="hot"
+        ).exclude(
+            lead_status__in=["converted", "lost"]
+        ).annotate(
+            recent_fu=Count("follow_ups", filter=Q(follow_ups__date__gte=neglected_cutoff))
+        ).filter(
+            recent_fu=0
+        )[:20]
+
+        for lead in hot_neglected:
+            add_item(
+                tab_key="priority",
+                work_type="hot_lead_neglected",
+                work_type_label="Hot Prospect Neglected",
+                title=f"Hot Prospect Neglected (3+ days): {lead.name}",
+                description="High priority 'Hot' lead has had no touchpoint or follow-up recorded in the last 3 days.",
+                urgency="high",
+                record_id=lead.id,
+                action_url=f"/leads/admin/{lead.id}/",
+                meta={
+                    "lead_id": lead.id,
+                    "lead_name": lead.name,
+                    "phone": lead.phone,
+                    "salesperson": lead.salesperson.first_name if lead.salesperson else "Unassigned"
+                }
+            )
+
+        # ---------------------------------------------------------------------
+        # TAB 5: DATA QUALITY & DUPLICATES
+        # ---------------------------------------------------------------------
+        # A. Missing Phone (HIGH)
+        missing_phone_leads = leads_qs.filter(
+            Q(phone__isnull=True) | Q(phone="") | Q(phone="None")
+        ).order_by("-created_at")[:20]
+
+        for lead in missing_phone_leads:
+            add_item(
+                tab_key="data_quality",
+                work_type="missing_phone",
+                work_type_label="Missing Phone",
+                title=f"Missing Phone Number: {lead.name}",
+                description=f"Lead # {lead.lead_number or lead.id} has no valid mobile phone recorded.",
+                urgency="high",
+                record_id=lead.id,
+                action_url=f"/leads/admin/{lead.id}/",
+                meta={"lead_id": lead.id, "lead_name": lead.name, "email": lead.email}
+            )
+
+        # B. Intern Lead Missing Target Course (MEDIUM)
+        intern_no_course = leads_qs.filter(
+            lead_category="intern",
+            course__isnull=True
+        ).order_by("-created_at")[:20]
+
+        for lead in intern_no_course:
+            add_item(
+                tab_key="data_quality",
+                work_type="intern_missing_course",
+                work_type_label="Intern Lead Missing Course",
+                title=f"Intern Lead with No Target Course: {lead.name}",
+                description="Lead is categorized as 'Intern' but has no course linked in the system.",
+                urgency="medium",
+                record_id=lead.id,
+                action_url=f"/leads/admin/{lead.id}/",
+                meta={"lead_id": lead.id, "lead_name": lead.name, "phone": lead.phone}
+            )
+
+        # C. Client Lead Missing Project Requirement (MEDIUM)
+        client_no_req = leads_qs.filter(
+            lead_category="client"
+        ).filter(
+            Q(project_requirement__isnull=True) | Q(project_requirement="")
+        ).order_by("-created_at")[:20]
+
+        for lead in client_no_req:
+            add_item(
+                tab_key="data_quality",
+                work_type="client_missing_requirement",
+                work_type_label="Client Lead Missing Requirements",
+                title=f"Client Lead Missing Requirements: {lead.name}",
+                description="B2B Client lead does not have any project requirement or scope details recorded.",
+                urgency="medium",
+                record_id=lead.id,
+                action_url=f"/leads/admin/{lead.id}/",
+                meta={"lead_id": lead.id, "lead_name": lead.name, "company": lead.company}
+            )
+
+        # D. Potential Duplicates by Phone (MEDIUM)
+        duplicate_phones = list(
+            leads_qs.exclude(Q(phone__isnull=True) | Q(phone=""))
+            .values("phone")
+            .annotate(cnt=Count("id"))
+            .filter(cnt__gt=1)
+            .values_list("phone", flat=True)[:10]
+        )
+        if duplicate_phones:
+            dup_leads = leads_qs.filter(phone__in=duplicate_phones).order_by("phone")[:20]
+            for lead in dup_leads:
+                add_item(
+                    tab_key="data_quality",
+                    work_type="potential_duplicate",
+                    work_type_label="Potential Duplicate",
+                    title=f"Duplicate Phone ({lead.phone}): {lead.name}",
+                    description=f"Multiple lead records share phone number {lead.phone}. Check for duplicate entries.",
+                    urgency="medium",
+                    record_id=lead.id,
+                    action_url=f"/leads/admin/{lead.id}/",
+                    meta={"lead_id": lead.id, "lead_name": lead.name, "phone": lead.phone}
+                )
+
+        # ---------------------------------------------------------------------
+        # TAB 6: CONVERSIONS & RNR
+        # ---------------------------------------------------------------------
+        # A. Converted Intern Leads Awaiting Academy Enrollment (MEDIUM)
+        converted_interns = leads_qs.filter(
+            lead_category="intern",
+            lead_status__in=["converted", "registration"]
+        ).order_by("-created_at")[:20]
+
+        for lead in converted_interns:
+            add_item(
+                tab_key="conversion",
+                work_type="converted_unregistered",
+                work_type_label="Converted Lead Pending Enrollment",
+                title=f"Converted Lead Pending Academy Enrollment: {lead.name}",
+                description=f"Lead is marked '{lead.get_lead_status_display()}'. Verify student registration and batch allocation in Academy module.",
+                urgency="medium",
+                record_id=lead.id,
+                action_url=f"/leads/admin/{lead.id}/",
+                meta={
+                    "lead_id": lead.id,
+                    "lead_name": lead.name,
+                    "course": lead.course.title if lead.course else None,
+                    "salesperson": lead.salesperson.first_name if lead.salesperson else None
+                }
+            )
+
+        # B. RNR / Busy Leads Revisit Due (LOW)
+        rnr_cutoff = today - timedelta(days=5)
+        rnr_leads = leads_qs.filter(
+            lead_status__in=["rnr", "busy", "number_not_valid"]
+        ).annotate(
+            recent_fu=Count("follow_ups", filter=Q(follow_ups__date__gte=rnr_cutoff))
+        ).filter(
+            recent_fu=0
+        ).order_by("-created_at")[:20]
+
+        for lead in rnr_leads:
+            add_item(
+                tab_key="conversion",
+                work_type="rnr_revisit_due",
+                work_type_label="RNR Re-engagement Due",
+                title=f"RNR Re-engagement Due: {lead.name}",
+                description=f"Lead marked as '{lead.get_lead_status_display()}' over 5 days ago. Ready for a re-call attempt or reassignment.",
+                urgency="low",
+                record_id=lead.id,
+                action_url=f"/leads/admin/{lead.id}/",
+                meta={"lead_id": lead.id, "lead_name": lead.name, "status": lead.lead_status, "phone": lead.phone}
+            )
+
+        # ---------------------------------------------------------------------
+        # 3. Assemble Response
+        # ---------------------------------------------------------------------
+        tab_counts = {tab["key"]: len(tab_items[tab["key"]]) for tab in self.TAB_DEFINITIONS}
+        total_pending_count = sum(tab_counts.values())
+
+        tabs_data = []
+        for tab in self.TAB_DEFINITIONS:
+            t_key = tab["key"]
+            cat_list = list(tab_categories[t_key].values())
+            tabs_data.append({
+                "key": t_key,
+                "label": tab["label"],
+                "count": tab_counts[t_key],
+                "categories": cat_list,
+            })
+
+        # Selected tab items
+        if active_tab == "all":
+            selected_items = [item for t in self.TAB_DEFINITIONS for item in tab_items[t["key"]]]
+        elif active_tab in tab_items:
+            selected_items = tab_items[active_tab]
+        else:
+            selected_items = []
+
+        # Apply urgency filter
+        if urgency_filter in ["high", "medium", "low"]:
+            selected_items = [i for i in selected_items if i["urgency"] == urgency_filter]
+
+        # Apply search filter
+        if search_query:
+            selected_items = [
+                i for i in selected_items
+                if search_query in i["title"].lower()
+                or search_query in i["description"].lower()
+                or search_query in str(i.get("meta", {})).lower()
+            ]
+
+        # Apply limit
+        try:
+            limit = int(limit_param)
+            if limit > 0:
+                selected_items = selected_items[:limit]
+        except (ValueError, TypeError):
+            selected_items = selected_items[:100]
+
+        response_data = {
+            "module": "lead_management",
+            "module_label": "Lead Management",
+            "salesperson_info": salesperson_info,
+            "total_pending_count": total_pending_count,
+            "tab_counts": tab_counts,
+            "tabs": tabs_data,
+            "active_tab": active_tab,
+            "items_count": len(selected_items),
+            "items": selected_items,
+        }
+
+        serializer = LeadManagementPendingDashboardSerializer(response_data)
         return Response(
             {"status": "1", "message": "success", "data": serializer.data},
             status=status.HTTP_200_OK

@@ -48,3 +48,19 @@ class MarketingPendingDashboardSerializer(serializers.Serializer):
     active_tab = serializers.CharField(default="all")
     items_count = serializers.IntegerField()
     items = MarketingPendingWorkItemSerializer(many=True)
+
+
+class LeadManagementPendingDashboardSerializer(serializers.Serializer):
+    """
+    Top-level response serializer for Lead Management Pending Works Dashboard.
+    Follows the cross-module unified standard contract.
+    """
+    module = serializers.CharField(default="lead_management")
+    module_label = serializers.CharField(default="Lead Management")
+    salesperson_info = serializers.DictField(allow_null=True, required=False, help_text="Filter/scope info if filtered by salesperson")
+    total_pending_count = serializers.IntegerField()
+    tab_counts = serializers.DictField(child=serializers.IntegerField())
+    tabs = MarketingPendingTabSerializer(many=True)
+    active_tab = serializers.CharField(default="all")
+    items_count = serializers.IntegerField()
+    items = MarketingPendingWorkItemSerializer(many=True)

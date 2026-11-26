@@ -1315,6 +1315,10 @@ class AttendanceReportView(APIView):
         date = request.query_params.get('date')
         status = request.query_params.get('status')
 
+        # The UI may send either the internal StaffProfile primary key
+        # (for example, ``53``) or the visible employee ID
+        # (for example, ``EMP100053``).  Resolve both to the same staff
+        # profile before filtering attendance.
         staff_id = request.query_params.get('staff_id')
 
 
@@ -1338,10 +1342,17 @@ class AttendanceReportView(APIView):
             attendances = attendances.filter(staff__job_detail__department_id=department)
 
         if staff_id:
-            attendances = attendances.filter(staff_id=staff_id)
-        elif date:
+            staff_filter = Q(staff__job_detail__employee_id__iexact=staff_id)
+            if staff_id.isdigit():
+                staff_filter |= Q(staff_id=int(staff_id))
+            attendances = attendances.filter(staff_filter)
+
+        # Apply the date independently of the staff filter. Previously the
+        # presence of staff_id skipped the requested date and returned a
+        # different report scope.
+        if date:
             attendances = attendances.filter(date=date)
-        else:
+        elif not staff_id:
             today = timezone.localdate()
             attendances = attendances.filter(date=today)
 

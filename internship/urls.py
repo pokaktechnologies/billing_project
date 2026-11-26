@@ -90,6 +90,9 @@ instructor_patterns = [
     path('recorded-classes/', recorded_class.RecordedClassListCreateAPIView.as_view(), name='instructor-recorded-classes-list-create'),
     path('recorded-classes/<int:pk>/', recorded_class.RecordedClassDetailAPIView.as_view(), name='instructor-recorded-classes-detail'),
 
+    # Pending Controls Dashboard
+    path('pending-dashboard/', pending_dashboard.FacultyPendingDashboardAPIView.as_view(), name='faculty-pending-dashboard'),
+
 ]
 
 

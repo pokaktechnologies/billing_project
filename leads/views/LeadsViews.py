@@ -5,11 +5,11 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import generics
 
+from django.utils import timezone
 from django.utils.timezone import make_aware
 from django.utils.dateparse import parse_date
-from datetime import datetime, date,time
-from django.utils.timezone import make_aware
-from django.db.models import Q
+from datetime import datetime, date, time
+from django.db.models import Q, Count, Max
 
 from accounts.permissions import HasModulePermission
 from attendance.models import DailyAttendance
@@ -114,6 +114,19 @@ class StaffLeadView(APIView):
                 return Response({"status": "0", "message": "Invalid end_date format"}, status=400)
 
             
+        today = timezone.localdate()
+        leads = leads.annotate(
+            this_month_followup_count=Count(
+                'follow_ups',
+                filter=Q(follow_ups__date__year=today.year, follow_ups__date__month=today.month),
+                distinct=True
+            ),
+            this_month_followup_date=Max(
+                'follow_ups__date',
+                filter=Q(follow_ups__date__year=today.year, follow_ups__date__month=today.month)
+            ),
+            latest_followup_date=Max('follow_ups__date'),
+        )
         leads = leads.order_by('-lead_date')
 
         # Pagination 
@@ -180,7 +193,19 @@ class StaffLeadDetailView(SalesPersonBaseView, APIView):
     # -----------------------
     def get_object(self, pk, salesperson):
         try:
-            return Lead.objects.get(pk=pk, salesperson=salesperson)
+            today = timezone.localdate()
+            return Lead.objects.annotate(
+                this_month_followup_count=Count(
+                    'follow_ups',
+                    filter=Q(follow_ups__date__year=today.year, follow_ups__date__month=today.month),
+                    distinct=True
+                ),
+                this_month_followup_date=Max(
+                    'follow_ups__date',
+                    filter=Q(follow_ups__date__year=today.year, follow_ups__date__month=today.month)
+                ),
+                latest_followup_date=Max('follow_ups__date'),
+            ).get(pk=pk, salesperson=salesperson)
         except Lead.DoesNotExist:
             return None
 

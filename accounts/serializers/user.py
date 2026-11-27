@@ -11,9 +11,10 @@ class DepartmentSerializer(serializers.ModelSerializer):
         fields = ['id', 'name']
 
 class ProfileSerializer(serializers.ModelSerializer):
+    is_admin = serializers.BooleanField(source="is_superuser", read_only=True)
     class Meta:
         model = CustomUser
-        fields = ['id', 'first_name', 'last_name', 'email']
+        fields = ['id', 'first_name', 'last_name', 'email', 'is_admin']
 
 
 class AssignPermissionSerializer(serializers.Serializer):

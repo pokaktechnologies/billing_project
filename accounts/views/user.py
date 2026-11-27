@@ -35,6 +35,7 @@ from datetime import datetime,date
 
 from project_management.models import ProjectManagement, Task
 from project_management.serializers import ProjectManagerSerializer, AssignedTaskListSerializer
+from finance.services.admin_finance_dashboard import build_admin_finance_dashboard
 
 class DepartmentView(BaseAPIView):
     permission_classes = [IsAuthenticated]
@@ -973,6 +974,30 @@ class AdminDashboardView(APIView):
     def get(self, request):
         user = request.user
 
+        from_date_str = request.query_params.get("from_date")
+        to_date_str = request.query_params.get("to_date")
+        from_date = None
+        to_date = None
+        if from_date_str:
+            from_date = parse_date(from_date_str)
+            if not from_date:
+                return Response(
+                    {"status": "0", "message": "Invalid from_date format. Use YYYY-MM-DD."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        if to_date_str:
+            to_date = parse_date(to_date_str)
+            if not to_date:
+                return Response(
+                    {"status": "0", "message": "Invalid to_date format. Use YYYY-MM-DD."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        if from_date and to_date and from_date > to_date:
+            return Response(
+                {"status": "0", "message": "from_date cannot be after to_date."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         response_data = {
             "user": {
                 "id": user.id,
@@ -1043,6 +1068,8 @@ class AdminDashboardView(APIView):
             ).data,
         }
 
+        finance_data = build_admin_finance_dashboard(from_date=from_date, to_date=to_date)
+
         return Response({
             "status": "1",
             "message": "Admin dashboard fetched successfully",
@@ -1053,7 +1080,8 @@ class AdminDashboardView(APIView):
                     "email": user.email,
                 },
                 "hr_dashboard": hr_data,
-                "project_dashboard": pm_data
+                "project_dashboard": pm_data,
+                "finance_dashboard": finance_data,
             }
         }, status=status.HTTP_200_OK)
 

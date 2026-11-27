@@ -1,4 +1,5 @@
 from django.shortcuts import render
+from rest_framework.views import APIView
 from rest_framework import viewsets, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -102,3 +103,21 @@ class MessageViewSet(viewsets.ViewSet):
 
         serializer = self.serializer_class(queryset, many=True)
         return Response(serializer.data)
+
+
+
+
+class UnreadMessageCountAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        count = (
+            Message.objects
+            .filter(
+                room__participants=request.user,
+                is_read=False,
+            )
+            .exclude(sender=request.user)
+            .count()
+        )
+        return Response({"unread_count": count})

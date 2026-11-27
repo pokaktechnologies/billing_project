@@ -655,6 +655,23 @@ class ListStaffView(APIView):
         return Response({"status": "1", "message": "success", "data": list(staff_users)})
 
 
+class StaffCountView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        staff = StaffProfile.objects.filter(job_detail__isnull=False)
+
+        return Response({
+            "status": "1",
+            "message": "Staff counts fetched successfully",
+            "data": {
+                "total_staff": staff.count(),
+                "total_interns": staff.filter(job_detail__job_type="internship").count(),
+                "active_staff": staff.filter(job_detail__status="active").count(),
+            }
+        }, status=status.HTTP_200_OK)
+
+
 class StaffPersonalInfoView(APIView):
     permission_classes = [IsAuthenticated]
 

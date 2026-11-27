@@ -31,6 +31,7 @@ urlpatterns = [
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('create-staff/', CreateStaffWithPermissionsView.as_view(), name="create-staff"),
     path('create-staff/<int:staff_id>/', CreateStaffWithPermissionsView.as_view(), name="create-staff"),
+    path('staff/counts/', StaffCountView.as_view(), name='staff-counts'),
     # path('admin/assign-permissions/', AssignPermissionView.as_view()),y
     # path('admin/staffs/', ListStaffView.as_view()),
     # path('admin/staffs/<int:staff_id>/', ListStaffView.as_view()),

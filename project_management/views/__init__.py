@@ -73,6 +73,11 @@ from .dashboard import (
     ProjectManagerDashboardView,
     NumberGeneratorView,
 )
+from .pending_dashboard import (
+    ProjectManagementPendingDashboardAPIView,
+    DigitalMarketingPendingDashboardAPIView,
+    TestingManagementPendingDashboardAPIView,
+)
 
 __all__ = [
     'ReportPagination',
@@ -135,4 +140,7 @@ __all__ = [
     'MeetingAttendanceView',
     'ProjectManagerDashboardView',
     'NumberGeneratorView',
+    'ProjectManagementPendingDashboardAPIView',
+    'DigitalMarketingPendingDashboardAPIView',
+    'TestingManagementPendingDashboardAPIView',
 ]

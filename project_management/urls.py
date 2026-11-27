@@ -109,4 +109,15 @@ urlpatterns = [
     path('bug-sheet/', BugSheetListCreateAPIView.as_view(), name='bug-sheet'),
     path('bug-sheet/<int:bug_id>/', BugReportDetailAPIView.as_view(), name='bug-report-detail'),
     path('bug-sheet/<int:bug_id>/status/', BugStatusUpdateAPIView.as_view(), name='bug-status-update'),
+
+    # Pending Controls / Works Dashboards (3 Dedicated APIs)
+    path('pending-dashboard/', ProjectManagementPendingDashboardAPIView.as_view(), name='project_management_pending_dashboard'),
+    path('pending-works/', ProjectManagementPendingDashboardAPIView.as_view(), name='project_management_pending_works'),
+    
+    path('digital-marketing/pending-dashboard/', DigitalMarketingPendingDashboardAPIView.as_view(), name='dm_pending_dashboard'),
+    path('dm/pending-dashboard/', DigitalMarketingPendingDashboardAPIView.as_view(), name='dm_pending_dashboard_alias'),
+    path('dm/pending-works/', DigitalMarketingPendingDashboardAPIView.as_view(), name='dm_pending_works'),
+
+    path('testing/pending-dashboard/', TestingManagementPendingDashboardAPIView.as_view(), name='testing_pending_dashboard'),
+    path('testing/pending-works/', TestingManagementPendingDashboardAPIView.as_view(), name='testing_pending_works'),
 ]

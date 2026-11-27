@@ -8,6 +8,7 @@ from ..models import LeaveRequest
 from ..serializers import LeaveRequestSerializer, HrLeaveRequestSerializer
 from accounts.models import StaffProfile
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 
 class EmployeeLeaveRequestView(BaseAPIView):
     permission_classes = [IsAuthenticated]
@@ -107,14 +108,35 @@ class HrLeaveRequestListCreateView(BaseAPIView):
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date')
 
+        # Validate the optional date range before filtering.  Dates are sent
+        # by the UI as ISO values: YYYY-MM-DD.
+        parsed_start_date = parse_date(start_date) if start_date else None
+        parsed_end_date = parse_date(end_date) if end_date else None
+        if start_date and not parsed_start_date:
+            return Response(
+                {"detail": "Invalid start_date. Use YYYY-MM-DD."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if end_date and not parsed_end_date:
+            return Response(
+                {"detail": "Invalid end_date. Use YYYY-MM-DD."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if parsed_start_date and parsed_end_date and parsed_start_date > parsed_end_date:
+            return Response(
+                {"detail": "start_date cannot be greater than end_date."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         if staff_id:
             queryset = queryset.filter(staff_id=staff_id)
         if status_filter:
             queryset = queryset.filter(status=status_filter)
-        if start_date:
-            queryset = queryset.filter(start_date__gte=start_date)
-        if end_date:
-            queryset = queryset.filter(end_date__lte=end_date)
+        # Return requests whose leave period overlaps the selected range.
+        if parsed_start_date:
+            queryset = queryset.filter(end_date__gte=parsed_start_date)
+        if parsed_end_date:
+            queryset = queryset.filter(start_date__lte=parsed_end_date)
 
         serializer = HrLeaveRequestSerializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)

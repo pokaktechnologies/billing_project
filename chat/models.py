@@ -46,6 +46,7 @@ class Message(models.Model):
     sender = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
     content = models.TextField()
     timestamp = models.DateTimeField(default=timezone.now)
+    read_by = models.ManyToManyField(CustomUser,related_name="read_messages",blank=True,)
     is_read = models.BooleanField(default=False)
 
     def __str__(self):

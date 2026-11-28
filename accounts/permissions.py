@@ -164,7 +164,6 @@ PARENT_MODULE_MAP = [
             "project",
             "project_timeline",
             "project_reports",
-            "testing",
             "client_contract",
             "team_member",
         ]
@@ -176,7 +175,6 @@ PARENT_MODULE_MAP = [
             "dm",
         ]
     },
-
     {
         "name": "Testing_Management",
         "submodules": [

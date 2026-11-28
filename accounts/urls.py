@@ -4,6 +4,10 @@ from accounts.views.user import  *
 
 from .views.SearchViews import *
 from .views.ReportView import *
+from .views.department_statistics import (
+    DepartmentStaffListView,
+    DepartmentStatisticsView,
+)
 from .views.pending_dashboard import (
     ProductsPendingDashboardAPIView,
     PurchasePendingDashboardAPIView,
@@ -52,6 +56,8 @@ urlpatterns = [
     path('user/modules/', StaffModulesView.as_view()),
     path('user/modules/all/', StaffModulesListView.as_view()),
 
+    path('departments/statistics/', DepartmentStatisticsView.as_view(), name='department-statistics'),
+    path('departments/<int:department_id>/staff/', DepartmentStaffListView.as_view(), name='department-staff-list'),
     path('departments/', DepartmentView.as_view()),
     path('departments/<int:department_id>/', DepartmentView.as_view()),
 

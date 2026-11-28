@@ -1080,21 +1080,31 @@ class HRSubmissionsListAPIView(APIView):
             except (ValueError, TypeError):
                 pass
 
-        if start_date:
-            try:
-                d = parse_date(start_date)
-                if d:
-                    queryset = queryset.filter(start_date__gte=d)
-            except ValueError:
-                return Response({"error": "Invalid start_date format."}, status=400)
+        # Filter submissions whose period overlaps the requested date range.
+        # This includes a submission when any part of its period is in range.
+        parsed_start_date = parse_date(start_date) if start_date else None
+        parsed_end_date = parse_date(end_date) if end_date else None
 
-        if end_date:
-            try:
-                d = parse_date(end_date)
-                if d:
-                    queryset = queryset.filter(end_date__lte=d)
-            except ValueError:
-                return Response({"error": "Invalid end_date format."}, status=400)
+        if start_date and not parsed_start_date:
+            return Response(
+                {"error": "Invalid start_date format. Use YYYY-MM-DD."},
+                status=400,
+            )
+        if end_date and not parsed_end_date:
+            return Response(
+                {"error": "Invalid end_date format. Use YYYY-MM-DD."},
+                status=400,
+            )
+        if parsed_start_date and parsed_end_date and parsed_start_date > parsed_end_date:
+            return Response(
+                {"error": "start_date cannot be after end_date."},
+                status=400,
+            )
+
+        if parsed_start_date:
+            queryset = queryset.filter(end_date__gte=parsed_start_date)
+        if parsed_end_date:
+            queryset = queryset.filter(start_date__lte=parsed_end_date)
 
         if search:
             queryset = queryset.filter(

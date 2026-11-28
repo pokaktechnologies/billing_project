@@ -132,17 +132,99 @@ Returns a comprehensive, single-month payslip for a specific employee. Includes 
   - `month` (string, Optional): Month in `YYYY-MM` format (Use if `period_id` is not known).
 - **Note**: Either `period_id` or `month` is required.
 
-### List Salary Statements
+### List All Staff Salary Statements (One-Line)
 
-Returns a list of salary statements for a specific employee with advanced duration and range filtering.
+Returns one-line salary statements across all staff members. By default (`view=summary`), returns one aggregated summary row per staff member across the filtered periods along with overall totals; pass `?view=flat` for one flat row per `(staff, period)` payroll record.
+
+- **URL**: `/salary-statement/`
+- **Method**: `GET`
+- **View Modes**:
+  - `view=summary` (default): 1 aggregated row per staff across all matching periods.
+  - `view=flat`: 1 flat row per `(staff, period)` payroll record.
+- **Filtering Options**:
+  - `year` (string): 4-digit year (e.g., `2026`).
+  - `month` (string): Month number (`3` or `03`) or `YYYY-MM` (`2026-03`). Combines with `year` when numeric (`?year=2026&month=3`).
+  - `period_month` (string): Exact `YYYY-MM` match (e.g., `2026-03`).
+  - `start_month` / `end_month` (string): Inclusive `YYYY-MM` range.
+  - `start_date` / `end_date` (YYYY-MM-DD): Inclusive date range mapped to payroll period months (`YYYY-MM`).
+  - `duration` (string): Predefined rolling windows (`1m`, `3m`, `6m`, `9m`, `12m`, `all`). Explicit period filters take precedence when combined.
+  - `status` (string): `paid`, `draft`, or `all` (case-insensitive; default returns all).
+  - `sort_by` / `sort` (string): `newest` (default), `oldest`, `highest` (`highest_salary`/`salary_high`), `lowest` (`lowest_salary`/`salary_low`).
+  - `ordering` (string): Custom field ordering (e.g., `net_salary`, `-gross_salary`, `working_days`, `staff_name`).
+  - Standard `PayrollFilter` options: `staff`, `period`, `department`, `job_type`, `staff_name`, `staff_email`, `employee_id`, `min_salary`, `max_salary`, and `?search=<term>`.
+  - Pagination: `?page=<n>&page_size=<m>` (or `size=<m>`) via `OptionalPagination`; omit for all records at once.
+- **Sample Response (`GET /payroll/salary-statement/?year=2026&status=all&sort_by=highest`)**:
+  ```json
+  {
+    "view": "summary",
+    "filters": {
+      "year": "2026",
+      "month": null,
+      "period_month": null,
+      "start_month": null,
+      "end_month": null,
+      "start_date": null,
+      "end_date": null,
+      "duration": null,
+      "status": "all",
+      "sort_by": "highest"
+    },
+    "summary": {
+      "total_staff": 2,
+      "total_records": 4,
+      "total_gross_salary": "220000.00",
+      "total_deduction": "4000.00",
+      "total_net_salary": "216000.00"
+    },
+    "count": 2,
+    "results": [
+      {
+        "staff_id": 5,
+        "employee_id": "EMP005",
+        "staff_name": "John Doe",
+        "email": "john@example.com",
+        "phone_number": "9876543210",
+        "department": "Engineering",
+        "role": "Developer",
+        "job_type": "full_day",
+        "period": "2026-01 to 2026-02",
+        "months_count": 2,
+        "payroll_id": null,
+        "status": "Paid",
+        "paid_months": 2,
+        "draft_months": 0,
+        "working_days": 44,
+        "total_working_hours": "352.00",
+        "paid_leave_used": 1,
+        "unpaid_leave_days": "0.00",
+        "gross_salary": "120000.00",
+        "deduction": "1000.00",
+        "net_salary": "119000.00",
+        "full_days": 43,
+        "half_days": 0,
+        "leave_days": 1,
+        "absent_days": 0,
+        "latest_created_at": "2026-03-01T10:00:00+05:30"
+      }
+    ]
+  }
+  ```
+
+### List Salary Statements (Single Staff)
+
+Returns a list of salary statements for a specific employee with year/month, duration, date range, status, and sort preset filtering.
 
 - **URL**: `/salary-statement/<int:staff_id>/`
 - **Method**: `GET`
 - **Filtering Options**:
-  - `duration` (string): Predefined periods (`1m`, `3m`, `6m`, `9m`, `12m`).
-  - `start_month` (string): Start of range in `YYYY-MM` format.
-  - `end_month` (string): End of range in `YYYY-MM` format.
-  - Supports standard `PayrollFilter` parameters (status, etc.).
+  - `year` (string): 4-digit year (e.g., `2026`).
+  - `month` (string): Month number (`3` or `03`) or `YYYY-MM`.
+  - `duration` (string): Predefined periods (`1m`, `3m`, `6m`, `9m`, `12m`, `all`).
+  - `start_month` / `end_month` (string): Range in `YYYY-MM` format.
+  - `start_date` / `end_date` (YYYY-MM-DD): Period-month range filter.
+  - `status` (string): `paid`, `draft`, or `all` (case-insensitive).
+  - `sort_by` / `sort` (string): `newest` (default), `oldest`, `highest`, `lowest`.
+  - Supports standard `PayrollFilter` parameters (`min_salary`, `max_salary`, `ordering`, etc.).
 - **Isolation**: Strictly returns records only for the `staff_id` specified in the URL.
 
 ---

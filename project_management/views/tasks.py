@@ -123,6 +123,8 @@ class TaskListCreateView(BaseAPIView):
         project = request.query_params.get('project')
         board = request.query_params.get('board')
         status_filter = request.query_params.get('status')
+        start_date_str = request.query_params.get('start_date')
+        end_date_str = request.query_params.get('end_date')
 
         task = Task.objects.all().order_by('-created_at')
 
@@ -138,6 +140,18 @@ class TaskListCreateView(BaseAPIView):
         allowed_status = ['not_started', 'in_progress', 'completed']
         if status_filter in allowed_status:
             task = task.filter(status=status_filter)
+
+        # Date filters apply to the task deadline (Task.end_date).
+        try:
+            if start_date_str:
+                task = task.filter(end_date__gte=datetime.strptime(start_date_str, "%Y-%m-%d").date())
+            if end_date_str:
+                task = task.filter(end_date__lte=datetime.strptime(end_date_str, "%Y-%m-%d").date())
+        except ValueError:
+            return Response(
+                {"status": "0", "message": "Invalid date format. Use YYYY-MM-DD."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         serializer = TaskSerializer(task, many=True)
 
@@ -194,6 +208,8 @@ class MyProjectTaskListView(BaseAPIView):
         project_id = request.query_params.get("project")
         board_id = request.query_params.get("board")
         status_filter = request.query_params.get("status")
+        start_date_str = request.query_params.get("start_date")
+        end_date_str = request.query_params.get("end_date")
 
         tasks = Task.objects.filter(
             assignments__assigned_to__member__user=user
@@ -211,6 +227,18 @@ class MyProjectTaskListView(BaseAPIView):
         allowed_status = ['not_started', 'in_progress', 'completed']
         if status_filter in allowed_status:
             tasks = tasks.filter(status=status_filter)
+
+        # Date filters apply to the task deadline (Task.end_date).
+        try:
+            if start_date_str:
+                tasks = tasks.filter(end_date__gte=datetime.strptime(start_date_str, "%Y-%m-%d").date())
+            if end_date_str:
+                tasks = tasks.filter(end_date__lte=datetime.strptime(end_date_str, "%Y-%m-%d").date())
+        except ValueError:
+            return Response(
+                {"status": "0", "message": "Invalid date format. Use YYYY-MM-DD."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 
         tasks = tasks.select_related(

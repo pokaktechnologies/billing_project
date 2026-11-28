@@ -498,6 +498,8 @@ class CounsellorConversionReportTests(TestCase):
         self.assertEqual(hr_list_resp.status_code, status.HTTP_200_OK)
         submissions_list = hr_list_resp.json()
         self.assertTrue(any(s["id"] == submission_id for s in submissions_list))
+        submission_data = next(s for s in submissions_list if s["id"] == submission_id)
+        self.assertEqual(submission_data["designation"], self.counsellor_a.designation)
 
         # 6. HR Submission detail (dynamically querying students)
         hr_detail_resp = self.client.get(f"/internship/report/hr/counsellor-submissions/{submission_id}/")

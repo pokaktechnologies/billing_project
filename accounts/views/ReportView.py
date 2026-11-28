@@ -967,6 +967,7 @@ class PurchaseOrderReportView(APIView):
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date')
         supplier = request.query_params.get('supplier')
+        po_status = request.query_params.get('status')
         search = request.query_params.get('search')
 
         purchases = PurchaseOrder.objects.select_related(
@@ -984,10 +985,14 @@ class PurchaseOrderReportView(APIView):
         if supplier:
             purchases = purchases.filter(supplier_id=supplier)
 
+        if po_status:
+            purchases = purchases.filter(status=po_status)
+
         if search:
             purchases = purchases.filter(
                 Q(supplier__first_name__icontains=search) |
                 Q(supplier__last_name__icontains=search) |
+                Q(supplier__company_name__icontains=search) |
                 Q(purchase_order_number__icontains=search)
             )
 
@@ -1024,6 +1029,7 @@ class MaterialReceiveReportView(APIView):
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date')
         supplier = request.query_params.get('supplier')
+        mr_status = request.query_params.get('status')
         search = request.query_params.get('search')
 
         material_receives = MaterialReceive.objects.select_related(
@@ -1041,10 +1047,14 @@ class MaterialReceiveReportView(APIView):
         if supplier:
             material_receives = material_receives.filter(supplier_id=supplier)
 
+        if mr_status:
+            material_receives = material_receives.filter(status=mr_status)
+
         if search:
             material_receives = material_receives.filter(
                 Q(supplier__first_name__icontains=search) |
                 Q(supplier__last_name__icontains=search) |
+                Q(supplier__company_name__icontains=search) |
                 Q(material_receive_number__icontains=search)
             )
 
@@ -1305,6 +1315,10 @@ class AttendanceReportView(APIView):
         date = request.query_params.get('date')
         status = request.query_params.get('status')
 
+        # The UI may send either the internal StaffProfile primary key
+        # (for example, ``53``) or the visible employee ID
+        # (for example, ``EMP100053``).  Resolve both to the same staff
+        # profile before filtering attendance.
         staff_id = request.query_params.get('staff_id')
 
 
@@ -1324,19 +1338,36 @@ class AttendanceReportView(APIView):
                 Q(staff__user__email__icontains=search)
             )
 
-        if department:
-            attendances = attendances.filter(staff__job_detail__department_id=department)
+        if department and department.lower() != 'all':
+            department_filter = Q(staff__job_detail__department__name__iexact=department)
+            if department.isdigit():
+                department_filter |= Q(staff__job_detail__department_id=int(department))
+            attendances = attendances.filter(department_filter)
 
         if staff_id:
-            attendances = attendances.filter(staff_id=staff_id)
-        elif date:
+            staff_filter = Q(staff__job_detail__employee_id__iexact=staff_id)
+            if staff_id.isdigit():
+                numeric_staff_id = int(staff_id)
+                # Some staff-list responses expose CustomUser.id rather than
+                # StaffProfile.id. Support both while the UI is migrated.
+                staff_filter |= Q(staff_id=numeric_staff_id)
+                staff_filter |= Q(staff__user_id=numeric_staff_id)
+            attendances = attendances.filter(staff_filter)
+
+        # Apply the date independently of the staff filter. Previously the
+        # presence of staff_id skipped the requested date and returned a
+        # different report scope.
+        if date:
             attendances = attendances.filter(date=date)
-        else:
+        elif not staff_id:
             today = timezone.localdate()
             attendances = attendances.filter(date=today)
 
-        if status:
-            attendances = attendances.filter(status=status)
+        if status and status.lower() != 'all':
+            # Accept UI labels such as "Half Day" as well as stored values
+            # such as "half_day".
+            normalized_status = status.strip().lower().replace(' ', '_')
+            attendances = attendances.filter(status=normalized_status)
 
         paginator = Pagination()
         paginated_attendances = paginator.paginate_queryset(attendances, request)
@@ -1374,14 +1405,14 @@ class ProductReportAPIView(generics.ListAPIView):
         if status and status.strip().lower() != "all":
             status_clean = status.strip().lower()
             if status_clean == "in stock":
-                queryset = queryset.filter(stock__gt=200)
+                queryset = queryset.filter(stock__gt=F("reorder_level"))
             elif status_clean == "low stock":
                 queryset = queryset.filter(
                     stock__gt=0,
-                    stock__lte=200
+                    stock__lte=F("reorder_level")
                 )
             elif status_clean == "out of stock":
-                queryset = queryset.filter(stock=0)
+                queryset = queryset.filter(stock__lte=0)
         return queryset.order_by("name")
 
 

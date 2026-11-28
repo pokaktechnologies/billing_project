@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import UserViewSet, ChatRoomViewSet, MessageViewSet
+from .views import UserViewSet, ChatRoomViewSet, MessageViewSet,UnreadMessageCountAPIView
 
 router = DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
@@ -15,5 +15,11 @@ urlpatterns = [
             'post': 'create'    # Send new message
         }),
         name='message-list-create'
+    ),
+
+    path(
+        'unread-count/',
+        UnreadMessageCountAPIView.as_view(),
+        name='unread-message-count',
     ),
 ]

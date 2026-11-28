@@ -804,6 +804,14 @@ class SupplierAPIView(BaseAPIView):
             elif end_date:
                 suppliers = suppliers.filter(date__lte=end_date)
 
+            is_active = request.query_params.get("is_active")
+            if is_active is not None:
+                val = is_active.strip().lower()
+                if val in ("true", "1"):
+                    suppliers = suppliers.filter(is_active=True)
+                elif val in ("false", "0"):
+                    suppliers = suppliers.filter(is_active=False)
+
             #supplier filter
             supplier = request.query_params.get("supplier")
             
@@ -914,6 +922,8 @@ class ProductListCreateAPIView(BaseAPIView):
         search = request.query_params.get('search')
         category = request.query_params.get('category')
         unit = request.query_params.get('unit')
+        is_active = request.query_params.get('is_active')
+        stock_status = request.query_params.get('stock_status')
 
         products = Product.objects.select_related(
             'unit', 'category', 'tax_setting'
@@ -930,6 +940,24 @@ class ProductListCreateAPIView(BaseAPIView):
 
         if unit:
             products = products.filter(unit_id=unit)
+
+        if is_active is not None and is_active.strip() != "":
+            is_active_clean = is_active.strip().lower()
+            if is_active_clean in ("true", "1"):
+                products = products.filter(is_active=True)
+            elif is_active_clean in ("false", "0"):
+                products = products.filter(is_active=False)
+
+        if stock_status:
+            stock_status_clean = stock_status.strip().lower()
+            if stock_status_clean == "negative":
+                products = products.filter(stock__lt=0)
+            elif stock_status_clean == "out_of_stock":
+                products = products.filter(stock=0)
+            elif stock_status_clean == "low_stock":
+                products = products.filter(stock__gt=0, stock__lte=F('reorder_level'))
+            elif stock_status_clean == "in_stock":
+                products = products.filter(stock__gt=F('reorder_level'))
 
 
         # optional pagination with response
@@ -1192,6 +1220,7 @@ class QuotationOrderAPI(BaseAPIView):
                     "termsandcondtions_title": quotation.termsandconditions.title if quotation.termsandconditions else "",
                     "quotation_date": str(quotation.quotation_date),
                     "grand_total": quotation.grand_total,
+                    "status": quotation.status,
                     "selesperson": quotation.client.salesperson.id if quotation.client and quotation.client.salesperson else "",
                     "salesperson_name": f"{quotation.client.salesperson.first_name} {quotation.client.salesperson.last_name}" if quotation.client and quotation.client.salesperson else "",
                     "contract_id": quotation.contract.id if quotation.contract else None,
@@ -1265,6 +1294,14 @@ class QuotationOrderAPI(BaseAPIView):
             #     return Response({"error": "User is not authenticated."}, status=401)
             
                 
+                quotation_status = data.get("status", "draft")
+                valid_statuses = {choice[0] for choice in QuotationOrderModel.STATUS_CHOICES}
+                if quotation_status not in valid_statuses:
+                    return Response(
+                        {"error": f"Invalid status '{quotation_status}'. Allowed: {', '.join(sorted(valid_statuses))}"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
                 quotation = QuotationOrderModel.objects.create(
                     user=CustomUser.objects.get(id=request.user.id),
                     client=Customer.objects.get(id=data.get("client")),
@@ -1280,7 +1317,8 @@ class QuotationOrderAPI(BaseAPIView):
                     #grand_total=0  ,
                     delivery_location=data.get("delivery_location", ""),
                     # bank_account_id= bank_account_id,
-                    termsandconditions_id=terms_id  # Add terms and condition
+                    termsandconditions_id=terms_id,  # Add terms and condition
+                    status=quotation_status,
                 )
                 contract_data = data.get("contract")
 
@@ -2464,7 +2502,8 @@ class SalesReturnDetailAPI(APIView):
             user=request.user
         )
 
-        if (timezone.now() - sales_return.created_at).days > 7:
+        is_status_only = set(request.data.keys()) == {"status"}
+        if not is_status_only and (timezone.now() - sales_return.created_at).days > 7:
             return Response({
                 "status": "0",
                 "error": "Returns older than 7 days cannot be modified"
@@ -3155,6 +3194,10 @@ class PurchaseOrderAPIView(BaseAPIView):
                     purchase_order_date__gte=start_date,
                     purchase_order_date__lte=end_date
                 )
+
+            po_status = request.query_params.get('status')
+            if po_status:
+                purchase_orders = purchase_orders.filter(status=po_status)
             
             # optional pagination response
             return paginate_response(purchase_orders, request, PurchaseOrderListSerializer)
@@ -3229,9 +3272,17 @@ class MaterialReceiveAPIView(BaseAPIView):
             end_date = request.query_params.get('end_date')
             if start_date and end_date:
                 material_receives = material_receives.filter(
-                    material_receive_date__gte=start_date,
-                    material_receive_date__lte=end_date
+                    received_date__gte=start_date,
+                    received_date__lte=end_date
                 )
+
+            mr_status = request.query_params.get('status')
+            if mr_status:
+                material_receives = material_receives.filter(status=mr_status)
+
+            purchase_order = request.query_params.get('purchase_order')
+            if purchase_order:
+                material_receives = material_receives.filter(purchase_order_id=purchase_order)
 
             serializer = MaterialReceiveListSerializer(material_receives, many=True)
             return Response({"status": "1", "message": "success", "data": serializer.data})
@@ -3270,8 +3321,40 @@ class MaterialReceiveAPIView(BaseAPIView):
                 {"error": "Material Receive order not found"},
                 status=status.HTTP_404_NOT_FOUND
             )
-        
-        material_receive.delete()
+
+        with transaction.atomic():
+            po = material_receive.purchase_order
+            if material_receive.status != "rejected":
+                qty_by_product = {}
+                for item in material_receive.items.all():
+                    qty_by_product[item.product_id] = qty_by_product.get(item.product_id, 0) + item.quantity
+
+                if qty_by_product:
+                    products = {
+                        p.id: p
+                        for p in Product.objects.select_for_update().filter(id__in=qty_by_product.keys())
+                    }
+                    for pid, qty in sorted(qty_by_product.items()):
+                        product = products.get(pid)
+                        if not product:
+                            continue
+                        if product.stock < qty:
+                            return Response(
+                                {
+                                    "error": f"Insufficient stock for '{product.name}' (available: {product.stock}, required reduction: {qty})."
+                                },
+                                status=status.HTTP_400_BAD_REQUEST,
+                            )
+                    for pid, qty in sorted(qty_by_product.items()):
+                        product = products.get(pid)
+                        if product:
+                            product.stock -= qty
+                            product.save(update_fields=["stock"])
+
+            material_receive.delete()
+            if po:
+                po.sync_receive_status()
+
         return Response(
             {"message": "Material Receive order deleted successfully"},
             status=status.HTTP_204_NO_CONTENT

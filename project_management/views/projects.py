@@ -8,9 +8,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
+from accounts.models import CustomUser, Department, StaffProfile
 from activity_logs.base_view import BaseAPIView
 from ..models import (
     ClientContract,
+    DMContract,
     Member,
     ProjectManagement,
     ProjectMember,
@@ -62,12 +64,107 @@ def get_project_progress_data(project):
     }
 
 
+def resolve_project_member_allocation(item):
+    """
+    Validates and resolves a single member allocation item into:
+    {
+        'member': Member instance,
+        'department': Department instance (or None),
+        'stack': Stack instance (or None),
+    }
+    Supports:
+    - {'member': <id>, 'stack': <id>} (Legacy)
+    - {'member': <id>, 'department': <id>}
+    - {'user': <id>, 'department': <id>} (New Direct Flow)
+    - {'staff': <id>, 'department': <id>}
+    - Auto-resolution of department from staff profile job_detail if department is not provided.
+    """
+    if not isinstance(item, dict):
+        raise ValueError("Each member allocation must be an object.")
+
+    # 1. Resolve Member / User
+    member_id = item.get('member') or item.get('member_id')
+    user_id = item.get('user') or item.get('user_id')
+    staff_id = item.get('staff') or item.get('staff_id')
+
+    member_instance = None
+    if member_id:
+        try:
+            member_instance = Member.objects.select_related('user').get(pk=member_id)
+        except Member.DoesNotExist:
+            raise ValueError(f"Member with ID {member_id} not found.")
+    elif user_id:
+        try:
+            user_instance = CustomUser.objects.get(pk=user_id)
+            member_instance, _ = Member.objects.get_or_create(
+                user=user_instance,
+                defaults={'status': 'active', 'is_active': True}
+            )
+        except CustomUser.DoesNotExist:
+            raise ValueError(f"User with ID {user_id} not found.")
+    elif staff_id:
+        try:
+            staff_prof = StaffProfile.objects.select_related('user').get(pk=staff_id)
+            member_instance, _ = Member.objects.get_or_create(
+                user=staff_prof.user,
+                defaults={'status': 'active', 'is_active': True}
+            )
+        except StaffProfile.DoesNotExist:
+            raise ValueError(f"Staff profile with ID {staff_id} not found.")
+    else:
+        raise ValueError("Member, User, or Staff ID is required for each member allocation.")
+
+    # Reactivate member if previously inactive
+    if not member_instance.is_active or member_instance.status != 'active':
+        member_instance.status = 'active'
+        member_instance.is_active = True
+        member_instance.save(update_fields=['status', 'is_active'])
+
+    # 2. Resolve Department & Stack
+    dept_id = item.get('department') or item.get('department_id')
+    stack_id = item.get('stack') or item.get('stack_id')
+
+    dept_instance = None
+    stack_instance = None
+
+    if dept_id:
+        try:
+            dept_instance = Department.objects.get(pk=dept_id)
+        except Department.DoesNotExist:
+            raise ValueError(f"Department with ID {dept_id} not found.")
+
+    if stack_id:
+        try:
+            stack_instance = Stack.objects.get(pk=stack_id)
+        except Stack.DoesNotExist:
+            raise ValueError(f"Stack with ID {stack_id} not found.")
+
+    # Auto-resolve department from staff profile if not explicitly passed
+    if not dept_instance:
+        staff_prof = getattr(member_instance.user, 'staff_profile', None)
+        if staff_prof and getattr(staff_prof, 'job_detail', None) and staff_prof.job_detail.department:
+            dept_instance = staff_prof.job_detail.department
+
+    # If stack is not passed but department is, find or create stack by department name for legacy compatibility
+    if not stack_instance and dept_instance:
+        stack_instance, _ = Stack.objects.get_or_create(
+            name=dept_instance.name,
+            defaults={'user': member_instance.user}
+        )
+
+    return {
+        'member': member_instance,
+        'department': dept_instance,
+        'stack': stack_instance,
+    }
+
+
 class project_management(BaseAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
 
     def get(self, request, format=None):
-        projects = ProjectManagement.objects.all()
+        projects = ProjectManagement.objects.select_related('contract', 'dm_contract')
 
         project_type = request.query_params.get('project_type')
 
@@ -85,6 +182,16 @@ class project_management(BaseAPIView):
 
             projects = projects.filter(project_type=project_type)
 
+        status_counts = {
+            value: 0
+            for value, _ in ProjectManagement._meta.get_field('status').choices
+        }
+
+        for row in projects.order_by().values('status').annotate(count=Count('id')):
+            status_counts[row['status']] = row['count']
+
+        total_projects = projects.count()
+
         projects = projects.order_by('-created_at')
 
         serializer = ProjectManagementSerializer(
@@ -96,6 +203,10 @@ class project_management(BaseAPIView):
             {
                 "status": "1",
                 "message": "success",
+                "summary": {
+                    "total_projects": total_projects,
+                    "status_counts": status_counts,
+                },
                 "data": serializer.data
             },
             status=status.HTTP_200_OK
@@ -131,37 +242,23 @@ class project_management(BaseAPIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        member_ids = []
-
+        resolved_allocations = []
+        member_pks = []
         for item in members:
-            if not isinstance(item, dict):
+            try:
+                alloc = resolve_project_member_allocation(item)
+            except ValueError as err:
                 return Response(
-                    {
-                        "status": "0",
-                        "message": "Each member must be an object"
-                    },
+                    {"status": "0", "message": str(err)},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-
-            if not item.get('member') or not item.get('stack'):
+            if alloc['member'].pk in member_pks:
                 return Response(
-                    {
-                        "status": "0",
-                        "message": "Member and stack are required"
-                    },
+                    {"status": "0", "message": "Members list contains duplicate members"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-
-            member_ids.append(item['member'])
-
-        if len(member_ids) != len(set(member_ids)):
-            return Response(
-                {
-                    "status": "0",
-                    "message": "Members list contains duplicate members"
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            member_pks.append(alloc['member'].pk)
+            resolved_allocations.append(alloc)
 
         # Validate boards
         if not isinstance(boards, list):
@@ -184,23 +281,9 @@ class project_management(BaseAPIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Contract is mandatory only for developer projects
-        contract = None
-        contract_id = request.data.get('contract')
-
-        if contract_id:
-            contract = ClientContract.objects.filter(
-                pk=contract_id
-            ).first()
-
-            if not contract:
-                return Response(
-                    {
-                        "status": "0",
-                        "message": "Contract not found"
-                    },
-                    status=status.HTTP_404_NOT_FOUND
-                )
+        # Contract / DM Contract validations
+        contract = serializer.validated_data.get('contract')
+        dm_contract = serializer.validated_data.get('dm_contract')
 
         if project_type == 'dev' and not contract:
             return Response(
@@ -211,40 +294,37 @@ class project_management(BaseAPIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        if project_type == 'dm' and not dm_contract:
+            return Response(
+                {
+                    "status": "0",
+                    "message": "Digital Marketing Contract is required for digital marketing projects"
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         try:
             with transaction.atomic():
 
                 # Create project
                 project = serializer.save(
                     user=request.user,
-                    project_type=project_type
+                    project_type=project_type,
+                    contract=contract if project_type in ['dev', 'testing'] else None,
+                    dm_contract=dm_contract if project_type == 'dm' else None
                 )
 
                 # Allocate members
-                for member in members:
-                    try:
-                        member_instance = Member.objects.get(
-                            pk=member['member']
-                        )
-
-                        stack_instance = Stack.objects.get(
-                            pk=member['stack']
-                        )
-
-                    except Member.DoesNotExist:
-                        raise ValueError(
-                            f"Member with ID {member['member']} not found"
-                        )
-
-                    except Stack.DoesNotExist:
-                        raise ValueError(
-                            f"Stack with ID {member['stack']} not found"
-                        )
-
-                    ProjectMember.objects.create(
+                for alloc in resolved_allocations:
+                    ProjectMember.objects.update_or_create(
                         project=project,
-                        member=member_instance,
-                        stack=stack_instance
+                        member=alloc['member'],
+                        defaults={
+                            'department': alloc['department'],
+                            'stack': alloc['stack'],
+                            'status': 'active',
+                            'is_active': True,
+                        }
                     )
 
                 # Create task boards
@@ -357,72 +437,24 @@ class project_management_detail(BaseAPIView):
             )
 
         # Validate member and stack IDs before updating anything
-        member_instances = {}
-        stack_instances = {}
-
+        resolved_allocations = []
         if members is not None:
-            member_ids = []
-            stack_ids = []
-
+            member_pks = []
             for item in members:
-                if not isinstance(item, dict):
+                try:
+                    alloc = resolve_project_member_allocation(item)
+                except ValueError as err:
                     return Response(
-                        {
-                            "status": "0",
-                            "message": "Each member must be an object"
-                        },
+                        {"status": "0", "message": str(err)},
                         status=status.HTTP_400_BAD_REQUEST
                     )
-
-                if not item.get('member') or not item.get('stack'):
+                if alloc['member'].pk in member_pks:
                     return Response(
-                        {
-                            "status": "0",
-                            "message": "Member and stack are required"
-                        },
+                        {"status": "0", "message": "Members list contains duplicate members"},
                         status=status.HTTP_400_BAD_REQUEST
                     )
-
-                member_ids.append(item['member'])
-                stack_ids.append(item['stack'])
-
-            if len(member_ids) != len(set(member_ids)):
-                return Response(
-                    {
-                        "status": "0",
-                        "message": "Members list contains duplicate members"
-                    },
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            member_instances = {
-                obj.id: obj
-                for obj in Member.objects.filter(id__in=member_ids)
-            }
-
-            stack_instances = {
-                obj.id: obj
-                for obj in Stack.objects.filter(id__in=stack_ids)
-            }
-
-            for item in members:
-                member_id = item['member']
-                stack_id = item['stack']
-
-                if (
-                    member_id not in member_instances
-                    or stack_id not in stack_instances
-                ):
-                    return Response(
-                        {
-                            "status": "0",
-                            "message": (
-                                f"Invalid member {member_id} "
-                                f"or stack {stack_id}"
-                            )
-                        },
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
+                member_pks.append(alloc['member'].pk)
+                resolved_allocations.append(alloc)
 
         # Validate project fields
         serializer = ProjectManagementSerializer(
@@ -458,11 +490,9 @@ class project_management_detail(BaseAPIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Preserve the existing contract unless a new value is supplied
-        contract = serializer.validated_data.get(
-            'contract',
-            project.contract
-        )
+        # Contract / DM Contract validations
+        contract = serializer.validated_data.get('contract')
+        dm_contract = serializer.validated_data.get('dm_contract')
 
         if project_type == 'dev' and not contract:
             return Response(
@@ -473,33 +503,36 @@ class project_management_detail(BaseAPIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        if project_type == 'dm' and not dm_contract:
+            return Response(
+                {
+                    "status": "0",
+                    "message": "Digital Marketing Contract is required for digital marketing projects"
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         try:
             with transaction.atomic():
 
-                serializer.save()
+                serializer.save(
+                    contract=contract if project_type in ['dev', 'testing'] else None,
+                    dm_contract=dm_contract if project_type == 'dm' else None
+                )
 
                 # Update or add members only if provided
                 if members is not None:
-                    for item in members:
-                        member_instance = member_instances[item['member']]
-                        stack_instance = stack_instances[item['stack']]
-
-                        project_member = ProjectMember.objects.filter(
+                    for alloc in resolved_allocations:
+                        ProjectMember.objects.update_or_create(
                             project=project,
-                            member=member_instance
-                        ).first()
-
-                        if project_member:
-                            project_member.stack = stack_instance
-                            project_member.save(
-                                update_fields=['stack']
-                            )
-                        else:
-                            ProjectMember.objects.create(
-                                project=project,
-                                member=member_instance,
-                                stack=stack_instance
-                            )
+                            member=alloc['member'],
+                            defaults={
+                                'department': alloc['department'],
+                                'stack': alloc['stack'],
+                                'status': 'active',
+                                'is_active': True,
+                            }
+                        )
 
         except Exception as e:
             return Response(
@@ -576,7 +609,7 @@ class MyProjectsView(APIView):
 
         projects = ProjectManagement.objects.filter(
             projectmember__member__user=user
-        ).select_related('contract').prefetch_related('projectmember_set').distinct()
+        ).select_related('contract', 'dm_contract').prefetch_related('projectmember_set').distinct()
 
         serializer = ProjectManagementSerializer(projects, many=True)
         project_data = serializer.data
@@ -604,7 +637,7 @@ class MyProjectDetailView(APIView):
         project = ProjectManagement.objects.filter(
             id=project_id,
             projectmember__member__user=user
-        ).select_related('contract').first()
+        ).select_related('contract', 'dm_contract').first()
 
         if not project:
             return Response(
@@ -625,7 +658,7 @@ class ProjectReportView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        projects = ProjectManagement.objects.select_related('contract').prefetch_related('task_set').order_by('-created_at')
+        projects = ProjectManagement.objects.select_related('contract', 'dm_contract').prefetch_related('task_set').order_by('-created_at')
 
         # FILTER PARAMETERS
         from_date = request.query_params.get('from_date')
@@ -833,6 +866,8 @@ class NumberGeneratorView(APIView):
             generated_number = self.generate_next_number(ProjectManagement, "project_number", "PR", 6)
         elif req_type == "CN":
             generated_number = self.generate_next_number(ClientContract, "contract_number", "CN", 6)
+        elif req_type in ["DMC", "DM"]:
+            generated_number = self.generate_next_number(DMContract, "contract_number", "DMC", 6)
         else:
             return Response({
                 'status': '0',

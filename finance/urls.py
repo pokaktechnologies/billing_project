@@ -11,6 +11,7 @@ from .views.settings import FinaceNumberGeneratorView, CashflowCategoryMappingLi
 from .views.reports import TrialBalanceView, ProfitAndLossView, BalanceSheetView, CashflowStatementView, AccountBalanceHierarchyView
 from .views.FinanceReport import JournalVoucherReportView, AccountReportView, LedgerReportView, TransactionDebitNotReportView, TransactionCreditNotReportView
 from .views.opening_balance import FinancialYearListCreateAPIView, FinancialYearRetrieveUpdateDestroyAPIView, OpeningBalanceDashboardAPIView
+from .views.pending_dashboard import FinancePendingDashboardAPIView
 
 urlpatterns = [
     path('account/', AccountListCreateAPIView.as_view(), name='account'),
@@ -61,5 +62,8 @@ urlpatterns = [
     path("financial-years/", FinancialYearListCreateAPIView.as_view(), name="financial-year-list-create"),
     path("financial-years/<int:pk>/", FinancialYearRetrieveUpdateDestroyAPIView.as_view(), name="financial-year-detail"),
     path("opening-balances/", OpeningBalanceDashboardAPIView.as_view(), name="opening-balance-dashboard"),
+
+    # Pending Controls Dashboard
+    path("pending-dashboard/", FinancePendingDashboardAPIView.as_view(), name="finance-pending-dashboard"),
 ]
 

@@ -4,6 +4,15 @@ from .contracts import (
     ClientContractDetailView,
     ContractReportView,
 )
+from .dm_contracts import (
+    DMContractListCreateAPIView,
+    DMContractDetailAPIView,
+    DMPlatformListCreateAPIView,
+    DMWorkTypeListCreateAPIView,
+    DMContractExtensionListCreateAPIView,
+    DMContractAttachmentUploadView,
+    DMContractAttachmentDeleteView,
+)
 from .projects import (
     get_project_progress_data,
     project_management,
@@ -26,6 +35,7 @@ from .members import (
     ProjectMembersViewListByProjectView,
     ProjectMembersSearchView,
     MembersSearchView,
+    DepartmentStaffListView,
 )
 from .tasks import (
     TaskBoardListByProjectView,
@@ -63,6 +73,11 @@ from .dashboard import (
     ProjectManagerDashboardView,
     NumberGeneratorView,
 )
+from .pending_dashboard import (
+    ProjectManagementPendingDashboardAPIView,
+    DigitalMarketingPendingDashboardAPIView,
+    TestingManagementPendingDashboardAPIView,
+)
 
 __all__ = [
     'ReportPagination',
@@ -70,6 +85,13 @@ __all__ = [
     'ClientContractView',
     'ClientContractDetailView',
     'ContractReportView',
+    'DMContractListCreateAPIView',
+    'DMContractDetailAPIView',
+    'DMPlatformListCreateAPIView',
+    'DMWorkTypeListCreateAPIView',
+    'DMContractExtensionListCreateAPIView',
+    'DMContractAttachmentUploadView',
+    'DMContractAttachmentDeleteView',
     'get_project_progress_data',
     'project_management',
     'project_management_detail',
@@ -89,6 +111,7 @@ __all__ = [
     'ProjectMembersViewListByProjectView',
     'ProjectMembersSearchView',
     'MembersSearchView',
+    'DepartmentStaffListView',
     'TaskBoardListByProjectView',
     'CreateListBoard',
     'ListBoardMember',
@@ -117,4 +140,7 @@ __all__ = [
     'MeetingAttendanceView',
     'ProjectManagerDashboardView',
     'NumberGeneratorView',
+    'ProjectManagementPendingDashboardAPIView',
+    'DigitalMarketingPendingDashboardAPIView',
+    'TestingManagementPendingDashboardAPIView',
 ]

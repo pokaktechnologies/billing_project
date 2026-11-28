@@ -518,6 +518,7 @@ class EligibleStaffForCertificateView(APIView):
 
     def get(self, request):
         filter_param = request.query_params.get('filter')
+        status_param = request.query_params.get('status', 'active')
 
         certified_staff_ids = CertificateRecord.objects.filter(
             user__isnull=False
@@ -527,14 +528,17 @@ class EligibleStaffForCertificateView(APIView):
             'profile_id', flat=True
         ).distinct()
 
-        eligible_staff = StaffProfile.objects.filter(
-            job_detail__status='active'
-        ).exclude(
+        eligible_staff = StaffProfile.objects.exclude(
             id__in=student_staff_ids
         ).select_related(
             'user',
             'job_detail__department'
         )
+
+        if status_param == 'exited':
+            eligible_staff = eligible_staff.filter(job_detail__status__in=['resigned', 'terminated', 'inactive'])
+        elif status_param != 'all':
+            eligible_staff = eligible_staff.filter(job_detail__status='active')
 
         if filter_param == 'certified':
             eligible_staff = eligible_staff.filter(id__in=certified_staff_ids)

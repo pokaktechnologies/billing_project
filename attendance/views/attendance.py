@@ -25,13 +25,26 @@ class DailyAttendanceListView(generics.ListAPIView):
     # Filters by exact match fields
     filterset_fields = {
         'staff': ['exact'],       # filter by staff ID
-        'status': ['exact'],      # leave, half_day, full_day
         'date': ['exact', 'gte', 'lte'],  # specific date or date range
     }
 
     # Ordering fields
     ordering_fields = ['date', 'status', 'staff']
     ordering = ['-date']  # default ordering
+
+    def get_queryset(self):
+        queryset = DailyAttendance.objects.all()
+        selected_status = self.request.query_params.get('status', '').strip().lower()
+        
+        if selected_status == 'today':
+            queryset = queryset.filter(
+                date=timezone.localdate(),
+                sessions__login_time__isnull=False,
+            ).distinct()
+        elif selected_status and selected_status != 'all':
+            queryset = queryset.filter(status=selected_status)
+
+        return queryset
 
 # 2. Get today's attendance records
 class DailyAttendanceTodayView(generics.ListAPIView):

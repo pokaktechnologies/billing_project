@@ -180,6 +180,10 @@ class LeadSerializerListDisplay(serializers.ModelSerializer):
     qoutation_grand_total = serializers.DecimalField(source='quotation.grand_total', read_only=True, default=None, max_digits=10, decimal_places=2)
     course_name = serializers.CharField(source='course.title', read_only=True, default=None)
     lead_source_name = serializers.CharField(source='lead_source.name', read_only=True, default=None)
+    this_month_followup_count = serializers.SerializerMethodField()
+    this_month_followup_date = serializers.SerializerMethodField()
+    followup_date = serializers.SerializerMethodField()
+    latest_followup_date = serializers.SerializerMethodField()
 
     class Meta:
         model = Lead
@@ -187,11 +191,43 @@ class LeadSerializerListDisplay(serializers.ModelSerializer):
 
     def get_field_names(self, declared_fields, info):
         fields = super().get_field_names(declared_fields, info)
-        fields.append("course_name")
+        for custom_field in [
+            "course_name",
+            "this_month_followup_count",
+            "this_month_followup_date",
+            "followup_date",
+            "latest_followup_date",
+        ]:
+            if custom_field not in fields:
+                fields.append(custom_field)
         return fields
     
     def get_lead_status_display(self, obj):
         return obj.get_lead_status_display()
+
+    def get_this_month_followup_count(self, obj):
+        if hasattr(obj, 'this_month_followup_count'):
+            return obj.this_month_followup_count
+        today = timezone.localdate()
+        return obj.follow_ups.filter(date__year=today.year, date__month=today.month).count()
+
+    def get_this_month_followup_date(self, obj):
+        if hasattr(obj, 'this_month_followup_date'):
+            val = obj.this_month_followup_date
+            return val.strftime('%Y-%m-%d') if val else None
+        today = timezone.localdate()
+        latest = obj.follow_ups.filter(date__year=today.year, date__month=today.month).order_by('-date').first()
+        return latest.date.strftime('%Y-%m-%d') if latest and latest.date else None
+
+    def get_latest_followup_date(self, obj):
+        if hasattr(obj, 'latest_followup_date'):
+            val = obj.latest_followup_date
+            return val.strftime('%Y-%m-%d') if val else None
+        latest = obj.follow_ups.order_by('-date').first()
+        return latest.date.strftime('%Y-%m-%d') if latest and latest.date else None
+
+    def get_followup_date(self, obj):
+        return self.get_this_month_followup_date(obj) or self.get_latest_followup_date(obj)
 
 class LeadSerializerDetailDisplay(serializers.ModelSerializer):
     lead_status_display = serializers.SerializerMethodField()
@@ -200,6 +236,10 @@ class LeadSerializerDetailDisplay(serializers.ModelSerializer):
     quotation = serializers.CharField(source='quotation.quotation_number', read_only=True, default=None)
     lead_source_name = serializers.CharField(source='lead_source.name', read_only=True, default=None)
     course_name = serializers.CharField(source='course.title', read_only=True, default=None)
+    this_month_followup_count = serializers.SerializerMethodField()
+    this_month_followup_date = serializers.SerializerMethodField()
+    followup_date = serializers.SerializerMethodField()
+    latest_followup_date = serializers.SerializerMethodField()
 
     class Meta:
         model = Lead
@@ -207,11 +247,43 @@ class LeadSerializerDetailDisplay(serializers.ModelSerializer):
 
     def get_field_names(self, declared_fields, info):
         fields = super().get_field_names(declared_fields, info)
-        fields.append("course_name")
+        for custom_field in [
+            "course_name",
+            "this_month_followup_count",
+            "this_month_followup_date",
+            "followup_date",
+            "latest_followup_date",
+        ]:
+            if custom_field not in fields:
+                fields.append(custom_field)
         return fields
     
     def get_lead_status_display(self, obj):
         return obj.get_lead_status_display()
+
+    def get_this_month_followup_count(self, obj):
+        if hasattr(obj, 'this_month_followup_count'):
+            return obj.this_month_followup_count
+        today = timezone.localdate()
+        return obj.follow_ups.filter(date__year=today.year, date__month=today.month).count()
+
+    def get_this_month_followup_date(self, obj):
+        if hasattr(obj, 'this_month_followup_date'):
+            val = obj.this_month_followup_date
+            return val.strftime('%Y-%m-%d') if val else None
+        today = timezone.localdate()
+        latest = obj.follow_ups.filter(date__year=today.year, date__month=today.month).order_by('-date').first()
+        return latest.date.strftime('%Y-%m-%d') if latest and latest.date else None
+
+    def get_latest_followup_date(self, obj):
+        if hasattr(obj, 'latest_followup_date'):
+            val = obj.latest_followup_date
+            return val.strftime('%Y-%m-%d') if val else None
+        latest = obj.follow_ups.order_by('-date').first()
+        return latest.date.strftime('%Y-%m-%d') if latest and latest.date else None
+
+    def get_followup_date(self, obj):
+        return self.get_this_month_followup_date(obj) or self.get_latest_followup_date(obj)
 
 
 class FollowUpSerializer(serializers.ModelSerializer):
@@ -426,6 +498,9 @@ class AcademicLeadDashboardSerializer(serializers.ModelSerializer):
             'lead_status_display',
             'lead_date',
             'salesperson',
+            "lead_source",
+            "notes",
+            "phone",
         ]
 
     def get_priority_status_display(self, obj):

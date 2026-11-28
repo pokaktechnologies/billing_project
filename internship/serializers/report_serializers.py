@@ -1254,6 +1254,7 @@ class CounsellorRegistrationApplicationSerializer(serializers.ModelSerializer):
 
 class CounsellorHRSubmissionSerializer(serializers.ModelSerializer):
     counsellor_name = serializers.CharField(source="counsellor.get_full_name", read_only=True)
+    designation = serializers.CharField(source="counsellor.designation", read_only=True, allow_null=True)
     submitted_by_name = serializers.SerializerMethodField()
     reviewed_by_name = serializers.SerializerMethodField()
     summary = serializers.SerializerMethodField()
@@ -1264,6 +1265,7 @@ class CounsellorHRSubmissionSerializer(serializers.ModelSerializer):
             "id",
             "counsellor",
             "counsellor_name",
+            "designation",
             "start_date",
             "end_date",
             "period_label",

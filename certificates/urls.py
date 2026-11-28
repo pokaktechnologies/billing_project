@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import pending_dashboard
 
 urlpatterns = [
     # path('generate/', views.CertificateListCreateView.as_view(), name='certificate-list-create'),
@@ -36,6 +37,9 @@ urlpatterns = [
 
     path('eligible-students/', views.CompletedStudentsForCertificateView.as_view()),
     path('eligible-staff/', views.EligibleStaffForCertificateView.as_view()),
+
+    # Pending Controls Dashboard
+    path('pending-dashboard/', pending_dashboard.CertificatePendingDashboardAPIView.as_view(), name='certificate-pending-dashboard'),
 
     # NEW REPORT
     path('certificate-report/', views.CertificateRecordReportView.as_view(), name='certificate-report'),

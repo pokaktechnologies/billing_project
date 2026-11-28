@@ -83,7 +83,7 @@ class Department(models.Model):
 class StaffProfile(models.Model):
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name="staff_profile")
     phone_number = models.CharField(max_length=15, blank=True, null=True)
-    qulification = models.CharField(max_length=255, blank=True, null=True)
+    qualification = models.CharField(max_length=255, blank=True, null=True)
     staff_email = models.EmailField(blank=True, null=True)
     profile_image = models.ImageField(upload_to="staff/profile_images/", blank=True, null=True)
     date_of_birth = models.DateField(blank=True, null=True)
@@ -299,6 +299,7 @@ class Product(models.Model):
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     # stock = models.DecimalField(max_digits=10, decimal_places=2, default=0,blank=True, null=True)
     stock = models.IntegerField(default=0)  # Stock quantity
+    reorder_level = models.PositiveIntegerField(default=10)
     category = models.ForeignKey('Category', on_delete=models.CASCADE, related_name='products')
 
     # NEW: tax setting
@@ -439,6 +440,7 @@ class Supplier(models.Model):
     mobile = models.CharField(max_length=20)
     currency = models.CharField(max_length=10)
     payment_terms = models.ForeignKey('TermsAndConditions', on_delete=models.SET_NULL, null=True, blank=True)
+    is_active = models.BooleanField(default=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True,null=True,blank=True)
 
     def __str__(self):
@@ -484,6 +486,13 @@ class SalesPerson(models.Model):
 
     
 class QuotationOrderModel(models.Model):
+    STATUS_CHOICES = [
+        ("draft", "Draft"),
+        ("sent", "Sent"),
+        ("approved", "Approved"),
+        ("rejected", "Rejected"),
+    ]
+
 # Add ForeignKey
     # customer_name = models.CharField(max_length=255)
     client = models.ForeignKey('Customer', on_delete=models.PROTECT, null=True, blank=True)
@@ -497,6 +506,7 @@ class QuotationOrderModel(models.Model):
     termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.SET_NULL, null=True, blank=True)
     contract = models.ForeignKey('Contract', on_delete=models.SET_NULL, null=True, blank=True)  
     grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="draft", db_index=True)
 
     def update_grand_total(self):
         """Recalculate grand total based on related QuotationItems."""
@@ -840,6 +850,13 @@ class ReceiptModel(models.Model):
 
 
 class SalesReturnModel(models.Model):
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("approved", "Approved"),
+        ("settled", "Settled"),
+        ("rejected", "Rejected"),
+    ]
+
     user = models.ForeignKey(CustomUser, on_delete=models.PROTECT, null=True, blank=True)
     client = models.ForeignKey('Customer', on_delete=models.PROTECT)
     sales_return_number = models.CharField(max_length=50, unique=True)
@@ -849,6 +866,7 @@ class SalesReturnModel(models.Model):
     termsandconditions = models.ForeignKey('TermsAndConditions', on_delete=models.SET_NULL, null=True, blank=True)
     reason = models.TextField()
     grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending", db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def update_grand_total(self):
@@ -1138,15 +1156,69 @@ class TermsAndConditionsPoint(models.Model):
 
 
 class PurchaseOrder(models.Model):
+    STATUS_CHOICES = [
+        ("draft", "Draft"),
+        ("sent", "Sent"),
+        ("partially_received", "Partially Received"),
+        ("received", "Received"),
+        ("closed", "Closed"),
+        ("cancelled", "Cancelled"),
+    ]
+
     supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE)
     purchase_order_number = models.CharField(max_length=50, unique=True)
     purchase_order_date = models.DateField()
+    expected_delivery_date = models.DateField(null=True, blank=True)
     contact_person_name = models.CharField(max_length=50)
     contact_person_number = models.CharField(max_length=50)
     quotation_number = models.CharField(max_length=50, blank=True, null=True)
     grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     remark = models.CharField(max_length=255, blank=True)
     terms_and_conditions = models.ForeignKey('TermsAndConditions', on_delete=models.SET_NULL, null=True, blank=True)
+    status = models.CharField(max_length=25, choices=STATUS_CHOICES, default="draft", db_index=True)
+
+    def sync_receive_status(self):
+        """Synchronize PO status from linked non-rejected material receives unless manually finalized."""
+        if self.status in ("closed", "cancelled"):
+            return
+
+        ordered_rows = (
+            self.items.values("product_id")
+            .annotate(qty=Sum("quantity"))
+        )
+        ordered_map = {row["product_id"]: row["qty"] or 0 for row in ordered_rows}
+        if not ordered_map:
+            return
+
+        received_rows = (
+            MaterialReceiveItem.objects.filter(material_receive__purchase_order=self)
+            .exclude(material_receive__status="rejected")
+            .values("product_id")
+            .annotate(qty=Sum("quantity"))
+        )
+        received_map = {row["product_id"]: row["qty"] or 0 for row in received_rows}
+
+        all_received = all(
+            received_map.get(pid, 0) >= ord_qty
+            for pid, ord_qty in ordered_map.items()
+        )
+        any_received = any(
+            received_map.get(pid, 0) > 0
+            for pid in ordered_map
+        )
+
+        if all_received:
+            new_status = "received"
+        elif any_received:
+            new_status = "partially_received"
+        elif self.status in ("received", "partially_received"):
+            new_status = "sent"
+        else:
+            new_status = self.status
+
+        if new_status != self.status:
+            self.status = new_status
+            self.save(update_fields=["status"])
 
     def __str__(self):
         return self.purchase_order_number
@@ -1164,12 +1236,19 @@ class PurchaseOrderItem(models.Model):
 
 
 class MaterialReceive(models.Model):
+    STATUS_CHOICES = [
+        ("pending_verification", "Pending Verification"),
+        ("verified", "Verified"),
+        ("rejected", "Rejected"),
+    ]
+
     supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE)
     purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE)
     material_receive_number = models.CharField(max_length=50, unique=True)
     received_date = models.DateField()
     grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     remark = models.CharField(max_length=255, null=True, blank=True)
+    status = models.CharField(max_length=25, choices=STATUS_CHOICES, default="pending_verification", db_index=True)
 
 
 class MaterialReceiveItem(models.Model):
@@ -1331,6 +1410,8 @@ class ModulePermission(models.Model):
 
         # PROJECT
         ("project", "Project"),
+        ("client_contract", "Client Contract"),
+        ("team_member", "Team Member"),
         ("project_timeline", "Developer Timeline"),
         ("project_reports", "Project Reports"),
 
@@ -1388,6 +1469,23 @@ class ModulePermission(models.Model):
         ('my_tasks', "My Tasks"),
         ('study_materials', "Study Materials"),
         ('intern_payments', "Intern Payments"),
+
+
+        #pending control
+
+        ('academy_pending', "Academy Pending"),
+        ('sales_pending', "Sales Pending"),
+        ('purchase_pending', "Purchase Pending"),
+        ('marketing_pending', "Marketing Pending"),
+        ('products_pending', "Products Pending"),
+        ('certificate_pending', "Certificate Pending"),
+        ('hr_pending', "HR Pending"),
+        ('lead_management_pending', "Lead Management Pending"),
+        ('finance_pending', "Finance Pending"),
+        ('faculty_pending', "Faculty Pending"),
+        ('dev_project_pending', "Developer Project Pending"),
+        ('testing_pending', "Testing Pending"),
+        ('digital_marketing_pending', "Digital Marketing Pending"),
     ]
 
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="module_permissions")

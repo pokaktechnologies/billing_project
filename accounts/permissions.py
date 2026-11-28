@@ -81,6 +81,27 @@ PARENT_MODULE_MAP = [
     },
 
     {
+        "name": "pending_controls",
+        "submodules": [
+            "academy_pending",
+            "sales_pending",
+            "purchase_pending",
+            "marketing_pending",
+            "products_pending",
+            "certificate_pending",
+            "hr_pending",
+            "lead_management_pending",
+            "finance_pending",
+            "faculty_pending",
+            "dev_project_pending",
+            "testing_pending",
+            "digital_marketing_pending",
+
+
+        ]
+    },
+
+    {
         "name": "Academy",
         "submodules": [
             "dashboard",
@@ -142,8 +163,10 @@ PARENT_MODULE_MAP = [
         "submodules": [
             "project",
             "project_timeline",
-            "project_reports"
-            "testing"
+            "project_reports",
+            "testing",
+            "client_contract",
+            "team_member",
         ]
     },
     {

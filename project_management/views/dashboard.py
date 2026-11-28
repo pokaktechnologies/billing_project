@@ -8,7 +8,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from attendance.models import DailyAttendance
 from attendance.serializers import DailyAttendanceSessionDetailSerializer
-from ..models import ClientContract, ProjectManagement, TaskAssign
+from ..models import ClientContract, DMContract, ProjectManagement, TaskAssign
 from ..serializers import AssignedTaskListSerializer, ProjectManagerSerializer
 
 
@@ -135,6 +135,8 @@ class NumberGeneratorView(APIView):
             generated_number = self.generate_next_number(ProjectManagement, "project_number", "PR", 6)
         elif req_type == "CN":
             generated_number = self.generate_next_number(ClientContract, "contract_number", "CN", 6)
+        elif req_type in ["DMC", "DM"]:
+            generated_number = self.generate_next_number(DMContract, "contract_number", "DMC", 6)
         else:
             return Response({
                 'status': '0',

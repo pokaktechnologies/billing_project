@@ -4,9 +4,21 @@ from .views.testing import *
 from .views import *
 
 urlpatterns = [
-    # Client contract
+    # Client contract (Development & Testing)
     path('client_contract/', ClientContractView.as_view(), name='client_contract_list'),
     path('client_contract/<int:pk>/', ClientContractDetailView.as_view(), name='client_contract_detail'),
+
+    # Digital Marketing Contracts
+    path('dm-contracts/', DMContractListCreateAPIView.as_view(), name='dm-contract-list-create'),
+    path('dm-contracts/<int:pk>/', DMContractDetailAPIView.as_view(), name='dm-contract-detail'),
+    path('dm-contracts/<int:pk>/extensions/', DMContractExtensionListCreateAPIView.as_view(), name='dm-contract-extensions'),
+    path('dm-contracts/<int:pk>/attachments/', DMContractAttachmentUploadView.as_view(), name='dm-contract-attachments-upload'),
+    path('dm-contracts/attachments/<int:pk>/', DMContractAttachmentDeleteView.as_view(), name='dm-contract-attachment-delete'),
+    path('dm-attachments/<int:pk>/', DMContractAttachmentDeleteView.as_view(), name='dm-attachment-delete-alias'),
+
+    # Digital Marketing Masters
+    path('dm-platforms/', DMPlatformListCreateAPIView.as_view(), name='dm-platform-list-create'),
+    path('dm-work-types/', DMWorkTypeListCreateAPIView.as_view(), name='dm-work-type-list-create'),
 
     # Project management
     path('', project_management.as_view(), name='project_management'),
@@ -18,6 +30,7 @@ urlpatterns = [
     # Members
     path('members/', MembersView.as_view(), name='members_list'),
     path('members/<int:pk>/', MembersViewDetail.as_view(), name='members_detail'),
+    path('department-staff/', DepartmentStaffListView.as_view(), name='department_staff_list'),
 
     # Stack
     path('stack/', StackView.as_view(), name='stack_list'),
@@ -96,4 +109,15 @@ urlpatterns = [
     path('bug-sheet/', BugSheetListCreateAPIView.as_view(), name='bug-sheet'),
     path('bug-sheet/<int:bug_id>/', BugReportDetailAPIView.as_view(), name='bug-report-detail'),
     path('bug-sheet/<int:bug_id>/status/', BugStatusUpdateAPIView.as_view(), name='bug-status-update'),
+
+    # Pending Controls / Works Dashboards (3 Dedicated APIs)
+    path('pending-dashboard/', ProjectManagementPendingDashboardAPIView.as_view(), name='project_management_pending_dashboard'),
+    path('pending-works/', ProjectManagementPendingDashboardAPIView.as_view(), name='project_management_pending_works'),
+    
+    path('digital-marketing/pending-dashboard/', DigitalMarketingPendingDashboardAPIView.as_view(), name='dm_pending_dashboard'),
+    path('dm/pending-dashboard/', DigitalMarketingPendingDashboardAPIView.as_view(), name='dm_pending_dashboard_alias'),
+    path('dm/pending-works/', DigitalMarketingPendingDashboardAPIView.as_view(), name='dm_pending_works'),
+
+    path('testing/pending-dashboard/', TestingManagementPendingDashboardAPIView.as_view(), name='testing_pending_dashboard'),
+    path('testing/pending-works/', TestingManagementPendingDashboardAPIView.as_view(), name='testing_pending_works'),
 ]

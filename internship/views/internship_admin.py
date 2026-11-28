@@ -150,6 +150,25 @@ class FacultyListCreateAPIView(FacultyQuerysetMixin, generics.ListCreateAPIView)
         "departments__name",
     ]
 
+    def list(self, request, *args, **kwargs):
+        # Summary counts are global; filters below only control the faculty
+        # cards returned in `data`.
+        faculty_counts = Faculty.objects.aggregate(
+            total_faculty=Count("id"),
+            active_faculty=Count("id", filter=Q(is_active=True)),
+            inactive_faculty=Count("id", filter=Q(is_active=False)),
+        )
+
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True)
+
+        return Response({
+            "total_faculty": faculty_counts["total_faculty"],
+            "active_faculty": faculty_counts["active_faculty"],
+            "inactive_faculty": faculty_counts["inactive_faculty"],
+            "data": serializer.data,
+        })
+
     def filter_queryset(self, queryset):
         return super().filter_queryset(queryset).distinct()
 

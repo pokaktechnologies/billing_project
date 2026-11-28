@@ -19,9 +19,10 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db import transaction
 from rest_framework import generics
 from django.core.mail import send_mail
+from django.core.paginator import EmptyPage, Paginator
 import random
 from django.conf import settings
-from django.db.models import Q
+from django.db.models import Count, Q
 from hr_section.models import Enquiry
 from hr_section.serializers import EnquirySerializer
 from internship.models import Student
@@ -34,6 +35,7 @@ from datetime import datetime,date
 
 from project_management.models import ProjectManagement, Task
 from project_management.serializers import ProjectManagerSerializer, AssignedTaskListSerializer
+from finance.services.admin_finance_dashboard import build_admin_finance_dashboard
 
 class DepartmentView(BaseAPIView):
     permission_classes = [IsAuthenticated]
@@ -188,7 +190,7 @@ class CreateStaffWithPermissionsView(BaseAPIView):
                 staff_profile = StaffProfile.objects.create(
                     user=user,
                     phone_number=request.data.get("phone_number"),
-                    qulification=request.data.get("qulification"),
+                    qualification=request.data.get("qualification"),
                     staff_email=request.data.get("staff_email"),
                     profile_image=request.FILES.get("profile_image"),
                     date_of_birth=request.data.get("date_of_birth"),
@@ -414,6 +416,10 @@ class UpdateStaffUserView(BaseGenericAPIView, generics.UpdateAPIView):
     serializer_class = StaffUserUpdateSerializer
     lookup_field = "id"
     parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def post(self, request, *args, **kwargs):
+        """Support frontend edit forms that submit updates with POST."""
+        return self.partial_update(request, *args, **kwargs)
 
 
 class UpdateJobDetailView(BaseGenericAPIView, generics.UpdateAPIView):
@@ -647,6 +653,23 @@ class ListStaffView(APIView):
         staff_users = CustomUser.objects.filter(is_staff=True).values('id', 'email', 'first_name',
                                                                                           'last_name')
         return Response({"status": "1", "message": "success", "data": list(staff_users)})
+
+
+class StaffCountView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        staff = StaffProfile.objects.filter(job_detail__isnull=False)
+
+        return Response({
+            "status": "1",
+            "message": "Staff counts fetched successfully",
+            "data": {
+                "total_staff": staff.count(),
+                "total_interns": staff.filter(job_detail__job_type="internship").count(),
+                "active_staff": staff.filter(job_detail__status="active").count(),
+            }
+        }, status=status.HTTP_200_OK)
 
 
 class StaffPersonalInfoView(APIView):
@@ -968,6 +991,30 @@ class AdminDashboardView(APIView):
     def get(self, request):
         user = request.user
 
+        from_date_str = request.query_params.get("from_date")
+        to_date_str = request.query_params.get("to_date")
+        from_date = None
+        to_date = None
+        if from_date_str:
+            from_date = parse_date(from_date_str)
+            if not from_date:
+                return Response(
+                    {"status": "0", "message": "Invalid from_date format. Use YYYY-MM-DD."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        if to_date_str:
+            to_date = parse_date(to_date_str)
+            if not to_date:
+                return Response(
+                    {"status": "0", "message": "Invalid to_date format. Use YYYY-MM-DD."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        if from_date and to_date and from_date > to_date:
+            return Response(
+                {"status": "0", "message": "from_date cannot be after to_date."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         response_data = {
             "user": {
                 "id": user.id,
@@ -1038,6 +1085,8 @@ class AdminDashboardView(APIView):
             ).data,
         }
 
+        finance_data = build_admin_finance_dashboard(from_date=from_date, to_date=to_date)
+
         return Response({
             "status": "1",
             "message": "Admin dashboard fetched successfully",
@@ -1048,7 +1097,8 @@ class AdminDashboardView(APIView):
                     "email": user.email,
                 },
                 "hr_dashboard": hr_data,
-                "project_dashboard": pm_data
+                "project_dashboard": pm_data,
+                "finance_dashboard": finance_data,
             }
         }, status=status.HTTP_200_OK)
 
@@ -1206,14 +1256,71 @@ class EmployeeRegistrationCreateView(APIView):
         )
 
     def get(self, request):
+        search = (request.query_params.get('search') or '').strip()
+        gender = (request.query_params.get('gender') or '').strip()
+
+        registrations_queryset = EmployeeRegistration.objects.all()
+
+        # Summary counts for the Staff Registration page. These counts are
+        # intentionally global so the cards show the overall registration
+        # state, independent of the table's current filters.
+        registration_counts = EmployeeRegistration.objects.aggregate(
+            total_registrations=Count('id'),
+            converted_registrations=Count('id', filter=Q(is_converted=True)),
+            pending_registrations=Count('id', filter=Q(is_converted=False)),
+        )
+
+        if search:
+            registrations_queryset = registrations_queryset.filter(
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search) |
+                Q(email__icontains=search) |
+                Q(phone_number__icontains=search)
+            )
+
+        if gender and gender.lower() not in {'all', 'all genders'}:
+            registrations_queryset = registrations_queryset.filter(gender__iexact=gender)
 
         registrations, error_response = _apply_date_filters(
-            EmployeeRegistration.objects.all().order_by('-created_at'),
+            registrations_queryset.order_by('-created_at'),
             request.query_params,
             field_name='created_at',
         )
         if error_response is not None:
             return error_response
+
+        # Paginate only when the client requests it. Keep the existing
+        # response shape so unpaginated consumers remain backwards compatible.
+        pagination = None
+        page_param = request.query_params.get('page')
+        page_size_param = request.query_params.get('page_size')
+        if page_param is not None or page_size_param is not None:
+            try:
+                page_size = int(page_size_param or 10)
+                if page_size <= 0:
+                    raise ValueError
+                page_number = int(page_param or 1)
+                if page_number <= 0:
+                    raise ValueError
+            except (TypeError, ValueError):
+                return Response(
+                    {'error': 'page and page_size must be positive integers.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            paginator = Paginator(registrations, page_size)
+            try:
+                registrations = paginator.page(page_number)
+            except EmptyPage:
+                registrations = []
+            pagination = {
+                'count': paginator.count,
+                'page': page_number,
+                'page_size': page_size,
+                'total_pages': paginator.num_pages,
+                'next': page_number + 1 if page_number < paginator.num_pages else None,
+                'previous': page_number - 1 if page_number > 1 and paginator.num_pages else None,
+            }
 
         serializer = EmployeeRegistrationSerializer(
             registrations,
@@ -1221,16 +1328,22 @@ class EmployeeRegistrationCreateView(APIView):
             context={'request': request}
         )
 
-        return Response(
-            {
-                "message": "Employee registrations fetched successfully.",
-                "data": serializer.data
-            },
-            status=status.HTTP_200_OK
-        )
+        response_data = {
+            "message": "Employee registrations fetched successfully.",
+            "total_registrations": registration_counts["total_registrations"],
+            "pending_registrations": registration_counts["pending_registrations"],
+            "converted_registrations": registration_counts["converted_registrations"],
+            "data": serializer.data,
+        }
+        if pagination is not None:
+            response_data["pagination"] = pagination
+
+        return Response(response_data, status=status.HTTP_200_OK)
 
 
 class EmployeeRegistrationDetailView(APIView):
+
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get(self, request, pk):
         try:
@@ -1253,6 +1366,33 @@ class EmployeeRegistrationDetailView(APIView):
             },
             status=status.HTTP_200_OK
         )
+
+    def patch(self, request, pk):
+        registration = get_object_or_404(EmployeeRegistration, pk=pk)
+        serializer = EmployeeRegistrationSerializer(
+            registration,
+            data=request.data,
+            partial=True,
+            context={'request': request},
+        )
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer.save()
+        return Response(
+            {
+                "message": "Employee registration updated successfully.",
+                "data": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def put(self, request, pk):
+        return self.patch(request, pk)
+
+    def post(self, request, pk):
+        """Support edit forms that submit multipart data with POST."""
+        return self.patch(request, pk)
 
 
 class ConvertEmployeeRegistrationToStaffAPIView(APIView):
@@ -1330,7 +1470,7 @@ class ConvertEmployeeRegistrationToStaffAPIView(APIView):
         staff_profile = StaffProfile.objects.create(
             user=user,
             phone_number=registration.phone_number,
-            qulification=registration.qualification,
+            qualification=registration.qualification,
             staff_email=staff_contact_email,
             profile_image=registration.profile_photo,
             date_of_birth=registration.date_of_birth,

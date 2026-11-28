@@ -1099,7 +1099,7 @@ class SalesReturnSerializer(serializers.ModelSerializer):
             'id', 'sales_return_number', 'return_date',
             'client', 'client_name',
             'invoice',
-            'reason', 'grand_total',
+            'reason', 'grand_total', 'status',
             'created_at', 'items', 'termsandconditions'
         ]
         read_only_fields = ['grand_total', 'created_at']
@@ -1246,7 +1246,7 @@ class SalesReturnListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'sales_return_number', 'return_date', 'client_firstname', 
             'client_lastname', 'invoice_number',
-            'reason', 'grand_total', 'created_at', 'total_items'
+            'reason', 'grand_total', 'status', 'created_at', 'total_items'
         ]
     
     def get_total_items(self, obj):
@@ -1472,7 +1472,10 @@ class ProductSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(f"Unit '{value}' does not exist.")
 
     def validate_code(self, value):
-        if Product.objects.filter(code=value).exists():
+        qs = Product.objects.filter(code=value)
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
             raise serializers.ValidationError(f"Product code '{value}' already exists.")
         return value
     def validate_category(self, value):
@@ -1522,23 +1525,67 @@ class TermsAndConditionsPointSerializer(serializers.ModelSerializer):
 
 
 
+def _supplier_display_name(supplier):
+    if not supplier:
+        return None
+    if supplier.supplier_type == "Business" and (supplier.company_name or "").strip():
+        return supplier.company_name.strip()
+    full_name = f"{supplier.first_name or ''} {supplier.last_name or ''}".strip()
+    return full_name or (supplier.company_name or "").strip() or supplier.supplier_number
+
+
+def _prepare_purchase_item_data(item_data, existing_item=None):
+    prepared = dict(item_data)
+    qty_val = prepared.get("quantity", existing_item.quantity if existing_item else 0)
+    unit_price_val = prepared.get("unit_price", existing_item.unit_price if existing_item else 0)
+    sgst_val = prepared.get("sgst_percentage", existing_item.sgst_percentage if existing_item else 0)
+    cgst_val = prepared.get("cgst_percentage", existing_item.cgst_percentage if existing_item else 0)
+
+    qty = Decimal(str(qty_val or 0))
+    unit_price = Decimal(str(unit_price_val or 0))
+    sgst_pct = Decimal(str(sgst_val or 0))
+    cgst_pct = Decimal(str(cgst_val or 0))
+
+    raw_total = prepared.get("total")
+    if raw_total is None or Decimal(str(raw_total)) == Decimal("0"):
+        calc_total = (qty * unit_price).quantize(Decimal("0.01"))
+        prepared["total"] = calc_total
+    else:
+        calc_total = Decimal(str(raw_total))
+
+    raw_sub_total = prepared.get("sub_total")
+    if raw_sub_total is None or Decimal(str(raw_sub_total)) == Decimal("0"):
+        sgst_amt = calc_total * sgst_pct / Decimal("100")
+        cgst_amt = calc_total * cgst_pct / Decimal("100")
+        prepared["sub_total"] = (calc_total + sgst_amt + cgst_amt).quantize(Decimal("0.01"))
+
+    return prepared
+
+
 class PurchaseOrderListSerializer(serializers.ModelSerializer):
-    supplier_name = serializers.CharField(source='supplier.first_name', read_only=True)
+    supplier_name = serializers.SerializerMethodField()
     total_items = serializers.SerializerMethodField()
+
     class Meta:
         model = PurchaseOrder
         fields = [
-            'id', 'purchase_order_date', 'purchase_order_number', 'supplier_name',
-            'total_items', 'contact_person_number', 'grand_total',
+            'id', 'purchase_order_date', 'expected_delivery_date', 'purchase_order_number',
+            'supplier_name', 'status', 'total_items', 'contact_person_number', 'grand_total',
         ]
-    
+
+    def get_supplier_name(self, obj):
+        return _supplier_display_name(obj.supplier)
+
     def get_total_items(self, obj):
         total_items = obj.items.count()
         return total_items if total_items else 0
 
+
 class PurchaseOrderItemSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(required=False)
     product_name = serializers.CharField(source='product.name', read_only=True)
     product_description = serializers.CharField(source='product.product_description', read_only=True)
+
     class Meta:
         model = PurchaseOrderItem
         fields = [
@@ -1556,20 +1603,24 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Quantity must be positive")
         return data
 
+
 class PurchaseOrderSerializer(serializers.ModelSerializer):
     supplier_id = serializers.IntegerField(source='supplier.id', read_only=True)
-    supplier_name = serializers.CharField(source='supplier.first_name', read_only=True)
+    supplier_name = serializers.SerializerMethodField()
     items = PurchaseOrderItemSerializer(many=True, required=False)
     supplier_details = SupplierSerializer(source='supplier', read_only=True)
     terms_and_conditions_id = serializers.IntegerField(source='terms_and_conditions.id', read_only=True)
     terms_and_conditions_title = serializers.CharField(source='terms_and_conditions.title', read_only=True)
     termsandconditions = serializers.SerializerMethodField()
+
     class Meta:
         model = PurchaseOrder
         fields = [
-            'id', 'supplier', 'supplier_id', 'supplier_name', 'purchase_order_number', 'purchase_order_date',
+            'id', 'supplier', 'supplier_id', 'supplier_name', 'purchase_order_number',
+            'purchase_order_date', 'expected_delivery_date', 'status',
             'contact_person_name', 'contact_person_number', 'quotation_number',
-            'grand_total', 'remark', 'terms_and_conditions', 'terms_and_conditions_id', 'terms_and_conditions_title', 'termsandconditions', 'items', 'supplier_details'
+            'grand_total', 'remark', 'terms_and_conditions', 'terms_and_conditions_id',
+            'terms_and_conditions_title', 'termsandconditions', 'items', 'supplier_details'
         ]
         read_only_fields = ['supplier_name', 'termsandconditions']
         extra_kwargs = {
@@ -1577,70 +1628,105 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             'terms_and_conditions': {'write_only': True},
         }
 
+    def get_supplier_name(self, obj):
+        return _supplier_display_name(obj.supplier)
+
     def create(self, validated_data):
-        items_data = validated_data.pop('items', [])
-        purchase_order = PurchaseOrder.objects.create(**validated_data)
-        
-        for item_data in items_data:
-            PurchaseOrderItem.objects.create(purchase_order=purchase_order, **item_data)
-            
-        return purchase_order
+        with transaction.atomic():
+            grand_total_explicit = (
+                "grand_total" in validated_data
+                and (validated_data.get("grand_total") or Decimal("0")) > 0
+            )
+            items_data = validated_data.pop('items', [])
+            purchase_order = PurchaseOrder.objects.create(**validated_data)
+
+            for item_data in items_data:
+                clean_item = _prepare_purchase_item_data(item_data)
+                clean_item.pop('id', None)
+                PurchaseOrderItem.objects.create(purchase_order=purchase_order, **clean_item)
+
+            if items_data and not grand_total_explicit:
+                purchase_order.grand_total = sum(
+                    (item.sub_total for item in purchase_order.items.all()),
+                    Decimal("0.00"),
+                )
+                purchase_order.save(update_fields=["grand_total"])
+
+            return purchase_order
 
     def update(self, instance, validated_data):
-        items_data = validated_data.pop('items', None)
-        
-        # Update PurchaseOrder fields
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-        
-        # Handle items update if provided
-        if items_data is not None:
-            # Delete existing items not in the update
-            existing_item_ids = [item.id for item in instance.items.all()]
-            updated_item_ids = [item.get('id') for item in items_data if item.get('id')]
-            
-            items_to_delete = set(existing_item_ids) - set(updated_item_ids)
-            if items_to_delete:
-                PurchaseOrderItem.objects.filter(id__in=items_to_delete).delete()
-            
-            # Create or update items
-            for item_data in items_data:
-                item_id = item_data.get('id')
-                if item_id:
-                    # Update existing item
-                    item = PurchaseOrderItem.objects.get(id=item_id, purchase_order=instance)
-                    for attr, value in item_data.items():
-                        setattr(item, attr, value)
-                    item.save()
-                else:
-                    # Create new item
-                    PurchaseOrderItem.objects.create(purchase_order=instance, **item_data)
-        
-        return instance
-    
+        with transaction.atomic():
+            grand_total_explicit = "grand_total" in validated_data
+            items_data = validated_data.pop('items', None)
+
+            for attr, value in validated_data.items():
+                setattr(instance, attr, value)
+            instance.save()
+
+            if items_data is not None:
+                existing_items = {item.id: item for item in instance.items.all()}
+                updated_item_ids = set()
+
+                for item_data in items_data:
+                    clean_item = dict(item_data)
+                    item_id = clean_item.pop('id', None)
+                    if item_id and item_id in existing_items:
+                        item = existing_items[item_id]
+                        prepared = _prepare_purchase_item_data(clean_item, existing_item=item)
+                        for attr, value in prepared.items():
+                            setattr(item, attr, value)
+                        item.save()
+                        updated_item_ids.add(item_id)
+                    else:
+                        prepared = _prepare_purchase_item_data(clean_item)
+                        created = PurchaseOrderItem.objects.create(purchase_order=instance, **prepared)
+                        updated_item_ids.add(created.id)
+
+                items_to_delete = set(existing_items.keys()) - updated_item_ids
+                if items_to_delete:
+                    PurchaseOrderItem.objects.filter(id__in=items_to_delete).delete()
+
+                if not grand_total_explicit or instance.grand_total == 0:
+                    instance.grand_total = sum(
+                        (item.sub_total for item in instance.items.all()),
+                        Decimal("0.00"),
+                    )
+                    instance.save(update_fields=["grand_total"])
+
+                instance.sync_receive_status()
+
+            return instance
+
     def get_termsandconditions(self, obj):
         if obj.terms_and_conditions:
             points = obj.terms_and_conditions.termsandconditionspoint_set.all()  # Assuming the related_name is 'points'
             return TermsAndConditionsPointSerializer(points, many=True).data
         return []
-    
-
-
 
 
 class MaterialReceiveListSerializer(serializers.ModelSerializer):
-    supplier_name = serializers.CharField(source='supplier.first_name', read_only=True)
+    supplier_name = serializers.SerializerMethodField()
+    purchase_order_number = serializers.CharField(
+        source='purchase_order.purchase_order_number',
+        read_only=True,
+    )
+
     class Meta:
         model = MaterialReceive
         fields = [
-            'id', 'received_date', 'material_receive_number', 'supplier_name'
+            'id', 'received_date', 'material_receive_number', 'supplier_name',
+            'purchase_order', 'purchase_order_number', 'grand_total', 'status',
         ]
+
+    def get_supplier_name(self, obj):
+        return _supplier_display_name(obj.supplier)
 
 
 class MaterialReceiveItemSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(required=False)
     product_name = serializers.CharField(source='product.name', read_only=True)
     product_description = serializers.CharField(source='product.product_description', read_only=True)
+
     class Meta:
         model = MaterialReceiveItem
         fields = [
@@ -1655,87 +1741,149 @@ class MaterialReceiveItemSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Quantity must be positive")
         return data
 
+
 class MaterialReceiveSerializer(serializers.ModelSerializer):
-    supplier_name = serializers.CharField(source='supplier.first_name', read_only=True)
+    supplier_name = serializers.SerializerMethodField()
     purchase_order_number = serializers.CharField(source='purchase_order.purchase_order_number', read_only=True)
     items = MaterialReceiveItemSerializer(many=True, required=False)
-    
+
     class Meta:
         model = MaterialReceive
         fields = [
-            'id', 'supplier', 'supplier_name', 'purchase_order', 'purchase_order_number', 'material_receive_number', 'grand_total', 'received_date', 'remark', 'items'
+            'id', 'supplier', 'supplier_name', 'purchase_order', 'purchase_order_number',
+            'material_receive_number', 'grand_total', 'received_date', 'remark', 'status', 'items'
         ]
         read_only_fields = ['supplier_name', 'purchase_order_number']
 
+    def get_supplier_name(self, obj):
+        return _supplier_display_name(obj.supplier)
+
     def create(self, validated_data):
-        items_data = validated_data.pop('items', [])
-        material_receive = MaterialReceive.objects.create(**validated_data)
-        
-        for item_data in items_data:
-            MaterialReceiveItem.objects.create(material_receive=material_receive, **item_data)
-            product = item_data.get('product')
-            product.stock += item_data.get('quantity', 0)
-            product.save()
-            print("item_data", item_data.get('product').stock)
-            
-        return material_receive
+        with transaction.atomic():
+            grand_total_explicit = (
+                "grand_total" in validated_data
+                and (validated_data.get("grand_total") or Decimal("0")) > 0
+            )
+            items_data = validated_data.pop('items', [])
+            material_receive = MaterialReceive.objects.create(**validated_data)
 
-    
-    def update(self, instance, validated_data):
-        items_data = validated_data.pop('items', None)
-
-        # Update the MaterialReceive instance
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-
-        if items_data is not None:
-            processed_ids = []
-
+            qty_by_product = {}
             for item_data in items_data:
-                item_id = item_data.get('id')
-                product = item_data.get('product')
-                quantity = item_data.get('quantity', 0)
+                clean_item = _prepare_purchase_item_data(item_data)
+                clean_item.pop('id', None)
+                item = MaterialReceiveItem.objects.create(
+                    material_receive=material_receive, **clean_item
+                )
+                qty_by_product[item.product_id] = qty_by_product.get(item.product_id, 0) + item.quantity
 
-                if item_id:
-                    try:
-                        item = MaterialReceiveItem.objects.get(id=item_id, material_receive=instance)
+            if items_data and not grand_total_explicit:
+                material_receive.grand_total = sum(
+                    (item.sub_total for item in material_receive.items.all()),
+                    Decimal("0.00"),
+                )
+                material_receive.save(update_fields=["grand_total"])
 
-                        # Revert old quantity from stock
-                        item.product.stock -= item.quantity
+            if material_receive.status != "rejected" and qty_by_product:
+                products = {
+                    p.id: p
+                    for p in Product.objects.select_for_update().filter(id__in=qty_by_product.keys())
+                }
+                for pid, qty in sorted(qty_by_product.items()):
+                    product = products.get(pid)
+                    if product and qty:
+                        product.stock += qty
+                        product.save(update_fields=["stock"])
 
-                        # Update the item fields
-                        for attr, value in item_data.items():
+            material_receive.purchase_order.sync_receive_status()
+            return material_receive
+
+    def update(self, instance, validated_data):
+        with transaction.atomic():
+            grand_total_explicit = "grand_total" in validated_data
+            items_data = validated_data.pop('items', None)
+
+            old_status = instance.status
+            old_po = instance.purchase_order
+            old_qty_map = {}
+            if old_status != "rejected":
+                for existing_item in instance.items.all():
+                    old_qty_map[existing_item.product_id] = (
+                        old_qty_map.get(existing_item.product_id, 0) + existing_item.quantity
+                    )
+
+            for attr, value in validated_data.items():
+                setattr(instance, attr, value)
+            instance.save()
+
+            if items_data is not None:
+                existing_items = {item.id: item for item in instance.items.all()}
+                kept_ids = set()
+
+                for item_data in items_data:
+                    clean_item = dict(item_data)
+                    item_id = clean_item.pop('id', None)
+                    if item_id and item_id in existing_items:
+                        item = existing_items[item_id]
+                        prepared = _prepare_purchase_item_data(clean_item, existing_item=item)
+                        for attr, value in prepared.items():
                             setattr(item, attr, value)
                         item.save()
+                        kept_ids.add(item_id)
+                    else:
+                        prepared = _prepare_purchase_item_data(clean_item)
+                        created = MaterialReceiveItem.objects.create(
+                            material_receive=instance, **prepared
+                        )
+                        kept_ids.add(created.id)
 
-                        # Add new quantity to stock
-                        item.product.stock += quantity
-                        item.product.save()
+                delete_ids = set(existing_items.keys()) - kept_ids
+                if delete_ids:
+                    MaterialReceiveItem.objects.filter(id__in=delete_ids).delete()
 
-                        processed_ids.append(item.id)
+                if not grand_total_explicit or instance.grand_total == 0:
+                    instance.grand_total = sum(
+                        (item.sub_total for item in instance.items.all()),
+                        Decimal("0.00"),
+                    )
+                    instance.save(update_fields=["grand_total"])
 
-                    except MaterialReceiveItem.DoesNotExist:
+            new_qty_map = {}
+            if instance.status != "rejected":
+                for current_item in instance.items.all():
+                    new_qty_map[current_item.product_id] = (
+                        new_qty_map.get(current_item.product_id, 0) + current_item.quantity
+                    )
+
+            all_pids = sorted(set(old_qty_map.keys()) | set(new_qty_map.keys()))
+            if all_pids:
+                products = {
+                    p.id: p
+                    for p in Product.objects.select_for_update().filter(id__in=all_pids)
+                }
+                deltas = {}
+                for pid in all_pids:
+                    delta = new_qty_map.get(pid, 0) - old_qty_map.get(pid, 0)
+                    if delta == 0:
                         continue
-                else:
-                    # Create new item
-                    item = MaterialReceiveItem.objects.create(material_receive=instance, **item_data)
+                    product = products.get(pid)
+                    if not product:
+                        continue
+                    if product.stock + delta < 0:
+                        raise serializers.ValidationError({
+                            "stock": f"Insufficient stock for '{product.name}' (available: {product.stock}, required reduction: {-delta})."
+                        })
+                    deltas[pid] = delta
 
-                    # Adjust stock
-                    item.product.stock += quantity
-                    item.product.save()
+                for pid, delta in deltas.items():
+                    product = products[pid]
+                    product.stock += delta
+                    product.save(update_fields=["stock"])
 
-                    processed_ids.append(item.id)
+            instance.purchase_order.sync_receive_status()
+            if old_po.id != instance.purchase_order_id:
+                old_po.sync_receive_status()
 
-            # Delete items not included in update
-            items_to_delete = MaterialReceiveItem.objects.filter(material_receive=instance).exclude(id__in=processed_ids)
-            for item in items_to_delete:
-                # Revert stock before deletion
-                item.product.stock -= item.quantity
-                item.product.save()
-                item.delete()
-
-        return instance
+            return instance
 
 
 

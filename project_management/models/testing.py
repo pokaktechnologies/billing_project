@@ -8,10 +8,12 @@ from django.db import models
 class BugReport(models.Model):
 
     SEVERITY_CHOICES = [
+        ('blocker', 'Blocker'),
         ('critical', 'Critical'),
         ('major', 'Major'),
         ('minor', 'Minor'),
         ('trivial', 'Trivial'),
+        ('enhancement', 'Enhancement'),
     ]
 
     STATUS_CHOICES = [

@@ -11,9 +11,10 @@ class DepartmentSerializer(serializers.ModelSerializer):
         fields = ['id', 'name']
 
 class ProfileSerializer(serializers.ModelSerializer):
+    is_admin = serializers.BooleanField(source="is_superuser", read_only=True)
     class Meta:
         model = CustomUser
-        fields = ['id', 'first_name', 'last_name', 'email']
+        fields = ['id', 'first_name', 'last_name', 'email', 'is_admin']
 
 
 class AssignPermissionSerializer(serializers.Serializer):
@@ -146,10 +147,12 @@ class JobDetailSerializer(serializers.ModelSerializer):
 class StaffProfileSerializer(serializers.ModelSerializer):
     job_detail = JobDetailSerializer(read_only=True)
     documents = StaffDocumentSerializer(many=True, read_only=True)
+    # Backwards-compatible response alias for the existing frontend.
+    qulification = serializers.CharField(source="qualification", read_only=True)
 
     class Meta:
         model = StaffProfile
-        fields = ['id','phone_number', 'qulification', 'staff_email', 'profile_image', 'date_of_birth', 'address', 'job_detail', 'documents']
+        fields = ['id','phone_number', 'qualification', 'qulification', 'staff_email', 'profile_image', 'date_of_birth', 'address', 'job_detail', 'documents']
 
 class StaffUserSerializer(serializers.ModelSerializer):
     profile = StaffProfileSerializer(source='staff_profile', read_only=True)
@@ -195,7 +198,7 @@ class StaffProfileUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = StaffProfile
-        fields = ["phone_number", "staff_email", "profile_image", "date_of_birth", "address"]
+        fields = ["phone_number", "qualification", "staff_email", "profile_image", "date_of_birth", "address"]
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -209,15 +212,53 @@ class StaffProfileUpdateSerializer(serializers.ModelSerializer):
 class StaffUserUpdateSerializer(serializers.ModelSerializer):
     staff_profile = StaffProfileUpdateSerializer()
 
+    def to_internal_value(self, data):
+        """Accept profile fields either nested or at the top level."""
+        # Convert multipart QueryDict data to a normal dictionary before
+        # constructing the nested staff_profile object. QueryDict assignment
+        # can otherwise turn nested values into string/list values.
+        data = {key: data.get(key) for key in data.keys()}
+        profile_data = data.get("staff_profile")
+        if not isinstance(profile_data, dict):
+            profile_data = {}
+        else:
+            profile_data = profile_data.copy()
+
+        # Multipart FormData commonly arrives as keys such as
+        # ``staff_profile.email`` rather than a nested object.
+        for key in list(data.keys()):
+            if key.startswith("staff_profile."):
+                profile_data[key.split(".", 1)[1]] = data.get(key)
+                data.pop(key)
+
+        # Some frontend forms submit account fields inside staff_profile.
+        # Normalize them to the CustomUser payload expected by this serializer.
+        for field in ("email", "gender"):
+            if field in profile_data and field not in data:
+                data[field] = profile_data.pop(field)
+
+        # The staff form uses staff_profile.staff_email for the displayed
+        # login email. Keep CustomUser.email and StaffProfile.staff_email in sync.
+        if "staff_email" in profile_data and "email" not in data:
+            data["email"] = profile_data["staff_email"]
+
+        for field in ("phone_number", "qualification", "staff_email", "date_of_birth", "address"):
+            if field in data:
+                profile_data[field] = data.pop(field)
+        if profile_data:
+            data["staff_profile"] = profile_data
+        return super().to_internal_value(data)
+
     class Meta:
         model = CustomUser
-        fields = ["email", "first_name", "last_name", "staff_profile"]
+        fields = ["email", "first_name", "last_name", "gender", "staff_profile"]
 
     def update(self, instance, validated_data):
         # Update CustomUser fields
         instance.email = validated_data.get("email", instance.email)
         instance.first_name = validated_data.get("first_name", instance.first_name)
         instance.last_name = validated_data.get("last_name", instance.last_name)
+        instance.gender = validated_data.get("gender", instance.gender)
         instance.save()
 
         # Update StaffProfile
@@ -564,7 +605,7 @@ class AdminStaffProfileSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "phone_number",
-            "qulification",
+            "qualification",
             "staff_email",
             "profile_image",
             "date_of_birth",

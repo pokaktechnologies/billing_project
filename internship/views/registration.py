@@ -28,6 +28,10 @@ class StudentRegistrationReportFilter(django_filters.FilterSet):
         field_name="student__status"
     )
 
+    enrollment_learning_type = django_filters.CharFilter(
+        field_name="learning_type"
+    )
+
     created_at__date = django_filters.DateFilter(
         field_name="enrollment_date"
     )
@@ -56,6 +60,7 @@ class StudentRegistrationOrderingFilter(OrderingFilter):
         "center": "student__center__name",
         "councellor": "student__councellor__profile__user__first_name",
         "course": "course__title",
+        "enrollment_learning_type": "learning_type",
     }
 
     def get_ordering(self, request, queryset, view):

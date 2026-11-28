@@ -22,21 +22,24 @@ def create_log(user, action, instance):
     )
 
     channel_layer = get_channel_layer()
-
-    async_to_sync(channel_layer.group_send)(
-        "activity_logs",
-        {
-            "type": "send_log",
-            "data": {
-                "id": log.id,
-                "user": str(log.user),
-                "action": log.action,
-                "model": log.model_name,
-                "description": log.description,
-                "time": str(log.timestamp)
-            }
-        }
-    )
+    if channel_layer:
+        try:
+            async_to_sync(channel_layer.group_send)(
+                "activity_logs",
+                {
+                    "type": "send_log",
+                    "data": {
+                        "id": log.id,
+                        "user": str(log.user),
+                        "action": log.action,
+                        "model": log.model_name,
+                        "description": log.description,
+                        "time": str(log.timestamp)
+                    }
+                }
+            )
+        except Exception:
+            pass
 
 
 from contextvars import ContextVar

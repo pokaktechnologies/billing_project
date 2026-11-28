@@ -50,6 +50,7 @@ from .views import (
     HRPolicySectionPointCreateView,
     HRPolicySubtitlePointCreateView,
     HRPolicyPointDetailView,
+    HrPendingDashboardAPIView,
 )
 
 router = DefaultRouter()
@@ -120,4 +121,7 @@ urlpatterns = [
     path('dashboard/staff-interns/', HrDashboardStaffInternsAPIView.as_view(), name='hr_dashboard_staff_interns'),
     path('dashboard/staff-milestones/', HrDashboardStaffMilestonesAPIView.as_view(), name='hr_dashboard_staff_milestones'),
     path('dashboard/staff-birthdays/', HrDashboardStaffBirthdaysAPIView.as_view(), name='hr_dashboard_staff_birthdays'),
+
+    # Pending Controls Dashboard
+    path('pending-dashboard/', HrPendingDashboardAPIView.as_view(), name='hr_pending_dashboard'),
 ]

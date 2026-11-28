@@ -4,6 +4,11 @@ from accounts.views.user import  *
 
 from .views.SearchViews import *
 from .views.ReportView import *
+from .views.pending_dashboard import (
+    ProductsPendingDashboardAPIView,
+    PurchasePendingDashboardAPIView,
+    SalesPendingDashboardAPIView,
+)
 
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -26,6 +31,7 @@ urlpatterns = [
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('create-staff/', CreateStaffWithPermissionsView.as_view(), name="create-staff"),
     path('create-staff/<int:staff_id>/', CreateStaffWithPermissionsView.as_view(), name="create-staff"),
+    path('staff/counts/', StaffCountView.as_view(), name='staff-counts'),
     # path('admin/assign-permissions/', AssignPermissionView.as_view()),y
     # path('admin/staffs/', ListStaffView.as_view()),
     # path('admin/staffs/<int:staff_id>/', ListStaffView.as_view()),
@@ -92,6 +98,9 @@ urlpatterns = [
     path('sales-returns/<int:return_id>/',SalesReturnDetailAPI.as_view(),name='sales-returns-detail'),
     path('print-sales-returns/<int:return_id>/', SalesReturnPrint.as_view(), name='print_sales_return'),
     path('sales-returns/client/<int:client_id>/', SalesOrderByClient.as_view(), name='sales_order_by_client'),
+    path('sales/pending-dashboard/', SalesPendingDashboardAPIView.as_view(), name='sales_pending_dashboard'),
+    path('purchases/pending-dashboard/', PurchasePendingDashboardAPIView.as_view(), name='purchase_pending_dashboard'),
+    path('products/pending-dashboard/', ProductsPendingDashboardAPIView.as_view(), name='products_pending_dashboard'),
     path('delivery-orders/sales-order/<int:sales_order_id>/', DelivaryOrderBySalesOrder.as_view(), name='delivery_order_by_sales_order'),
 
     path('orders/generate-number/', OrderNumberGeneratorView.as_view(), name='order_number_generator'),

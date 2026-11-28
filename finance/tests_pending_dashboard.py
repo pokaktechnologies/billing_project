@@ -1,0 +1,161 @@
+from datetime import date, timedelta
+from decimal import Decimal
+from django.contrib.auth import get_user_model
+from django.test import TestCase
+from django.urls import reverse
+from rest_framework import status
+from rest_framework.test import APIClient
+
+from accounts.models import Customer, ModulePermission, SalesPerson, SalesReturnModel, StaffProfile
+from accounts.permissions import PARENT_MODULE_MAP
+from finance.models import Account, FinancialYear, PaymentVoucher, TaxSettings
+from payroll.models import Payroll
+
+User = get_user_model()
+
+
+class FinancePendingDashboardAPITests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.url = reverse("finance-pending-dashboard")
+        self.user = User.objects.create_user(
+            email="fin@example.com",
+            password="pass1234",
+            first_name="Finance",
+            last_name="User",
+        )
+        self.staff = StaffProfile.objects.create(user=self.user)
+        ModulePermission.objects.create(user=self.user, module_name="finance_pending")
+
+    def test_requires_authentication(self):
+        res = self.client.get(self.url)
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_requires_finance_pending_permission(self):
+        no_perm_user = User.objects.create_user(
+            email="noperm_fin@example.com",
+            password="pass1234",
+            first_name="No",
+            last_name="Perm",
+        )
+        self.client.force_authenticate(user=no_perm_user)
+        res = self.client.get(self.url)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+        pending_group = next(
+            (g for g in PARENT_MODULE_MAP if g["name"] == "pending_controls"),
+            None,
+        )
+        self.assertIsNotNone(pending_group)
+        for key in ("lead_management_pending", "finance_pending", "faculty_pending"):
+            self.assertIn(key, pending_group["submodules"])
+
+    def test_finance_pending_dashboard_items_and_filters(self):
+        root_asset = Account.objects.create(
+            account_number="1.1000",
+            name="Current Assets",
+            type="asset",
+            is_posting=False,
+        )
+        cash_acc = Account.objects.create(
+            account_number="1.1001",
+            name="Cash",
+            type="asset",
+            parent_account=root_asset,
+            is_posting=True,
+        )
+        root_exp = Account.objects.create(
+            account_number="7.1000",
+            name="Operating Expenses",
+            type="general_expenses",
+            is_posting=False,
+        )
+        exp_acc = Account.objects.create(
+            account_number="7.1001",
+            name="Office Expense",
+            type="general_expenses",
+            parent_account=root_exp,
+            is_posting=True,
+        )
+
+        PaymentVoucher.objects.create(
+            voucher_number="PV-001",
+            date=date.today() - timedelta(days=5),
+            payment_method="cash",
+            pay_to="Vendor A",
+            debit_account=exp_acc,
+            credit_account=cash_acc,
+            amount=Decimal("1500.00"),
+            status="draft",
+        )
+
+        FinancialYear.objects.create(
+            name="FY 2025-26",
+            start_date=date.today() - timedelta(days=400),
+            end_date=date.today() - timedelta(days=10),
+            status="open",
+            is_current=False,
+        )
+
+        Payroll.objects.create(
+            staff=self.staff,
+            month="2025-01",
+            gross_salary=Decimal("30000.00"),
+            working_days=22,
+            paid_leave_used=0,
+            unpaid_leave_days=Decimal("0.00"),
+            deduction=Decimal("0.00"),
+            net_salary=Decimal("30000.00"),
+            status="Draft",
+        )
+
+        self.client.force_authenticate(user=self.user)
+        res = self.client.get(self.url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["module"], "finance")
+        self.assertEqual(res.data["tab_counts"]["payment_voucher"], 1)
+        self.assertEqual(res.data["tab_counts"]["payroll"], 1)
+        self.assertGreaterEqual(res.data["tab_counts"]["financial_year"], 2)
+
+        res_pv = self.client.get(self.url, {"tab": "payment_voucher"})
+        self.assertEqual(res_pv.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_pv.data["items_count"], 1)
+
+        res_search = self.client.get(self.url, {"search": "PV-001"})
+        self.assertEqual(res_search.data["items_count"], 1)
+
+    def test_approved_sales_return_pending_settlement(self):
+        salesperson = SalesPerson.objects.create(
+            first_name="Sales",
+            last_name="Person",
+            email="sp@example.com",
+            phone="9999999991",
+            mobile="9999999991",
+            incentive=Decimal("0.00"),
+        )
+        customer = Customer.objects.create(
+            first_name="John",
+            last_name="Doe",
+            salesperson=salesperson,
+            mobile="9999999992",
+        )
+        SalesReturnModel.objects.create(
+            client=customer,
+            sales_return_number="SR|100001",
+            return_date=date.today(),
+            reason="Damaged",
+            status="approved",
+        )
+
+        self.client.force_authenticate(user=self.user)
+        for tab in ("all", "invoices_receipts"):
+            res = self.client.get(self.url, {"tab": tab})
+            self.assertEqual(res.status_code, status.HTTP_200_OK)
+            sr_items = [
+                item
+                for item in res.data["items"]
+                if item["work_type"] == "sales_return_pending_settlement"
+            ]
+            self.assertEqual(len(sr_items), 1)
+            self.assertIn("SR|100001", sr_items[0]["title"])
+            self.assertEqual(sr_items[0]["meta"]["sales_return_number"], "SR|100001")

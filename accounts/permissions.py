@@ -92,7 +92,10 @@ PARENT_MODULE_MAP = [
             "hr_pending",
             "lead_management_pending",
             "finance_pending",
-            "faculty_pending"
+            "faculty_pending",
+            "dev_project_pending",
+            "testing_pending",
+            "digital_marketing_pending",
 
 
         ]

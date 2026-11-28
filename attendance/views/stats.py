@@ -2,19 +2,17 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.utils import timezone
-from datetime import datetime
+from django.utils.dateparse import parse_date
 from django.db.models import Avg, Count, Q, Sum
 from ..models import DailyAttendance
 from accounts.models import StaffProfile
-from .attendance import DailyAttendanceTodayView
 
 class StaffAttendanceTodayView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # Base queryset from your existing view
-        today_view = DailyAttendanceTodayView()
-        queryset = today_view.get_queryset()
+        # Default to today only when no date range is provided.
+        queryset = DailyAttendance.objects.all()
 
         # -----------------------------
         # 📌 DATE RANGE FILTER
@@ -25,17 +23,34 @@ class StaffAttendanceTodayView(APIView):
         parsed_start = None
         parsed_end = None
 
-        if start_date and end_date:
-            try:
-                parsed_start = datetime.strptime(start_date, "%Y-%m-%d").date()
-                parsed_end = datetime.strptime(end_date, "%Y-%m-%d").date()
-            except ValueError:
+        if start_date:
+            parsed_start = parse_date(start_date)
+            if not parsed_start:
                 return Response(
-                    {"error": "Invalid date format. Use YYYY-MM-DD."},
+                    {"error": "Invalid start_date format. Use YYYY-MM-DD."},
                     status=400
                 )
 
-            queryset = queryset.filter(date__range=[parsed_start, parsed_end])
+        if end_date:
+            parsed_end = parse_date(end_date)
+            if not parsed_end:
+                return Response(
+                    {"error": "Invalid end_date format. Use YYYY-MM-DD."},
+                    status=400
+                )
+
+        if parsed_start and parsed_end and parsed_start > parsed_end:
+            return Response(
+                {"error": "start_date cannot be after end_date."},
+                status=400
+            )
+
+        if parsed_start:
+            queryset = queryset.filter(date__gte=parsed_start)
+        if parsed_end:
+            queryset = queryset.filter(date__lte=parsed_end)
+        if not parsed_start and not parsed_end:
+            queryset = queryset.filter(date=timezone.localdate())
 
         # -----------------------------
         # 📌 TODAY VALUE (still needed)

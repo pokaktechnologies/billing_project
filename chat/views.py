@@ -96,12 +96,22 @@ class MessageViewSet(viewsets.ViewSet):
         queryset = self.get_queryset()
     
     # Auto mark as read when user views the chat
-        Message.objects.filter(
-        room__id=room_id,
-        is_read=False
-        ).exclude(sender=request.user).update(is_read=True)
+        # Message.objects.filter(
+        # room__id=room_id,
+        # is_read=False
+        # ).exclude(sender=request.user).update(is_read=True)
 
-        serializer = self.serializer_class(queryset, many=True)
+        # Mark incoming messages in this room as read for this user only.
+        unread_messages = (
+            queryset
+            .exclude(sender=request.user)
+            .exclude(read_by=request.user)
+        )
+        for message in unread_messages:
+            message.read_by.add(request.user)
+
+
+        serializer = self.serializer_class(queryset, many=True, context={'request': request})
         return Response(serializer.data)
 
 
@@ -113,11 +123,10 @@ class UnreadMessageCountAPIView(APIView):
     def get(self, request):
         count = (
             Message.objects
-            .filter(
-                room__participants=request.user,
-                is_read=False,
-            )
+            .filter(room__participants=request.user)
             .exclude(sender=request.user)
+            .exclude(read_by=request.user)
+            .distinct()
             .count()
         )
         return Response({"unread_count": count})

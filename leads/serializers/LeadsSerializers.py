@@ -87,6 +87,15 @@ class LeadSerializer(serializers.ModelSerializer):
             )
         )
 
+        hours = data.get(
+            'hours',
+            getattr(
+                self.instance,
+                'hours',
+                None
+            )
+        )
+
         # ----------------------------------------
         # OTHER CATEGORY VALIDATION
         # ----------------------------------------
@@ -168,6 +177,23 @@ class LeadSerializer(serializers.ModelSerializer):
                 'course':
                     'Course can only be selected for intern leads.'
             })
+
+        # ----------------------------------------
+        # HOURS VALIDATION (Intern category with course)
+        # ----------------------------------------
+        if hours is not None:
+            if category != 'intern':
+                raise serializers.ValidationError({
+                    'hours': 'Hours can only be set for intern leads.'
+                })
+            if not course:
+                raise serializers.ValidationError({
+                    'hours': 'Course must be selected before specifying required hours.'
+                })
+            if hours <= 0:
+                raise serializers.ValidationError({
+                    'hours': 'Hours must be a positive number greater than 0.'
+                })
 
         return data
 

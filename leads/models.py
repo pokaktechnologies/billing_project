@@ -47,6 +47,11 @@ class Lead(models.Model):
     enquiry = models.CharField(max_length=100, blank=True, null=True)  # Customer Enquiry
     project_requirement = models.TextField(blank=True, null=True)  # Project Requirement
     course = models.ForeignKey('internship.Course', on_delete=models.SET_NULL, blank=True, null=True, related_name='leads')
+    hours = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        help_text="Required training/internship hours for college internship students (e.g. 60, 120)"
+    )
     qualification = models.CharField(max_length=100, blank=True, null=True)
     add_on_course_attended = models.CharField(max_length=255, blank=True, null=True)
     expected_starting_date = models.DateField(blank=True, null=True)
